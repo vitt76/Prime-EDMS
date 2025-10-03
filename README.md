@@ -4,17 +4,19 @@
 [![WSL2](https://img.shields.io/badge/WSL2-Compatible-green)](https://docs.microsoft.com/en-us/windows/wsl/)
 [![Mayan EDMS](https://img.shields.io/badge/Mayan_EDMS-4.3.1-orange)](https://www.mayan-edms.com/)
 
-Полнофункциональная система управления электронными документами на базе Mayan EDMS, развернутая в Docker контейнерах для WSL2.
+Полнофункциональная система управления электронными документами на базе Mayan EDMS, развернутая в Docker контейнерах для Windows (WSL2) и Linux (Ubuntu).
 
 ## 🚀 Быстрый старт
 
 ### Требования
-- Windows 10/11 с WSL2
-- Ubuntu 20.04+ в WSL2
+- **Для Windows**: Windows 10/11 с WSL2 + Ubuntu 20.04+
+- **Для Linux**: Ubuntu 20.04+ или другие дистрибутивы с systemd
 - Минимум 4GB RAM
 - Минимум 10GB свободного места
 
 ### Автоматическая установка
+
+#### Вариант 1: Windows с WSL2
 
 1. **Установите WSL2 и Ubuntu** (если не установлены):
    ```powershell
@@ -28,45 +30,163 @@
 
 3. **Запустите скрипт автоматической установки**:
    ```bash
-   chmod +x setup-wsl.sh
+   # В Ubuntu WSL2
    ./setup-wsl.sh
+   ```
+
+4. **Перезагрузите WSL2**:
+   ```powershell
+   # В PowerShell
+   wsl --shutdown && wsl
+   ```
+
+5. **Запустите Mayan EDMS**:
+   ```bash
+   # В Ubuntu WSL2
+   make start
+   # или
+   ./start-mayan.sh start
+   # или
+   docker-compose -f docker-compose.simple.yml up -d
+   ```
+
+   ```powershell
+   # В Windows PowerShell
+   .\start-windows.bat start
+   # или
+   .\start-mayan.ps1
+   ```
+
+#### Вариант 2: Ubuntu (нативно)
+
+1. **Клонируйте репозиторий**:
+   ```bash
+   git clone https://github.com/vitt76/Prime-EDMS.git mayan-edms
+   cd mayan-edms
+   ```
+
+2. **Запустите скрипт установки**:
+   ```bash
+   ./ubuntu-setup.sh
+   ```
+
+3. **Перезайдите в систему** или выполните:
+   ```bash
+   newgrp docker
    ```
 
 4. **Запустите Mayan EDMS**:
    ```bash
-   docker-compose -f docker-compose.simple.yml up -d
+   ./ubuntu-start.sh start
    ```
 
 5. **Откройте браузер и перейдите**: http://localhost
 
+## 📋 Доступные скрипты
+
+### Скрипты установки
+- `setup-wsl.sh` - Автоматическая установка для Windows WSL2
+- `ubuntu-setup.sh` - Автоматическая установка для Ubuntu нативно
+
+### Скрипты управления
+- `start-mayan.sh` - Управление Mayan EDMS в WSL2/Linux
+- `ubuntu-start.sh` - Управление Mayan EDMS в Ubuntu нативно
+- `start-mayan.ps1` - Управление Mayan EDMS в Windows PowerShell
+- `start-windows.bat` - Управление Mayan EDMS в Windows CMD
+- `Makefile` - Команды make для автоматизации (только в WSL2/Ubuntu)
+
+### Сравнение подходов
+
+| Платформа | Скрипт установки | Скрипт управления | Особенности |
+|-----------|----------------|-------------------|-------------|
+| **Windows + WSL2** | `setup-wsl.sh` | `start-mayan.sh`, `make`, `start-mayan.ps1`, `start-windows.bat` | Перезапуск WSL2 после установки |
+| **Ubuntu нативно** | `ubuntu-setup.sh` | `ubuntu-start.sh`, `make` | Максимальная производительность |
+| **Windows (только)** | `setup-windows.bat` | `start-windows.bat`, `start-mayan.ps1` | Через WSL2 в фоне |
+
 ## 📋 Ручная установка
 
-### Шаг 1: Установка Docker в WSL2
+### Вариант A: Установка в WSL2 (Windows)
+
+#### Шаг 1: Установка Docker в WSL2
 
 ```bash
 # Обновление системы
-sudo apt update
+sudo apt update && sudo apt upgrade -y
 
 # Установка зависимостей
 sudo apt install -y ca-certificates curl gnupg lsb-release
 
-# Добавление репозитория Docker
+# Добавление GPG ключа Docker
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu jammy stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Добавление репозитория Docker
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 # Установка Docker
 sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
 # Запуск Docker daemon
-sudo dockerd &
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# Добавление пользователя в группу docker
+sudo usermod -aG docker $USER
 ```
 
-### Шаг 2: Запуск Mayan EDMS
+#### Шаг 2: Запуск Mayan EDMS в WSL2
 
 ```bash
 # Переход в директорию проекта
 cd /mnt/c/Users/[YOUR_USERNAME]/PycharmProjects/Prime-EDMS
+
+# Перезапуск WSL2 для применения группы docker
+# В PowerShell: wsl --shutdown && wsl
+
+# Запуск сервисов
+docker-compose -f docker-compose.simple.yml up -d
+
+# Проверка статуса
+docker ps
+```
+
+### Вариант B: Установка в Ubuntu (нативно)
+
+#### Шаг 1: Установка Docker в Ubuntu
+
+```bash
+# Обновление системы
+sudo apt update && sudo apt upgrade -y
+
+# Установка зависимостей
+sudo apt install -y ca-certificates curl gnupg lsb-release
+
+# Добавление GPG ключа Docker
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+# Добавление репозитория Docker
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Установка Docker
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Запуск Docker daemon
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# Добавление пользователя в группу docker
+sudo usermod -aG docker $USER
+
+# Перезаход в систему
+newgrp docker
+```
+
+#### Шаг 2: Запуск Mayan EDMS в Ubuntu
+
+```bash
+# Переход в директорию проекта
+cd ~/mayan-edms
 
 # Запуск сервисов
 docker-compose -f docker-compose.simple.yml up -d

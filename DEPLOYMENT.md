@@ -3,18 +3,27 @@
 ## Быстрое развертывание на новой машине
 
 ### Предварительные требования
-- Windows 10/11 Pro или выше
+- **Для Windows**: Windows 10/11 Pro или выше с WSL2
+- **Для Linux**: Ubuntu 20.04+ или другие дистрибутивы с systemd
 - Минимум 4GB RAM
 - Минимум 10GB свободного места
-- Включена виртуализация в BIOS
+- Включена виртуализация в BIOS (для Windows)
 
 ### Шаг 1: Клонирование проекта
 
+#### Для Windows (WSL2):
 ```bash
-# В PowerShell или командной строке
-cd C:\Users\%USERNAME%\PycharmProjects
-git clone <URL_ВАШЕГО_РЕПОЗИТОРИЯ> Prime-EDMS
+# В Ubuntu WSL2
+cd /mnt/c/Users/$USER/PycharmProjects
+git clone https://github.com/vitt76/Prime-EDMS.git Prime-EDMS
 cd Prime-EDMS
+```
+
+#### Для Ubuntu (нативно):
+```bash
+# В Ubuntu
+git clone https://github.com/vitt76/Prime-EDMS.git mayan-edms
+cd mayan-edms
 ```
 
 ### Шаг 2: Настройка WSL2
@@ -61,6 +70,99 @@ docker-compose -f docker-compose.simple.yml up -d
 
 Откройте браузер и перейдите: **http://localhost**
 
+## 🐧 Развертывание на Ubuntu (нативно)
+
+### Шаг 1: Установка Ubuntu
+
+Установите Ubuntu 20.04+ на ваш сервер или виртуальную машину.
+
+### Шаг 2: Клонирование проекта
+
+```bash
+# В Ubuntu
+git clone https://github.com/vitt76/Prime-EDMS.git mayan-edms
+cd mayan-edms
+```
+
+### Шаг 3: Автоматическая установка
+
+```bash
+# Запустите скрипт установки (не от root!)
+./ubuntu-setup.sh
+```
+
+### Шаг 4: Перезаход в систему
+
+```bash
+# Перезайдите в систему или выполните:
+newgrp docker
+```
+
+### Шаг 5: Запуск Mayan EDMS
+
+```bash
+# Запуск системы
+./ubuntu-start.sh start
+
+# Или используя make (если установлен)
+make start
+
+# Или напрямую через docker-compose
+docker-compose -f docker-compose.simple.yml up -d
+```
+
+### Шаг 6: Доступ к системе
+
+Откройте браузер и перейдите: **http://localhost**
+
+## 💻 Развертывание на Windows (нативно)
+
+### Шаг 1: Установка WSL2
+
+```powershell
+# В PowerShell с правами администратора
+wsl --install -d Ubuntu-22.04
+wsl --set-default-version 2
+restart-computer  # Перезагрузка компьютера
+```
+
+### Шаг 2: Запуск автоматической установки
+
+```cmd
+# В командной строке Windows
+setup-windows.bat
+```
+
+Или вручную:
+
+```powershell
+# В PowerShell
+git clone https://github.com/vitt76/Prime-EDMS.git Prime-EDMS
+cd Prime-EDMS
+
+# Запуск Ubuntu и установка
+wsl --distribution Ubuntu-22.04
+# В Ubuntu:
+cd /mnt/c/Users/$USER/Prime-EDMS
+./setup-wsl.sh
+```
+
+### Шаг 3: Запуск Mayan EDMS
+
+```cmd
+# В командной строке Windows
+start-windows.bat start
+```
+
+Или в PowerShell:
+```powershell
+.\start-mayan.ps1
+```
+
+### Шаг 4: Доступ к системе
+
+Откройте браузер и перейдите: **http://localhost**
+
 ## 🛠️ Альтернативные способы запуска
 
 ### Использование PowerShell скрипта (Windows)
@@ -88,6 +190,64 @@ make logs      # Логи
 make status    # Статус
 make clean     # Очистка данных
 ```
+
+### Использование скрипта Ubuntu (Ubuntu нативно)
+
+```bash
+cd ~/mayan-edms
+
+./ubuntu-start.sh start     # Запуск
+./ubuntu-start.sh stop      # Остановка
+./ubuntu-start.sh restart   # Перезапуск
+./ubuntu-start.sh logs      # Логи
+./ubuntu-start.sh status    # Статус
+./ubuntu-start.sh clean     # Очистка данных (ОПАСНО!)
+
+# Или с make (если установлен)
+make help      # Справка по командам
+make start     # Запуск
+make stop      # Остановка
+make restart   # Перезапуск
+make logs      # Логи
+make status    # Статус
+make clean     # Очистка данных
+```
+
+### Использование Windows скриптов (Windows)
+
+```cmd
+REM В командной строке Windows
+start-windows.bat start     # Запуск
+start-windows.bat stop      # Остановка
+start-windows.bat restart   # Перезапуск
+start-windows.bat logs      # Логи
+start-windows.bat status    # Статус
+start-windows.bat clean     # Очистка данных (ОПАСНО!)
+```
+
+```powershell
+# В PowerShell
+.\start-mayan.ps1              # Запуск
+.\start-mayan.ps1 -Stop        # Остановка
+.\start-mayan.ps1 -Restart     # Перезапуск
+.\start-mayan.ps1 -Logs        # Логи
+.\start-mayan.ps1 -Status      # Статус
+.\start-mayan.ps1 -Clean       # Очистка данных (ОПАСНО!)
+```
+
+## 📚 Доступные скрипты
+
+### Скрипты установки
+- `setup-wsl.sh` - Установка для Windows WSL2
+- `ubuntu-setup.sh` - Установка для Ubuntu нативно
+- `setup-windows.bat` - Установка для Windows (с WSL2)
+
+### Скрипты управления
+- `start-mayan.sh` - Управление для WSL2/Linux
+- `ubuntu-start.sh` - Управление для Ubuntu нативно
+- `start-mayan.ps1` - Управление для Windows PowerShell
+- `start-windows.bat` - Управление для Windows CMD
+- `Makefile` - Команды make для Linux (только в WSL2/Ubuntu)
 
 ## 🔧 Настройка
 
