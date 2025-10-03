@@ -63,7 +63,7 @@ start_mayan() {
 
     docker-compose -f $COMPOSE_FILE up -d
     print_success "Ожидание запуска..."
-    sleep 15
+    sleep 60
 
     # Проверка статуса
     if docker-compose -f $COMPOSE_FILE ps | grep -q "Up"; then
@@ -87,7 +87,7 @@ stop_mayan() {
 restart_mayan() {
     print_header "Перезапуск Mayan EDMS..."
     docker-compose -f $COMPOSE_FILE restart
-    sleep 5
+    sleep 30
 
     if docker-compose -f $COMPOSE_FILE ps | grep -q "Up"; then
         print_success "Mayan EDMS перезапущен"

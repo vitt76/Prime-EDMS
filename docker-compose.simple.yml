@@ -11,6 +11,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - mayan
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mayan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:6.2-alpine
@@ -19,6 +24,11 @@ services:
       - redis_data:/data
     networks:
       - mayan
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3.10-management-alpine
@@ -30,6 +40,11 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - mayan
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   app:
     image: mayanedms/mayanedms:s4.3
@@ -42,9 +57,12 @@ services:
     volumes:
       - app_data:/var/lib/mayan
     depends_on:
-      - postgresql
-      - redis
-      - rabbitmq
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "80:8000"
     networks:

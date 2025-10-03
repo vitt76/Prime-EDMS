@@ -15,7 +15,7 @@ sleep 3
 docker-compose -f docker-compose.simple.yml up -d
 
 echo "Mayan EDMS запущен!"
-echo "Веб-интерфейс доступен по адресу: http://localhost:8000"
+echo "Веб-интерфейс доступен по адресу: http://localhost"
 echo ""
 echo "Управление:"
 echo "  Остановить: docker-compose -f docker-compose.simple.yml down"
