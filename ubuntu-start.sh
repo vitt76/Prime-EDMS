@@ -61,17 +61,57 @@ start_mayan() {
         return 0
     fi
 
-    docker-compose -f $COMPOSE_FILE up -d
-    print_success "Ожидание запуска..."
-    sleep 60
+    # Запускаем только инфраструктуру (БД, Redis, RabbitMQ)
+    docker-compose -f $COMPOSE_FILE up -d postgresql redis rabbitmq
+    print_success "Ожидание готовности сервисов..."
+
+    # Ждем готовности PostgreSQL
+    print_header "Ожидание PostgreSQL..."
+    for i in {1..30}; do
+        if docker exec $PROJECT_NAME-postgresql-1 pg_isready -U mayan >/dev/null 2>&1; then
+            print_success "PostgreSQL готов"
+            break
+        fi
+        sleep 5
+        echo -n "."
+    done
+
+    # Ждем готовности Redis
+    print_header "Ожидание Redis..."
+    for i in {1..20}; do
+        if docker exec $PROJECT_NAME-redis-1 redis-cli ping >/dev/null 2>&1; then
+            print_success "Redis готов"
+            break
+        fi
+        sleep 3
+        echo -n "."
+    done
+
+    # Ждем готовности RabbitMQ
+    print_header "Ожидание RabbitMQ..."
+    for i in {1..40}; do
+        if docker exec $PROJECT_NAME-rabbitmq-1 rabbitmqctl node_health_check >/dev/null 2>&1; then
+            print_success "RabbitMQ готов"
+            break
+        fi
+        sleep 5
+        echo -n "."
+    done
+
+    print_success "Все сервисы готовы! Запуск Mayan EDMS..."
+    sleep 10
+
+    # Запускаем само приложение
+    docker-compose -f $COMPOSE_FILE --profile app up -d app
+    sleep 30
 
     # Проверка статуса
-    if docker-compose -f $COMPOSE_FILE ps | grep -q "Up"; then
+    if docker-compose -f $COMPOSE_FILE ps | grep -q "prime-edms_app.*Up"; then
         print_success "Mayan EDMS запущен!"
         echo ""
         echo -e "${BLUE}🌐 Доступен по адресу: http://localhost${NC}"
     else
-        print_error "Ошибка запуска. Проверьте логи: ./ubuntu-start.sh logs"
+        print_error "Ошибка запуска приложения. Проверьте логи: ./ubuntu-start.sh logs"
         exit 1
     fi
 }
@@ -79,17 +119,17 @@ start_mayan() {
 # Остановка Mayan EDMS
 stop_mayan() {
     print_header "Остановка Mayan EDMS..."
-    docker-compose -f $COMPOSE_FILE down
+    docker-compose -f $COMPOSE_FILE --profile app down
     print_success "Mayan EDMS остановлен"
 }
 
 # Перезапуск Mayan EDMS
 restart_mayan() {
     print_header "Перезапуск Mayan EDMS..."
-    docker-compose -f $COMPOSE_FILE restart
+    docker-compose -f $COMPOSE_FILE --profile app restart
     sleep 30
 
-    if docker-compose -f $COMPOSE_FILE ps | grep -q "Up"; then
+    if docker-compose -f $COMPOSE_FILE ps | grep -q "prime-edms_app.*Up"; then
         print_success "Mayan EDMS перезапущен"
     else
         print_error "Ошибка перезапуска"
@@ -99,13 +139,17 @@ restart_mayan() {
 # Просмотр логов
 show_logs() {
     print_header "Логи Mayan EDMS (Ctrl+C для выхода):"
-    docker-compose -f $COMPOSE_FILE logs -f
+    docker-compose -f $COMPOSE_FILE --profile app logs -f
 }
 
 # Статус системы
 show_status() {
     print_header "Статус контейнеров:"
-    docker-compose -f $COMPOSE_FILE ps
+    docker-compose -f $COMPOSE_FILE --profile app ps
+
+    echo ""
+    print_header "Healthchecks:"
+    docker ps --format "table {{.Names}}\t{{.Status}}" | grep "$PROJECT_NAME\|NAMES" || echo "Нет запущенных контейнеров"
 
     echo ""
     print_header "Использование ресурсов:"
@@ -123,7 +167,7 @@ clean_system() {
         print_header "Остановка и очистка..."
 
         # Остановка контейнеров
-        docker-compose -f $COMPOSE_FILE down -v 2>/dev/null || true
+        docker-compose -f $COMPOSE_FILE --profile app down -v 2>/dev/null || true
 
         # Удаление volumes
         docker volume rm ${PROJECT_NAME}_postgres_data ${PROJECT_NAME}_redis_data ${PROJECT_NAME}_rabbitmq_data ${PROJECT_NAME}_app_data 2>/dev/null || true

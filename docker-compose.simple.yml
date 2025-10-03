@@ -41,10 +41,11 @@ services:
     networks:
       - mayan
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      test: ["CMD", "rabbitmqctl", "node_health_check"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   app:
     image: mayanedms/mayanedms:s4.3
@@ -67,6 +68,9 @@ services:
       - "80:8000"
     networks:
       - mayan
+    # Отключаем автоматический запуск, будем управлять вручную
+    profiles:
+      - app
 
 networks:
   mayan:
