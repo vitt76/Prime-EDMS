@@ -55,8 +55,18 @@ services:
       MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
       MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock
       MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:mayanredispassword@redis:6379/2'}"
+      # HTTPS настройки (для production измените SECRET_KEY!)
+      MAYAN_COMMON_DISABLE_SSL_REDIRECT: "false"
+      MAYAN_COMMON_REDIRECT_TO_HTTPS: "true"
+      MAYAN_COMMON_SECRET_KEY: "your-super-secret-key-change-this-in-production"
+      MAYAN_COMMON_ALLOWED_HOSTS: "['*']"
+      # SSL сертификаты (опционально, раскомментируйте и настройте пути)
+      # MAYAN_COMMON_SSL_CERTIFICATE: "/opt/mayan/certificates/ssl.crt"
+      # MAYAN_COMMON_SSL_KEY: "/opt/mayan/certificates/ssl.key"
     volumes:
       - app_data:/var/lib/mayan
+      # Раскомментируйте для SSL сертификатов
+      # - ./certificates:/opt/mayan/certificates:ro
     depends_on:
       postgresql:
         condition: service_healthy
@@ -66,6 +76,7 @@ services:
         condition: service_healthy
     ports:
       - "80:8000"
+      - "443:8443"
     networks:
       - mayan
     # Отключаем автоматический запуск, будем управлять вручную

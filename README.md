@@ -95,6 +95,10 @@
 - `start-windows.bat` - Управление Mayan EDMS в Windows CMD
 - `Makefile` - Команды make для автоматизации (только в WSL2/Ubuntu)
 
+### Скрипты безопасности
+- `generate-ssl.sh` - Генерация самоподписанных SSL сертификатов
+- `setup-https.sh` - Настройка HTTPS (самоподписанные или Let's Encrypt)
+
 ### Сравнение подходов
 
 | Платформа | Скрипт установки | Скрипт управления | Особенности |
@@ -102,6 +106,44 @@
 | **Windows + WSL2** | `setup-wsl.sh` | `start-mayan.sh`, `make`, `start-mayan.ps1`, `start-windows.bat` | Перезапуск WSL2 после установки |
 | **Ubuntu нативно** | `ubuntu-setup.sh` | `ubuntu-start.sh`, `make` | Максимальная производительность |
 | **Windows (только)** | `setup-windows.bat` | `start-windows.bat`, `start-mayan.ps1` | Через WSL2 в фоне |
+
+## 🔒 Настройка HTTPS
+
+### Быстрая настройка HTTPS
+
+#### Самоподписанный сертификат (для тестирования)
+
+```bash
+# Генерация сертификатов
+./generate-ssl.sh your-domain.com
+
+# Активация HTTPS
+# Раскомментируйте строки в docker-compose.simple.yml:
+# MAYAN_COMMON_SSL_CERTIFICATE: "/opt/mayan/certificates/ssl.crt"
+# MAYAN_COMMON_SSL_KEY: "/opt/mayan/certificates/ssl.key"
+# - ./certificates:/opt/mayan/certificates:ro
+
+# Перезапуск
+docker-compose -f docker-compose.simple.yml --profile app down
+docker-compose -f docker-compose.simple.yml --profile app up -d app
+```
+
+#### Production сертификат (Let's Encrypt)
+
+```bash
+# Настройка Let's Encrypt
+./setup-https.sh letsencrypt your-domain.com
+
+# Перезапуск
+docker-compose -f docker-compose.simple.yml --profile app down
+docker-compose -f docker-compose.simple.yml --profile app up -d app
+```
+
+### Доступ к HTTPS
+
+- **URL**: https://your-domain.com (или https://localhost для самоподписанных)
+- **Порт**: 443 (автоматически)
+- **HTTP редирект**: Включается автоматически на HTTPS
 
 ## 📋 Ручная установка
 
