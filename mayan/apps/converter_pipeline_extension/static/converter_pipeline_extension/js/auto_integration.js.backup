@@ -1,0 +1,375 @@
+// Mayan EDMS Auto Integration for Converter Pipeline Extension
+// Автоматически добавляет кнопку конвертации в меню действий файлов
+
+(function() {
+    'use strict';
+
+    console.log('🔧 Converter Pipeline Extension: Auto integration loaded');
+
+    // Функция для добавления кнопки конвертации
+    function addConverterButton() {
+        console.log('🔍 Looking for menus and action buttons to add converter button...');
+        console.log('📍 Current URL:', window.location.href);
+        console.log('📍 Pathname:', window.location.pathname);
+        console.log('📍 Hash:', window.location.hash);
+
+        // Ищем все возможные меню и контейнеры действий
+        var selectors = [
+            // Меню
+            '.dropdown-menu',           // Bootstrap dropdown
+            '.v-menu__content',         // Vuetify menu
+            '[role="menu"]',           // ARIA menu
+            '.context-menu',           // Общее контекстное меню
+            '.menu',                   // Просто menu
+            '[class*="menu"]',         // Любой класс содержащий menu
+
+            // Контейнеры действий
+            '.actions',                // Контейнер действий
+            '.action-buttons',         // Кнопки действий
+            '[class*="action"]',       // Элементы с action в классе
+            '.v-card__actions',        // Vuetify card actions
+            '.card-actions',           // Card actions
+
+            // Таблицы и списки (где могут быть действия для файлов)
+            'table tbody tr',          // Строки таблицы
+            '.file-row',               // Строки файлов
+            '.document-row',           // Строки документов
+            '[data-file-id]',          // Элементы с file ID
+            '[data-document-id]'       // Элементы с document ID
+        ];
+
+        var foundElements = false;
+        var processedElements = 0;
+
+        selectors.forEach(function(selector) {
+            var elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+                console.log('📋 Found', elements.length, 'elements with selector:', selector);
+                foundElements = true;
+
+                // Ограничиваем количество элементов для обработки (чтобы не было слишком много логов)
+                var maxElements = Math.min(elements.length, 10);
+
+                for (var i = 0; i < maxElements; i++) {
+                    processedElements++;
+                    processElement(elements[i], selector);
+                }
+
+                if (elements.length > maxElements) {
+                    console.log('   ... and', elements.length - maxElements, 'more elements (showing first', maxElements, ')');
+                }
+            }
+        });
+
+        console.log('📊 Processed', processedElements, 'elements total');
+
+        if (!foundElements) {
+            console.log('⚠️ No menus or action containers found on page');
+            // Показываем все элементы с классами содержащими menu или action
+            logAllMenuElements();
+        }
+    }
+
+    // Функция для логирования всех элементов с menu/action в классе
+    function logAllMenuElements() {
+        console.log('🔍 Searching for all elements with menu/action classes...');
+
+        var allElements = document.querySelectorAll('*');
+        var menuElements = [];
+        var actionElements = [];
+
+        for (var i = 0; i < allElements.length; i++) {
+            var element = allElements[i];
+            var className = element.className || '';
+
+            if (className.includes('menu') && !menuElements.includes(className)) {
+                menuElements.push(className);
+            }
+            if (className.includes('action') && !actionElements.includes(className)) {
+                actionElements.push(className);
+            }
+        }
+
+        if (menuElements.length > 0) {
+            console.log('🎯 Found elements with "menu" in class:', menuElements);
+        }
+        if (actionElements.length > 0) {
+            console.log('🎯 Found elements with "action" in class:', actionElements);
+        }
+    }
+
+    // Функция для обработки элемента (меню, контейнер действий, строка таблицы и т.д.)
+    function processElement(element, selector) {
+        try {
+            // Проверяем, есть ли уже кнопка конвертации в этом элементе или его родителях
+            var parent = element;
+            var hasConverterBtn = false;
+            for (var i = 0; i < 5; i++) { // Проверяем до 5 уровней вверх
+                if (parent && parent.querySelector && parent.querySelector('.converter-btn')) {
+                    hasConverterBtn = true;
+                    break;
+                }
+                parent = parent.parentElement;
+            }
+            if (hasConverterBtn) {
+                return; // Уже добавлена
+            }
+
+            // Определяем тип элемента и как его обрабатывать
+            var isMenu = selector.includes('menu') || selector.includes('dropdown');
+            var isActionContainer = selector.includes('action') || selector.includes('card-actions');
+            var isTableRow = selector.includes('tr') || selector.includes('row');
+            var hasDataId = element.hasAttribute('data-file-id') || element.hasAttribute('data-document-id');
+
+            console.log('🔍 Processing element with selector:', selector, 'Type: menu=' + isMenu + ', actions=' + isActionContainer + ', row=' + isTableRow + ', data-id=' + hasDataId);
+
+            // Ищем ссылки и кнопки в элементе
+            var links = element.querySelectorAll('a, button, [role="menuitem"], [role="button"]');
+
+            // Проверяем, содержит ли элемент действия с файлами
+            var hasFileActions = false;
+            var fileActions = ['Скачать', 'Удалить', 'Редактировать', 'Download', 'Delete', 'Edit', 'View', 'Просмотр'];
+
+            for (var i = 0; i < links.length; i++) {
+                var text = links[i].textContent || links[i].innerText || '';
+                var href = links[i].href || '';
+                console.log('   Link text:', text, 'href:', href);
+
+                for (var j = 0; j < fileActions.length; j++) {
+                    if (text.includes(fileActions[j])) {
+                        hasFileActions = true;
+                        break;
+                    }
+                }
+                if (hasFileActions) break;
+            }
+
+            // Дополнительные проверки для разных типов элементов
+            if (!hasFileActions) {
+                // Для строк таблицы проверяем наличие ссылок на файлы
+                if (isTableRow || hasDataId) {
+                    var fileLinks = element.querySelectorAll('a[href*="files"]');
+                    if (fileLinks.length > 0) {
+                        hasFileActions = true;
+                        console.log('   Found file links in row/element');
+                    }
+                }
+
+                // Для контейнеров действий проверяем наличие кнопок
+                if (isActionContainer && links.length > 0) {
+                    hasFileActions = true;
+                    console.log('   Found action buttons in container');
+                }
+            }
+
+            // Если элемент содержит действия с файлами, добавляем кнопку конвертации
+            if (hasFileActions || isTableRow || hasDataId) {
+                console.log('📁 Found file-related element, adding converter button...');
+
+                // Получаем ID файла из разных источников
+                var fileId = getFileIdFromElement(element) || getFileIdFromUrl();
+
+                if (fileId) {
+                    // Создаем кнопку конвертации
+                    var converterBtn = document.createElement('a');
+                    converterBtn.className = 'btn btn-sm btn-outline-primary converter-btn ml-2';
+                    converterBtn.href = '/converter-pipeline/media-conversion/' + fileId + '/';
+                    converterBtn.innerHTML = '<i class="fas fa-exchange-alt"></i> Конвертировать';
+                    converterBtn.style.display = 'inline-block';
+                    converterBtn.style.margin = '2px';
+
+                    // Добавляем обработчик клика
+                    converterBtn.addEventListener('click', function(e) {
+                        console.log('🔧 Converter button clicked for file ID:', fileId);
+                    });
+
+                    // Добавляем кнопку в подходящее место
+                    addButtonToElement(element, converterBtn, selector);
+                    console.log('✅ Converter button added for file ID:', fileId);
+                } else {
+                    console.log('⚠️ Could not extract file ID from element or URL');
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error processing element:', error);
+        }
+    }
+
+    // Функция для добавления кнопки в подходящее место элемента
+    function addButtonToElement(element, button, selector) {
+        try {
+            if (selector.includes('menu')) {
+                // Для меню добавляем в конец
+                element.appendChild(button);
+            } else if (selector.includes('action') || selector.includes('card-actions')) {
+                // Для контейнеров действий добавляем в конец
+                element.appendChild(button);
+            } else if (selector.includes('tr') || selector.includes('row')) {
+                // Для строк таблицы ищем ячейку действий или добавляем в конец
+                var actionCell = element.querySelector('td:last-child, .actions, .buttons');
+                if (actionCell) {
+                    actionCell.appendChild(button);
+                } else {
+                    element.appendChild(button);
+                }
+            } else {
+                // Для остальных элементов добавляем в конец
+                element.appendChild(button);
+            }
+        } catch (error) {
+            console.error('❌ Error adding button to element:', error);
+            // Fallback - добавляем в конец документа
+            document.body.appendChild(button);
+        }
+    }
+
+    // Функция для извлечения ID файла из элемента
+    function getFileIdFromElement(element) {
+        // Проверяем data атрибуты
+        var fileId = element.getAttribute('data-file-id') ||
+                    element.getAttribute('data-fid') ||
+                    element.getAttribute('data-id');
+
+        if (fileId) {
+            console.log('   Found file ID in element attributes:', fileId);
+            return fileId;
+        }
+
+        // Ищем в дочерних элементах
+        var links = element.querySelectorAll('a[href*="files"]');
+        for (var i = 0; i < links.length; i++) {
+            var href = links[i].href;
+            var match = href.match(/\/files\/(\d+)/);
+            if (match) {
+                console.log('   Found file ID in link href:', match[1]);
+                return match[1];
+            }
+        }
+
+        // Ищем в input элементах
+        var inputs = element.querySelectorAll('input[name*="file"], input[name*="id"]');
+        for (var i = 0; i < inputs.length; i++) {
+            if (inputs[i].value) {
+                console.log('   Found file ID in input value:', inputs[i].value);
+                return inputs[i].value;
+            }
+        }
+
+        return null;
+    }
+
+    // Функция для извлечения ID файла из URL
+    function getFileIdFromUrl() {
+        var pathname = window.location.pathname;
+        var hash = window.location.hash;
+
+        console.log('   Extracting file ID from URL pathname:', pathname, 'hash:', hash);
+
+        // Проверяем разные форматы URL
+        var patterns = [
+            /\/documents\/(\d+)\/files\/(\d+)\//,  // /documents/1/files/123/
+            /\/documents\/(\d+)\/files\/(\d+)/,    // /documents/1/files/123
+            /files\/(\d+)\//,                      // files/123/
+            /files\/(\d+)/,                        // files/123
+            /\/documents\/\d+\/files\/(\d+)/,      // для hash роутера
+        ];
+
+        for (var i = 0; i < patterns.length; i++) {
+            var match = pathname.match(patterns[i]) || hash.match(patterns[i]);
+            if (match) {
+                var fileId = match[2] || match[1];
+                console.log('   Extracted file ID from URL:', fileId);
+                return fileId;
+            }
+        }
+
+        // Проверяем параметры URL
+        var urlParams = new URLSearchParams(window.location.search);
+        var fileId = urlParams.get('file_id') || urlParams.get('id');
+        if (fileId) {
+            console.log('   Found file ID in URL params:', fileId);
+            return fileId;
+        }
+
+        console.log('   No file ID found in URL');
+        return null;
+    }
+
+    // Функция для наблюдения за изменениями в DOM
+    function observeDOMChanges() {
+        try {
+            var observer = new MutationObserver(function(mutations) {
+                var shouldCheck = false;
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                        // Когда добавляются новые элементы, проверяем их
+                        shouldCheck = true;
+                    }
+                });
+
+                if (shouldCheck) {
+                    // Когда DOM изменяется, пытаемся добавить кнопку
+                    setTimeout(addConverterButton, 500);
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            console.log('👁️ DOM observer started');
+        } catch (error) {
+            console.error('❌ Error starting DOM observer:', error);
+        }
+    }
+
+    // Функция для агрессивной проверки (для Vue.js компонентов)
+    function aggressiveCheck() {
+        addConverterButton();
+
+        // Повторяем проверку каждые 3 секунды
+        setTimeout(aggressiveCheck, 3000);
+    }
+
+    // Запускаем интеграцию
+    function initIntegration() {
+        console.log('🔧 Starting auto integration...');
+
+        // Добавляем кнопку сразу
+        addConverterButton();
+
+        // Начинаем наблюдение за изменениями DOM
+        observeDOMChanges();
+
+        // Запускаем агрессивную проверку для Vue.js
+        setTimeout(aggressiveCheck, 1000);
+
+        // Дополнительная проверка через 5 секунд (на случай медленной загрузки)
+        setTimeout(addConverterButton, 5000);
+
+        console.log('✅ Auto integration initialized');
+    }
+
+    // Ждем загрузки страницы
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            // Ждем еще немного для Vue.js
+            setTimeout(initIntegration, 1000);
+        });
+    } else {
+        // Если страница уже загружена, ждем немного для Vue.js
+        setTimeout(initIntegration, 1000);
+    }
+
+    // Дополнительный триггер для Vue.js роутера
+    window.addEventListener('load', function() {
+        setTimeout(addConverterButton, 2000);
+    });
+
+    // Обработка изменений hash (для Vue.js роутера)
+    window.addEventListener('hashchange', function() {
+        setTimeout(addConverterButton, 1500);
+    });
+
+})();

@@ -5,8 +5,8 @@
 
 set -e
 
-COMPOSE_FILE="docker-compose.simple.yml"
-PROJECT_NAME="mayan-edms"
+COMPOSE_FILE="docker-compose.yml"
+PROJECT_NAME="prime-edms"
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -56,7 +56,7 @@ start_mayan() {
     print_header "Запуск Mayan EDMS..."
 
     # Проверка существования контейнеров
-    if docker ps -q -f name="$PROJECT_NAME" | grep -q .; then
+    if docker ps -q -f name="${PROJECT_NAME}" | grep -q .; then
         print_warning "Mayan EDMS уже запущен"
         return 0
     fi
@@ -67,19 +67,28 @@ start_mayan() {
 
     # Ждем готовности PostgreSQL
     print_header "Ожидание PostgreSQL..."
-    for i in {1..30}; do
-        if docker exec $PROJECT_NAME-postgresql-1 pg_isready -U mayan >/dev/null 2>&1; then
+    counter=0
+    while [ $counter -lt 30 ]; do
+        echo "Попытка $((counter + 1))/30: проверка PostgreSQL..."
+        if docker exec ${PROJECT_NAME}_postgresql_1 pg_isready -U mayan >/dev/null 2>&1; then
             print_success "PostgreSQL готов"
             break
+        else
+            echo "PostgreSQL еще не готов, ждем 5 секунд..."
         fi
         sleep 5
-        echo -n "."
+        counter=$((counter + 1))
     done
+
+    if [ $counter -ge 30 ]; then
+        print_warning "PostgreSQL не запустился за 150 секунд"
+        exit 1
+    fi
 
     # Ждем готовности Redis
     print_header "Ожидание Redis..."
     for i in {1..20}; do
-        if docker exec $PROJECT_NAME-redis-1 redis-cli ping >/dev/null 2>&1; then
+        if docker exec ${PROJECT_NAME}_redis_1 redis-cli -a mayanredispassword ping >/dev/null 2>&1; then
             print_success "Redis готов"
             break
         fi
@@ -90,7 +99,7 @@ start_mayan() {
     # Ждем готовности RabbitMQ
     print_header "Ожидание RabbitMQ..."
     for i in {1..40}; do
-        if docker exec $PROJECT_NAME-rabbitmq-1 rabbitmqctl node_health_check >/dev/null 2>&1; then
+        if docker exec ${PROJECT_NAME}_rabbitmq_1 rabbitmqctl node_health_check >/dev/null 2>&1; then
             print_success "RabbitMQ готов"
             break
         fi
@@ -101,8 +110,21 @@ start_mayan() {
     print_success "Все сервисы готовы! Запуск Mayan EDMS..."
     sleep 10
 
-    # Запускаем само приложение
-    docker-compose -f $COMPOSE_FILE --profile app up -d app
+    # Запускаем само приложение через Docker
+    docker run -d \
+        --name ${PROJECT_NAME}_app_1 \
+        --network ${PROJECT_NAME}_default \
+        -p 80:8000 -p 443:8443 \
+        -e MAYAN_DATABASES="{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'${PROJECT_NAME}_postgresql_1'}}" \
+        -e MAYAN_CELERY_BROKER_URL="amqp://mayan:mayanrabbitpass@${PROJECT_NAME}_rabbitmq_1:5672/mayan" \
+        -e MAYAN_CELERY_RESULT_BACKEND="redis://:mayanredispassword@${PROJECT_NAME}_redis_1:6379/1" \
+        -e MAYAN_LOCK_MANAGER_BACKEND="mayan.apps.lock_manager.backends.redis_lock.RedisLock" \
+        -e MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS="{'redis_url':'redis://:mayanredispassword@${PROJECT_NAME}_redis_1:6379/2'}" \
+        -e COMMON_EXTRA_APPS="['mayan.apps.converter_pipeline_extension']" \
+        --env-file app.env \
+        --volume mayan_data:/var/lib/mayan \
+        --volume $(pwd)/config.yml:/opt/mayan-edms/config.yml \
+        prime-edms_app
     sleep 30
 
     # Проверка статуса

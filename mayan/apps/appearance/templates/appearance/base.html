@@ -103,6 +103,196 @@
     jQuery(document).ready(function() {
         $('[data-toggle="tooltip"]').tooltip();
 
+
+        // Функция для конвертации медиа файла
+        window.convertMediaFile = function(linkElement) {
+            // Извлекаем file ID из Vue.js роутинга или API
+            var fileId = null;
+            var documentId = null;
+
+            // Сначала пытаемся из Vue router
+            if (window.app && window.app.$route) {
+                try {
+                    var route = window.app.$route;
+                    if (route.params && route.params.document_file_id) {
+                        fileId = route.params.document_file_id;
+                    } else if (route.path) {
+                        var match = route.path.match(/\/files\/(\d+)/);
+                        if (match) {
+                            fileId = match[1];
+                        }
+                    }
+                } catch (e) {
+                    // Vue router access failed
+                }
+            }
+
+            // Если не нашли file ID, пытаемся из hash URL
+            if (!fileId) {
+                var hash = window.location.hash;
+
+                // Сначала пробуем найти file ID
+                var fileMatch = hash.match(/\/files\/(\d+)/);
+                if (fileMatch) {
+                    fileId = fileMatch[1];
+                } else {
+                    // Ищем document ID
+                    var docMatch = hash.match(/\/documents\/(\d+)\//);
+                    if (docMatch) {
+                        documentId = docMatch[1];
+                    }
+                }
+            }
+
+            // Если нашли file ID, открываем страницу
+            if (fileId) {
+                var url = '/converter-pipeline/media-conversion/' + fileId + '/';
+                window.location.href = url;
+                return;
+            }
+
+            // Если нашли только document ID, ищем файлы
+            if (documentId) {
+                // Ищем Vue приложение
+                var vueApp = window.app || window.Mayan || window.vueApp || window.Vue;
+
+                if (!vueApp) {
+                    for (var prop in window) {
+                        if (window[prop] && window[prop].$store) {
+                            vueApp = window[prop];
+                            break;
+                        }
+                    }
+                }
+
+                if (!vueApp) {
+                    var allElements = document.querySelectorAll('*');
+                    for (var i = 0; i < allElements.length; i++) {
+                        if (allElements[i].__vue__ && allElements[i].__vue__.$store) {
+                            vueApp = allElements[i].__vue__;
+                            break;
+                        }
+                    }
+                }
+
+                // Ищем файлы в Vue store
+                if (vueApp && vueApp.$store) {
+                    try {
+                        var state = vueApp.$store.state;
+                        var foundFiles = [];
+
+                        if (state.documents && state.documents.files) {
+                            for (var key in state.documents.files) {
+                                var file = state.documents.files[key];
+                                if (file && file.document_id == documentId) {
+                                    foundFiles.push(file);
+                                }
+                            }
+                        }
+
+                        if (foundFiles.length > 0) {
+                            fileId = foundFiles[0].id;
+                        }
+                    } catch (e) {
+                        // Vue store access failed
+                    }
+                }
+
+                // Если нашли file ID в store, открываем
+                if (fileId) {
+                    var url = '/converter-pipeline/media-conversion/' + fileId + '/';
+                    window.location.href = url;
+                    return;
+                }
+
+                // Fallback - API запрос
+                fetch('/api/v4/documents/' + documentId + '/files/')
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        if (data.results && data.results.length > 0) {
+                            var fileId = data.results[0].id;
+                            var url = '/converter-pipeline/media-conversion/' + fileId + '/';
+                            window.location.href = url;
+                        } else {
+                            alert('No files found for this document');
+                        }
+                    })
+                    .catch(function(error) {
+                        alert('Error: Could not load document files.');
+                    });
+            } else {
+                alert('Error: Could not determine file ID from current page.');
+            }
+        };
+
+        // Функция для установки обработчиков на ссылки конвертации
+        function setupConvertMediaHandlers() {
+            var convertLinks = document.querySelectorAll('a.convert-media-link');
+
+            if (convertLinks.length > 0) {
+                convertLinks.forEach(function(link) {
+                    if (!link.hasAttribute('data-handler-attached')) {
+                        link.setAttribute('data-handler-attached', 'true');
+
+                        link.addEventListener('click', function(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            event.stopImmediatePropagation();
+
+                            window.convertMediaFile(this);
+                            return false;
+                        });
+                    }
+                });
+            }
+        }
+
+        // Добавляем пункт меню вручную через JavaScript
+        function addConvertMediaMenuItem() {
+            // Ищем существующие меню
+            var actionMenus = document.querySelectorAll('.dropdown-menu, [role="menu"]');
+
+            actionMenus.forEach(function(menu) {
+                // Ищем, есть ли уже наш пункт
+                var existingLink = menu.querySelector('a.convert-media-link');
+                if (!existingLink) {
+                    var menuItem = document.createElement('li');
+                    if (menuItem) {
+                        menuItem.className = 'menu-item';
+
+                        var link = document.createElement('a');
+                        link.href = '#convert-media-action';
+                        link.className = 'convert-media-link';
+                        link.innerHTML = '<i class="fas fa-film"></i> Сконвертировать';
+
+                        menuItem.appendChild(link);
+                        menu.appendChild(menuItem);
+                    }
+                }
+            });
+        }
+
+        // MutationObserver для установки обработчиков
+        var convertObserver = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList') {
+                    setupConvertMediaHandlers();
+                }
+            });
+        });
+
+        // Начинаем наблюдение
+        convertObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        // Устанавливаем обработчики и добавляем меню
+        setupConvertMediaHandlers();
+        setTimeout(addConvertMediaMenuItem, 2000);
+
         let djangoMessages = [
             {% for message in messages %}
                 {

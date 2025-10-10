@@ -82,6 +82,7 @@ INSTALLED_APPS = (
     'mayan.apps.autoadmin',
     'mayan.apps.common',
     'mayan.apps.converter',
+    'mayan.apps.converter_pipeline_extension',
     'mayan.apps.dashboards',
     'mayan.apps.databases',
     'mayan.apps.dependencies',

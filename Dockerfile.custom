@@ -1,0 +1,12 @@
+FROM mayanedms/mayanedms:s4.3
+
+# Копируем наше расширение
+COPY mayan/apps/converter_pipeline_extension /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
+
+# Устанавливаем права
+RUN chown -R mayan:mayan /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
+
+# Копируем статические файлы
+RUN mkdir -p /opt/mayan-edms/static/converter_pipeline_extension && \
+    cp -r /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension/static/converter_pipeline_extension/. /opt/mayan-edms/static/converter_pipeline_extension/ && \
+    chown -R mayan:mayan /opt/mayan-edms/static/converter_pipeline_extension

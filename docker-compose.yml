@@ -1,0 +1,57 @@
+version: '3.8'
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:
+  mayan_data:
+
+services:
+  postgresql:
+    image: postgres:12.10-alpine
+    container_name: prime-edms_postgresql_1
+    environment:
+      POSTGRES_DB: mayan
+      POSTGRES_USER: mayan
+      POSTGRES_PASSWORD: mayandbpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mayan -d mayan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:6.2-alpine
+    container_name: prime-edms_redis_1
+    command: redis-server --requirepass mayanredispassword
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.10-management-alpine
+    container_name: prime-edms_rabbitmq_1
+    environment:
+      RABBITMQ_DEFAULT_USER: mayan
+      RABBITMQ_DEFAULT_PASS: mayanrabbitpass
+      RABBITMQ_DEFAULT_VHOST: mayan
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5

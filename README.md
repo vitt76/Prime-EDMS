@@ -1,63 +1,18 @@
 # Mayan EDMS - Система Управления Электронными Документами
 
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue)](https://www.docker.com/)
-[![WSL2](https://img.shields.io/badge/WSL2-Compatible-green)](https://docs.microsoft.com/en-us/windows/wsl/)
 [![Mayan EDMS](https://img.shields.io/badge/Mayan_EDMS-4.3.1-orange)](https://www.mayan-edms.com/)
 
-Полнофункциональная система управления электронными документами на базе Mayan EDMS, развернутая в Docker контейнерах для Windows (WSL2) и Linux (Ubuntu).
+Полнофункциональная система управления электронными документами на базе Mayan EDMS для Ubuntu.
 
 ## 🚀 Быстрый старт
 
-### Требования
-- **Для Windows**: Windows 10/11 с WSL2 + Ubuntu 20.04+
-- **Для Linux**: Ubuntu 20.04+ или другие дистрибутивы с systemd
-- Минимум 4GB RAM
-- Минимум 10GB свободного места
+### 📋 Системные требования
+- **ОС**: Ubuntu 20.04+
+- **RAM**: Минимум 4GB (рекомендуется 8GB+)
+- **Диск**: Минимум 10GB свободного места
+- **CPU**: 2+ ядра
 
-### Автоматическая установка
-
-#### Вариант 1: Windows с WSL2
-
-1. **Установите WSL2 и Ubuntu** (если не установлены):
-   ```powershell
-   wsl --install -d Ubuntu-22.04
-   ```
-
-2. **Запустите Ubuntu и перейдите в директорию проекта**:
-   ```bash
-   cd /mnt/c/Users/[YOUR_USERNAME]/PycharmProjects/Prime-EDMS
-   ```
-
-3. **Запустите скрипт автоматической установки**:
-   ```bash
-   # В Ubuntu WSL2
-   ./setup-wsl.sh
-   ```
-
-4. **Перезагрузите WSL2**:
-   ```powershell
-   # В PowerShell
-   wsl --shutdown && wsl
-   ```
-
-5. **Запустите Mayan EDMS**:
-   ```bash
-   # В Ubuntu WSL2
-   make start
-   # или
-   ./start-mayan.sh start
-   # или
-   docker-compose -f docker-compose.simple.yml up -d
-   ```
-
-   ```powershell
-   # В Windows PowerShell
-   .\start-windows.bat start
-   # или
-   .\start-mayan.ps1
-   ```
-
-#### Вариант 2: Ubuntu (нативно)
+### 🔧 Установка и запуск
 
 1. **Клонируйте репозиторий**:
    ```bash
@@ -78,6 +33,7 @@
 4. **Запустите Mayan EDMS**:
    ```bash
    ./ubuntu-start.sh start
+   # Или используйте make: make start
    ```
 
 5. **Откройте браузер и перейдите**: http://localhost
@@ -85,27 +41,19 @@
 ## 📋 Доступные скрипты
 
 ### Скрипты установки
-- `setup-wsl.sh` - Автоматическая установка для Windows WSL2
-- `ubuntu-setup.sh` - Автоматическая установка для Ubuntu нативно
+- `ubuntu-setup.sh` - Автоматическая установка для Ubuntu
 
 ### Скрипты управления
-- `start-mayan.sh` - Управление Mayan EDMS в WSL2/Linux
-- `ubuntu-start.sh` - Управление Mayan EDMS в Ubuntu нативно
-- `start-mayan.ps1` - Управление Mayan EDMS в Windows PowerShell
-- `start-windows.bat` - Управление Mayan EDMS в Windows CMD
-- `Makefile` - Команды make для автоматизации (только в WSL2/Ubuntu)
+- `ubuntu-start.sh` - Управление Mayan EDMS в Ubuntu
+- `Makefile` - Команды make для автоматизации
 
 ### Скрипты безопасности
 - `generate-ssl.sh` - Генерация самоподписанных SSL сертификатов
 - `setup-https.sh` - Настройка HTTPS (самоподписанные или Let's Encrypt)
 
-### Сравнение подходов
-
-| Платформа | Скрипт установки | Скрипт управления | Особенности |
-|-----------|----------------|-------------------|-------------|
-| **Windows + WSL2** | `setup-wsl.sh` | `start-mayan.sh`, `make`, `start-mayan.ps1`, `start-windows.bat` | Перезапуск WSL2 после установки |
-| **Ubuntu нативно** | `ubuntu-setup.sh` | `ubuntu-start.sh`, `make` | Максимальная производительность |
-| **Windows (только)** | `setup-windows.bat` | `start-windows.bat`, `start-mayan.ps1` | Через WSL2 в фоне |
+### Скрипты управления
+- `ubuntu-start.sh` - Управление Mayan EDMS
+- `Makefile` - Команды make для автоматизации
 
 ## 🔒 Настройка HTTPS
 
@@ -118,14 +66,12 @@
 ./generate-ssl.sh your-domain.com
 
 # Активация HTTPS
-# Раскомментируйте строки в docker-compose.simple.yml:
+# Раскомментируйте строки в app.env:
 # MAYAN_COMMON_SSL_CERTIFICATE: "/opt/mayan/certificates/ssl.crt"
 # MAYAN_COMMON_SSL_KEY: "/opt/mayan/certificates/ssl.key"
-# - ./certificates:/opt/mayan/certificates:ro
 
 # Перезапуск
-docker-compose -f docker-compose.simple.yml --profile app down
-docker-compose -f docker-compose.simple.yml --profile app up -d app
+make restart
 ```
 
 #### Production сертификат (Let's Encrypt)
@@ -135,8 +81,7 @@ docker-compose -f docker-compose.simple.yml --profile app up -d app
 ./setup-https.sh letsencrypt your-domain.com
 
 # Перезапуск
-docker-compose -f docker-compose.simple.yml --profile app down
-docker-compose -f docker-compose.simple.yml --profile app up -d app
+make restart
 ```
 
 ### Доступ к HTTPS
@@ -145,102 +90,6 @@ docker-compose -f docker-compose.simple.yml --profile app up -d app
 - **Порт**: 443 (автоматически)
 - **HTTP редирект**: Включается автоматически на HTTPS
 
-## 📋 Ручная установка
-
-### Вариант A: Установка в WSL2 (Windows)
-
-#### Шаг 1: Установка Docker в WSL2
-
-```bash
-# Обновление системы
-sudo apt update && sudo apt upgrade -y
-
-# Установка зависимостей
-sudo apt install -y ca-certificates curl gnupg lsb-release
-
-# Добавление GPG ключа Docker
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-# Добавление репозитория Docker
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Установка Docker
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# Запуск Docker daemon
-sudo systemctl enable docker
-sudo systemctl start docker
-
-# Добавление пользователя в группу docker
-sudo usermod -aG docker $USER
-```
-
-#### Шаг 2: Запуск Mayan EDMS в WSL2
-
-```bash
-# Переход в директорию проекта
-cd /mnt/c/Users/[YOUR_USERNAME]/PycharmProjects/Prime-EDMS
-
-# Перезапуск WSL2 для применения группы docker
-# В PowerShell: wsl --shutdown && wsl
-
-# Запуск сервисов
-docker-compose -f docker-compose.simple.yml up -d
-
-# Проверка статуса
-docker ps
-```
-
-### Вариант B: Установка в Ubuntu (нативно)
-
-#### Шаг 1: Установка Docker в Ubuntu
-
-```bash
-# Обновление системы
-sudo apt update && sudo apt upgrade -y
-
-# Установка зависимостей
-sudo apt install -y ca-certificates curl gnupg lsb-release
-
-# Добавление GPG ключа Docker
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-# Добавление репозитория Docker
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Установка Docker
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# Запуск Docker daemon
-sudo systemctl enable docker
-sudo systemctl start docker
-
-# Добавление пользователя в группу docker
-sudo usermod -aG docker $USER
-
-# Перезаход в систему
-newgrp docker
-```
-
-#### Шаг 2: Запуск Mayan EDMS в Ubuntu
-
-```bash
-# Переход в директорию проекта
-cd ~/mayan-edms
-
-# Запуск сервисов
-docker-compose -f docker-compose.simple.yml up -d
-
-# Проверка статуса
-docker ps
-```
-
-### Шаг 3: Доступ к системе
-
-- **URL**: http://localhost
-- **Первоначальная настройка**: Следуйте инструкциям в веб-интерфейсе
 
 ## 🏗️ Архитектура
 
@@ -262,10 +111,10 @@ Mayan EDMS Stack:
 
 ```
 Prime-EDMS/
-├── docker-compose.simple.yml    # Конфигурация Docker Compose
 ├── app.env                      # Переменные окружения приложения
-├── setup-wsl.sh                 # Скрипт установки для WSL2
-├── start-mayan.sh               # Скрипт запуска (Windows)
+├── ubuntu-setup.sh              # Установка окружения
+├── ubuntu-start.sh              # Управление сервисами
+├── Makefile                     # Команды make
 ├── README.md                    # Документация
 └── .gitignore                   # Исключаемые файлы
 ```
@@ -291,47 +140,29 @@ MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS={'redis_url':'redis://:mayanredispassword@r
 
 ### Изменение порта
 
-По умолчанию Mayan EDMS доступен на порту 80. Чтобы изменить порт:
-
-```yaml
-# В docker-compose.simple.yml измените:
-ports:
-  - "8080:8000"  # Вместо "80:8000"
-```
+По умолчанию Mayan EDMS доступен на порту 80. Чтобы изменить порт, отредактируйте скрипт `ubuntu-start.sh`.
 
 ## 🔧 Управление
 
 ### Основные команды
 
 ```bash
-# Запуск всех сервисов
-docker-compose -f docker-compose.simple.yml up -d
-
-# Остановка всех сервисов
-docker-compose -f docker-compose.simple.yml down
-
-# Просмотр логов
-docker-compose -f docker-compose.simple.yml logs -f
-
-# Перезапуск приложения
-docker-compose -f docker-compose.simple.yml restart app
-
-# Просмотр статуса контейнеров
-docker ps
+make start    # Запуск всех сервисов
+make stop     # Остановка всех сервисов
+make restart  # Перезапуск приложения
+make logs     # Просмотр логов
+make status   # Статус контейнеров
 ```
 
-### Очистка данных
+### Управление через скрипт
 
 ```bash
-# Остановка и удаление всех контейнеров
-docker-compose -f docker-compose.simple.yml down
-
-# Удаление volumes (ВНИМАНИЕ: удалятся все данные!)
-docker volume rm $(docker volume ls -q | grep prime-edms)
-
-# Полная очистка
-docker system prune -a --volumes
+./ubuntu-start.sh start   # Запуск
+./ubuntu-start.sh stop    # Остановка
+./ubuntu-start.sh restart # Перезапуск
+./ubuntu-start.sh status  # Статус
 ```
+
 
 ## 🔒 Безопасность
 
@@ -375,37 +206,162 @@ docker stats
 
 ## 🐛 Устранение проблем
 
-### Порт 80 занят
+### 🚨 Распространенные проблемы и решения
+
+#### 1. **Порт 80 занят**
 ```bash
 # Найти процесс, занимающий порт 80
 sudo lsof -i :80
 
 # Остановить Apache/Nginx если необходимо
 sudo systemctl stop apache2
+sudo systemctl disable apache2
 ```
 
-### Docker не запускается
+#### 2. **Не хватает места на диске**
 ```bash
-# Проверить статус Docker daemon
-sudo systemctl status docker
+# Проверить использование диска
+df -h
 
-# Перезапустить Docker
-sudo systemctl restart docker
+# Очистить ненужные пакеты
+sudo apt autoremove
+sudo apt autoclean
 ```
 
-### Ошибки сети
+#### 3. **Проблемы с правами Docker**
 ```bash
-# Пересоздать сеть
-docker-compose -f docker-compose.simple.yml down
-docker network rm prime-edms_mayan
-docker-compose -f docker-compose.simple.yml up -d
+# Добавить пользователя в группу docker
+sudo usermod -aG docker $USER
+
+# Перезайти в систему
+# Или выполнить: newgrp docker
 ```
+
+#### 4. **Приложение не запускается**
+```bash
+# Проверить статус сервисов
+make status
+
+# Посмотреть логи
+make logs
+
+# Перезапустить
+make restart
+```
+
+#### 5. **База данных не отвечает**
+```bash
+# Проверить логи базы данных
+./ubuntu-start.sh logs postgresql
+
+# Перезапустить базу данных
+./ubuntu-start.sh restart postgresql
+```
+
+### 🔧 Восстановление после сбоев
+
+#### Полная перезагрузка
+```bash
+# Остановить все сервисы
+make stop
+
+# Перезапустить проект
+make start
+```
+
+#### Очистка данных (ВНИМАНИЕ!)
+```bash
+# Это удалит все данные!
+make stop
+sudo rm -rf docker/mayan_data/*
+sudo rm -rf docker/postgres_data/*
+sudo rm -rf docker/rabbitmq_data/*
+sudo rm -rf docker/redis_data/*
+make start
+```
+
+### 📞 Получение помощи
+
+Если проблема не решена:
+
+1. **Соберите информацию**:
+   ```bash
+   make status
+   make logs
+   df -h
+   free -h
+   ```
+
+2. **Создайте issue** в репозитории с:
+   - Описанием проблемы
+   - Логами команд выше
+   - Версией Ubuntu: `lsb_release -a`
+
+## 🔄 Конвертация медиа файлов
+
+Проект включает расширение для автоматической конвертации медиа файлов с использованием FFmpeg и Pillow.
+
+### ✨ Автоматическая интеграция
+
+**Кнопка "Сконвертировать" автоматически добавляется в меню "Действия" файлов документов в Mayan EDMS.**
+
+### 🎯 Как использовать
+
+1. **Откройте Mayan EDMS**: `http://localhost`
+2. **Перейдите к любому документу** с файлами
+3. **В меню "Действия" файла** нажмите **"Сконвертировать"**
+4. **Выберите желаемый формат** вывода
+5. **Система автоматически** создаст новую версию документа
+
+### 📁 Поддерживаемые форматы
+
+#### Изображения
+- **Входные**: JPEG, PNG, TIFF, BMP, GIF, WebP, RAW форматы (CR2, NEF, ARW, etc.)
+- **Выходные**: PDF, JPEG, PNG, TIFF
+
+#### Видео
+- **Входные**: MP4, AVI, MOV, MKV, WebM, FLV, WMV, 3GP, MPG
+- **Выходные**: MP4, WebM, AVI (с извлечением кадров и превью)
+
+#### Документы
+- **Входные**: PDF, DOC, DOCX
+- **Выходные**: PDF (оптимизация и конвертация)
+
+#### Аудио
+- **Входные**: MP3, WAV, FLAC, AAC, OGG
+- **Выходные**: Визуализация в виде изображений спектрограмм
+
+### ⚙️ Технические возможности
+
+- **Автоматическое определение** типа файла
+- **Оптимизация качества** при конвертации
+- **Извлечение превью** для видео файлов
+- **Создание миниатюр** для всех типов файлов
+- **Обработка метаданных** и EXIF данных
+- **Пакетная обработка** через фоновые задачи
+
+### 🔍 Диагностика
+
+Если кнопка не появляется:
+
+```bash
+# Проверить загрузку расширения
+make logs | grep "Converter Pipeline"
+
+# Проверить JavaScript в браузере (F12 → Console)
+# Должен появиться alert: "JavaScript загружен через context processor!"
+```
+
+### 📊 Мониторинг конвертаций
+
+Все конвертации выполняются в фоне. Статус можно отслеживать в:
+- **Логах приложения**: `make logs`
+- **Celery воркерах**: через RabbitMQ Management (`http://localhost:15672`)
+- **Интерфейсе Mayan EDMS**: в истории версий документа
 
 ## 📚 Дополнительные ресурсы
 
 - [Официальная документация Mayan EDMS](https://docs.mayan-edms.com/)
-- [Docker документация](https://docs.docker.com/)
-- [WSL2 документация](https://docs.microsoft.com/en-us/windows/wsl/)
 
 ## 📄 Лицензия
 
