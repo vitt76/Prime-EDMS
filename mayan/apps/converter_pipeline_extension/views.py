@@ -122,6 +122,64 @@ class MediaConversionView(SingleObjectDetailView):
 
         return f'{name_part}_converted{new_ext}'
 
+    def _convert_image_to_pdf(self, image):
+        """Конвертирует изображение в PDF"""
+        from io import BytesIO
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
+        from PIL import Image
+        import tempfile
+        import os
+
+        try:
+            # Создаем PDF буфер
+            pdf_buffer = BytesIO()
+
+            # Создаем PDF документ
+            c = canvas.Canvas(pdf_buffer, pagesize=letter)
+            width, height = letter
+
+            # Конвертируем изображение в RGB если нужно
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+
+            # Масштабируем изображение чтобы поместилось на страницу
+            img_width, img_height = image.size
+            aspect_ratio = img_width / img_height
+
+            if img_width > width * 0.8:
+                img_width = width * 0.8
+                img_height = img_width / aspect_ratio
+
+            if img_height > height * 0.8:
+                img_height = height * 0.8
+                img_width = img_height * aspect_ratio
+
+            # Сохраняем изображение во временный файл (reportlab лучше работает с файлами)
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                temp_image_path = temp_file.name
+                image.save(temp_file, format='JPEG', quality=85)
+
+            try:
+                # Добавляем изображение на PDF страницу
+                c.drawImage(temp_image_path, (width - img_width) / 2, (height - img_height) / 2, img_width, img_height)
+
+                # Сохраняем PDF
+                c.save()
+                pdf_buffer.seek(0)
+
+                return pdf_buffer
+            finally:
+                # Удаляем временный файл
+                try:
+                    os.unlink(temp_image_path)
+                except:
+                    pass
+
+        except Exception as e:
+            logger.error(f'PDF conversion failed: {e}')
+            return None
+
     def post(self, request, *args, **kwargs):
         """Обработка POST запроса на конвертацию"""
         self.object = self.get_object()
@@ -149,47 +207,26 @@ class MediaConversionView(SingleObjectDetailView):
             converted_file = self._convert_file(self.object, output_format)
 
             if converted_file:
-                # Создаем новый DocumentFile с конвертированным файлом
-                from mayan.apps.documents.models import DocumentFile
+                # Используем метод file_new документа для создания нового файла
                 from django.core.files.base import ContentFile
 
                 # Создаем новый файл в документе
-                new_document_file = DocumentFile(
-                    document=self.object.document,
-                    filename=self._generate_converted_filename(self.object.filename, output_format)
+                new_filename = self._generate_converted_filename(self.object.filename, output_format)
+
+                # Создаем file-like объект из конвертированных данных
+                file_content = ContentFile(converted_file.getvalue(), name=new_filename)
+
+                # Используем file_new метод документа
+                from mayan.apps.documents.document_file_actions import DocumentFileActionUseNewPages
+
+                new_document_file = self.object.document.file_new(
+                    file_object=file_content,
+                    action=DocumentFileActionUseNewPages.backend_id,  # Используем правильный backend_id
+                    comment=comment,
+                    filename=new_filename,
+                    _user=request.user
                 )
-
-                # Сохраняем конвертированный файл
-                file_content = ContentFile(converted_file.getvalue(), name=new_document_file.filename)
-                new_document_file.file.save(new_document_file.filename, file_content, save=False)
-                new_document_file.save()
-
-                # Создаем версию с новым файлом
-                if not self.object.document.version_active:
-                    # Если нет активной версии, создаем первую версию
-                    document_version = DocumentVersion(
-                        document=self.object.document,
-                        comment=comment
-                    )
-                    document_version._event_actor = request.user
-                    document_version.save()
-
-                    # Добавляем страницы из нового файла
-                    document_version.pages_remap(
-                        annotated_content_object_list=DocumentVersion.annotate_content_object_list(
-                            content_object_list=new_document_file.pages.all()
-                        ),
-                        _user=request.user
-                    )
-                else:
-                    # Используем новый файл для создания версии
-                    from mayan.apps.documents.document_file_actions import DocumentFileActionAppendNewPages
-                    DocumentFileActionAppendNewPages.execute(
-                        document=self.object.document,
-                        document_file=new_document_file,
-                        comment=comment,
-                        _user=request.user
-                    )
+                # file_new уже выполнил нужные действия по созданию версии
             else:
                 # Fallback: создаем версию с оригинальным файлом
                 if not self.object.document.version_active:
