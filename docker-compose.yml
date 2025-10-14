@@ -55,3 +55,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  app:
+    image: mayanedms/mayanedms:s4.3
+    container_name: prime-edms_app_1
+    environment:
+      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql'}}"
+      MAYAN_CELERY_BROKER_URL: amqp://mayan:mayanrabbitpass@rabbitmq:5672/mayan
+      MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
+      MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock
+      MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:mayanredispassword@redis:6379/2'}"
+      MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
+    volumes:
+      - mayan_data:/var/lib/mayan
+      - ./config.yml:/opt/mayan-edms/config.yml:ro
+      - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension:ro
+    ports:
+      - "80:8000"
+    depends_on:
+      - postgresql
+      - redis
+      - rabbitmq
+    restart: unless-stopped

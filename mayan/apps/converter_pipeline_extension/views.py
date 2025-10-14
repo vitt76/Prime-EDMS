@@ -3,10 +3,13 @@ import logging
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
-from django.views.generic import RedirectView
+from django.views.generic import RedirectView, View
+from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
+
+from stronghold.decorators import public
 
 from mayan.apps.documents.models import DocumentFile
 from mayan.apps.documents.permissions import permission_document_file_view
@@ -96,6 +99,28 @@ class MediaConversionView(SingleObjectDetailView):
 
         # Для неизвестных форматов возвращаем пустой список
         return []
+
+    def _generate_converted_filename(self, original_filename, output_format):
+        """
+        Генерирует имя файла для конвертированного файла.
+        """
+        import os
+
+        if not original_filename:
+            return f'converted.{output_format}'
+
+        # Разделяем имя файла и расширение
+        name_part, ext = os.path.splitext(original_filename)
+
+        # Создаем новое имя с указанным расширением
+        if output_format.lower() == 'jpeg':
+            new_ext = '.jpg'
+        elif output_format.lower() == 'tiff':
+            new_ext = '.tif'
+        else:
+            new_ext = f'.{output_format.lower()}'
+
+        return f'{name_part}_converted{new_ext}'
 
     def post(self, request, *args, **kwargs):
         """Обработка POST запроса на конвертацию"""
@@ -439,31 +464,41 @@ class DocumentFileConversionAPIView(generics.RetrieveAPIView):
         return Response({"message": f"Convert document file {document_file.pk}"})
 
 
-class DocumentFileConvertRedirectView(RedirectView):
+@public
+class DocumentFileConvertRedirectView(View):
     """
-    View that analyzes the return URL and redirects to the appropriate media conversion page.
+    View that redirects to the media conversion page.
+    Works with Mayan EDMS hash-based routing.
     """
+    # public = True  # Mark as public view - now using decorator
 
-    def get_redirect_url(self, *args, **kwargs):
-        return_url = self.request.GET.get('return', '')
+    def get(self, request, *args, **kwargs):
+        # Сначала проверяем, есть ли document_file_id в URL параметрах
+        document_file_id = kwargs.get('document_file_id')
 
-        if not return_url:
-            # Если нет return URL, показываем ошибку
-            from django.contrib import messages
-            messages.error(self.request, _('Не удалось определить файл для конвертации.'))
-            return '/'
+        if document_file_id:
+            # Если есть ID файла в URL, формируем правильный URL (hash-based для Vue.js)
+            redirect_url = f"#/converter-pipeline/media-conversion/{document_file_id}/"
+        else:
+            # Иначе используем старый способ с GET параметром return
+            return_url = request.GET.get('return', '')
 
-        # Извлекаем file ID из return URL
-        file_id = self._extract_file_id_from_url(return_url)
+            if not return_url:
+                # Если нет return URL, перенаправляем на home
+                redirect_url = "/documents/"
+            else:
+                # Извлекаем file ID из return URL
+                file_id = self._extract_file_id_from_url(return_url)
 
-        if file_id:
-            # Перенаправляем на страницу конвертации
-            return f"/converter-pipeline/media-conversion/{file_id}/"
-                    else:
-            # Если не удалось извлечь file ID, показываем ошибку
-            from django.contrib import messages
-            messages.error(self.request, _('Не удалось определить файл для конвертации.'))
-            return return_url
+                if file_id:
+                    # Перенаправляем на страницу конвертации (hash-based для Vue.js)
+                    redirect_url = f"#/converter-pipeline/media-conversion/{file_id}/"
+                else:
+                    # Если не удалось извлечь file ID, перенаправляем на документы
+                    redirect_url = "/documents/"
+
+        # Используем Django redirect, который Mayan EDMS преобразует в hash-based URL
+        return redirect(redirect_url)
 
     def _extract_file_id_from_url(self, url):
         """
@@ -485,4 +520,4 @@ class DocumentFileConvertRedirectView(RedirectView):
             if match:
                 return match.group(1)
 
-                            return None
+        return None

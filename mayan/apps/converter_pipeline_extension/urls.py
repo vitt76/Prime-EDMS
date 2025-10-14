@@ -16,15 +16,17 @@ app_name = 'converter_pipeline_extension'
 # Удаляем простую функцию, используем MediaConversionView
 
 urlpatterns = [
+    # Тестовый URL для проверки
+    path(
+        'test/',
+        TemplateView.as_view(template_name='converter_pipeline_extension/setup_instructions.html'),
+        name='test_page'
+    ),
+    # Основные страницы конвертации
     path(
         'media-conversion/<int:document_file_id>/',
         MediaConversionView.as_view(),
         name='convert_media'
-    ),
-    path(
-        'convert/',
-        DocumentFileConvertRedirectView.as_view(),
-        name='convert_redirect'
     ),
     # REST API endpoints
     path(

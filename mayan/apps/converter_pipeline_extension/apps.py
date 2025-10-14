@@ -21,41 +21,18 @@ class ConverterPipelineExtensionApp(MayanAppConfig):
         super().ready()
         print('🔥 Converter Pipeline Extension loaded successfully!')
 
-        # Регистрация URL вручную (автоматическая регистрация MayanAppConfig не работает)
-        try:
-            self._register_urls()
-        except Exception as e:
-            print(f'❌ Failed to register URLs: {e}')
-            raise
+        # Удаляем устаревший фронтенд-скрипт, если он был установлен ранее (временно отключено)
+        # try:
+        #     self._cleanup_legacy_frontend_assets()
+        # except Exception as e:
+        #     print(f'⚠️ Failed to cleanup legacy frontend assets: {e}')
 
-        # Удаляем устаревший фронтенд-скрипт, если он был установлен ранее
-        try:
-            self._cleanup_legacy_frontend_assets()
-        except Exception as e:
-            print(f'⚠️ Failed to cleanup legacy frontend assets: {e}')
+        # Регистрация backend'а конвертера (временно отключено)
+        # try:
+        #     self._patch_converter_backend()
+        # except Exception as e:
+        #     print(f'❌ Failed to patch converter backend: {e}')
 
-        # Регистрация backend'а конвертера
-        try:
-            self._patch_converter_backend()
-        except Exception as e:
-            print(f'❌ Failed to patch converter backend: {e}')
-
-    def _register_urls(self):
-        """Регистрация URL для конвертации"""
-        try:
-            from django.urls import include, path
-            # Используем тот же импорт, что и в MayanAppConfig
-            from mayan.urls import urlpatterns as mayan_urlpatterns
-
-            # Импортируем urls только здесь
-            from . import urls
-            mayan_urlpatterns.append(
-                path('converter-pipeline/', include((urls.urlpatterns, 'converter_pipeline_extension')))
-            )
-            print('✅ URLs registered successfully!')
-        except Exception as e:
-            print(f'❌ Failed to register URLs: {e}')
-            raise
 
     def _cleanup_legacy_frontend_assets(self):
         """Удалить ранее установленный JS, добавлявший пункт Convert через DOM."""

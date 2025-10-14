@@ -310,7 +310,10 @@ TIMEZONE_SESSION_KEY = 'django_timezone'
 
 # ----- Stronghold -------
 
-STRONGHOLD_PUBLIC_URLS = (r'^/favicon\.ico$',)
+STRONGHOLD_PUBLIC_URLS = (
+    r'^/favicon\.ico$',
+    r'^/converter-pipeline/document-files/\d+/convert/$',
+)
 
 # ----- Swagger --------
 
@@ -343,6 +346,9 @@ if repeated_apps:
     )
 
 INSTALLED_APPS = tuple(COMMON_EXTRA_APPS_PRE or ()) + INSTALLED_APPS  # NOQA: F821
+
+# Temporary: Add our converter extension directly
+INSTALLED_APPS = INSTALLED_APPS + ('mayan.apps.converter_pipeline_extension',)  # NOQA: F821
 
 INSTALLED_APPS = INSTALLED_APPS + tuple(COMMON_EXTRA_APPS or ())  # NOQA: F821
 

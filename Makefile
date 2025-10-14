@@ -15,7 +15,7 @@
 # .\start-mayan.ps1 -Logs   - логи
 # .\start-mayan.ps1 -Status - статус
 
-COMPOSE_FILE = docker-compose.simple.yml
+COMPOSE_FILE = docker-compose.yml
 PROJECT_NAME = prime-edms
 
 .PHONY: help start stop restart logs logs-app status clean setup

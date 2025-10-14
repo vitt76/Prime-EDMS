@@ -1,0 +1,26 @@
+{% extends "appearance/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card card-default">
+                <div class="card-body text-center">
+                    <div class="alert alert-info">
+                        <h4><i class="fas fa-spinner fa-spin"></i> {% trans "Перенаправление..." %}</h4>
+                        <p>{% trans "Перенаправляем на страницу конвертации файлов." %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+<script>
+    // Перенаправляем на страницу конвертации через hash-based routing
+    window.location.href = '{{ redirect_url }}';
+</script>
+{% endblock %}
