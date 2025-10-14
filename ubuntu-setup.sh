@@ -55,6 +55,13 @@ sudo systemctl stop nginx 2>/dev/null || true
 sudo systemctl disable apache2 2>/dev/null || true
 sudo systemctl disable nginx 2>/dev/null || true
 
+# Установка зависимостей для расширения converter_pipeline_extension
+echo "📦 Установка зависимостей для converter_pipeline_extension..."
+sudo apt install -y ffmpeg python3-pip python3-dev build-essential python3-pil python3-reportlab
+
+# Установка reportlab в систему
+sudo pip3 install reportlab --upgrade
+
 # Установка дополнительных инструментов
 echo "🔧 Установка дополнительных инструментов..."
 sudo apt install -y git curl wget htop
@@ -65,9 +72,11 @@ echo "📋 Следующие шаги:"
 echo "1. Перезайдите в систему или выполните: newgrp docker"
 echo "2. Перейдите в директорию проекта:"
 echo "   cd ~/mayan-edms"
-echo "3. Запустите Mayan EDMS:"
-echo "   make start"
-echo "4. Откройте http://localhost в браузере"
+echo "3. Подготовьте проект:"
+echo "   ./ubuntu-prepare.sh"
+echo "4. Запустите Mayan EDMS:"
+echo "   ./ubuntu-start.sh start"
+echo "5. Откройте http://localhost в браузере"
 echo ""
 echo "⚠️  Важно: После установки перезайдите в систему для применения группы docker!"
 echo ""

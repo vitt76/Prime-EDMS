@@ -57,7 +57,7 @@ services:
       retries: 5
 
   app:
-    image: mayanedms/mayanedms:s4.3
+    image: prime-edms_app:latest
     container_name: prime-edms_app_1
     environment:
       MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql'}}"

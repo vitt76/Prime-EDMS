@@ -61,8 +61,16 @@ start_mayan() {
         return 0
     fi
 
-    # Запускаем только инфраструктуру (БД, Redis, RabbitMQ)
-    docker-compose -f $COMPOSE_FILE up -d postgresql redis rabbitmq
+    # Проверка наличия Docker образа
+    if ! docker images | grep -q "${PROJECT_NAME}_app"; then
+        print_warning "Docker образ не найден. Запустите: ./ubuntu-prepare.sh"
+        exit 1
+    fi
+
+    # Запуск всех сервисов через docker-compose
+    print_header "Запуск сервисов..."
+    docker-compose -f $COMPOSE_FILE up -d
+
     print_success "Ожидание готовности сервисов..."
 
     # Ждем готовности PostgreSQL
@@ -70,7 +78,7 @@ start_mayan() {
     counter=0
     while [ $counter -lt 30 ]; do
         echo "Попытка $((counter + 1))/30: проверка PostgreSQL..."
-        if docker exec ${PROJECT_NAME}_postgresql_1 pg_isready -U mayan >/dev/null 2>&1; then
+        if docker exec ${PROJECT_NAME}_postgresql_1 pg_isready -U mayan -d mayan >/dev/null 2>&1; then
             print_success "PostgreSQL готов"
             break
         else
@@ -107,24 +115,8 @@ start_mayan() {
         echo -n "."
     done
 
-    print_success "Все сервисы готовы! Запуск Mayan EDMS..."
-    sleep 10
-
-    # Запускаем само приложение через Docker
-    docker run -d \
-        --name ${PROJECT_NAME}_app_1 \
-        --network ${PROJECT_NAME}_default \
-        -p 80:8000 -p 443:8443 \
-        -e MAYAN_DATABASES="{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'${PROJECT_NAME}_postgresql_1'}}" \
-        -e MAYAN_CELERY_BROKER_URL="amqp://mayan:mayanrabbitpass@${PROJECT_NAME}_rabbitmq_1:5672/mayan" \
-        -e MAYAN_CELERY_RESULT_BACKEND="redis://:mayanredispassword@${PROJECT_NAME}_redis_1:6379/1" \
-        -e MAYAN_LOCK_MANAGER_BACKEND="mayan.apps.lock_manager.backends.redis_lock.RedisLock" \
-        -e MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS="{'redis_url':'redis://:mayanredispassword@${PROJECT_NAME}_redis_1:6379/2'}" \
-        -e COMMON_EXTRA_APPS="['mayan.apps.converter_pipeline_extension']" \
-        --env-file app.env \
-        --volume mayan_data:/var/lib/mayan \
-        --volume $(pwd)/config.yml:/opt/mayan-edms/config.yml \
-        prime-edms_app
+    # Ждем запуска приложения
+    print_success "Ожидание запуска Mayan EDMS..."
     sleep 30
 
     # Проверка статуса
@@ -132,6 +124,7 @@ start_mayan() {
         print_success "Mayan EDMS запущен!"
         echo ""
         echo "🌐 Доступен по адресу: http://localhost"
+        echo "🔧 Расширение converter_pipeline_extension активно"
     else
         print_error "Ошибка запуска приложения. Проверьте логи: ./ubuntu-start.sh logs"
         exit 1
@@ -162,21 +155,24 @@ stop_mayan() {
 restart_mayan() {
     print_header "Перезапуск Mayan EDMS..."
 
-    # Проверка существования контейнера приложения
-    if docker ps -q -f name="${PROJECT_NAME}_app_1" | grep -q .; then
-        print_header "Остановка текущего контейнера приложения..."
-        docker stop ${PROJECT_NAME}_app_1 >/dev/null 2>&1
-        docker rm ${PROJECT_NAME}_app_1 >/dev/null 2>&1
-        print_success "Контейнер приложения остановлен"
-    else
-        print_warning "Контейнер приложения не найден, возможно уже остановлен"
+    # Проверка наличия Docker образа
+    if ! docker images | grep -q "${PROJECT_NAME}_app"; then
+        print_warning "Docker образ не найден. Запустите: ./ubuntu-prepare.sh"
+        exit 1
     fi
 
-    # Перезапуск инфраструктуры
-    print_header "Перезапуск инфраструктуры..."
-    docker-compose -f $COMPOSE_FILE restart postgresql redis rabbitmq 2>/dev/null || docker-compose -f $COMPOSE_FILE up -d postgresql redis rabbitmq
+    # Полная остановка всех сервисов
+    print_header "Остановка всех сервисов..."
+    docker-compose -f $COMPOSE_FILE down
 
-    # Ждем готовности сервисов
+    # Очистка старых контейнеров
+    docker stop ${PROJECT_NAME}_app_1 2>/dev/null || true
+    docker rm ${PROJECT_NAME}_app_1 2>/dev/null || true
+
+    # Запуск всех сервисов через docker-compose
+    print_header "Запуск сервисов..."
+    docker-compose -f $COMPOSE_FILE up -d
+
     print_success "Ожидание готовности сервисов..."
 
     # Ждем готовности PostgreSQL
@@ -218,24 +214,8 @@ restart_mayan() {
         echo -n "."
     done
 
-    print_success "Все сервисы готовы! Запуск Mayan EDMS..."
-    sleep 10
-
-    # Запускаем само приложение через Docker
-    docker run -d \
-        --name ${PROJECT_NAME}_app_1 \
-        --network ${PROJECT_NAME}_default \
-        -p 80:8000 -p 443:8443 \
-        -e MAYAN_DATABASES="{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'${PROJECT_NAME}_postgresql_1'}}" \
-        -e MAYAN_CELERY_BROKER_URL="amqp://mayan:mayanrabbitpass@${PROJECT_NAME}_rabbitmq_1:5672/mayan" \
-        -e MAYAN_CELERY_RESULT_BACKEND="redis://:mayanredispassword@${PROJECT_NAME}_redis_1:6379/1" \
-        -e MAYAN_LOCK_MANAGER_BACKEND="mayan.apps.lock_manager.backends.redis_lock.RedisLock" \
-        -e MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS="{'redis_url':'redis://:mayanredispassword@${PROJECT_NAME}_redis_1:6379/2'}" \
-        -e MAYAN_COMMON_EXTRA_APPS="['mayan.apps.converter_pipeline_extension']" \
-        --env-file app.env \
-        --volume mayan_data:/var/lib/mayan \
-        --volume $(pwd)/config.yml:/opt/mayan-edms/config.yml \
-        prime-edms_app
+    # Ждем запуска приложения
+    print_success "Ожидание запуска Mayan EDMS..."
     sleep 30
 
     # Проверка статуса
@@ -243,6 +223,7 @@ restart_mayan() {
         print_success "Mayan EDMS перезапущен!"
         echo ""
         echo "🌐 Доступен по адресу: http://localhost"
+        echo "🔧 Расширение converter_pipeline_extension активно"
     else
         print_error "Ошибка перезапуска приложения. Проверьте логи: ./ubuntu-start.sh logs"
         exit 1

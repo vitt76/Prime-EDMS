@@ -18,7 +18,7 @@
 COMPOSE_FILE = docker-compose.yml
 PROJECT_NAME = prime-edms
 
-.PHONY: help start stop restart logs logs-app status clean setup
+.PHONY: help start stop restart logs logs-app status clean setup prepare ubuntu-setup ubuntu-start ubuntu-prepare
 
 help:
 	@echo "Mayan EDMS - Управление проектом"
@@ -32,6 +32,11 @@ help:
 	@echo "  make logs-app  - логи только приложения"
 	@echo "  make status    - статус контейнеров"
 	@echo "  make clean     - очистить данные (ОПАСНО!)"
+	@echo ""
+	@echo "Установка на Ubuntu:"
+	@echo "  make ubuntu-setup  - настройка Ubuntu и Docker"
+	@echo "  make ubuntu-prepare - подготовка проекта Mayan EDMS"
+	@echo "  make ubuntu-start   - управление Mayan EDMS на Ubuntu"
 	@echo ""
 	@echo "Или используйте PowerShell скрипт: .\start-mayan.ps1"
 
@@ -82,3 +87,16 @@ clean:
 	else \
 		echo "Операция отменена"; \
 	fi
+
+# Команды для Ubuntu
+ubuntu-setup:
+	@echo "🐳 Настройка Ubuntu для Mayan EDMS..."
+	./ubuntu-setup.sh
+
+ubuntu-prepare:
+	@echo "🔧 Подготовка проекта Mayan EDMS..."
+	./ubuntu-prepare.sh
+
+ubuntu-start:
+	@echo "🚀 Управление Mayan EDMS на Ubuntu..."
+	./ubuntu-start.sh
