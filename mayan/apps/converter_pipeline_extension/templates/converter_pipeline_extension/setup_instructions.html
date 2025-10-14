@@ -1,0 +1,132 @@
+{% extends "appearance/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}Настройка меню конвертации{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card card-default">
+                <div class="card-header">
+                    <h1 class="card-title">
+                        <i class="fas fa-cogs text-primary"></i>
+                        {% trans "Настройка меню конвертации" %}
+                    </h1>
+                </div>
+
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h4><i class="fas fa-info-circle"></i> Временное решение</h4>
+                        <p>Поскольку Mayan EDMS 4.3 использует новый Vue.js интерфейс, традиционные Django меню не отображаются автоматически.</p>
+                        <p>Используйте одно из решений ниже для добавления кнопки конвертации.</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-magic"></i>
+                                        Автоматическая интеграция
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-success">
+                                        <strong>✅ Система работает автоматически!</strong><br>
+                                        Кнопка конвертации автоматически добавляется в меню "Действия" файлов документов через JavaScript интеграцию с интерфейсом Mayan EDMS.
+                                    </div>
+
+                                    <div class="alert alert-info">
+                                        <strong>📍 Где найти кнопку:</strong><br>
+                                        Кнопка "Конвертировать" появляется в выпадающем меню "Действия" у файла документа, рядом с пунктами "Скачать", "Удалить", "Редактировать" и другими действиями.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-external-link-alt"></i>
+                                        Вариант 2: Прямые ссылки
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>Если bookmarklet не работает, используйте прямые URL для конвертации:</p>
+
+                                    <div class="alert alert-info">
+                                        <strong>Формат URL:</strong><br>
+                                        <code>http://localhost/converter-pipeline/media-conversion/&lt;FILE_ID&gt;/</code>
+                                    </div>
+
+                                    <p><strong>Как найти FILE_ID:</strong></p>
+                                    <ol>
+                                        <li>Откройте страницу файла документа в Mayan EDMS</li>
+                                        <li>Посмотрите на URL в адресной строке браузера</li>
+                                        <li>Найдите число между <code>/files/</code> и следующим <code>/</code></li>
+                                        <li>Пример: <code>/documents/1/files/123/</code> → FILE_ID = <code>123</code></li>
+                                    </ol>
+
+                                    <p><strong>Пример полной ссылки:</strong></p>
+                                    <p><code>http://localhost/converter-pipeline/media-conversion/123/</code></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-tools"></i>
+                                        Возможности конвертации
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <h6><i class="fas fa-image text-success"></i> Изображения</h6>
+                                            <ul class="list-unstyled small">
+                                                <li>• RAW (CR2, NEF, ARW, DNG)</li>
+                                                <li>• JPEG, PNG, TIFF</li>
+                                                <li>• Конвертация в PDF</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <h6><i class="fas fa-video text-danger"></i> Видео</h6>
+                                            <ul class="list-unstyled small">
+                                                <li>• MP4, AVI, MOV, MKV</li>
+                                                <li>• Извлечение превью</li>
+                                                <li>• Конвертация в изображения</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <h6><i class="fas fa-file text-primary"></i> Документы</h6>
+                                            <ul class="list-unstyled small">
+                                                <li>• PDF документы</li>
+                                                <li>• Конвертация форматов</li>
+                                                <li>• Обработка страниц</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <a href="{% url 'documents:document_list' %}" class="btn btn-primary">
+                            <i class="fas fa-arrow-left"></i>
+                            Вернуться к документам
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

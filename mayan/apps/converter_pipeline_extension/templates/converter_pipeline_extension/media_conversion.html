@@ -1,0 +1,162 @@
+{% extends "appearance/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Сконвертировать" %} - {{ object.filename }}{% endblock %}
+
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card card-default">
+                <div class="card-header">
+                    <h1 class="card-title">
+                        <i class="fas fa-film text-primary"></i>
+                        {% trans "Расширение конвейера конвертации" %}
+                    </h1>
+                </div>
+
+                <div class="card-body">
+                    <h4 class="text-muted">{% trans "Конвертация файла" %} #{{ object.pk }}</h4>
+
+                    <!-- File Information -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-file text-info"></i>
+                                        {% trans "Информация о файле" %}
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <dl class="row">
+                                        <dt class="col-sm-3">{% trans "Имя файла" %}:</dt>
+                                        <dd class="col-sm-9">{{ object.filename }}</dd>
+
+                                        <dt class="col-sm-3">{% trans "Тип MIME" %}:</dt>
+                                        <dd class="col-sm-9">{{ mime_type }}</dd>
+
+                                        <dt class="col-sm-3">{% trans "Размер" %}:</dt>
+                                        <dd class="col-sm-9">{{ object.size|filesizeformat }}</dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Alert -->
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <strong>{% trans "Статус" %}:</strong> {% trans "Готово к конвертации" %}
+                                </div>
+
+                    <!-- Supported Formats and Tools -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-file text-success"></i>
+                                        {% trans "Поддерживаемые форматы" %}
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item">
+                                            <i class="fas fa-camera text-primary"></i>
+                                            {% trans "RAW изображения (CR2, NEF, ARW, DNG)" %}
+                                        </li>
+                                        <li class="list-group-item">
+                                            <i class="fas fa-video text-danger"></i>
+                                            {% trans "Видео (MP4, AVI, MOV, MKV)" %}
+                                        </li>
+                                        <li class="list-group-item">
+                                            <i class="fas fa-archive text-warning"></i>
+                                            {% trans "Архивы (ZIP, RAR, 7Z)" %}
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-tools text-secondary"></i>
+                                        {% trans "Инструменты конвертации" %}
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item">
+                                            <i class="fab fa-linux text-dark"></i>
+                                            dcraw / libraw
+                                        </li>
+                                        <li class="list-group-item">
+                                            <i class="fas fa-play-circle text-primary"></i>
+                                            FFmpeg
+                                        </li>
+                                        <li class="list-group-item">
+                                            <i class="fas fa-archive text-warning"></i>
+                                            unrar / 7z
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <!-- Output Format Selection -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-file-export"></i>
+                                        {% trans "Настройки конвертации" %}
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <div class="form-group">
+                                            <label for="output_format">
+                                                {% trans "Выходной формат" %}
+                                            </label>
+                                            <select class="form-control" id="output_format" name="output_format">
+                                                <option value="pdf">PDF Document</option>
+                                                <option value="jpeg">JPEG Image</option>
+                                                <option value="png">PNG Image</option>
+                                                <option value="tiff">TIFF Image</option>
+                                            </select>
+                                            <small class="form-text text-muted">
+                                                {% trans "Выберите желаемый выходной формат для конвертированного файла." %}
+                                            </small>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary btn-lg" {% if not can_convert %}disabled{% endif %}>
+                                            <i class="fas fa-play"></i>
+                                            {% trans "Начать конвертацию" %}
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                            <a href="{% url 'documents:document_file_preview' document_file_id=object.pk %}" class="btn btn-secondary btn-lg ml-2">
+                                <i class="fas fa-arrow-left"></i>
+                                {% trans "Вернуться к файлу" %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

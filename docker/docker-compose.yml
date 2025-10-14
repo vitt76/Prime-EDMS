@@ -287,3 +287,10 @@ volumes:
   rabbitmq:
   redis:
   traefik-certificates-letsencrypt:
+  app:
+  elasticsearch:
+  postgres:
+  mountindex:
+  rabbitmq:
+  redis:
+  traefik-certificates-letsencrypt:
