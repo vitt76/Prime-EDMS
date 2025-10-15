@@ -69,14 +69,15 @@ services:
       MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock
       MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:mayanredispassword@redis:6379/2'}"
       MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
-      # Force add our converter extension via environment
-      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension']"
+      # Force add our extensions via environment
+      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
       PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
     volumes:
       - mayan_data:/var/lib/mayan
       - ./config.yml:/opt/mayan-edms/config.yml:ro
       - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension:ro
+      - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution:ro
     ports:
       - "80:8000"
     depends_on:

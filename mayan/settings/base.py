@@ -318,6 +318,7 @@ TIMEZONE_SESSION_KEY = 'django_timezone'
 STRONGHOLD_PUBLIC_URLS = (
     r'^/favicon\.ico$',
     r'^/converter-pipeline/document-files/\d+/convert/$',
+    r'^/publish/.*$',
 )
 
 # ----- Swagger --------
@@ -326,6 +327,47 @@ SWAGGER_SETTINGS = {
     'DEFAULT_INFO': 'rest_api.schemas.openapi_info',
     'DEFAULT_MODEL_DEPTH': 1,
     'DOC_EXPANSION': 'None'
+}
+
+# ----- Distribution -------
+
+DISTRIBUTION_RENDITION_PRESETS = [
+    {
+        'resource_type': 'image',
+        'format': 'jpeg',
+        'width': 1920,
+        'height': 1080,
+        'quality': 85,
+        'watermark': {}
+    },
+    {
+        'resource_type': 'image',
+        'format': 'png',
+        'width': 800,
+        'height': None,
+        'quality': None,
+        'watermark': {}
+    },
+    {
+        'resource_type': 'document',
+        'format': 'pdf',
+        'width': None,
+        'height': None,
+        'quality': None,
+        'watermark': {}
+    }
+]
+
+DISTRIBUTION_DEFAULT_EXPIRATION_DAYS = 30
+DISTRIBUTION_MAX_DOWNLOADS = 100
+DISTRIBUTION_FFMPEG_PATH = '/usr/bin/ffmpeg'
+DISTRIBUTION_CONVERT_TIMEOUT = 300  # 5 minutes
+DISTRIBUTION_STORAGE = 'local'  # 'local' or 's3'
+DISTRIBUTION_WATERMARK_DEFAULTS = {
+    'text': 'SAMPLE',
+    'font_size': 24,
+    'opacity': 0.3,
+    'position': 'center'
 }
 
 # ------ End -----

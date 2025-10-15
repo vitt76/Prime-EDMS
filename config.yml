@@ -1,3 +1,4 @@
 common:
   extra_apps:
     - mayan.apps.converter_pipeline_extension
+    - mayan.apps.distribution
