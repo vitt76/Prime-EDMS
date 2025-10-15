@@ -89,12 +89,12 @@ from .links.document_links import (
     link_document_preview, link_document_properties
 )
 from .links.document_file_links import (
-    link_document_file_delete, link_document_file_multiple_delete,
-    link_document_file_download_quick, link_document_file_edit,
-    link_document_file_list, link_document_file_preview,
-    link_document_file_print_form, link_document_file_properties,
-    link_document_file_return_to_document, link_document_file_return_list,
-    link_document_file_transformations_clear,
+    link_document_file_convert, link_document_file_delete,
+    link_document_file_multiple_delete, link_document_file_download_quick,
+    link_document_file_edit, link_document_file_list,
+    link_document_file_preview, link_document_file_print_form,
+    link_document_file_properties, link_document_file_return_to_document,
+    link_document_file_return_list, link_document_file_transformations_clear,
     link_document_file_multiple_transformations_clear,
     link_document_file_transformations_clone
 )
@@ -819,6 +819,7 @@ class DocumentsApp(MayanAppConfig):
                 link_document_file_delete,
                 link_document_file_download_quick,
                 link_document_file_edit,
+                link_document_file_convert,
                 link_document_file_page_count_update,
                 link_document_file_print_form,
                 link_document_file_transformations_clear,

@@ -132,6 +132,9 @@ icon_document_file_preview = Icon(
 icon_document_file_print = Icon(
     driver_name='fontawesome', symbol='print'
 )
+icon_document_file_convert = Icon(
+    driver_name='fontawesome', symbol='exchange-alt'
+)
 icon_document_file_properties_detail = Icon(
     driver_name='fontawesome', symbol='info'
 )

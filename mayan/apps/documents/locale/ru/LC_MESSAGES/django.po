@@ -438,6 +438,10 @@ msgstr "Удалить"
 msgid "Edit"
 msgstr "Редактировать"
 
+#: links/document_file_links.py:42
+msgid "Convert"
+msgstr "Конвертировать"
+
 #: links/document_file_links.py:41
 msgid "Quick download"
 msgstr "Скачать"

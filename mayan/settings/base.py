@@ -241,6 +241,11 @@ LANGUAGES = (
     ('zh-hans', _('Chinese (Simplified)'))
 )
 
+# Path to locale files
+LOCALE_PATHS = [
+    '/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/locale',
+]
+
 MEDIA_URL = 'media/'
 
 SITE_ID = 1
