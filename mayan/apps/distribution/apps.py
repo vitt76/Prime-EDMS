@@ -26,3 +26,5 @@ class DistributionApp(MayanAppConfig):
         if app_name not in settings.INSTALLED_APPS:
             settings.INSTALLED_APPS.append(app_name)
             print(f'✅ Added {app_name} to INSTALLED_APPS via ready()')
+
+                # URLs will be automatically discovered by REST API app via api_urls variable

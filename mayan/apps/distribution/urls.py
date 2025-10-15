@@ -4,7 +4,7 @@ from .urls.api_urls import urlpatterns as api_urlpatterns
 
 app_name = 'distribution'
 
-# API URLs for REST framework
+# API URLs for REST framework (this is what REST API app discovers)
 api_urls = api_urlpatterns
 
 urlpatterns = [

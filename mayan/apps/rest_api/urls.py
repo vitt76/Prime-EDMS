@@ -6,15 +6,6 @@ from .api_views import (
 )
 from .literals import API_VERSION
 
-# Import distribution URLs if available
-try:
-    from mayan.apps.distribution.urls import api_urls as distribution_api_urls
-    print("DEBUG: Successfully imported distribution API URLs")
-except ImportError as e:
-    print(f"DEBUG: Could not import distribution API URLs: {e}")
-    distribution_api_urls = []
-
-
 api_version_urls = [
     url(regex=r'^$', name='api_version_root', view=APIVersionRoot.as_view()),
     url(
@@ -30,9 +21,6 @@ api_version_urls = [
         view=BatchRequestAPIView.as_view()
     )
 ]
-
-# Add distribution URLs
-api_version_urls.extend(distribution_api_urls)
 
 api_urls = [
     url(

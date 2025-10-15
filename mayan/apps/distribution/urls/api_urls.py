@@ -1,8 +1,6 @@
 from django.http import JsonResponse
 from django.urls import path
 
-from rest_framework import routers
-
 from ..views import (
     APIAccessLogListView, APIGeneratedRenditionDetailView,
     APIGeneratedRenditionListView, APIPublicationDetailView,
@@ -12,13 +10,9 @@ from ..views import (
     APIRenditionPresetListView, APIShareLinkDetailView, APIShareLinkListView
 )
 
-# API router для distribution
-router = routers.DefaultRouter()
-
-# Пока пустой роутер, endpoints добавим позже
-print("DEBUG: api_urls.py loaded, router.urls length:", len(router.urls))
-print("DEBUG: About to create urlpatterns")
-urlpatterns = router.urls + [
+# API URLs для distribution
+print("DEBUG: api_urls.py loaded, creating urlpatterns")
+urlpatterns = [
     # Recipients
     path(
         route='recipients/',

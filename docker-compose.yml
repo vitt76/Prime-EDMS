@@ -78,6 +78,8 @@ services:
       - ./config.yml:/opt/mayan-edms/config.yml:ro
       - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension:ro
       - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution:ro
+      - ./mayan/apps/rest_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api
+      - ./mayan/urls:/opt/mayan-edms/lib/python3.9/site-packages/mayan/urls
     ports:
       - "80:8000"
     depends_on:
