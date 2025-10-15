@@ -28,3 +28,23 @@ permission_recipient_manage = namespace.add_permission(
 permission_rendition_preset_manage = namespace.add_permission(
     label=_('Manage rendition presets'), name='rendition_preset_manage'
 )
+
+# API permissions
+permission_publication_api_create = namespace.add_permission(
+    label=_('Create publications via API'), name='publication_api_create'
+)
+permission_publication_api_view = namespace.add_permission(
+    label=_('View publications via API'), name='publication_api_view'
+)
+permission_publication_api_edit = namespace.add_permission(
+    label=_('Edit publications via API'), name='publication_api_edit'
+)
+permission_publication_api_delete = namespace.add_permission(
+    label=_('Delete publications via API'), name='publication_api_delete'
+)
+permission_recipient_api_manage = namespace.add_permission(
+    label=_('Manage recipients via API'), name='recipient_api_manage'
+)
+permission_preset_api_manage = namespace.add_permission(
+    label=_('Manage presets via API'), name='preset_api_manage'
+)

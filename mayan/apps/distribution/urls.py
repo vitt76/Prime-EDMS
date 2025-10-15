@@ -1,12 +1,11 @@
 from django.urls import path, include
 
+from .urls.api_urls import urlpatterns as api_urlpatterns
+
 app_name = 'distribution'
 
-# Import API URLs from api_urls.py
-from .urls.api_urls import urlpatterns as api_urls
-
-# Make api_urls available as module attribute for REST API
-api_urls = api_urls
+# API URLs for REST framework
+api_urls = api_urlpatterns
 
 urlpatterns = [
     # Админ URLs будут добавлены позже
