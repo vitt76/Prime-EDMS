@@ -15,8 +15,14 @@
 # .\start-mayan.ps1 -Logs   - логи
 # .\start-mayan.ps1 -Status - статус
 
-COMPOSE_FILE = docker-compose.yml
-PROJECT_NAME = prime-edms
+# Загружаем переменные окружения если файл существует
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
+
+COMPOSE_FILE ?= docker-compose.yml
+PROJECT_NAME ?= prime-edms
 
 .PHONY: help start stop restart logs logs-app status clean setup prepare ubuntu-setup ubuntu-start ubuntu-prepare
 

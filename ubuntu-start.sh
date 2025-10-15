@@ -32,6 +32,22 @@ print_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+# Функция для проверки сетевого подключения
+check_network() {
+    local service=$1
+    local host=$2
+    local port=$3
+
+    print_header "Проверка подключения к $service..."
+    if docker exec "${PROJECT_NAME}_app_1" sh -c "timeout 5 bash -c '</dev/tcp/$host/$port' && echo 'OK'" 2>/dev/null | grep -q "OK"; then
+        print_success "$service доступен"
+        return 0
+    else
+        print_error "$service недоступен"
+        return 1
+    fi
+}
+
 # Проверка Docker
 check_docker() {
     if ! docker --version >/dev/null 2>&1; then
@@ -119,12 +135,39 @@ start_mayan() {
     print_success "Ожидание запуска Mayan EDMS..."
     sleep 30
 
+    # Дополнительные проверки после запуска
+    print_header "Проверка сетевых подключений..."
+
+    # Ждем запуска приложения
+    sleep 10
+
+    # Проверяем подключения
+    check_network "PostgreSQL" "postgresql" "5432" || print_warning "PostgreSQL недоступен"
+    check_network "Redis" "redis" "6379" || print_warning "Redis недоступен"
+    check_network "RabbitMQ" "rabbitmq" "5672" || print_warning "RabbitMQ недоступен"
+
+    # Проверяем загрузку расширения
+    if docker exec "${PROJECT_NAME}_app_1" python3 -c "
+import sys
+sys.path.insert(0, '/opt/mayan-edms/lib/python3.9/site-packages')
+try:
+    import mayan.apps.converter_pipeline_extension
+    print('✅ Расширение converter_pipeline_extension загружено')
+except ImportError as e:
+    print('❌ Ошибка загрузки расширения:', e)
+    sys.exit(1)
+" 2>/dev/null; then
+        print_success "Расширение converter_pipeline_extension активно"
+    else
+        print_error "Расширение converter_pipeline_extension не загружено"
+    fi
+
     # Проверка статуса
     if docker ps -q -f name="${PROJECT_NAME}_app_1" | grep -q .; then
         print_success "Mayan EDMS запущен!"
         echo ""
         echo "🌐 Доступен по адресу: http://localhost"
-        echo "🔧 Расширение converter_pipeline_extension активно"
+        echo "🔗 Конвертер: http://localhost/#/converter-pipeline/media-conversion/1"
     else
         print_error "Ошибка запуска приложения. Проверьте логи: ./ubuntu-start.sh logs"
         exit 1

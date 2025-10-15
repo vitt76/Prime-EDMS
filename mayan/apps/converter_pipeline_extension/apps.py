@@ -21,6 +21,13 @@ class ConverterPipelineExtensionApp(MayanAppConfig):
         super().ready()
         print('🔥 Converter Pipeline Extension loaded successfully!')
 
+        # Force add ourselves to INSTALLED_APPS if not already there
+        from django.conf import settings
+        app_name = 'mayan.apps.converter_pipeline_extension'
+        if app_name not in settings.INSTALLED_APPS:
+            settings.INSTALLED_APPS.append(app_name)
+            print(f'✅ Added {app_name} to INSTALLED_APPS via ready()')
+
         # Удаляем устаревший фронтенд-скрипт, если он был установлен ранее (временно отключено)
         # try:
         #     self._cleanup_legacy_frontend_assets()

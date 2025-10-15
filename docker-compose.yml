@@ -18,6 +18,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mayan -d mayan"]
       interval: 10s
@@ -32,6 +33,7 @@ services:
       - redis_data:/data
     ports:
       - "6379:6379"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
@@ -50,6 +52,7 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    restart: unless-stopped
     healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 10s
@@ -66,6 +69,10 @@ services:
       MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock
       MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:mayanredispassword@redis:6379/2'}"
       MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
+      # Force add our converter extension via environment
+      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension']"
+      # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
+      PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
     volumes:
       - mayan_data:/var/lib/mayan
       - ./config.yml:/opt/mayan-edms/config.yml:ro
@@ -73,7 +80,16 @@ services:
     ports:
       - "80:8000"
     depends_on:
-      - postgresql
-      - redis
-      - rabbitmq
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
