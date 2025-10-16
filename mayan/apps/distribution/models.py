@@ -147,6 +147,28 @@ class RenditionPreset(models.Model):
     def __str__(self):
         return f"{self.resource_type} → {self.format} ({self.name})"
 
+    def generate_rendition(self, publication_item):
+        """
+        Создает и запускает генерацию rendition'а для указанного publication item.
+        """
+        from .tasks import generate_rendition_task
+
+        # Создаем GeneratedRendition объект
+        rendition, created = GeneratedRendition.objects.get_or_create(
+            publication_item=publication_item,
+            preset=self,
+            defaults={'status': 'pending'}
+        )
+
+        # Если уже существует и не в состоянии pending, не запускаем
+        if not created and rendition.status not in ['pending', 'failed']:
+            return rendition
+
+        # Запускаем задачу
+        generate_rendition_task.delay(rendition.id)
+
+        return rendition
+
 
 class Publication(models.Model):
     """
@@ -214,6 +236,14 @@ class Publication(models.Model):
 
     def __str__(self):
         return self.title
+
+    def generate_all_renditions(self):
+        """
+        Запускает генерацию всех rendition'ов для всех items публикации.
+        """
+        for item in self.items.all():
+            for preset in self.presets.all():
+                preset.generate_rendition(item)
 
 
 class PublicationItem(models.Model):
@@ -318,9 +348,11 @@ class GeneratedRendition(models.Model):
         on_delete=models.CASCADE,
         help_text=_('Preset used to generate this rendition')
     )
-    file_path = models.CharField(
-        max_length=500,
-        help_text=_('Path to the generated file')
+    file = models.FileField(
+        upload_to='distribution_renditions/',
+        null=True,
+        blank=True,
+        help_text=_('Generated rendition file')
     )
     status = models.CharField(
         max_length=16,

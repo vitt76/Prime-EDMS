@@ -2,7 +2,7 @@
 
 from .preset_views import APIRenditionPresetDetailView, APIRenditionPresetListView
 from .publication_views import (
-    APIAccessLogListView, APIGeneratedRenditionDetailView,
+    APIAccessLogListView, APIGenerateRenditionsView, APIGeneratedRenditionDetailView,
     APIGeneratedRenditionListView, APIPublicationDetailView,
     APIPublicationItemDetailView, APIPublicationItemListView,
     APIPublicationListView, APIShareLinkDetailView, APIShareLinkListView

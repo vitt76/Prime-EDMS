@@ -167,3 +167,22 @@ class APIAccessLogListView(generics.ListAPIView):
         queryset = super().get_queryset()
         # Filter to show only logs for share links of publications owned by current user
         return queryset.filter(share_link__publication__owner=self.request.user)
+
+
+class APIGenerateRenditionsView(generics.RetrieveAPIView):
+    """
+    post: Generate all renditions for a publication.
+    """
+    mayan_object_permissions = {'POST': (permission_publication_api_edit,)}
+    serializer_class = PublicationSerializer
+    queryset = Publication.objects.all()
+
+    def get_queryset(self):
+        return Publication.objects.filter(owner=self.request.user)
+
+    def post(self, request, *args, **kwargs):
+        publication = self.get_object()
+        # Запускаем генерацию всех rendition'ов
+        publication.generate_all_renditions()
+        serializer = self.get_serializer(publication)
+        return Response(serializer.data)

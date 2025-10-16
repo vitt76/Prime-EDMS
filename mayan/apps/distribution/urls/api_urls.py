@@ -2,7 +2,7 @@ from django.http import JsonResponse
 from django.urls import path
 
 from ..views import (
-    APIAccessLogListView, APIGeneratedRenditionDetailView,
+    APIAccessLogListView, APIGenerateRenditionsView, APIGeneratedRenditionDetailView,
     APIGeneratedRenditionListView, APIPublicationDetailView,
     APIPublicationItemDetailView, APIPublicationItemListView,
     APIPublicationListView, APIRecipientDetailView, APIRecipientListDetailView,
@@ -109,5 +109,12 @@ urlpatterns = [
         route='test/',
         view=lambda request: JsonResponse({'status': 'ok', 'app': 'distribution'}),
         name='distribution-test'
+    ),
+
+    # Generate renditions
+    path(
+        route='publications/<int:publication_id>/generate_renditions/',
+        view=APIGenerateRenditionsView.as_view(),
+        name='publication-generate-renditions'
     ),
 ]
