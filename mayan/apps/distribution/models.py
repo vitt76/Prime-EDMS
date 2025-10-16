@@ -325,6 +325,81 @@ class ShareLink(models.Model):
     def __str__(self):
         return f"{self.publication.title} → {self.token[:8]}..."
 
+    def is_valid(self):
+        """
+        Check if the share link is still valid.
+        """
+        from django.utils import timezone
+
+        # Check expiration
+        if self.expires_at and timezone.now() > self.expires_at:
+            return False
+
+        # Check download limit
+        if self.max_downloads and self.downloads_count >= self.max_downloads:
+            return False
+
+        return True
+
+    def can_download(self):
+        """
+        Check if download is allowed (valid and under limit).
+        """
+        return self.is_valid()
+
+    def record_access(self, request):
+        """
+        Record access to this share link.
+        """
+        from django.utils import timezone
+        from .models import AccessLog
+
+        # Update last accessed
+        self.last_accessed = timezone.now()
+        self.save(update_fields=['last_accessed'])
+
+        # Create access log
+        AccessLog.objects.create(
+            share_link=self,
+            event='view',
+            ip_address=self._get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            timestamp=timezone.now()
+        )
+
+    def record_download(self, request, rendition=None):
+        """
+        Record download from this share link.
+        """
+        from django.utils import timezone
+        from .models import AccessLog
+
+        # Increment download count
+        self.downloads_count += 1
+        self.last_accessed = timezone.now()
+        self.save(update_fields=['downloads_count', 'last_accessed'])
+
+        # Create access log
+        AccessLog.objects.create(
+            share_link=self,
+            event='download',
+            ip_address=self._get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            timestamp=timezone.now(),
+            rendition=rendition
+        )
+
+    def _get_client_ip(self, request):
+        """
+        Get client IP address from request.
+        """
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
 
 class GeneratedRendition(models.Model):
     """
@@ -401,6 +476,13 @@ class AccessLog(models.Model):
         on_delete=models.CASCADE,
         related_name='access_logs',
         help_text=_('Share link that was accessed')
+    )
+    rendition = models.ForeignKey(
+        GeneratedRendition,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        help_text=_('Rendition that was downloaded (for download events)')
     )
     event = models.CharField(
         max_length=16,

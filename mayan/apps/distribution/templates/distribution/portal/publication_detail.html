@@ -1,0 +1,103 @@
+{% extends "appearance/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Publication Access" %} - {{ share_link.publication.title }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-xs-12">
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <h3 class="panel-title">
+                    <i class="fa fa-download"></i>
+                    {% trans "Publication:" %} {{ share_link.publication.title }}
+                </h3>
+            </div>
+            <div class="panel-body">
+                {% if share_link.publication.description %}
+                <div class="alert alert-info">
+                    {{ share_link.publication.description }}
+                </div>
+                {% endif %}
+
+                {% if not can_download %}
+                <div class="alert alert-warning">
+                    <i class="fa fa-exclamation-triangle"></i>
+                    {% trans "This link has expired or reached its download limit." %}
+                </div>
+                {% else %}
+                <div class="alert alert-success">
+                    <i class="fa fa-check-circle"></i>
+                    {% trans "You can download files from this publication." %}
+                    {% if share_link.max_downloads %}
+                        {% blocktrans with downloads=share_link.downloads_count max=share_link.max_downloads %}
+                            Downloads: {{ downloads }}/{{ max }}
+                        {% endblocktrans %}
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% for publication_item in publication_items %}
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h4 class="panel-title">
+                    <i class="fa fa-file"></i>
+                    {{ publication_item.original_file.filename }}
+                </h4>
+            </div>
+            <div class="panel-body">
+                <p class="text-muted">
+                    {% trans "File size:" %} {{ publication_item.original_file.size|filesizeformat }}
+                    | {% trans "Uploaded:" %} {{ publication_item.original_file.datetime_created|date:"SHORT_DATE_FORMAT" }}
+                </p>
+
+                {% if publication_item.renditions %}
+                <h5>{% trans "Available renditions:" %}</h5>
+                <div class="row">
+                    {% for rendition in publication_item.renditions %}
+                    <div class="col-md-4 col-sm-6">
+                        <div class="thumbnail">
+                            <div class="caption">
+                                <h5>{{ rendition.preset.name }}</h5>
+                                <p class="text-muted">
+                                    {% trans "Format:" %} {{ rendition.preset.format|upper }}
+                                    {% if rendition.preset.width and rendition.preset.height %}
+                                        | {% trans "Size:" %} {{ rendition.preset.width }}×{{ rendition.preset.height }}
+                                    {% endif %}
+                                    <br>
+                                    {% trans "File size:" %} {{ rendition.file_size|filesizeformat }}
+                                </p>
+                                {% if can_download %}
+                                <a href="{% url 'distribution:download_rendition' token=share_link.token rendition_id=rendition.id %}"
+                                   class="btn btn-primary btn-sm">
+                                    <i class="fa fa-download"></i>
+                                    {% trans "Download" %}
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fa fa-info-circle"></i>
+                    {% trans "No renditions available yet. They may still be processing." %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not publication_items %}
+        <div class="alert alert-warning">
+            <i class="fa fa-exclamation-triangle"></i>
+            {% trans "No files available in this publication." %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

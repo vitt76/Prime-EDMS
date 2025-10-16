@@ -1,6 +1,7 @@
 from django.urls import path, include
 
 from .urls.api_urls import urlpatterns as api_urlpatterns
+from .urls.public_urls import urlpatterns as public_urlpatterns
 
 app_name = 'distribution'
 
@@ -8,5 +9,8 @@ app_name = 'distribution'
 api_urls = api_urlpatterns
 
 urlpatterns = [
+    # Public portal URLs (no auth required)
+    *public_urlpatterns,
+
     # Админ URLs будут добавлены позже
 ]

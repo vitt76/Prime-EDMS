@@ -7,6 +7,9 @@ from .publication_views import (
     APIPublicationItemDetailView, APIPublicationItemListView,
     APIPublicationListView, APIShareLinkDetailView, APIShareLinkListView
 )
+from .portal_views import (
+    PublicationPortalView, download_rendition
+)
 from .recipient_views import (
     APIRecipientDetailView, APIRecipientListDetailView,
     APIRecipientListListView, APIRecipientListView
