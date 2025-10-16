@@ -1,0 +1,75 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-share-square text-primary"></i>
+                        {{ title }}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="well">
+                                <h4>{% trans "Информация о документе" %}</h4>
+                                <p><strong>{% trans "Название:" %}</strong> {{ document.label }}</p>
+                                <p><strong>{% trans "Тип:" %}</strong> {{ document.document_type }}</p>
+                                <p><strong>{% trans "Файлов:" %}</strong> {{ document.files.count }}</p>
+                                <p><strong>{% trans "Создан:" %}</strong> {{ document.datetime_created|date:"d.m.Y H:i" }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <form method="post">
+                                {% csrf_token %}
+
+                                <div class="form-group">
+                                    <label for="{{ form.title.id_for_label }}">{% trans "Название публикации" %} *</label>
+                                    {{ form.title }}
+                                    {% if form.title.errors %}
+                                        <div class="text-danger">{{ form.title.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="{{ form.description.id_for_label }}">{% trans "Описание" %}</label>
+                                    {{ form.description }}
+                                    {% if form.description.errors %}
+                                        <div class="text-danger">{{ form.description.errors }}</div>
+                                    {% endif %}
+                                    <small class="form-text text-muted">
+                                        {% trans "Необязательное описание публикации для получателей" %}
+                                    </small>
+                                </div>
+
+                                <div class="alert alert-info">
+                                    <i class="fa fa-info-circle"></i>
+                                    {% trans "Будут созданы версии файлов документа согласно пресетам системы. Получатели смогут скачивать файлы через защищенные ссылки." %}
+                                </div>
+
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="fa fa-share-square"></i>
+                                        {% trans "Создать публикацию" %}
+                                    </button>
+                                    <a href="{% url 'documents:document_preview' document.pk %}" class="btn btn-default">
+                                        {% trans "Отмена" %}
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

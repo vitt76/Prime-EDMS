@@ -1,0 +1,72 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{% trans "Управление пресетами" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-cogs text-primary"></i>
+                        {% trans "Пресеты версий файлов" %}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <a href="#" class="btn btn-primary pull-right">
+                                <i class="fa fa-plus"></i>
+                                {% trans "Создать пресет" %}
+                            </a>
+                        </div>
+                    </div>
+
+                    {% if presets %}
+                        <div class="row">
+                            {% for preset in presets %}
+                                <div class="col-md-4">
+                                    <div class="panel panel-info">
+                                        <div class="panel-heading">
+                                            <h5 class="panel-title">{{ preset.name }}</h5>
+                                        </div>
+                                        <div class="panel-body">
+                                            <p><strong>{% trans "Формат:" %}</strong> {{ preset.format|upper }}</p>
+                                            <p><strong>{% trans "Размер:" %}</strong> {{ preset.width }}x{{ preset.height }}</p>
+                                            <p><strong>{% trans "Качество:" %}</strong> {{ preset.quality }}%</p>
+                                            <p><strong>{% trans "Водяной знак:" %}</strong>
+                                                {% if preset.watermark_text %}
+                                                    {{ preset.watermark_text }}
+                                                {% else %}
+                                                    {% trans "Нет" %}
+                                                {% endif %}
+                                            </p>
+                                            <div class="btn-group">
+                                                <a href="#" class="btn btn-xs btn-warning">
+                                                    <i class="fa fa-edit"></i>
+                                                </a>
+                                                <a href="#" class="btn btn-xs btn-danger">
+                                                    <i class="fa fa-trash"></i>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "Пока нет пресетов. Создайте первый пресет для генерации версий файлов." %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

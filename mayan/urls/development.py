@@ -33,13 +33,5 @@ if 'silk' in settings.INSTALLED_APPS:
             url(regex=r'^silk/', view=include('silk.urls', namespace='silk'))
         ]
 
-# Add distribution URLs
-if 'mayan.apps.distribution' in settings.INSTALLED_APPS:
-    try:
-        from mayan.apps.distribution import urls as distribution_urls
-        urlpatterns += [  # NOQA
-            url(regex=r'^', view=include(distribution_urls, namespace='distribution'))
-        ]
-        print("DEBUG: Added distribution URLs to main urlpatterns")
-    except ImportError as e:
-        print(f"WARNING: Could not import distribution URLs: {e}")
+# Note: converter_pipeline_extension is registered automatically
+# via MayanAppConfig for extra_apps in config.yml

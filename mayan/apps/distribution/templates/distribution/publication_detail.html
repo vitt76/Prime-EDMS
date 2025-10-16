@@ -1,0 +1,123 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{% trans "Публикация" %}: {{ publication.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-file-alt text-primary"></i>
+                        {{ publication.title }}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <p><strong>{% trans "Описание:" %}</strong> {{ publication.description|default:"—" }}</p>
+                            <p><strong>{% trans "Создано:" %}</strong> {{ publication.created|date:"d.m.Y H:i" }}</p>
+                            <p><strong>{% trans "Автор:" %}</strong> {{ publication.created_by.get_full_name|default:publication.created_by.username }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="btn-group-vertical" style="width: 100%;">
+                                <a href="#" class="btn btn-success">
+                                    <i class="fa fa-share"></i>
+                                    {% trans "Создать ссылку для скачивания" %}
+                                </a>
+                                <a href="#" class="btn btn-primary">
+                                    <i class="fa fa-cogs"></i>
+                                    {% trans "Генерировать версии файлов" %}
+                                </a>
+                                <a href="#" class="btn btn-warning">
+                                    <i class="fa fa-users"></i>
+                                    {% trans "Управление получателями" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h4>{% trans "Документы в публикации" %}</h4>
+
+                    {% if publication.items.all %}
+                        {% for item in publication.items.all %}
+                            <div class="panel panel-info">
+                                <div class="panel-heading">
+                                    <h5 class="panel-title">
+                                        <i class="fa fa-file"></i>
+                                        {{ item.document_file.filename }}
+                                    </h5>
+                                </div>
+                                <div class="panel-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p><strong>{% trans "Размер:" %}</strong> {{ item.document_file.size|filesizeformat }}</p>
+                                            <p><strong>{% trans "Тип:" %}</strong> {{ item.document_file.mimetype }}</p>
+                                            <p><strong>{% trans "Документ:" %}</strong>
+                                                <a href="{% url 'documents:document_preview' item.document_file.document.pk %}">
+                                                    {{ item.document_file.document.label }}
+                                                </a>
+                                            </p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h5>{% trans "Доступные версии" %}</h5>
+                                            {% if item.renditions.all %}
+                                                <ul class="list-group">
+                                                    {% for rendition in item.renditions.all %}
+                                                        <li class="list-group-item">
+                                                            <strong>{{ rendition.preset.name }}</strong>
+                                                            ({{ rendition.preset.format|upper }})
+                                                            <span class="badge pull-right">
+                                                                {% if rendition.status == 'completed' %}
+                                                                    <span class="text-success">{% trans "Готово" %}</span>
+                                                                {% elif rendition.status == 'processing' %}
+                                                                    <span class="text-warning">{% trans "Обработка" %}</span>
+                                                                {% else %}
+                                                                    <span class="text-danger">{% trans "Ошибка" %}</span>
+                                                                {% endif %}
+                                                            </span>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            {% else %}
+                                                <div class="alert alert-warning">
+                                                    {% trans "Версии файлов еще не созданы" %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="alert alert-info">
+                                {% trans "В этой публикации пока нет документов" %}
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-info">
+                            {% trans "В этой публикации пока нет документов" %}
+                        </div>
+                    {% endif %}
+
+                    <div class="form-group">
+                        <a href="{% url 'distribution:my_publications' %}" class="btn btn-default">
+                            <i class="fa fa-arrow-left"></i>
+                            {% trans "Вернуться к списку" %}
+                        </a>
+                        <a href="#" class="btn btn-primary">
+                            <i class="fa fa-plus"></i>
+                            {% trans "Добавить документы" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
