@@ -20,7 +20,7 @@
                         <div class="col-md-8">
                             <p><strong>{% trans "Описание:" %}</strong> {{ publication.description|default:"—" }}</p>
                             <p><strong>{% trans "Создано:" %}</strong> {{ publication.created|date:"d.m.Y H:i" }}</p>
-                            <p><strong>{% trans "Автор:" %}</strong> {{ publication.created_by.get_full_name|default:publication.created_by.username }}</p>
+                            <p><strong>{% trans "Автор:" %}</strong> {{ publication.owner.get_full_name|default:publication.owner.username }}</p>
                         </div>
                         <div class="col-md-4">
                             <div class="btn-group-vertical" style="width: 100%;">

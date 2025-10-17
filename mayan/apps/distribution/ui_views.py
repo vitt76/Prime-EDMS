@@ -16,78 +16,58 @@ from mayan.apps.views.generics import SingleObjectListView, SingleObjectDetailVi
 # Import models early
 from mayan.apps.documents.models import Document, DocumentFile
 
-class PublicationListView(SingleObjectListView):
+
+class PublicationListView(TemplateView):
     """SPA-compatible view for publications list"""
     template_name = 'distribution/publication_list.html'
 
-    def get_extra_context(self):
-        context = super().get_extra_context()
-        # In SPA context, we'll load data via AJAX from API
-        context['use_api'] = True
-        return context
 
-
-class PublicationCreateView(SingleObjectDetailView):
+class PublicationCreateView(TemplateView):
     """SPA-compatible view for creating publications"""
     template_name = 'distribution/publication_create.html'
-    model = Document  # Dummy model, not used
-    pk_url_kwarg = 'document_id'
 
-    def get_extra_context(self):
-        context = super().get_extra_context()
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
         context['document_id'] = self.kwargs.get('document_id')
         return context
 
 
-class RecipientsView(SingleObjectListView):
+class RecipientsView(TemplateView):
     """SPA-compatible view for managing recipients"""
     template_name = 'distribution/recipient_list.html'
 
 
-class PresetsView(SingleObjectListView):
+class PresetsView(TemplateView):
     """SPA-compatible view for managing presets"""
     template_name = 'distribution/preset_list.html'
 
 
-class ShareLinksView(SingleObjectListView):
+class ShareLinksView(TemplateView):
     """SPA-compatible view for managing share links"""
     template_name = 'distribution/share_link_list.html'
 
 
-class TestView(SingleObjectDetailView):
+class TestView(TemplateView):
     """Test view for SPA integration"""
     template_name = 'distribution/test_template.html'
-    model = Document  # Dummy model, not used
-
-    def get_extra_context(self):
-        context = super().get_extra_context()
-        context['test_message'] = 'Distribution SPA integration works!'
-        return context
 
 
-class SimpleTestView(SingleObjectDetailView):
+class SimpleTestView(TemplateView):
     """Simple test view that returns HTML directly"""
-    model = Document  # Dummy model, not used
+    template_name = None
 
     def get(self, request, *args, **kwargs):
-        html = '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Distribution Test</title>
-            <meta charset="utf-8">
-        </head>
-        <body>
-            <div style="padding: 20px; font-family: Arial, sans-serif;">
-                <h1 style="color: #5cb85c;">Distribution SPA Integration Test</h1>
-                <p style="font-size: 18px;">This page is working! Distribution module is integrated.</p>
-                <div style="margin-top: 20px;">
-                    <a href="#/documents/" style="color: #337ab7; text-decoration: none;">← Back to Documents</a>
-                </div>
-            </div>
-        </body>
-        </html>
-        '''
+        html = (
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            '<title>Distribution Test</title></head>'
+            '<body style="padding:20px;font-family:Arial, sans-serif;">'
+            '<h1 style="color:#5cb85c;">Distribution SPA Integration Test</h1>'
+            '<p style="font-size:18px;">This page is working! Distribution module is integrated.</p>'
+            '<div style="margin-top:20px;">'
+            '<a href="#/documents/" style="color:#337ab7;text-decoration:none;">'
+            '← Back to Documents</a></div>'
+            '</body></html>'
+        )
         return HttpResponse(html)
 
 from mayan.apps.documents.permissions import permission_document_view
@@ -128,7 +108,7 @@ class PublicationCreateFromDocumentView(LoginRequiredMixin, CreateView):
 
         # Создаем публикацию
         publication = form.save(commit=False)
-        publication.created_by = self.request.user
+        publication.owner = self.request.user
         publication.save()
 
         # Добавляем документ в публикацию
@@ -157,9 +137,12 @@ class DocumentPublicationsView(LoginRequiredMixin, ListView):
             Document,
             pk=self.kwargs['document_id']
         )
-        return Publication.objects.filter(
+        queryset = Publication.objects.filter(
             items__document_file__document=document
         ).distinct()
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(owner=self.request.user)
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -197,7 +180,7 @@ class PublicationCreateMultipleView(LoginRequiredMixin, TemplateView):
         publication = Publication.objects.create(
             title=title,
             description=description,
-            created_by=request.user
+            owner=request.user
         )
 
         # Добавляем документы в публикацию
@@ -231,7 +214,7 @@ class AddToPublicationView(LoginRequiredMixin, TemplateView):
             pk=self.kwargs['document_file_id']
         )
         publications = Publication.objects.filter(
-            created_by=self.request.user
+            owner=self.request.user
         ).order_by('-created')
         context['document_file'] = document_file
         context['publications'] = publications
@@ -252,7 +235,7 @@ class AddToPublicationView(LoginRequiredMixin, TemplateView):
         try:
             publication = Publication.objects.get(
                 pk=publication_id,
-                created_by=request.user
+                owner=request.user
             )
         except Publication.DoesNotExist:
             messages.error(request, _('Публикация не найдена.'))
@@ -328,7 +311,7 @@ class MyPublicationsView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         return Publication.objects.filter(
-            created_by=self.request.user
+            owner=self.request.user
         ).order_by('-created')
 
 
@@ -340,7 +323,10 @@ class PublicationListView(LoginRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        return Publication.objects.all().order_by('-created')
+        queryset = Publication.objects.all().order_by('-created')
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(owner=self.request.user)
+        return queryset
 
 
 class PublicationDetailView(LoginRequiredMixin, DetailView):
@@ -350,7 +336,10 @@ class PublicationDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'publication'
 
     def get_queryset(self):
-        return Publication.objects.filter(created_by=self.request.user)
+        queryset = Publication.objects.all()
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(owner=self.request.user)
+        return queryset
 
 
 # ===== УПРАВЛЕНИЕ ПОЛУЧАТЕЛЯМИ =====
@@ -387,7 +376,7 @@ class ShareLinkManagementView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         return ShareLink.objects.filter(
-            publication__created_by=self.request.user
+            publication__owner=self.request.user
         ).order_by('-created')
 
 
@@ -402,7 +391,7 @@ class PublicationListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         return Publication.objects.filter(
-            created_by=self.request.user
+            owner=self.request.user
         ).order_by('-created')
 
 
@@ -413,7 +402,7 @@ class PublicationDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'publication'
 
     def get_queryset(self):
-        return Publication.objects.filter(created_by=self.request.user)
+        return Publication.objects.filter(owner=self.request.user)
 
 
 class PublicationCreateView(LoginRequiredMixin, CreateView):
@@ -424,7 +413,7 @@ class PublicationCreateView(LoginRequiredMixin, CreateView):
     success_url = reverse_lazy('distribution:publication_list')
 
     def form_valid(self, form):
-        form.instance.created_by = self.request.user
+        form.instance.owner = self.request.user
         return super().form_valid(form)
 
 
@@ -456,5 +445,5 @@ class ShareLinksListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         return ShareLink.objects.filter(
-            publication__created_by=self.request.user
+            publication__owner=self.request.user
         ).order_by('-created')
