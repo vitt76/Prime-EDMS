@@ -56,8 +56,9 @@
                                             <i class="fa fa-plus"></i>
                                             {% trans "Добавить в публикацию" %}
                                         </button>
-                                        <a href="{% url 'documents:document_file_list' document_file.document.pk %}" class="btn btn-default">
-                                            {% trans "Отмена" %}
+                                        <a href="{% url 'distribution:publication_list' %}" class="btn btn-primary">
+                                            <i class="fa fa-arrow-left"></i>
+                                            {% trans "Назад" %}
                                         </a>
                                     </div>
                                 </form>
@@ -66,7 +67,7 @@
                                     <i class="fa fa-exclamation-triangle"></i>
                                     {% trans "У вас пока нет ни одной публикации." %}
                                 </div>
-                                <a href="{% url 'distribution:my_publications' %}" class="btn btn-primary">
+                                <a href="{% url 'distribution:publication_list' %}" class="btn btn-primary">
                                     <i class="fa fa-plus"></i>
                                     {% trans "Создать первую публикацию" %}
                                 </a>

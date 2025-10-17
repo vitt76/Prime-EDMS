@@ -72,19 +72,11 @@ link_document_file_add_to_publication = Link(
 
 # ===== ГЛАВНОЕ МЕНЮ =====
 
-# Мои публикации - UI страница
-link_my_publications = Link(
-    icon=icon_distribution_user,
-    permissions=(permission_publication_api_view,),
-    text=_('Мои публикации'),
-    view='distribution:publication_list'
-)
-
-# Все публикации - UI страница
-link_publication_list = Link(
+# Публикации
+link_distribution_publications = Link(
     icon=icon_distribution_list,
     permissions=(permission_publication_api_view,),
-    text=_('Все публикации'),
+    text=_('Публикации'),
     view='distribution:publication_list'
 )
 

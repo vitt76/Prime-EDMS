@@ -5,10 +5,11 @@ from .api_urls import urlpatterns as api_urlpatterns
 from .public_urls import urlpatterns as public_urlpatterns
 from ..ui_views import (
     AddToPublicationView, DocumentPublicationsView, GenerateFileRenditionsView,
-    MyPublicationsView, PresetsListView, PresetsView, PublicationCreateFromDocumentView,
-    PublicationCreateMultipleView, PublicationCreateView, PublicationDetailView,
-    PublicationListView, RecipientsListView, RecipientsView, ShareLinksListView,
-    ShareLinksView, SimpleTestView, TestView, ShareLinkManagementView, PublicationDeleteView
+    PresetsListView, PresetsView, PublicationCreateFromDocumentView,
+    PublicationCreateMultipleView, PublicationCreateView, PublicationDeleteView,
+    PublicationDetailView, PublicationListView, RecipientsListView,
+    RecipientsView, ShareLinkManagementView, ShareLinksListView, ShareLinksView,
+    SimpleTestView, TestView
 )
 
 app_name = 'distribution'
@@ -102,11 +103,6 @@ ui_urlpatterns = [
         'share-links/',
         ShareLinksView.as_view(),
         name='share_link_list'
-    ),
-    path(
-        'publications/my/',
-        MyPublicationsView.as_view(),
-        name='my_publications'
     ),
     path(
         'share-links/manage/',

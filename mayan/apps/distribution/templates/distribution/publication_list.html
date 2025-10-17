@@ -2,7 +2,7 @@
 
 {% load i18n static %}
 
-{% block title %}{% trans "Мои публикации" %}{% endblock %}
+{% block title %}{% trans "Публикации" %}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -12,26 +12,42 @@
                 <div class="panel-heading">
                     <h3 class="panel-title">
                         <i class="fa fa-list text-primary"></i>
-                        {% trans "Мои публикации" %}
+                        {% if show_all_active %}
+                            {% trans "Все публикации" %}
+                        {% else %}
+                            {% trans "Мои публикации" %}
+                        {% endif %}
                     </h3>
                 </div>
                 <div class="panel-body">
-                    <div class="row">
-                        <div class="col-md-12">
-                            <button id="create-publication-btn" class="btn btn-primary pull-right">
+                    <div class="row m-b-15">
+                        <div class="col-md-12 text-right">
+                            {% if is_admin %}
+                                {% if show_all_active %}
+                                    <a href="{% url 'distribution:publication_list' %}" class="btn btn-default">
+                                        <i class="fa fa-user"></i>
+                                        {% trans "Скрыть все" %}
+                                    </a>
+                                {% else %}
+                                    <a href="{% url 'distribution:publication_list' %}?show_all=true" class="btn btn-default">
+                                        <i class="fa fa-users"></i>
+                                        {% trans "Показать все" %}
+                                    </a>
+                                {% endif %}
+                            {% endif %}
+
+                            <button id="create-publication-btn" class="btn btn-primary">
                                 <i class="fa fa-plus"></i>
                                 {% trans "Создать публикацию" %}
                             </button>
                         </div>
                     </div>
 
-                    <!-- Loading indicator -->
                     <div id="loading-indicator" class="text-center" style="display: none;">
                         <i class="fa fa-spinner fa-spin fa-2x"></i>
                         {% trans "Загрузка..." %}
                     </div>
 
-                    <!-- Publications table -->
                     <div id="publications-container">
                         <div class="alert alert-info text-center">
                             <i class="fa fa-info-circle fa-3x"></i>
@@ -49,16 +65,25 @@ $(document).ready(function() {
     loadPublications();
 
     $('#create-publication-btn').click(function() {
-        // In SPA context, navigate to create page
         window.location.hash = '#/distribution/publications/create/';
     });
 });
+
+function getApiUrl() {
+    const url = new URL(window.location.href);
+    const showAll = url.searchParams.get('show_all') === 'true';
+    let apiUrl = '/api/v4/distribution/publications/';
+    if (showAll) {
+        apiUrl += '?show_all=true';
+    }
+    return apiUrl;
+}
 
 function loadPublications() {
     $('#loading-indicator').show();
 
     $.ajax({
-        url: '/api/v4/distribution/publications/',
+        url: getApiUrl(),
         method: 'GET',
         headers: {
             'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val()
@@ -99,7 +124,7 @@ function renderPublications(publications) {
         return;
     }
 
-    var html = '<div class="table-responsive">' +
+    let html = '<div class="table-responsive">' +
         '<table class="table table-striped">' +
         '<thead>' +
         '<tr>' +
@@ -107,6 +132,7 @@ function renderPublications(publications) {
         '<th>{% trans "Описание" %}</th>' +
         '<th>{% trans "Документов" %}</th>' +
         '<th>{% trans "Создано" %}</th>' +
+        '<th>{% trans "Владелец" %}</th>' +
         '<th>{% trans "Действия" %}</th>' +
         '</tr>' +
         '</thead>' +
@@ -118,6 +144,7 @@ function renderPublications(publications) {
             '<td>' + (publication.description ? publication.description.substring(0, 50) + (publication.description.length > 50 ? '...' : '') : '—') + '</td>' +
             '<td>' + (publication.items_count || 0) + '</td>' +
             '<td>' + new Date(publication.created).toLocaleDateString() + '</td>' +
+            '<td>' + (publication.owner_username || '—') + '</td>' +
             '<td>' +
             '<div class="btn-group">' +
             '<button class="btn btn-xs btn-primary" onclick="viewPublication(' + publication.id + ')">' +

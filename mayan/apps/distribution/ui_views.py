@@ -302,33 +302,6 @@ class GenerateFileRenditionsView(LoginRequiredMixin, TemplateView):
 
 # ===== УПРАВЛЕНИЕ ПУБЛИКАЦИЯМИ =====
 
-class MyPublicationsView(LoginRequiredMixin, ListView):
-    """Мои публикации"""
-    model = Publication
-    template_name = 'distribution/my_publications.html'
-    context_object_name = 'publications'
-    paginate_by = 20
-
-    def get_queryset(self):
-        return Publication.objects.filter(
-            owner=self.request.user
-        ).order_by('-created')
-
-
-class PublicationListView(LoginRequiredMixin, ListView):
-    """Все публикации"""
-    model = Publication
-    template_name = 'distribution/publication_list.html'
-    context_object_name = 'publications'
-    paginate_by = 20
-
-    def get_queryset(self):
-        queryset = Publication.objects.all().order_by('-created')
-        if not self.request.user.is_staff:
-            queryset = queryset.filter(owner=self.request.user)
-        return queryset
-
-
 class PublicationDetailView(LoginRequiredMixin, DetailView):
     """Детальный просмотр публикации"""
     model = Publication
@@ -381,29 +354,6 @@ class ShareLinkManagementView(LoginRequiredMixin, ListView):
 
 
 # ===== ПОЛНОЦЕННЫЕ UI VIEWS =====
-
-class PublicationListView(LoginRequiredMixin, ListView):
-    """Список всех публикаций пользователя"""
-    model = Publication
-    template_name = 'distribution/publication_list.html'
-    context_object_name = 'publications'
-    paginate_by = 20
-
-    def get_queryset(self):
-        return Publication.objects.filter(
-            owner=self.request.user
-        ).order_by('-created')
-
-
-class PublicationDetailView(LoginRequiredMixin, DetailView):
-    """Детальный просмотр публикации"""
-    model = Publication
-    template_name = 'distribution/publication_detail.html'
-    context_object_name = 'publication'
-
-    def get_queryset(self):
-        return Publication.objects.filter(owner=self.request.user)
-
 
 class PublicationCreateView(LoginRequiredMixin, CreateView):
     """Создание новой публикации"""
@@ -479,4 +429,4 @@ class PublicationDeleteView(LoginRequiredMixin, TemplateView):
             _('Публикация "{title}" удалена.').format(title=publication_title)
         )
 
-        return HttpResponseRedirect(reverse('distribution:my_publications'))
+        return HttpResponseRedirect(reverse('distribution:publication_list'))
