@@ -8,7 +8,7 @@ from ..ui_views import (
     MyPublicationsView, PresetsListView, PresetsView, PublicationCreateFromDocumentView,
     PublicationCreateMultipleView, PublicationCreateView, PublicationDetailView,
     PublicationListView, RecipientsListView, RecipientsView, ShareLinksListView,
-    ShareLinksView, SimpleTestView, TestView, ShareLinkManagementView
+    ShareLinksView, SimpleTestView, TestView, ShareLinkManagementView, PublicationDeleteView
 )
 
 app_name = 'distribution'
@@ -80,6 +80,11 @@ ui_urlpatterns = [
         'publications/<int:pk>/',
         PublicationDetailView.as_view(),
         name='publication_detail'
+    ),
+    path(
+        'publications/<int:pk>/delete/',
+        PublicationDeleteView.as_view(),
+        name='publication_delete'
     ),
 
     # UI URLs для управления (SPA-compatible)

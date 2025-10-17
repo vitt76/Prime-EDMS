@@ -447,3 +447,36 @@ class ShareLinksListView(LoginRequiredMixin, ListView):
         return ShareLink.objects.filter(
             publication__owner=self.request.user
         ).order_by('-created')
+
+
+class PublicationDeleteView(LoginRequiredMixin, TemplateView):
+    """Подтверждение и удаление публикации"""
+    template_name = 'distribution/publication_confirm_delete.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        publication = get_object_or_404(
+            Publication,
+            pk=self.kwargs['pk'],
+            owner=self.request.user
+        )
+        context['publication'] = publication
+        context['title'] = _('Удаление публикации')
+        return context
+
+    def post(self, request, *args, **kwargs):
+        publication = get_object_or_404(
+            Publication,
+            pk=self.kwargs['pk'],
+            owner=self.request.user
+        )
+
+        publication_title = publication.title
+        publication.delete()
+
+        messages.success(
+            request,
+            _('Публикация "{title}" удалена.').format(title=publication_title)
+        )
+
+        return HttpResponseRedirect(reverse('distribution:my_publications'))

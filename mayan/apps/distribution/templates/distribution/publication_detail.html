@@ -36,6 +36,10 @@
                                     <i class="fa fa-users"></i>
                                     {% trans "Управление получателями" %}
                                 </a>
+                                <a href="{% url 'distribution:publication_delete' publication.pk %}" class="btn btn-danger">
+                                    <i class="fa fa-trash"></i>
+                                    {% trans "Удалить публикацию" %}
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -65,7 +69,7 @@
                                             </p>
                                         </div>
                                         <div class="col-md-6">
-                                            <h5>{% trans "Доступные версии" %}</h5>
+                                            <h5>{% trans "Доступные версии публикации" %}</h5>
                                             {% if item.renditions.all %}
                                                 <ul class="list-group">
                                                     {% for rendition in item.renditions.all %}
@@ -86,7 +90,7 @@
                                                 </ul>
                                             {% else %}
                                                 <div class="alert alert-warning">
-                                                    {% trans "Версии файлов еще не созданы" %}
+                                                    {% trans "Версии публикации ещё не сгенерированы" %}
                                                 </div>
                                             {% endif %}
                                         </div>
@@ -108,6 +112,10 @@
                         <a href="{% url 'distribution:my_publications' %}" class="btn btn-default">
                             <i class="fa fa-arrow-left"></i>
                             {% trans "Вернуться к списку" %}
+                        </a>
+                        <a href="{% url 'distribution:publication_delete' publication.pk %}" class="btn btn-danger">
+                            <i class="fa fa-trash"></i>
+                            {% trans "Удалить публикацию" %}
                         </a>
                         <a href="#" class="btn btn-primary">
                             <i class="fa fa-plus"></i>
