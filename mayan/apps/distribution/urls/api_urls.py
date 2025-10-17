@@ -1,5 +1,5 @@
 from django.http import JsonResponse
-from django.urls import path
+from django.urls import include, path
 
 from ..views import (
     APIAccessLogListView, APIGenerateRenditionsView, APIGeneratedRenditionDetailView,
@@ -12,8 +12,7 @@ from ..views import (
 
 # API URLs для distribution
 print("DEBUG: api_urls.py loaded, creating urlpatterns")
-urlpatterns = [
-    # Recipients
+distribution_api_patterns = [
     path(
         route='recipients/',
         view=APIRecipientListView.as_view(),
@@ -117,4 +116,11 @@ urlpatterns = [
         view=APIGenerateRenditionsView.as_view(),
         name='publication-generate-renditions'
     ),
+]
+
+urlpatterns = [
+    path(
+        route='distribution/',
+        view=include((distribution_api_patterns, 'distribution'), namespace='distribution')
+    )
 ]

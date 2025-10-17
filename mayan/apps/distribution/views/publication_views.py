@@ -25,8 +25,13 @@ class APIPublicationListView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
         # Filter to show only publications owned by current user
-        return queryset.filter(owner=self.request.user)
+        return queryset.filter(owner=user)
 
     def get_instance_extra_data(self):
         return {
@@ -52,8 +57,13 @@ class APIPublicationDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
         # Filter to show only publications owned by current user
-        return queryset.filter(owner=self.request.user)
+        return queryset.filter(owner=user)
 
     def get_instance_extra_data(self):
         return {
@@ -70,6 +80,16 @@ class APIPublicationItemListView(generics.ListCreateAPIView):
     mayan_view_permissions = {'POST': (permission_publication_api_edit,)}
     queryset = PublicationItem.objects.all()
     serializer_class = PublicationItemSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
+        # Filter to show only items that belong to publications owned by current user
+        return queryset.filter(publication__owner=user)
 
 
 class APIPublicationItemDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -88,6 +108,16 @@ class APIPublicationItemDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = PublicationItem.objects.all()
     serializer_class = PublicationItemSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
+        # Filter to show only items that belong to publications owned by current user
+        return queryset.filter(publication__owner=user)
+
 
 class APIShareLinkListView(generics.ListCreateAPIView):
     """
@@ -101,8 +131,13 @@ class APIShareLinkListView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
         # Filter to show only share links for publications owned by current user
-        return queryset.filter(publication__owner=self.request.user)
+        return queryset.filter(publication__owner=user)
 
 
 class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -123,8 +158,13 @@ class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
         # Filter to show only share links for publications owned by current user
-        return queryset.filter(publication__owner=self.request.user)
+        return queryset.filter(publication__owner=user)
 
 
 class APIGeneratedRenditionListView(generics.ListAPIView):
@@ -137,8 +177,13 @@ class APIGeneratedRenditionListView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
         # Filter to show only renditions for publications owned by current user
-        return queryset.filter(publication_item__publication__owner=self.request.user)
+        return queryset.filter(publication_item__publication__owner=user)
 
 
 class APIGeneratedRenditionDetailView(generics.RetrieveAPIView):
@@ -151,8 +196,13 @@ class APIGeneratedRenditionDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
         # Filter to show only renditions for publications owned by current user
-        return queryset.filter(publication_item__publication__owner=self.request.user)
+        return queryset.filter(publication_item__publication__owner=user)
 
 
 class APIAccessLogListView(generics.ListAPIView):
@@ -165,8 +215,13 @@ class APIAccessLogListView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = getattr(self.request, 'user', None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
         # Filter to show only logs for share links of publications owned by current user
-        return queryset.filter(share_link__publication__owner=self.request.user)
+        return queryset.filter(share_link__publication__owner=user)
 
 
 class APIGenerateRenditionsView(generics.RetrieveAPIView):
@@ -178,11 +233,9 @@ class APIGenerateRenditionsView(generics.RetrieveAPIView):
     queryset = Publication.objects.all()
 
     def get_queryset(self):
-        return Publication.objects.filter(owner=self.request.user)
+        user = getattr(self.request, 'user', None)
 
-    def post(self, request, *args, **kwargs):
-        publication = self.get_object()
-        # Запускаем генерацию всех rendition'ов
-        publication.generate_all_renditions()
-        serializer = self.get_serializer(publication)
-        return Response(serializer.data)
+        if not user or not user.is_authenticated:
+            return Publication.objects.none()
+
+        return Publication.objects.filter(owner=user)

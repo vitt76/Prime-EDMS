@@ -8,7 +8,7 @@ from .icons import icon_distribution
 menu_distribution = Menu(
     icon=icon_distribution,
     name='distribution',
-    label=_('DAM Публикации')
+    label=_('Публикации')
 )
 
 # Временно пустое меню из-за проблем с namespace

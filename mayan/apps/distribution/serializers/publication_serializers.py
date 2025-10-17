@@ -5,76 +5,69 @@ from mayan.apps.rest_api import serializers
 from ..models import Publication, PublicationItem, ShareLink, GeneratedRendition
 
 
-class PublicationItemSerializer(serializers.HyperlinkedModelSerializer):
+class PublicationItemSerializer(serializers.ModelSerializer):
     class Meta:
-        extra_kwargs = {
-            'url': {
-                'lookup_url_kwarg': 'publication_item_id',
-                'view_name': 'rest_api:publicationitem-detail'
-            }
-        }
-        fields = ('id', 'publication', 'document_file', 'created', 'url')
+        fields = ('id', 'publication', 'document_file', 'created')
         model = PublicationItem
         read_only_fields = ('id', 'created')
 
 
-class PublicationSerializer(serializers.HyperlinkedModelSerializer):
+class PublicationSerializer(serializers.ModelSerializer):
     items = PublicationItemSerializer(many=True, read_only=True)
-    share_links = serializers.HyperlinkedIdentityField(
-        lookup_url_kwarg='publication_id',
-        view_name='rest_api:sharelink-list'
-    )
+    owner = serializers.SerializerMethodField()
 
     class Meta:
-        extra_kwargs = {
-            'url': {
-                'lookup_url_kwarg': 'publication_id',
-                'view_name': 'rest_api:publication-detail'
-            }
-        }
         fields = (
             'id', 'owner', 'title', 'description', 'access_policy',
             'expires_at', 'max_downloads', 'presets', 'recipient_lists',
-            'downloads_count', 'items', 'share_links',
-            'created', 'modified', 'url'
+            'downloads_count', 'items',
+            'created', 'modified'
         )
         model = Publication
-        read_only_fields = ('id', 'created', 'modified', 'downloads_count')
+        read_only_fields = ('id', 'created', 'modified', 'downloads_count', 'owner')
+
+    def get_owner(self, obj):
+        owner = obj.owner
+        if owner:
+            return owner.get_username()
+        return None
+
+    def _strip_internal_fields(self, validated_data):
+        validated_data.pop('_instance_extra_data', None)
+        return validated_data
+
+    def create(self, validated_data):
+        validated_data = self._strip_internal_fields(validated_data)
+
+        request = self.context.get('request')
+        if request and request.user and request.user.is_authenticated:
+            validated_data['owner'] = request.user
+
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data = self._strip_internal_fields(validated_data)
+        validated_data.pop('owner', None)
+
+        return super().update(instance, validated_data)
 
 
-class ShareLinkSerializer(serializers.HyperlinkedModelSerializer):
-    access_log_url = serializers.HyperlinkedIdentityField(
-        lookup_url_kwarg='share_link_id',
-        view_name='rest_api:accesslog-list'
-    )
+class ShareLinkSerializer(serializers.ModelSerializer):
 
     class Meta:
-        extra_kwargs = {
-            'url': {
-                'lookup_url_kwarg': 'share_link_id',
-                'view_name': 'rest_api:sharelink-detail'
-            }
-        }
         fields = (
             'id', 'publication', 'token', 'recipient', 'expires_at',
-            'max_downloads', 'downloads_count', 'created', 'last_accessed',
-            'url', 'access_log_url'
+            'max_downloads', 'downloads_count', 'created', 'last_accessed'
         )
         model = ShareLink
         read_only_fields = ('id', 'token', 'created', 'last_accessed', 'downloads_count')
 
 
-class GeneratedRenditionSerializer(serializers.HyperlinkedModelSerializer):
+class GeneratedRenditionSerializer(serializers.ModelSerializer):
     class Meta:
-        extra_kwargs = {
-            'url': {
-                'lookup_url_kwarg': 'rendition_id',
-                'view_name': 'rest_api:generatedrendition-detail'
-            }
-        }
         fields = (
             'id', 'publication_item', 'preset', 'file_path', 'status',
-            'file_size', 'checksum', 'error_message', 'created', 'modified', 'url'
+            'file_size', 'checksum', 'error_message', 'created', 'modified'
         )
         model = GeneratedRendition
         read_only_fields = ('id', 'created', 'modified')

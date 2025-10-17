@@ -5,17 +5,13 @@ from mayan.apps.rest_api import serializers
 from ..models import AccessLog
 
 
-class AccessLogSerializer(serializers.HyperlinkedModelSerializer):
+class AccessLogSerializer(serializers.ModelSerializer):
     class Meta:
-        extra_kwargs = {
-            'url': {
-                'lookup_url_kwarg': 'access_log_id',
-                'view_name': 'rest_api:accesslog-detail'
-            }
-        }
         fields = (
             'id', 'share_link', 'event', 'ip_address', 'user_agent',
-            'timestamp', 'url'
+            'timestamp', 'rendition'
         )
         model = AccessLog
-        read_only_fields = ('id', 'timestamp')
+        read_only_fields = (
+            'id', 'timestamp', 'rendition'
+        )
