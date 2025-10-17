@@ -76,6 +76,11 @@ ui_urlpatterns = [
         PublicationCreateView.as_view(),
         name='publication_create'
     ),
+    path(
+        'publications/<int:pk>/',
+        PublicationDetailView.as_view(),
+        name='publication_detail'
+    ),
 
     # UI URLs для управления (SPA-compatible)
     path(
