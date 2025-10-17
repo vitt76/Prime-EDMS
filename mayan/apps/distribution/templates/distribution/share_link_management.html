@@ -16,6 +16,31 @@
                     </h3>
                 </div>
                 <div class="panel-body">
+                    <div class="row m-b-15">
+                        <div class="col-md-8">
+                            {% if current_publication %}
+                                <div class="alert alert-info">
+                                    <strong>{% trans "Публикация:" %}</strong> {{ current_publication.title }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 text-right">
+                            {% if current_publication %}
+                                <a href="#"
+                                   id="share-link-create-btn"
+                                   data-publication-id="{{ current_publication.pk }}"
+                                   class="btn btn-primary">
+                                    <i class="fa fa-plus"></i>
+                                    {% trans "Создать ссылку" %}
+                                </a>
+                            {% else %}
+                                <button type="button" class="btn btn-primary" disabled>
+                                    <i class="fa fa-plus"></i>
+                                    {% trans "Создать ссылку" %}
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
                     {% if share_links %}
                         <div class="table-responsive">
                             <table class="table table-striped">
@@ -98,6 +123,23 @@ function copyToClipboard(text) {
         console.log('Copied to clipboard: ' + text);
     });
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const createBtn = document.getElementById('share-link-create-btn');
+    if (!createBtn) {
+        return;
+    }
+
+    const publicationId = createBtn.dataset.publicationId;
+    if (publicationId) {
+        createBtn.addEventListener('click', function(event) {
+            event.preventDefault();
+            window.location.hash = '/distribution/share-links/create/' + publicationId + '/';
+        });
+    } else {
+        createBtn.disabled = true;
+    }
+});
 </script>
 {% endblock %}
 

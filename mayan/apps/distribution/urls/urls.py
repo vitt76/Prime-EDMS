@@ -11,6 +11,7 @@ from ..ui_views import (
     RecipientsView, ShareLinkManagementView, ShareLinksListView, ShareLinksView,
     SimpleTestView, TestView
 )
+from ..views.share_link_views import ShareLinkCreateView
 
 app_name = 'distribution'
 
@@ -108,6 +109,11 @@ ui_urlpatterns = [
         'share-links/manage/',
         ShareLinkManagementView.as_view(),
         name='share_link_manage'
+    ),
+    path(
+        'share-links/create/<int:publication_id>/',
+        ShareLinkCreateView.as_view(),
+        name='share_link_create'
     ),
 
     # Test views

@@ -14,3 +14,4 @@ from .recipient_views import (
     APIRecipientDetailView, APIRecipientListDetailView,
     APIRecipientListListView, APIRecipientListView
 )
+from .share_link_views import ShareLinkCreateView

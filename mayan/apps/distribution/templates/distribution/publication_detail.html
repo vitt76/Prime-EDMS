@@ -24,7 +24,7 @@
                         </div>
                         <div class="col-md-4">
                             <div class="btn-group-vertical" style="width: 100%;">
-                                <a href="#" class="btn btn-success">
+                                <a href="#" class="btn btn-success" onclick="openShareLinks({{ publication.pk }}); return false;">
                                     <i class="fa fa-share"></i>
                                     {% trans "Создать ссылку для скачивания" %}
                                 </a>
@@ -123,5 +123,11 @@
         </div>
     </div>
 </div>
+
+<script>
+function openShareLinks(publicationId) {
+    window.location.hash = '#/distribution/share-links/?publication=' + publicationId;
+}
+</script>
 {% endblock %}
 

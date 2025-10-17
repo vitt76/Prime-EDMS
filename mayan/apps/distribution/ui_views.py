@@ -46,6 +46,17 @@ class ShareLinksView(TemplateView):
     """SPA-compatible view for managing share links"""
     template_name = 'distribution/share_link_list.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        publication_id = self.request.GET.get('publication')
+        if publication_id:
+            try:
+                publication = Publication.objects.get(pk=publication_id, owner=self.request.user)
+                context['current_publication'] = publication
+            except Publication.DoesNotExist:
+                context['current_publication'] = None
+        return context
+
 
 class TestView(TemplateView):
     """Test view for SPA integration"""
@@ -348,9 +359,25 @@ class ShareLinkManagementView(LoginRequiredMixin, ListView):
     context_object_name = 'share_links'
 
     def get_queryset(self):
-        return ShareLink.objects.filter(
+        queryset = ShareLink.objects.filter(
             publication__owner=self.request.user
         ).order_by('-created')
+
+        publication_id = self.request.GET.get('publication')
+        if publication_id:
+            queryset = queryset.filter(publication__pk=publication_id)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        publication_id = self.request.GET.get('publication')
+        if publication_id:
+            try:
+                publication = Publication.objects.get(pk=publication_id, owner=self.request.user)
+                context['current_publication'] = publication
+            except Publication.DoesNotExist:
+                context['current_publication'] = None
+        return context
 
 
 # ===== ПОЛНОЦЕННЫЕ UI VIEWS =====

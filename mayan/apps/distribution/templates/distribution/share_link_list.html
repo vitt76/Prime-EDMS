@@ -16,6 +16,29 @@
                     </h3>
                 </div>
                 <div class="panel-body">
+                    {% if current_publication %}
+                        <div class="alert alert-info">
+                            <strong>{% trans "Публикация:" %}</strong> {{ current_publication.title }}
+                        </div>
+                    {% endif %}
+                    <div class="row m-b-15">
+                        <div class="col-md-12 text-right">
+                            {% if current_publication %}
+                                <a href="#"
+                                   id="create-share-link-btn"
+                                   data-publication-id="{{ current_publication.pk }}"
+                                   class="btn btn-primary">
+                                    <i class="fa fa-plus"></i>
+                                    {% trans "Создать ссылку" %}
+                                </a>
+                            {% else %}
+                                <button type="button" class="btn btn-primary" disabled>
+                                    <i class="fa fa-plus"></i>
+                                    {% trans "Создать ссылку" %}
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
                     {% if share_links %}
                         <div class="table-responsive">
                             <table class="table table-striped">
@@ -79,5 +102,23 @@ function copyToClipboard(text) {
         console.log('Copied to clipboard: ' + text);
     });
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const button = document.getElementById('create-share-link-btn');
+    if (!button) return;
+
+    const publicationId = button.dataset.publicationId;
+    if (publicationId) {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+            window.location.hash = '/distribution/share-links/create/' + publicationId + '/';
+        });
+    } else {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+            alert('{% trans "Сначала выберите публикацию" %}');
+        });
+    }
+});
 </script>
 {% endblock %}
