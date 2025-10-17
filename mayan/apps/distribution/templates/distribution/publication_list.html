@@ -153,6 +153,9 @@ function renderPublications(publications) {
             '<button class="btn btn-xs btn-warning" onclick="manageLinks(' + publication.id + ')" title="{% trans "Управление ссылками" %}">' +
             '<i class="fa fa-link"></i>' +
             '</button>' +
+            '<button class="btn btn-xs btn-danger" onclick="deletePublication(' + publication.id + ')" title="{% trans "Удалить публикацию" %}">' +
+            '<i class="fa fa-trash"></i>' +
+            '</button>' +
             '</div>' +
             '</td>' +
             '</tr>';
@@ -168,6 +171,10 @@ function viewPublication(id) {
 
 function manageLinks(id) {
     window.location.hash = '#/distribution/share-links/?publication=' + id;
+}
+
+function deletePublication(id) {
+    window.location.hash = '#/distribution/publications/' + id + '/delete/';
 }
 </script>
 {% endblock %}
