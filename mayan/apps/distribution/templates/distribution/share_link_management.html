@@ -26,10 +26,9 @@
                         </div>
                         <div class="col-md-4 text-right">
                             {% if current_publication %}
-                                <a href="#"
-                                   id="share-link-create-btn"
-                                   data-publication-id="{{ current_publication.pk }}"
-                                   class="btn btn-primary">
+                                <a href="/distribution/share-links/create/{{ current_publication.pk }}/"
+                                   data-absolute-hash="/distribution/share-links/create/{{ current_publication.pk }}/"
+                                   class="btn btn-primary create-share-link">
                                     <i class="fa fa-plus"></i>
                                     {% trans "Создать ссылку" %}
                                 </a>
@@ -119,26 +118,20 @@
 <script>
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(function() {
-        // Можно добавить уведомление об успешном копировании
         console.log('Copied to clipboard: ' + text);
     });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    const createBtn = document.getElementById('share-link-create-btn');
-    if (!createBtn) {
-        return;
-    }
-
-    const publicationId = createBtn.dataset.publicationId;
-    if (publicationId) {
-        createBtn.addEventListener('click', function(event) {
-            event.preventDefault();
-            window.location.hash = '/distribution/share-links/create/' + publicationId + '/';
-        });
-    } else {
-        createBtn.disabled = true;
-    }
+    document.querySelectorAll('a.create-share-link').forEach(function(link) {
+        const target = link.dataset.absoluteHash;
+        if (target) {
+            link.addEventListener('click', function(event) {
+                event.preventDefault();
+                window.location.hash = target;
+            });
+        }
+    });
 });
 </script>
 {% endblock %}

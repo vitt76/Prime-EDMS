@@ -24,10 +24,9 @@
                     <div class="row m-b-15">
                         <div class="col-md-12 text-right">
                             {% if current_publication %}
-                                <a href="#"
-                                   id="create-share-link-btn"
-                                   data-publication-id="{{ current_publication.pk }}"
-                                   class="btn btn-primary">
+                                <a href="/distribution/share-links/create/{{ current_publication.pk }}/"
+                                   data-absolute-hash="/distribution/share-links/create/{{ current_publication.pk }}/"
+                                   class="btn btn-primary create-share-link">
                                     <i class="fa fa-plus"></i>
                                     {% trans "Создать ссылку" %}
                                 </a>
@@ -104,21 +103,15 @@ function copyToClipboard(text) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    const button = document.getElementById('create-share-link-btn');
-    if (!button) return;
-
-    const publicationId = button.dataset.publicationId;
-    if (publicationId) {
-        button.addEventListener('click', function(event) {
-            event.preventDefault();
-            window.location.hash = '/distribution/share-links/create/' + publicationId + '/';
-        });
-    } else {
-        button.addEventListener('click', function(event) {
-            event.preventDefault();
-            alert('{% trans "Сначала выберите публикацию" %}');
-        });
-    }
+    document.querySelectorAll('a.create-share-link').forEach(function(link) {
+        const target = link.dataset.absoluteHash;
+        if (target) {
+            link.addEventListener('click', function(event) {
+                event.preventDefault();
+                window.location.hash = target;
+            });
+        }
+    });
 });
 </script>
 {% endblock %}
