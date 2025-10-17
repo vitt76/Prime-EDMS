@@ -8,7 +8,7 @@ from ..ui_views import (
     MyPublicationsView, PresetsListView, PresetsView, PublicationCreateFromDocumentView,
     PublicationCreateMultipleView, PublicationCreateView, PublicationDetailView,
     PublicationListView, RecipientsListView, RecipientsView, ShareLinksListView,
-    ShareLinksView, SimpleTestView, TestView
+    ShareLinksView, SimpleTestView, TestView, ShareLinkManagementView
 )
 
 app_name = 'distribution'
@@ -97,6 +97,16 @@ ui_urlpatterns = [
         'share-links/',
         ShareLinksView.as_view(),
         name='share_link_list'
+    ),
+    path(
+        'publications/my/',
+        MyPublicationsView.as_view(),
+        name='my_publications'
+    ),
+    path(
+        'share-links/manage/',
+        ShareLinkManagementView.as_view(),
+        name='share_link_manage'
     ),
 
     # Test views
