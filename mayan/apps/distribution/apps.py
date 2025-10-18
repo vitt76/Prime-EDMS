@@ -45,31 +45,35 @@ class DistributionApp(MayanAppConfig):
         from mayan.apps.common.menus import menu_main, menu_object
 
         # Импорт наших меню и ссылок
-        from .menus import link_distribution_menu
+        from .menus import menu_distribution
         from .links.distribution_links import (
-            link_distribution_publications,
+            link_distribution_publications, link_distribution_presets,
             link_document_test, link_document_publish, link_document_publications,
             link_document_file_add_to_publication
         )
 
         # ===== РЕГИСТРАЦИЯ В ГЛАВНОМ МЕНЮ =====
 
-        # Добавляем нашу ссылку в главное меню навигации
+        menu_distribution.bind_links(
+            links=(
+                link_distribution_publications,
+                link_distribution_presets
+            )
+        )
+
         menu_main.bind_links(
-            links=(link_distribution_publications,),
+            links=(menu_distribution,),
             position=20  # После основных разделов
         )
 
         # ===== РЕГИСТРАЦИЯ В МЕНЮ ДОКУМЕНТОВ =====
 
-        # Регистрация в меню документов
         menu_object.bind_links(
             links=(link_document_test, link_document_publish, link_document_publications),
             sources=(Document,),
             position=12
         )
 
-        # Регистрация в меню файлов документов
         menu_object.bind_links(
             links=(link_document_file_add_to_publication,),
             sources=(DocumentFile,),

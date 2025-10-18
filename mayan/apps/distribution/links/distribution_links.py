@@ -80,6 +80,13 @@ link_distribution_publications = Link(
     view='distribution:publication_list'
 )
 
+link_distribution_presets = Link(
+    icon=icon_distribution_settings,
+    permissions=(permission_publication_api_view,),
+    text=_('Пресеты'),
+    view='distribution:preset_list'
+)
+
 # Управление получателями - UI страница
 link_recipient_management = Link(
     icon=icon_distribution_user,
@@ -95,7 +102,6 @@ link_preset_management = Link(
     text=_('Пресеты рендишенов'),
     view='distribution:preset_list'
 )
-
 # Управление ссылками - UI страница
 link_share_link_management = Link(
     icon=icon_distribution_link,
@@ -103,3 +109,4 @@ link_share_link_management = Link(
     text=_('Ссылки для скачивания'),
     view='distribution:share_link_list'
 )
+
