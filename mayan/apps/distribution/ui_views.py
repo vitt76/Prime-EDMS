@@ -15,7 +15,9 @@ from mayan.apps.views.generics import SingleObjectListView, SingleObjectDetailVi
 
 # Import models early
 from mayan.apps.documents.models import Document, DocumentFile
-from .models import Publication, Recipient, RenditionPreset, ShareLink
+from .models import (
+    Publication, PublicationItem, Recipient, RenditionPreset, ShareLink
+)
 
 
 class PublicationListTemplateView(TemplateView):
@@ -331,8 +333,12 @@ class GenerateFileRenditionsView(LoginRequiredMixin, TemplateView):
             pk=self.kwargs['document_file_id']
         )
         presets = RenditionPreset.objects.all().order_by('name')
+        publications = Publication.objects.filter(
+            items__document_file=document_file
+        ).distinct()
         context['document_file'] = document_file
         context['presets'] = presets
+        context['publications'] = publications
         context['title'] = _('Генерация версий файла')
         return context
 
@@ -349,12 +355,37 @@ class GenerateFileRenditionsView(LoginRequiredMixin, TemplateView):
 
         presets = RenditionPreset.objects.filter(pk__in=preset_ids)
 
-        # Здесь должна быть логика генерации rendition'ов через Celery
-        # Пока просто сообщение
-        messages.info(
-            request,
-            _('Запущена генерация {} версий файла.').format(presets.count())
-        )
+        publication_items = list(PublicationItem.objects.filter(
+            document_file=document_file
+        ).select_related('publication'))
+
+        if not publication_items:
+            messages.warning(
+                request,
+                _('Файл не входит ни в одну публикацию, генерация невозможна.')
+            )
+            return HttpResponseRedirect(
+                reverse('documents:document_file_list', args=(document_file.document.pk,))
+            )
+
+        started = 0
+
+        for preset in presets:
+            for publication_item in publication_items:
+                rendition = preset.generate_rendition(publication_item)
+                if rendition.status in ['pending', 'processing']:
+                    started += 1
+
+        if started:
+            messages.success(
+                request,
+                _('Запущена генерация {count} рендишенов. Обновите статус позднее.').format(count=started)
+            )
+        else:
+            messages.info(
+                request,
+                _('Для выбранных пресетов уже существуют готовые версии.')
+            )
 
         return HttpResponseRedirect(
             reverse('documents:document_file_list', args=(document_file.document.pk,))

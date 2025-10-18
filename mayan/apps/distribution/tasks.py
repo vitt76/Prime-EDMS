@@ -38,18 +38,18 @@ def generate_rendition_task(self, generated_rendition_id):
             filename = _generate_rendition_filename(document_file, preset)
             file_content = ContentFile(converted_file.getvalue(), name=filename)
 
-            # Обновляем модель
             rendition.status = 'completed'
-            rendition.file = file_content
-            rendition.file_size = converted_file.tell()
+            rendition.file.save(filename, file_content, save=False)
+            rendition.file_size = len(converted_file.getvalue())
             rendition.checksum = _calculate_checksum(converted_file)
-            rendition.save()
+            rendition.error_message = ''
+            rendition.save(update_fields=['status', 'file', 'file_size', 'checksum', 'error_message', 'modified'])
 
             logger.info(f"Successfully generated rendition: {rendition}")
         else:
             rendition.status = 'failed'
             rendition.error_message = 'Failed to convert file'
-            rendition.save()
+            rendition.save(update_fields=['status', 'error_message', 'modified'])
             logger.error(f"Failed to generate rendition: {rendition}")
 
     except Exception as e:
@@ -58,7 +58,7 @@ def generate_rendition_task(self, generated_rendition_id):
             rendition = GeneratedRendition.objects.get(id=generated_rendition_id)
             rendition.status = 'failed'
             rendition.error_message = str(e)
-            rendition.save()
+            rendition.save(update_fields=['status', 'error_message', 'modified'])
         except Exception:
             pass
 
@@ -148,7 +148,6 @@ def _generate_rendition_filename(document_file, preset):
 
 
 
-
 def _calculate_checksum(file_buffer):
     """
     Вычисляет checksum файла.
@@ -156,4 +155,6 @@ def _calculate_checksum(file_buffer):
     import hashlib
 
     file_buffer.seek(0)
-    return hashlib.md5(file_buffer.read()).hexdigest()
+    checksum = hashlib.md5(file_buffer.read()).hexdigest()
+    file_buffer.seek(0)
+    return checksum
