@@ -3,8 +3,8 @@ from .api_urls import urlpatterns as api_urlpatterns
 from .public_urls import urlpatterns as public_urlpatterns
 from ..ui_views import (
     AddToPublicationView, DocumentPublicationsView, GenerateFileRenditionsView,
-    PresetCreateTemplateView, PresetsTemplateView, PublicationCreateFromDocumentView,
-    PublicationCreateMultipleView, PublicationCreateTemplateView,
+    PresetCreateTemplateView, PresetDeleteView, PresetEditTemplateView, PresetsTemplateView,
+    PublicationCreateFromDocumentView, PublicationCreateMultipleView, PublicationCreateTemplateView,
     PublicationDeleteView, PublicationDetailView, PublicationListTemplateView,
     RecipientsTemplateView, ShareLinkManagementView, ShareLinksTemplateView
 )
@@ -88,6 +88,16 @@ ui_urlpatterns = [
         'distribution/presets/create/',
         PresetCreateTemplateView.as_view(),
         name='preset_create'
+    ),
+    path(
+        'distribution/presets/<int:preset_id>/edit/',
+        PresetEditTemplateView.as_view(),
+        name='preset_edit'
+    ),
+    path(
+        'distribution/presets/<int:preset_id>/delete/',
+        PresetDeleteView.as_view(),
+        name='preset_delete'
     ),
     path(
         'distribution/share-links/',

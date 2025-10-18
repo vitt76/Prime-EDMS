@@ -41,6 +41,14 @@
                                                     {% trans "Нет" %}
                                                 {% endif %}
                                             </p>
+                                            <div class="btn-group">
+                                                <a href="#" class="btn btn-sm btn-primary" onclick="openPresetEdit({{ preset.id }}); return false;">
+                                                    <i class="fa fa-pencil"></i> {% trans "Редактировать" %}
+                                                </a>
+                                                <button class="btn btn-sm btn-danger" onclick="deletePreset({{ preset.id }}); return false;">
+                                                    <i class="fa fa-trash"></i> {% trans "Удалить" %}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -60,6 +68,36 @@
 <script>
 function openPresetCreate() {
     window.location.hash = '#/distribution/presets/create/';
+}
+
+function openPresetEdit(presetId) {
+    window.location.hash = '#/distribution/presets/' + presetId + '/edit/';
+}
+
+function deletePreset(presetId) {
+    if (!confirm('{% trans "Удалить пресет?" %}')) {
+        return;
+    }
+
+    const csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+    fetch(`/api/v4/distribution/rendition_presets/${presetId}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': csrfToken || '',
+            'Accept': 'application/json'
+        },
+        credentials: 'include'
+    }).then(response => {
+        if (response.ok || response.status === 204) {
+            window.location.reload();
+        } else {
+            return response.json().then(data => {
+                alert(JSON.stringify(data));
+            });
+        }
+    }).catch(error => {
+        alert(error.message);
+    });
 }
 </script>
 {% endblock %}

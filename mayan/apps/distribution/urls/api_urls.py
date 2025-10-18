@@ -43,7 +43,7 @@ distribution_api_patterns = [
         name='renditionpreset-list'
     ),
     path(
-        route='rendition_presets/<int:preset_id>/',
+        route='rendition_presets/<int:pk>/',
         view=APIRenditionPresetDetailView.as_view(),
         name='renditionpreset-detail'
     ),

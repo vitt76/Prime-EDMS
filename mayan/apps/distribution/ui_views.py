@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import ugettext_lazy as _
 from django.views.generic import (
-    CreateView, DetailView, ListView, TemplateView, UpdateView, RedirectView
+    CreateView, DetailView, ListView, TemplateView, UpdateView, RedirectView, DeleteView
 )
 
 # SPA-compatible UI views using SingleObjectDetailView like converter_pipeline_extension
@@ -15,6 +15,7 @@ from mayan.apps.views.generics import SingleObjectListView, SingleObjectDetailVi
 
 # Import models early
 from mayan.apps.documents.models import Document, DocumentFile
+from .models import Publication, Recipient, RenditionPreset, ShareLink
 
 
 class PublicationListTemplateView(TemplateView):
@@ -46,11 +47,51 @@ class PresetsTemplateView(TemplateView):
         context['presets'] = RenditionPreset.objects.order_by('name')
         return context
 
+
 class PresetCreateTemplateView(TemplateView):
     """SPA-compatible view for creating a preset"""
     template_name = 'distribution/preset_create.html'
 
-# ... rest of file ...
+
+class PresetEditTemplateView(TemplateView):
+    """SPA-compatible view for editing a preset"""
+    template_name = 'distribution/preset_edit.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        preset = get_object_or_404(RenditionPreset, pk=self.kwargs['preset_id'])
+        context['preset'] = preset
+        return context
+
+
+class PresetDeleteTemplateView(TemplateView):
+    """SPA-compatible view for confirming preset deletion"""
+    template_name = 'distribution/preset_delete.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        preset = get_object_or_404(RenditionPreset, pk=self.kwargs['preset_id'])
+        context['preset'] = preset
+        return context
+
+
+class PresetEditView(LoginRequiredMixin, UpdateView):
+    model = RenditionPreset
+    fields = ['name', 'resource_type', 'format', 'width', 'height', 'quality', 'description', 'watermark']
+    template_name = 'distribution/preset_edit_form.html'
+
+    def get_success_url(self):
+        messages.success(self.request, _('Пресет обновлён.'))
+        return reverse('distribution:preset_list')
+
+
+class PresetDeleteView(LoginRequiredMixin, DeleteView):
+    model = RenditionPreset
+    template_name = 'distribution/preset_confirm_delete.html'
+
+    def get_success_url(self):
+        messages.success(self.request, _('Пресет удалён.'))
+        return reverse('distribution:preset_list')
 
 class ShareLinksTemplateView(TemplateView):
     """SPA-compatible view for managing share links"""
@@ -93,7 +134,6 @@ class SimpleTestView(TemplateView):
 
 from mayan.apps.documents.permissions import permission_document_view
 
-from .models import Publication, Recipient, RenditionPreset, ShareLink
 from .permissions import (
     permission_publication_api_create, permission_publication_api_edit,
     permission_publication_api_view, permission_recipient_manage,

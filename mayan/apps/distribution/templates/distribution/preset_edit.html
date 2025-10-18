@@ -1,0 +1,162 @@
+{% extends "appearance/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Редактирование пресета" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-pencil text-primary"></i>
+                        {% trans "Редактирование пресета" %}: {{ preset.name }}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <form id="preset-edit-form" class="form-horizontal">
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-name">{% trans "Название" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-name" value="{{ preset.name }}" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-resource">{% trans "Тип ресурса" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-resource" class="form-control" required>
+                                    <option value="image" {% if preset.resource_type == 'image' %}selected{% endif %}>{% trans "Изображение" %}</option>
+                                    <option value="document" {% if preset.resource_type == 'document' %}selected{% endif %}>{% trans "Документ" %}</option>
+                                    <option value="video" {% if preset.resource_type == 'video' %}selected{% endif %}>{% trans "Видео" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-format">{% trans "Формат" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-format" value="{{ preset.format }}" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-width">{% trans "Ширина" %}</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control" id="preset-width" min="0" value="{{ preset.width|default_if_none:'' }}">
+                            </div>
+                            <label class="col-sm-1 control-label" for="preset-height">{% trans "Высота" %}</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control" id="preset-height" min="0" value="{{ preset.height|default_if_none:'' }}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-quality">{% trans "Качество" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" class="form-control" id="preset-quality" min="0" max="100" value="{{ preset.quality|default_if_none:'' }}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-description">{% trans "Описание" %}</label>
+                            <div class="col-sm-9">
+                                <textarea id="preset-description" class="form-control" rows="3">{{ preset.description }}</textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-sm-offset-3 col-sm-9">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa fa-save"></i> {% trans "Сохранить" %}
+                                </button>
+                                <a href="#/distribution/presets/" class="btn btn-default">
+                                    <i class="fa fa-arrow-left"></i> {% trans "Отмена" %}
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="preset-edit-alert" class="alert" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const form = document.getElementById('preset-edit-form');
+    const alertBox = document.getElementById('preset-edit-alert');
+    const presetId = {{ preset.id }};
+
+    function showAlert(message, type) {
+        alertBox.textContent = message;
+        alertBox.className = 'alert alert-' + type;
+        alertBox.style.display = 'block';
+    }
+
+    function getCookie(name) {
+        const cookies = document.cookie ? document.cookie.split(';') : [];
+        for (let cookie of cookies) {
+            cookie = cookie.trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                return decodeURIComponent(cookie.substring(name.length + 1));
+            }
+        }
+        return null;
+    }
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const payload = {
+            name: document.getElementById('preset-name').value,
+            resource_type: document.getElementById('preset-resource').value,
+            format: document.getElementById('preset-format').value,
+            width: parseInt(document.getElementById('preset-width').value) || null,
+            height: parseInt(document.getElementById('preset-height').value) || null,
+            quality: document.getElementById('preset-quality').value ? parseInt(document.getElementById('preset-quality').value) : null,
+            description: document.getElementById('preset-description').value || '',
+            watermark: {}
+        };
+
+        const csrfToken = getCookie('csrftoken');
+        if (!csrfToken) {
+            showAlert('{% trans "CSRF токен не найден. Обновите страницу." %}', 'danger');
+            return;
+        }
+
+        fetch(`/api/v4/distribution/rendition_presets/${presetId}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    let message = '';
+                    if (data.detail) {
+                        message = data.detail;
+                    } else if (typeof data === 'object') {
+                        message = Object.values(data).flat().join(' ');
+                    } else {
+                        message = JSON.stringify(data);
+                    }
+                    throw new Error(message);
+                });
+            }
+            return response.json();
+        })
+        .then(() => {
+            showAlert('{% trans "Пресет обновлён" %}', 'success');
+            setTimeout(() => {
+                window.location.hash = '#/distribution/presets/';
+            }, 1000);
+        })
+        .catch(error => {
+            showAlert(error.message || '{% trans "Не удалось обновить пресет" %}', 'danger');
+        });
+    });
+})();
+</script>
+{% endblock %}
