@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 
 from mayan.celery import app
 from mayan.apps.documents.models import DocumentFile
+from mayan.apps.converter_pipeline_extension.backends.raw_image import RawImageConverter
 
 logger = logging.getLogger(name=__name__)
 
@@ -87,6 +88,10 @@ def _convert_file_with_preset(document_file, preset):
         if filename.lower().endswith('.dng'):
             mime_type = 'image/x-adobe-dng'
 
+        if not mime_type:
+            logger.warning('DocumentFile %s has no mimetype; skipping conversion.', document_file.pk)
+            return None
+
         # Конвертация изображений
         if mime_type.startswith('image/'):
             try:
@@ -95,6 +100,14 @@ def _convert_file_with_preset(document_file, preset):
                     try:
                         image = Image.open(input_buffer)
                     except Exception:
+                        # Попробовать конвертировать через RawImageConverter
+                        try:
+                            converter = RawImageConverter(file_object=document_file.file)
+                            preview = converter.convert_to_preview(format=preset.format.upper())
+                            if preview:
+                                return BytesIO(preview.read())
+                        except Exception as raw_error:
+                            logger.error('Raw conversion failed for %s: %s', document_file.pk, raw_error)
                         return None
                 else:
                     image = Image.open(input_buffer)

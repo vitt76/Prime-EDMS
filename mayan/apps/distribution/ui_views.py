@@ -18,6 +18,7 @@ from mayan.apps.documents.models import Document, DocumentFile
 from .models import (
     Publication, PublicationItem, Recipient, RenditionPreset, ShareLink
 )
+from .models import GeneratedRendition
 
 
 class PublicationListTemplateView(TemplateView):
@@ -420,6 +421,31 @@ class PublicationDetailView(LoginRequiredMixin, DetailView):
             context['first_document_file_id'] = None
         context['title'] = _('Публикация: {}').format(publication.title)
         return context
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        rendition_id = request.POST.get('delete_rendition_id')
+
+        if rendition_id:
+            try:
+                rendition = GeneratedRendition.objects.get(
+                    pk=rendition_id,
+                    publication_item__publication=self.object
+                )
+                rendition.delete()
+                messages.success(
+                    request,
+                    _('Версия файла удалена.')
+                )
+            except GeneratedRendition.DoesNotExist:
+                messages.error(
+                    request,
+                    _('Не удалось найти выбранную версию файла.')
+                )
+
+        return HttpResponseRedirect(
+            reverse('distribution:publication_detail', args=(self.object.pk,))
+        )
 
 
 # ===== УПРАВЛЕНИЕ ПОЛУЧАТЕЛЯМИ =====

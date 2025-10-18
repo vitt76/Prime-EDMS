@@ -82,25 +82,67 @@
                                         <div class="col-md-6">
                                             <h5>{% trans "Доступные версии публикации" %}</h5>
                                             {% if item.renditions.all %}
-                                                <ul class="list-group">
-                                                    {% for rendition in item.renditions.all %}
-                                                        <li class="list-group-item">
-                                                            <strong>{{ rendition.preset.name }}</strong>
-                                                            ({{ rendition.preset.format|upper }})
-                                                            <span class="badge pull-right">
-                                                                {% if rendition.status == 'completed' %}
-                                                                    <span class="text-success">{% trans "Готово" %}</span>
-                                                                {% elif rendition.status == 'processing' %}
-                                                                    <span class="text-warning">{% trans "Обработка" %}</span>
-                                                                {% else %}
-                                                                    <span class="text-danger">{% trans "Ошибка" %}</span>
-                                                                {% endif %}
-                                                            </span>
-                                                        </li>
-                                                    {% endfor %}
-                                                </ul>
+                                                <div class="table-responsive">
+                                                    <table class="table table-striped table-condensed">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>{% trans "Пресет" %}</th>
+                                                                <th>{% trans "Формат" %}</th>
+                                                                <th>{% trans "Статус" %}</th>
+                                                                <th>{% trans "Сообщение" %}</th>
+                                                                <th>{% trans "Ссылка" %}</th>
+                                                                <th class="text-right">{% trans "Действия" %}</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for rendition in item.renditions.all %}
+                                                                <tr>
+                                                                    <td>
+                                                                        <strong>{{ rendition.preset.name }}</strong><br>
+                                                                        <span class="label label-default">ID {{ rendition.id }}</span>
+                                                                    </td>
+                                                                    <td>{{ rendition.preset.format|upper }}</td>
+                                                                    <td>
+                                                                        {% if rendition.status == 'completed' %}
+                                                                            <span class="label label-success">{% trans "Готово" %}</span>
+                                                                        {% elif rendition.status == 'processing' %}
+                                                                            <span class="label label-warning">{% trans "Обработка" %}</span>
+                                                                        {% else %}
+                                                                            <span class="label label-danger">{% trans "Ошибка" %}</span>
+                                                                        {% endif %}
+                                                                    </td>
+                                                                    <td style="max-width: 220px;">
+                                                                        {% if rendition.error_message %}
+                                                                            <span class="text-danger">{{ rendition.error_message }}</span>
+                                                                        {% else %}
+                                                                            <span class="text-muted">{% trans "Нет" %}</span>
+                                                                        {% endif %}
+                                                                    </td>
+                                                                    <td>
+                                                                        {% if rendition.file %}
+                                                                            <a href="{{ rendition.file.url }}" target="_blank" class="btn btn-xs btn-primary">
+                                                                                <i class="fa fa-download"></i> {% trans "Скачать" %}
+                                                                            </a>
+                                                                        {% else %}
+                                                                            <span class="text-muted">{% trans "Недоступно" %}</span>
+                                                                        {% endif %}
+                                                                    </td>
+                                                                    <td class="text-right">
+                                                                        <form method="post" style="display:inline-block;">
+                                                                            {% csrf_token %}
+                                                                            <input type="hidden" name="delete_rendition_id" value="{{ rendition.id }}">
+                                                                            <button type="submit" class="btn btn-xs btn-danger" onclick="return confirm('{% trans "Удалить эту версию?" %}')">
+                                                                                <i class="fa fa-trash"></i> {% trans "Удалить" %}
+                                                                            </button>
+                                                                        </form>
+                                                                    </td>
+                                                                </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             {% else %}
-                                                <div class="alert alert-warning">
+                                                <div class="alert.alert-warning">
                                                     {% trans "Версии публикации ещё не сгенерированы" %}
                                                 </div>
                                             {% endif %}
