@@ -17,12 +17,12 @@ from mayan.apps.views.generics import SingleObjectListView, SingleObjectDetailVi
 from mayan.apps.documents.models import Document, DocumentFile
 
 
-class PublicationListView(TemplateView):
+class PublicationListTemplateView(TemplateView):
     """SPA-compatible view for publications list"""
     template_name = 'distribution/publication_list.html'
 
 
-class PublicationCreateView(TemplateView):
+class PublicationCreateTemplateView(TemplateView):
     """SPA-compatible view for creating publications"""
     template_name = 'distribution/publication_create.html'
 
@@ -32,17 +32,17 @@ class PublicationCreateView(TemplateView):
         return context
 
 
-class RecipientsView(TemplateView):
+class RecipientsTemplateView(TemplateView):
     """SPA-compatible view for managing recipients"""
     template_name = 'distribution/recipient_list.html'
 
 
-class PresetsView(TemplateView):
+class PresetsTemplateView(TemplateView):
     """SPA-compatible view for managing presets"""
     template_name = 'distribution/preset_list.html'
 
 
-class ShareLinksView(TemplateView):
+class ShareLinksTemplateView(TemplateView):
     """SPA-compatible view for managing share links"""
     template_name = 'distribution/share_link_list.html'
 

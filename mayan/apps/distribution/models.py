@@ -352,7 +352,7 @@ class ShareLink(models.Model):
         Record access to this share link.
         """
         from django.utils import timezone
-        from .models import AccessLog
+        from mayan.apps.distribution.models import AccessLog
 
         # Update last accessed
         self.last_accessed = timezone.now()
@@ -372,21 +372,21 @@ class ShareLink(models.Model):
         Record download from this share link.
         """
         from django.utils import timezone
-        from .models import AccessLog
+        from mayan.apps.distribution.models import AccessLog
 
         # Increment download count
         self.downloads_count += 1
         self.last_accessed = timezone.now()
         self.save(update_fields=['downloads_count', 'last_accessed'])
 
-        # Create access log
+        # Create access log entry
         AccessLog.objects.create(
             share_link=self,
+            rendition=rendition,
             event='download',
             ip_address=self._get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', ''),
-            timestamp=timezone.now(),
-            rendition=rendition
+            timestamp=timezone.now()
         )
 
     def _get_client_ip(self, request):

@@ -8,7 +8,7 @@ class DistributionApp(MayanAppConfig):
     Управление получателями, пресетами рендишенов, токен-порталом.
     """
     app_namespace = 'distribution'
-    app_url = 'distribution'
+    app_url = ''
     has_rest_api = True
     has_static_media = False
     has_tests = True
