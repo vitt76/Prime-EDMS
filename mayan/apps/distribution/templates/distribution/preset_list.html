@@ -16,6 +16,12 @@
                     </h3>
                 </div>
                 <div class="panel-body">
+                    <div class="clearfix" style="margin-bottom: 15px;">
+                        <a href="#" class="btn btn-success pull-right" onclick="openPresetCreate(); return false;">
+                            <i class="fa fa-plus"></i>
+                            {% trans "Создать пресет" %}
+                        </a>
+                    </div>
                     {% if presets %}
                         <div class="row">
                             {% for preset in presets %}
@@ -51,4 +57,9 @@
         </div>
     </div>
 </div>
+<script>
+function openPresetCreate() {
+    window.location.hash = '#/distribution/presets/create/';
+}
+</script>
 {% endblock %}

@@ -39,6 +39,10 @@
                                     {% trans "Генерировать версии файлов" %}
                                 </a>
                                 {% endif %}
+                                <a href="#" class="btn btn-info" onclick="openPresets(); return false;">
+                                    <i class="fa fa-sliders-h"></i>
+                                    {% trans "Настройки пресетов" %}
+                                </a>
                                 <a href="#" class="btn btn-warning">
                                     <i class="fa fa-users"></i>
                                     {% trans "Управление получателями" %}
@@ -134,6 +138,10 @@
 <script>
 function openShareLinks(publicationId) {
     window.location.hash = '#/distribution/share-links/?publication=' + publicationId;
+}
+
+function openPresets() {
+    window.location.hash = '#/distribution/presets/';
 }
 </script>
 {% endblock %}

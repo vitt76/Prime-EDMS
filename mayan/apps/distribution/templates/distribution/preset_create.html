@@ -1,0 +1,176 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{% trans "Создание пресета" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-plus text-success"></i>
+                        {% trans "Создание пресета рендишена" %}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <form id="preset-form" class="form-horizontal">
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-name">{% trans "Название" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-name" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-resource">{% trans "Тип ресурса" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-resource" class="form-control" required>
+                                    <option value="image">{% trans "Изображение" %}</option>
+                                    <option value="document">{% trans "Документ" %}</option>
+                                    <option value="video">{% trans "Видео" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-format">{% trans "Формат" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-format" placeholder="jpeg, pdf, mp4" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-width">{% trans "Ширина" %}</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control" id="preset-width" min="0" placeholder="{% trans "Пиксели или 0" %}">
+                            </div>
+                            <label class="col-sm-1 control-label" for="preset-height">{% trans "Высота" %}</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control" id="preset-height" min="0" placeholder="{% trans "Пиксели или 0" %}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-quality">{% trans "Качество" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" class="form-control" id="preset-quality" min="0" max="100" placeholder="{% trans "0-100" %}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-description">{% trans "Описание" %}</label>
+                            <div class="col-sm-9">
+                                <textarea id="preset-description" class="form-control" rows="3"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-sm-offset-3 col-sm-9">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fa fa-save"></i> {% trans "Создать" %}
+                                </button>
+                                <a href="#/distribution/presets/" class="btn btn-default">
+                                    <i class="fa fa-arrow-left"></i> {% trans "Отмена" %}
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="preset-alert" class="alert" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+(function() {
+    const form = document.getElementById('preset-form');
+    const alertBox = document.getElementById('preset-alert');
+
+    function showAlert(message, type) {
+        alertBox.textContent = message;
+        alertBox.className = 'alert alert-' + type;
+        alertBox.style.display = 'block';
+    }
+
+    function getCookie(name) {
+        const cookies = document.cookie ? document.cookie.split(';') : [];
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                return decodeURIComponent(cookie.substring(name.length + 1));
+            }
+        }
+        return null;
+    }
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const csrfToken = getCookie('csrftoken');
+        if (!csrfToken) {
+            showAlert('{% trans "CSRF токен не найден. Обновите страницу и попробуйте ещё раз." %}', 'danger');
+            return;
+        }
+
+        const payload = {
+            name: document.getElementById('preset-name').value,
+            resource_type: document.getElementById('preset-resource').value,
+            format: document.getElementById('preset-format').value,
+            width: parseInt(document.getElementById('preset-width').value) || null,
+            height: parseInt(document.getElementById('preset-height').value) || null,
+            quality: document.getElementById('preset-quality').value ? parseInt(document.getElementById('preset-quality').value) : null,
+            description: document.getElementById('preset-description').value || '',
+            watermark: {}
+        };
+
+        fetch('/api/v4/distribution/rendition_presets/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    let message = '';
+                    if (typeof data === 'string') {
+                        message = data;
+                    } else if (data.detail) {
+                        message = data.detail;
+                    } else if (typeof data === 'object' && data !== null) {
+                        const collected = [];
+                        Object.keys(data).forEach(key => {
+                            const value = data[key];
+                            if (Array.isArray(value)) {
+                                collected.push(value.join(' '));
+                            } else if (typeof value === 'string') {
+                                collected.push(value);
+                            }
+                        });
+                        message = collected.join(' ') || JSON.stringify(data);
+                    } else {
+                        message = JSON.stringify(data);
+                    }
+                    throw new Error(message);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            showAlert('{% trans "Пресет успешно создан" %}', 'success');
+            setTimeout(() => {
+                window.location.hash = '#/distribution/presets/';
+            }, 1000);
+        })
+        .catch(error => {
+            console.error('Preset creation error:', error);
+            showAlert(error.message || '{% trans "Не удалось создать пресет" %}', 'danger');
+        });
+    });
+})();
+</script>
+{% endblock %}
+

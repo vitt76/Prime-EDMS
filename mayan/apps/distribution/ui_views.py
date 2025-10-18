@@ -41,6 +41,16 @@ class PresetsTemplateView(TemplateView):
     """SPA-compatible view for managing presets"""
     template_name = 'distribution/preset_list.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['presets'] = RenditionPreset.objects.order_by('name')
+        return context
+
+class PresetCreateTemplateView(TemplateView):
+    """SPA-compatible view for creating a preset"""
+    template_name = 'distribution/preset_create.html'
+
+# ... rest of file ...
 
 class ShareLinksTemplateView(TemplateView):
     """SPA-compatible view for managing share links"""
