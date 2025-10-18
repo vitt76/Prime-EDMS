@@ -6,7 +6,8 @@ from ..ui_views import (
     PresetCreateTemplateView, PresetDeleteView, PresetEditTemplateView, PresetsTemplateView,
     PublicationCreateFromDocumentView, PublicationCreateMultipleView, PublicationCreateTemplateView,
     PublicationDeleteView, PublicationDetailView, PublicationListTemplateView,
-    RecipientsTemplateView, ShareLinkManagementView, ShareLinksTemplateView
+    RecipientsTemplateView, ShareLinkManagementView, ShareLinksTemplateView,
+    RenditionDownloadView
 )
 from ..views.share_link_views import ShareLinkCreateView
 
@@ -71,6 +72,11 @@ ui_urlpatterns = [
         'distribution/publications/<int:pk>/delete/',
         PublicationDeleteView.as_view(),
         name='publication_delete'
+    ),
+    path(
+        'distribution/renditions/<int:rendition_id>/download/',
+        RenditionDownloadView.as_view(),
+        name='rendition_download'
     ),
 
     # UI URLs для управления (SPA-compatible)

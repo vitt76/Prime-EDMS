@@ -64,10 +64,31 @@ class ShareLinkSerializer(serializers.ModelSerializer):
 
 
 class GeneratedRenditionSerializer(serializers.ModelSerializer):
+    file_name = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+
     class Meta:
         fields = (
-            'id', 'publication_item', 'preset', 'file_path', 'status',
-            'file_size', 'checksum', 'error_message', 'created', 'modified'
+            'id', 'publication_item', 'preset', 'status',
+            'file_name', 'download_url', 'file_size', 'checksum',
+            'error_message', 'created', 'modified'
         )
         model = GeneratedRendition
         read_only_fields = ('id', 'created', 'modified')
+
+    def get_file_name(self, obj):
+        if obj.file:
+            return obj.file.name.rsplit('/', 1)[-1]
+        return None
+
+    def get_download_url(self, obj):
+        request = self.context.get('request')
+        if obj.file:
+            try:
+                url = obj.get_download_url()
+                if url and request is not None:
+                    return request.build_absolute_uri(url)
+                return url
+            except Exception:
+                return None
+        return None

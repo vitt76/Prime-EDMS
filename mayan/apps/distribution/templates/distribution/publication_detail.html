@@ -119,13 +119,9 @@
                                                                         {% endif %}
                                                                     </td>
                                                                     <td>
-                                                                        {% if rendition.file %}
-                                                                            <a href="{{ rendition.file.url }}" target="_blank" class="btn btn-xs btn-primary">
-                                                                                <i class="fa fa-download"></i> {% trans "Скачать" %}
-                                                                            </a>
-                                                                        {% else %}
-                                                                            <span class="text-muted">{% trans "Недоступно" %}</span>
-                                                                        {% endif %}
+                                                                        <a href="{% url 'distribution:rendition_download' rendition.id %}" class="btn btn-xs btn-primary">
+                                                                                 <i class="fa fa-download"></i> {% trans "Скачать" %}
+                                                                             </a>
                                                                     </td>
                                                                     <td class="text-right">
                                                                         <form method="post" style="display:inline-block;">

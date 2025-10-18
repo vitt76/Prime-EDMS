@@ -461,6 +461,14 @@ class GeneratedRendition(models.Model):
     def __str__(self):
         return f"{self.publication_item} → {self.preset}"
 
+    def get_download_url(self):
+        if not self.file:
+            return None
+        try:
+            return self.file.storage.url(self.file.name)
+        except Exception:
+            return None
+
 
 class AccessLog(models.Model):
     """

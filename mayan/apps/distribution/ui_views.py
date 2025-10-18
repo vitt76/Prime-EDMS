@@ -2,12 +2,12 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponse, FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import ugettext_lazy as _
 from django.views.generic import (
-    CreateView, DetailView, ListView, TemplateView, UpdateView, RedirectView, DeleteView
+    CreateView, DetailView, ListView, TemplateView, UpdateView, RedirectView, DeleteView, View
 )
 
 # SPA-compatible UI views using SingleObjectDetailView like converter_pipeline_extension
@@ -16,9 +16,9 @@ from mayan.apps.views.generics import SingleObjectListView, SingleObjectDetailVi
 # Import models early
 from mayan.apps.documents.models import Document, DocumentFile
 from .models import (
+    GeneratedRendition,
     Publication, PublicationItem, Recipient, RenditionPreset, ShareLink
-)
-from .models import GeneratedRendition
+) # Добавлены импорты моделей
 
 
 class PublicationListTemplateView(TemplateView):
@@ -579,3 +579,35 @@ class PublicationDeleteView(LoginRequiredMixin, TemplateView):
         )
 
         return HttpResponseRedirect(reverse('distribution:publication_list'))
+
+
+class RenditionDownloadView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        rendition = get_object_or_404(GeneratedRendition, pk=kwargs['rendition_id'])
+
+        publication = rendition.publication_item.publication
+        if not request.user.is_staff and publication.owner != request.user:
+            raise Http404
+
+        if not rendition.file:
+            raise Http404
+
+        # Попытка отдать файл напрямую
+        try:
+            filename = rendition.file.name.rsplit('/', 1)[-1]
+            return FileResponse(
+                rendition.file.open(mode='rb'),
+                as_attachment=True,
+                filename=filename
+            )
+        except FileNotFoundError:
+            raise Http404
+        except Exception:
+            # Fallback на storage url (например, когда используется внешнее хранилище)
+            try:
+                redirect_url = rendition.get_download_url()
+                if redirect_url:
+                    return redirect(redirect_url)
+            except Exception:
+                pass
+            raise Http404
