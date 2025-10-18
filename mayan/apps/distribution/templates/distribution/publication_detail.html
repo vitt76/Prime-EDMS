@@ -28,10 +28,17 @@
                                     <i class="fa fa-share"></i>
                                     {% trans "Создать ссылку для скачивания" %}
                                 </a>
-                                <a href="#" class="btn btn-primary">
+                                {% if first_document_file_id %}
+                                <a href="{% url 'distribution:generate_file_renditions' first_document_file_id %}" class="btn btn-primary">
                                     <i class="fa fa-cogs"></i>
                                     {% trans "Генерировать версии файлов" %}
                                 </a>
+                                {% else %}
+                                <a href="#" class="btn btn-primary disabled">
+                                    <i class="fa fa-cogs"></i>
+                                    {% trans "Генерировать версии файлов" %}
+                                </a>
+                                {% endif %}
                                 <a href="#" class="btn btn-warning">
                                     <i class="fa fa-users"></i>
                                     {% trans "Управление получателями" %}
@@ -48,8 +55,8 @@
 
                     <h4>{% trans "Документы в публикации" %}</h4>
 
-                    {% if publication.items.all %}
-                        {% for item in publication.items.all %}
+                    {% if items %}
+                        {% for item in items %}
                             <div class="panel panel-info">
                                 <div class="panel-heading">
                                     <h5 class="panel-title">

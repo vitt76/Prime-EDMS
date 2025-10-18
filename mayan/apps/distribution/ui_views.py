@@ -325,6 +325,21 @@ class PublicationDetailView(LoginRequiredMixin, DetailView):
             queryset = queryset.filter(owner=self.request.user)
         return queryset
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        publication = self.object
+        items_queryset = publication.items.select_related(
+            'document_file', 'document_file__document'
+        )
+        context['items'] = items_queryset
+        first_item = items_queryset.first()
+        if first_item:
+            context['first_document_file_id'] = first_item.document_file_id
+        else:
+            context['first_document_file_id'] = None
+        context['title'] = _('Публикация: {}').format(publication.title)
+        return context
+
 
 # ===== УПРАВЛЕНИЕ ПОЛУЧАТЕЛЯМИ =====
 
