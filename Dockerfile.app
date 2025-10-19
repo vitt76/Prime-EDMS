@@ -20,6 +20,7 @@ COPY mayan/apps/converter_pipeline_extension /opt/mayan-edms/lib/python3.9/site-
 COPY mayan/apps/documents/links/document_file_links.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/links/document_file_links.py
 COPY mayan/apps/documents/icons.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/icons.py
 COPY mayan/apps/documents/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/apps.py
+COPY mayan/apps/distribution/models.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/models.py
 COPY mayan/settings/base.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
 
 # Копирование файлов переводов

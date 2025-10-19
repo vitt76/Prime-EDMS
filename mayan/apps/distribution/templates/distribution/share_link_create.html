@@ -12,7 +12,7 @@
                 <div class="panel-heading">
                     <h3 class="panel-title">
                         <i class="fa fa-link text-primary"></i>
-                        {% blocktrans with title=publication.title %}Создание ссылки для публикации «{{ title }}»{% endblocktrans %}
+                        {% blocktrans with preset=rendition.preset.name title=publication.title %}Создание ссылки для рендишена «{{ preset }}» публикации «{{ title }}»{% endblocktrans %}
                     </h3>
                 </div>
                 <div class="panel-body">

@@ -45,7 +45,7 @@
                             <table class="table table-striped">
                                 <thead>
                                     <tr>
-                                        <th>{% trans "Публикация" %}</th>
+                                        <th>{% trans "Публикация / Рендишен" %}</th>
                                         <th>{% trans "Ссылка" %}</th>
                                         <th>{% trans "Создана" %}</th>
                                         <th>{% trans "Истекает" %}</th>
@@ -57,7 +57,10 @@
                                 <tbody>
                                     {% for link in share_links %}
                                         <tr>
-                                            <td>{{ link.publication.title }}</td>
+                                            <td>
+                                                <strong>{{ link.rendition.publication_item.publication.title }}</strong><br>
+                                                <small class="text-muted">{{ link.rendition.preset.name }} ({{ link.rendition.preset.format|upper }})</small>
+                                            </td>
                                             <td>
                                                 <code>{{ link.token }}</code>
                                                 <button class="btn btn-xs btn-default" onclick="copyToClipboard('{{ link.token }}')">
@@ -81,13 +84,13 @@
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                <button type="button" class="btn btn-xs btn-default" disabled>
+                                                <a href="http://localhost/{{ link.token }}/" target="_blank" class="btn btn-xs btn-primary" title="{% trans "Открыть файл" %}">
                                                     <i class="fa fa-external-link"></i>
-                                                </button>
-                                                <a href="#" class="btn btn-xs btn-warning">
+                                                </a>
+                                                <a href="#" class="btn btn-xs btn-warning" title="{% trans "Редактировать" %}">
                                                     <i class="fa fa-edit"></i>
                                                 </a>
-                                                <a href="#" class="btn btn-xs btn-danger">
+                                                <a href="#" class="btn btn-xs btn-danger" title="{% trans "Удалить" %}">
                                                     <i class="fa fa-trash"></i>
                                                 </a>
                                             </td>

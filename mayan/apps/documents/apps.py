@@ -782,28 +782,6 @@ class DocumentsApp(MayanAppConfig):
             ), sources=(Document,)
         )
 
-                # Distribution module links for Document
-                if 'mayan.apps.distribution' in settings.INSTALLED_APPS:
-                    print("✅ Distribution module found, registering links...")
-                    try:
-                        from mayan.apps.distribution.links.distribution_links import (
-                            link_document_test, link_document_publish, link_document_publications
-                        )
-                        menu_object.bind_links(
-                            links=(
-                                link_document_test, link_document_publish, link_document_publications
-                            ),
-                            sources=(Document,)
-                        )
-                        print("✅ Distribution links added to Document menu")
-                    except ImportError as e:
-                        print(f"⚠️ Could not import distribution links: {e}")
-                    except Exception as e:
-                        print(f"⚠️ Could not register distribution links: {e}")
-                        import traceback
-                        traceback.print_exc()
-                else:
-                    print("❌ Distribution module not found in INSTALLED_APPS")
 
         menu_multi_item.bind_links(
             links=(
@@ -852,23 +830,6 @@ class DocumentsApp(MayanAppConfig):
             sources=(DocumentFile,)
         )
 
-                # Distribution module links for DocumentFile
-                if 'mayan.apps.distribution' in settings.INSTALLED_APPS:
-                    try:
-                        from mayan.apps.distribution.links.distribution_links import (
-                            link_document_file_add_to_publication
-                        )
-                        menu_object.bind_links(
-                            links=(
-                                link_document_file_add_to_publication,
-                            ),
-                            sources=(DocumentFile,)
-                        )
-                        print("✅ Distribution links added to DocumentFile menu")
-                    except ImportError as e:
-                        print(f"⚠️ Could not import distribution file links: {e}")
-                    except Exception as e:
-                        print(f"⚠️ Could not register distribution file links: {e}")
 
         menu_return.bind_links(
             links=(

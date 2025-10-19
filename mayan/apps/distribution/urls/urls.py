@@ -116,7 +116,7 @@ ui_urlpatterns = [
         name='share_link_manage'
     ),
     path(
-        'distribution/share-links/create/<int:publication_id>/',
+        'distribution/share-links/create/<int:rendition_id>/',
         ShareLinkCreateView.as_view(),
         name='share_link_create'
     ),

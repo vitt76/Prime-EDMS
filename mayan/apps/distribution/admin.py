@@ -46,8 +46,8 @@ class PublicationItemAdmin(admin.ModelAdmin):
 
 @admin.register(ShareLink)
 class ShareLinkAdmin(admin.ModelAdmin):
-    list_display = ('publication', 'token_short', 'recipient', 'downloads_count', 'created')
-    search_fields = ('publication__title', 'token', 'recipient__email')
+    list_display = ('rendition', 'token_short', 'recipient', 'downloads_count', 'created')
+    search_fields = ('rendition__publication_item__publication__title', 'token', 'recipient__email')
     list_filter = ('created', 'expires_at')
     readonly_fields = ('token',)
 
@@ -66,6 +66,6 @@ class GeneratedRenditionAdmin(admin.ModelAdmin):
 @admin.register(AccessLog)
 class AccessLogAdmin(admin.ModelAdmin):
     list_display = ('share_link', 'event', 'ip_address', 'timestamp')
-    search_fields = ('share_link__publication__title', 'ip_address')
+    search_fields = ('share_link__rendition__publication_item__publication__title', 'ip_address')
     list_filter = ('event', 'timestamp')
     readonly_fields = ('share_link', 'event', 'ip_address', 'user_agent', 'timestamp')

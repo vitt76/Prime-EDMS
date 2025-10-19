@@ -482,12 +482,15 @@ class ShareLinkManagementView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         queryset = ShareLink.objects.filter(
-            publication__owner=self.request.user
+            rendition__publication_item__publication__owner=self.request.user
+        ).select_related(
+            'rendition__preset',
+            'rendition__publication_item__publication'
         ).order_by('-created')
 
         publication_id = self.request.GET.get('publication')
         if publication_id:
-            queryset = queryset.filter(publication__pk=publication_id)
+            queryset = queryset.filter(rendition__publication_item__publication__pk=publication_id)
         return queryset
 
     def get_context_data(self, **kwargs):

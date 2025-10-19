@@ -323,13 +323,13 @@ class PublicationItem(models.Model):
 
 class ShareLink(models.Model):
     """
-    Ссылка для доступа к публикации.
+    Ссылка для доступа к рендишену файла.
     """
-    publication = models.ForeignKey(
-        Publication,
+    rendition = models.ForeignKey(
+        'GeneratedRendition',
         on_delete=models.CASCADE,
         related_name='share_links',
-        help_text=_('Publication this link provides access to')
+        help_text=_('Rendition this link provides access to')
     )
     token = models.CharField(
         max_length=64,
@@ -371,7 +371,7 @@ class ShareLink(models.Model):
         verbose_name_plural = _('Share Links')
 
     def __str__(self):
-        return f"{self.publication.title} → {self.token[:8]}..."
+        return f"{self.rendition.publication_item.publication.title} → {self.rendition.preset.name} → {self.token[:8]}..."
 
     def is_valid(self):
         """
