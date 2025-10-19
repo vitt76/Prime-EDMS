@@ -17,7 +17,7 @@ from mayan.apps.converter_pipeline_extension.utils import (
 logger = logging.getLogger(name=__name__)
 
 
-@app.task(bind=True, ignore_result=True)
+@app.task(bind=True, ignore_result=True, queue='converter')
 def generate_rendition_task(self, generated_rendition_id):
     logger.debug('generate_rendition_task queued with id %s', generated_rendition_id)
     """

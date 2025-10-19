@@ -91,7 +91,7 @@ distribution_api_patterns = [
         name='generatedrendition-list'
     ),
     path(
-        route='generated_renditions/<int:rendition_id>/',
+        route='generated_renditions/<int:pk>/',
         view=APIGeneratedRenditionDetailView.as_view(),
         name='generatedrendition-detail'
     ),

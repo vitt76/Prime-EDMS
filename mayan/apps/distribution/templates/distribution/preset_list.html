@@ -33,13 +33,13 @@
                                         <div class="panel-body">
                                             <p><strong>{% trans "Формат:" %}</strong> {{ preset.format|upper }}</p>
                                             <p><strong>{% trans "Размер:" %}</strong> {{ preset.width }}x{{ preset.height }}</p>
+                                            <p><strong>{% trans "Обрезка:" %}</strong> {{ preset.crop|yesno:_("Да,Нет") }}</p>
                                             <p><strong>{% trans "Качество:" %}</strong> {{ preset.quality }}%</p>
-                                            <p><strong>{% trans "Водяной знак:" %}</strong>
-                                                {% if preset.watermark_text %}
-                                                    {{ preset.watermark_text }}
-                                                {% else %}
-                                                    {% trans "Нет" %}
-                                                {% endif %}
+                                            <p><strong>{% trans "DPI:" %}</strong> {{ preset.dpi_x }} × {{ preset.dpi_y }}</p>
+                                            <p><strong>{% trans "Фильтры:" %}</strong> {{ preset.filters|join:", " }}</p>
+                                            <p><strong>{% trans "Яркость/Контраст/Цвет/Резкость:" %}</strong>
+                                                {{ preset.adjust_brightness }} / {{ preset.adjust_contrast }} /
+                                                {{ preset.adjust_color }} / {{ preset.adjust_sharpness }}
                                             </p>
                                             <div class="btn-group">
                                                 <a href="#" class="btn btn-sm btn-primary" onclick="openPresetEdit({{ preset.id }}); return false;">

@@ -16,13 +16,6 @@ from ..permissions import (
 
 # ===== ДОКУМЕНТЫ =====
 
-# Тестовая ссылка без прав для проверки регистрации
-link_document_test = Link(
-    icon=icon_distribution,
-    text=_('TEST: Distribution работает'),
-    view='distribution:test_simple'
-)
-
 # Публикация документа - UI страница
 link_document_publish = Link(
     args='resolved_object.id',

@@ -30,6 +30,8 @@ class DistributionApp(MayanAppConfig):
         # Регистрация меню и ссылок
         print('🔗 Starting distribution menu registration...')
         try:
+            # Load queue definitions
+            from . import queues  # noqa: F401
             self._register_menu_links()
             print('✅ Distribution menu links registered successfully!')
         except Exception as e:
@@ -48,7 +50,7 @@ class DistributionApp(MayanAppConfig):
         from .menus import menu_distribution
         from .links.distribution_links import (
             link_distribution_publications, link_distribution_presets,
-            link_document_test, link_document_publish, link_document_publications,
+            link_document_publish, link_document_publications,
             link_document_file_add_to_publication
         )
 
@@ -69,7 +71,7 @@ class DistributionApp(MayanAppConfig):
         # ===== РЕГИСТРАЦИЯ В МЕНЮ ДОКУМЕНТОВ =====
 
         menu_object.bind_links(
-            links=(link_document_test, link_document_publish, link_document_publications),
+            links=(link_document_publish, link_document_publications),
             sources=(Document,),
             position=12
         )

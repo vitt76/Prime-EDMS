@@ -5,6 +5,15 @@ logger = logging.getLogger(name=__name__)
 
 # Справочник поддерживаемых форматов с их конвертерами
 MEDIA_FORMAT_REGISTRY = {
+    'image/jpeg': {'converter': 'preset_image', 'backend': 'pillow', 'priority': 5},
+    'image/pjpeg': {'converter': 'preset_image', 'backend': 'pillow', 'priority': 5},
+    'image/png': {'converter': 'preset_image', 'backend': 'pillow', 'priority': 5},
+    'image/webp': {'converter': 'preset_image', 'backend': 'pillow', 'priority': 5},
+    'image/tiff': {'converter': 'preset_image', 'backend': 'pillow', 'priority': 5},
+    'image/bmp': {'converter': 'preset_image', 'backend': 'pillow', 'priority': 5},
+    'image/x-bmp': {'converter': 'preset_image', 'backend': 'pillow', 'priority': 5},
+    'image/x-ms-bmp': {'converter': 'preset_image', 'backend': 'pillow', 'priority': 5},
+    'image/gif': {'converter': 'preset_image', 'backend': 'pillow', 'priority': 5},
     # RAW изображения (dcraw/libraw)
     'image/x-canon-cr2': {'converter': 'raw_image', 'backend': 'dcraw', 'priority': 10},
     'image/x-canon-crw': {'converter': 'raw_image', 'backend': 'dcraw', 'priority': 10},
@@ -117,6 +126,17 @@ def get_converter_for_mime_type(mime_type):
         dict or None: Информация о конвертере или None
     """
     return MEDIA_FORMAT_REGISTRY.get(mime_type)
+
+
+def get_converter_class_for_info(converter_key):
+    from .backends import PresetImageConverter, RawImageConverter, VideoConverter
+
+    mapping = {
+        'preset_image': PresetImageConverter,
+        'raw_image': RawImageConverter,
+        'video': VideoConverter,
+    }
+    return mapping.get(converter_key)
 
 
 def get_all_supported_formats():

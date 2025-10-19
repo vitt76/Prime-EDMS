@@ -97,6 +97,15 @@ class RenditionPreset(models.Model):
         ('mp4', 'MP4'),
     ]
 
+    FILTER_CHOICES = [
+        ('grayscale', _('Grayscale')),
+        ('invert', _('Invert')),
+        ('autocontrast', _('Auto contrast')),
+        ('equalize', _('Equalize')),
+        ('posterize', _('Posterize')),
+        ('solarize', _('Solarize')),
+    ]
+
     resource_type = models.CharField(
         max_length=32,
         choices=RESOURCE_TYPE_CHOICES,
@@ -122,10 +131,49 @@ class RenditionPreset(models.Model):
         blank=True,
         help_text=_('Quality setting (0-100 for images, None for others)')
     )
+    crop = models.BooleanField(
+        default=False,
+        help_text=_('Crop to exact size when width and height are specified')
+    )
+    dpi_x = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text=_('Horizontal DPI value')
+    )
+    dpi_y = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text=_('Vertical DPI value')
+    )
+    filters = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=_('List of image filters to apply')
+    )
     watermark = models.JSONField(
         default=dict,
         blank=True,
         help_text=_('Watermark settings as JSON')
+    )
+    adjust_brightness = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=_('Brightness factor (1.0 = original)')
+    )
+    adjust_contrast = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=_('Contrast factor (1.0 = original)')
+    )
+    adjust_color = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=_('Color saturation factor (1.0 = original)')
+    )
+    adjust_sharpness = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=_('Sharpness factor (1.0 = original)')
     )
     name = models.CharField(
         max_length=255,
@@ -424,7 +472,7 @@ class GeneratedRendition(models.Model):
         help_text=_('Preset used to generate this rendition')
     )
     file = models.FileField(
-        upload_to='distribution_renditions/',
+        upload_to='renditions/distribution/',
         null=True,
         blank=True,
         help_text=_('Generated rendition file')
