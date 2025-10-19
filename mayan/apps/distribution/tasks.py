@@ -5,15 +5,21 @@ from io import BytesIO
 from django.conf import settings
 from django.core.files.base import ContentFile
 
+from PIL import Image, ImageEnhance, ImageOps, ImageDraw, ImageFont
+
 from mayan.celery import app
 from mayan.apps.documents.models import DocumentFile
-from mayan.apps.converter_pipeline_extension.backends.raw_image import RawImageConverter
+from mayan.apps.converter_pipeline_extension.backends import RawImageConverter
+from mayan.apps.converter_pipeline_extension.utils import (
+    get_converter_for_mime_type, get_converter_class_for_info
+)
 
 logger = logging.getLogger(name=__name__)
 
 
 @app.task(bind=True, ignore_result=True)
 def generate_rendition_task(self, generated_rendition_id):
+    logger.debug('generate_rendition_task queued with id %s', generated_rendition_id)
     """
     Celery задача для генерации rendition'а.
     """
@@ -69,10 +75,6 @@ def _convert_file_with_preset(document_file, preset):
     Конвертирует файл с использованием заданного пресета.
     Возвращает BytesIO с конвертированным файлом или None при ошибке.
     """
-    from io import BytesIO
-    from PIL import Image
-    import os
-
     try:
         # Читаем исходный файл
         with document_file.file.open() as f:
@@ -91,6 +93,57 @@ def _convert_file_with_preset(document_file, preset):
         if not mime_type:
             logger.warning('DocumentFile %s has no mimetype; skipping conversion.', document_file.pk)
             return None
+
+        converter_info = get_converter_for_mime_type(mime_type)
+        if converter_info:
+            converter_class = get_converter_class_for_info(converter_info['converter'])
+            if converter_class:
+                target_format = (preset.format or 'jpeg').lower()
+                try:
+                    storage_file = document_file.file
+                    with storage_file.storage.open(name=storage_file.name, mode='rb') as source_stream:
+                        converter = converter_class(file_stream=source_stream, mime_type=mime_type)
+
+                    filters_value = preset.filters or []
+                    if isinstance(filters_value, str):
+                        filters_value = [filters_value]
+
+                    convert_kwargs = {
+                        'width': preset.width,
+                        'height': preset.height,
+                        'format': target_format,
+                        'quality': preset.quality or 85,
+                        'crop': bool(preset.crop and preset.width and preset.height),
+                        'dpi': (preset.dpi_x, preset.dpi_y) if preset.dpi_x and preset.dpi_y else None,
+                        'filters': filters_value or None,
+                        'brightness': preset.adjust_brightness,
+                        'contrast': preset.adjust_contrast,
+                        'color': preset.adjust_color,
+                        'sharpness': preset.adjust_sharpness,
+                        'watermark': preset.watermark or None,
+                    }
+
+                    if hasattr(converter, 'convert'):
+                        output_buffer = converter.convert(**convert_kwargs)
+                        if isinstance(output_buffer, ContentFile):
+                            buffer = BytesIO(output_buffer.read())
+                        elif isinstance(output_buffer, BytesIO):
+                            buffer = output_buffer
+                        else:
+                            buffer = BytesIO(output_buffer)
+                        buffer.seek(0)
+                        return buffer
+                    else:
+                        preview = converter.convert_to_preview(
+                            format=target_format.upper(),
+                            quality=preset.quality or 85,
+                            max_size=(preset.width or 1920, preset.height or 1080)
+                        )
+                        buffer = BytesIO(preview.read())
+                        buffer.seek(0)
+                        return buffer
+                except Exception as exc:
+                    logger.warning('Preset converter failed for document_file %s: %s', document_file.pk, exc)
 
         # Конвертация изображений
         if mime_type.startswith('image/'):
@@ -112,28 +165,65 @@ def _convert_file_with_preset(document_file, preset):
                 else:
                     image = Image.open(input_buffer)
 
-                # Конвертируем в RGB если нужно
-                if image.mode not in ('RGB', 'L'):
+                # Коррекция режима под целевой формат
+                if preset.format == 'jpeg' and image.mode not in ('RGB', 'L'):
                     image = image.convert('RGB')
 
-                # Применяем размеры если указаны
-                if preset.width or preset.height:
-                    image.thumbnail((preset.width or image.width, preset.height or image.height), Image.ANTIALIAS)
+                # Масштабирование / обрезка
+                if preset.crop and preset.width and preset.height:
+                    image = ImageOps.fit(
+                        image,
+                        (int(preset.width), int(preset.height)),
+                        method=Image.LANCZOS,
+                        centering=(0.5, 0.5)
+                    )
+                elif preset.width or preset.height:
+                    target_width = preset.width or image.width
+                    target_height = preset.height or image.height
+                    image.thumbnail((int(target_width), int(target_height)), Image.LANCZOS)
+
+                # Тоновые корректировки
+                if preset.adjust_brightness is not None and preset.adjust_brightness != 1.0:
+                    image = ImageEnhance.Brightness(image).enhance(float(preset.adjust_brightness))
+
+                if preset.adjust_contrast is not None and preset.adjust_contrast != 1.0:
+                    image = ImageEnhance.Contrast(image).enhance(float(preset.adjust_contrast))
+
+                if preset.adjust_color is not None and preset.adjust_color != 1.0:
+                    image = ImageEnhance.Color(image).enhance(float(preset.adjust_color))
+
+                if preset.adjust_sharpness is not None and preset.adjust_sharpness != 1.0:
+                    image = ImageEnhance.Sharpness(image).enhance(float(preset.adjust_sharpness))
+
+                # Фильтры
+                if preset.filters and image.mode in ('RGB', 'RGBA', 'L'):
+                    for filter_name in preset.filters:
+                        image = _apply_image_filter(image=image, filter_name=filter_name)
+
+                # Водяной знак
+                if preset.watermark and image.mode in ('RGB', 'RGBA'):
+                    image = _apply_watermark(image=image, watermark=preset.watermark)
 
                 # Создаем выходной буфер
                 output_buffer = BytesIO()
 
-                # Сохраняем в выбранном формате
-                if preset.format == 'jpeg':
-                    quality = preset.quality or 85
-                    image.save(output_buffer, format='JPEG', quality=quality)
-                elif preset.format == 'png':
-                    image.save(output_buffer, format='PNG')
-                elif preset.format == 'tiff':
-                    image.save(output_buffer, format='TIFF')
+                target_format = (preset.format or 'jpeg').upper()
+                save_kwargs = {}
+                if preset.dpi_x and preset.dpi_y:
+                    save_kwargs['dpi'] = (int(preset.dpi_x), int(preset.dpi_y))
+
+                if target_format == 'JPEG':
+                    save_kwargs['quality'] = int(preset.quality or 85)
+                    save_kwargs['optimize'] = True
+                elif target_format == 'PNG':
+                    save_kwargs['optimize'] = True
+                elif target_format == 'TIFF':
+                    pass
                 else:
-                    # Неизвестный формат
+                    logger.warning('Unsupported target format for fallback conversion: %s', preset.format)
                     return None
+
+                image.save(output_buffer, format=target_format, **save_kwargs)
 
                 output_buffer.seek(0)
                 return output_buffer
@@ -171,3 +261,53 @@ def _calculate_checksum(file_buffer):
     checksum = hashlib.md5(file_buffer.read()).hexdigest()
     file_buffer.seek(0)
     return checksum
+
+
+def _apply_image_filter(*, image, filter_name):
+    filter_name = (filter_name or '').lower()
+
+    if filter_name == 'grayscale':
+        return ImageOps.grayscale(image)
+    if filter_name == 'invert':
+        return ImageOps.invert(image)
+    if filter_name == 'autocontrast':
+        return ImageOps.autocontrast(image)
+    if filter_name == 'equalize':
+        return ImageOps.equalize(image)
+    if filter_name == 'posterize':
+        return ImageOps.posterize(image, bits=4)
+    if filter_name == 'solarize':
+        return ImageOps.solarize(image)
+
+    logger.warning('Unsupported image filter requested: %s', filter_name)
+    return image
+
+
+def _apply_watermark(*, image, watermark):
+    if not isinstance(watermark, dict):
+        return image
+
+    text = watermark.get('text')
+    if not text:
+        return image
+
+    position = watermark.get('position', (10, 10))
+    font_size = watermark.get('font_size', 24)
+    font_color = watermark.get('font_color', (255, 255, 255, 128))
+
+    drawable = image.convert('RGBA') if image.mode != 'RGBA' else image.copy()
+    overlay = Image.new('RGBA', drawable.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    try:
+        font_path = watermark.get('font_path')
+        if font_path:
+            font = ImageFont.truetype(font_path, font_size)
+        else:
+            font = ImageFont.truetype('arial.ttf', font_size)
+    except Exception:
+        font = ImageFont.load_default()
+
+    draw.text(position, text, font=font, fill=font_color)
+    combined = Image.alpha_composite(drawable, overlay)
+    return combined.convert(image.mode) if image.mode != 'RGBA' else combined
