@@ -50,19 +50,13 @@ class PublicationPortalView(DetailView):
         # Record access
         share_link.record_access(self.request)
 
-        # Get all publication items with their renditions
-        publication_items = []
-        for item in share_link.publication.items.all():
-            renditions = GeneratedRendition.objects.filter(
-                publication_item=item,
-                status='completed'
-            ).select_related('preset')
-
-            publication_items.append({
-                'item': item,
-                'renditions': renditions,
-                'original_file': item.document_file
-            })
+        # For single rendition share link, just show that rendition
+        rendition = share_link.rendition
+        publication_items = [{
+            'item': rendition.publication_item,
+            'renditions': [rendition],
+            'original_file': rendition.publication_item.document_file
+        }]
 
         context.update({
             'publication_items': publication_items,
@@ -70,6 +64,62 @@ class PublicationPortalView(DetailView):
         })
 
         return context
+
+
+@public
+def share_link_view(request, token):
+    """
+    Public view for direct access to a rendition file via share link token.
+    Displays the file inline in the browser instead of downloading.
+    """
+    # Get share link
+    share_link = get_object_or_404(ShareLink, token=token)
+
+    # Check if link is valid
+    if not share_link.is_valid():
+        raise Http404(_("This link has expired or reached its download limit."))
+
+    # Check if download is allowed (using can_download for consistency, though it's inline view)
+    if not share_link.can_download():
+        raise Http404(_("Access limit reached for this link."))
+
+    # Get rendition (now directly from share_link.rendition)
+    rendition = share_link.rendition
+
+    # Check if rendition is completed
+    if rendition.status != 'completed':
+        raise Http404(_("Rendition is not ready yet."))
+
+    # Record access
+    share_link.record_access(request)
+
+    # Serve file inline (for viewing in browser)
+    try:
+        # Determine content type
+        content_type = 'application/octet-stream'
+        if rendition.preset.format == 'jpeg':
+            content_type = 'image/jpeg'
+        elif rendition.preset.format == 'png':
+            content_type = 'image/png'
+        elif rendition.preset.format == 'pdf':
+            content_type = 'application/pdf'
+        elif rendition.preset.format == 'mp4':
+            content_type = 'video/mp4'
+
+        response = HttpResponse(rendition.file, content_type=content_type)
+
+        # For inline viewing instead of download
+        filename = rendition.file.name.split('/')[-1]
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+
+        # Add cache headers for better performance
+        response['Cache-Control'] = 'private, max-age=3600'
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error serving share link {token}: {e}")
+        raise Http404(_("Error accessing file."))
 
 
 @public
@@ -94,7 +144,7 @@ def download_rendition(request, token, rendition_id):
     rendition = get_object_or_404(
         GeneratedRendition,
         id=rendition_id,
-        publication_item__publication=share_link.publication,
+        publication_item=share_link.rendition.publication_item,
         status='completed'
     )
 
