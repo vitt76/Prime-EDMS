@@ -47,7 +47,7 @@ class PresetsTemplateView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['presets'] = RenditionPreset.objects.order_by('name')
+        context['presets'] = RenditionPreset.objects.select_related('recipient').order_by('name')
         return context
 
 

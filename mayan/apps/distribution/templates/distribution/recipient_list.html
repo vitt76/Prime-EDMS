@@ -43,6 +43,7 @@
                                     <th>{% trans "Email" %}</th>
                                     <th>{% trans "Организация" %}</th>
                                     <th>{% trans "Язык" %}</th>
+                                    <th>{% trans "Пресеты" %}</th>
                                     <th class="text-right" style="width: 140px;">{% trans "Действия" %}</th>
                                 </tr>
                             </thead>
@@ -184,6 +185,16 @@
             row.append($('<td></td>').text(recipient.email));
             row.append($('<td></td>').text(recipient.organization || '—'));
             row.append($('<td></td>').text(recipient.locale || '—'));
+
+            // Столбец с пресетами
+            const presetsTd = $('<td></td>');
+            if (recipient.presets && recipient.presets.length > 0) {
+                const presetsList = recipient.presets.map(preset => preset.name).join(', ');
+                presetsTd.text(presetsList);
+            } else {
+                presetsTd.text('—');
+            }
+            row.append(presetsTd);
 
             const actionsTd = $('<td class="text-right"></td>');
             const editBtn = $('<button class="btn btn-xs btn-primary" title="{% trans "Редактировать" %}"><i class="fa fa-pencil"></i></button>');

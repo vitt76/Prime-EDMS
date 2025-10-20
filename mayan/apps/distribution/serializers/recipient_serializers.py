@@ -2,17 +2,23 @@ from django.utils.translation import ugettext_lazy as _
 
 from rest_framework import serializers
 
-from ..models import Recipient, RecipientList
+from ..models import Recipient, RecipientList, RenditionPreset
 
 
 class RecipientSerializer(serializers.ModelSerializer):
+    presets = serializers.SerializerMethodField()
+
     class Meta:
         fields = (
-            'id', 'email', 'name', 'organization', 'locale',
+            'id', 'email', 'name', 'organization', 'locale', 'presets',
             'created', 'modified'
         )
         model = Recipient
         read_only_fields = ('id', 'created', 'modified')
+
+    def get_presets(self, obj):
+        presets = RenditionPreset.objects.filter(recipient=obj)
+        return [{'id': preset.id, 'name': preset.name} for preset in presets]
 
     def create(self, validated_data):
         validated_data.pop('_instance_extra_data', None)
