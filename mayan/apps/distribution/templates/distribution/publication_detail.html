@@ -39,14 +39,6 @@
                                     {% trans "Генерировать версии файлов" %}
                                 </a>
                                 {% endif %}
-                                <a href="#" class="btn btn-info" onclick="openPresets(); return false;">
-                                    <i class="fa fa-sliders-h"></i>
-                                    {% trans "Настройки пресетов" %}
-                                </a>
-                                <a href="#" class="btn btn-warning" onclick="openRecipients(); return false;">
-                                    <i class="fa fa-users"></i>
-                                    {% trans "Управление получателями" %}
-                                </a>
                                 <a href="{% url 'distribution:publication_delete' publication.pk %}" class="btn btn-danger">
                                     <i class="fa fa-trash"></i>
                                     {% trans "Удалить публикацию" %}
@@ -167,7 +159,7 @@
                             <i class="fa fa-arrow-left"></i>
                             {% trans "Вернуться к списку" %}
                         </a>
-                        <a href="#" class="btn btn-primary">
+                        <a href="{% url 'distribution:add_documents_to_publication' publication.pk %}" class="btn btn-primary">
                             <i class="fa fa-plus"></i>
                             {% trans "Добавить документы" %}
                         </a>
@@ -181,14 +173,6 @@
 <script>
 function openShareLinks(publicationId) {
     window.location.hash = '#/distribution/share-links/manage/?publication=' + publicationId;
-}
-
-function openPresets() {
-    window.location.hash = '#/distribution/presets/';
-}
-
-function openRecipients() {
-    window.location.hash = '#/distribution/recipients/';
 }
 </script>
 {% endblock %}

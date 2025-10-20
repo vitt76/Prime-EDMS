@@ -2,7 +2,7 @@ from django.urls import path
 from .api_urls import urlpatterns as api_urlpatterns
 from .public_urls import urlpatterns as public_urlpatterns
 from ..ui_views import (
-    AddToPublicationView, DocumentPublicationsView, GenerateFileRenditionsView,
+    AddDocumentsToPublicationView, AddToPublicationView, DocumentPublicationsView, GenerateFileRenditionsView,
     PresetCreateTemplateView, PresetDeleteView, PresetEditTemplateView, PresetsTemplateView,
     PublicationCreateFromDocumentView, PublicationCreateMultipleView, PublicationCreateTemplateView,
     PublicationDeleteView, PublicationDetailView, PublicationListTemplateView,
@@ -72,6 +72,11 @@ ui_urlpatterns = [
         'distribution/publications/<int:pk>/delete/',
         PublicationDeleteView.as_view(),
         name='publication_delete'
+    ),
+    path(
+        'distribution/publications/<int:publication_id>/add-documents/',
+        AddDocumentsToPublicationView.as_view(),
+        name='add_documents_to_publication'
     ),
     path(
         'distribution/renditions/<int:rendition_id>/download/',

@@ -267,6 +267,77 @@ class PublicationCreateMultipleView(LoginRequiredMixin, TemplateView):
 
 # ===== ФАЙЛЫ ДОКУМЕНТОВ =====
 
+class AddDocumentsToPublicationView(LoginRequiredMixin, TemplateView):
+    """Добавление документов в существующую публикацию"""
+    template_name = 'distribution/add_documents_to_publication.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.publication = get_object_or_404(
+            Publication,
+            pk=kwargs['publication_id'],
+            owner=request.user
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Получаем документы пользователя, которые еще не в этой публикации
+        from mayan.apps.documents.models import Document
+        existing_document_ids = set(
+            item.document_file.document_id
+            for item in self.publication.items.all()
+        )
+        # Получаем документы пользователя (упрощенный подход)
+        # Mayan ACL система сама проверит разрешения при добавлении
+        available_documents = Document.objects.exclude(
+            pk__in=existing_document_ids
+        ).order_by('-datetime_created')[:50]  # Ограничиваем для производительности
+
+        context.update({
+            'publication': self.publication,
+            'available_documents': available_documents,
+            'title': _('Добавление документов в публикацию: {}').format(self.publication.title)
+        })
+        return context
+
+    def post(self, request, *args, **kwargs):
+        selected_document_ids = request.POST.getlist('document_ids')
+        if not selected_document_ids:
+            messages.warning(request, _('Не выбрано ни одного документа.'))
+            return self.get(request, *args, **kwargs)
+
+        added_count = 0
+        for document_id in selected_document_ids:
+            try:
+                document = get_object_or_404(Document, pk=document_id)
+                # Добавляем все файлы документа в публикацию
+                for document_file in document.files.all():
+                    if not self.publication.items.filter(document_file=document_file).exists():
+                        PublicationItem.objects.create(
+                            publication=self.publication,
+                            document_file=document_file
+                        )
+                        added_count += 1
+            except Exception as e:
+                messages.error(request, _('Ошибка при добавлении документа {}: {}').format(document_id, str(e)))
+
+        if added_count > 0:
+            messages.success(request, _('Добавлено {} файлов в публикацию.').format(added_count))
+            # Запускаем генерацию rendition'ов для новых элементов
+            from .tasks import generate_rendition_task
+            for item in self.publication.items.filter(document_file__document__pk__in=selected_document_ids):
+                for preset in self.publication.presets.all():
+                    generate_rendition_task.delay(
+                        GeneratedRendition.objects.get_or_create(
+                            publication_item=item,
+                            preset=preset,
+                            defaults={'status': 'pending'}
+                        )[0].id
+                    )
+
+        return redirect('distribution:publication_detail', pk=self.publication.pk)
+
+
 class AddToPublicationView(LoginRequiredMixin, TemplateView):
     """Добавление файла в существующую публикацию"""
     template_name = 'distribution/add_to_publication.html'

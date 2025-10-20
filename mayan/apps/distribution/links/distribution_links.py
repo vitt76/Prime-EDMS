@@ -69,7 +69,7 @@ link_document_file_add_to_publication = Link(
 link_distribution_publications = Link(
     icon=icon_distribution_list,
     permissions=(permission_publication_api_view,),
-    text=_('Публикации'),
+    text=_('Все'),
     view='distribution:publication_list'
 )
 
