@@ -1,0 +1,48 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n %}
+
+{% block title %}{% trans "Удаление публикации" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <div class="panel panel-danger">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-trash"></i>
+                        {% trans "Подтверждение удаления" %}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <p class="lead text-danger">
+                        {% blocktrans with title=publication.title %}
+                            Вы уверены, что хотите удалить публикацию «{{ title }}»?
+                        {% endblocktrans %}
+                    </p>
+                    <p>
+                        {% trans "Это действие нельзя отменить. Все связанные ссылки и записи будут удалены." %}
+                    </p>
+
+                    <form method="post" class="form-horizontal">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <div class="col-md-12 text-right">
+                                <a href="{% url 'distribution:publication_detail' publication.pk %}" class="btn btn-default">
+                                    <i class="fa fa-arrow-left"></i>
+                                    {% trans "Отмена" %}
+                                </a>
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="fa fa-trash"></i>
+                                    {% trans "Удалить" %}
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,313 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{% trans "Создание пресета" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-plus text-success"></i>
+                        {% trans "Создание пресета рендишена" %}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <form id="preset-form" class="form-horizontal">
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-name">{% trans "Название" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-name" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-recipient">{% trans "Получатель" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-recipient" class="form-control" required>
+                                    {% for recipient in recipients %}
+                                    <option value="{{ recipient.id }}">
+                                        {{ recipient.name|default:recipient.email }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <p class="help-block">{% trans "Выберите получателя, связанного с этим пресетом" %}</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-resource">{% trans "Тип ресурса" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-resource" class="form-control" required>
+                                    <option value="image">{% trans "Изображение" %}</option>
+                                    <option value="document">{% trans "Документ" %}</option>
+                                    <option value="video">{% trans "Видео" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-format">{% trans "Формат" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-format" class="form-control" required>
+                                    <option value="jpeg">JPEG</option>
+                                    <option value="png">PNG</option>
+                                    <option value="pdf">PDF</option>
+                                    <option value="mp4">MP4</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-width">{% trans "Ширина" %}</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control" id="preset-width" min="0" placeholder="{% trans "Пиксели или 0" %}">
+                            </div>
+                            <label class="col-sm-1 control-label" for="preset-height">{% trans "Высота" %}</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control" id="preset-height" min="0" placeholder="{% trans "Пиксели или 0" %}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-sm-offset-3 col-sm-9">
+                                <div class="checkbox">
+                                    <label>
+                                        <input type="checkbox" id="preset-crop"> {% trans "Обрезать до точного размера" %}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-quality">{% trans "Качество" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" class="form-control" id="preset-quality" min="0" max="100" placeholder="{% trans "0-100" %}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-dpi-x">{% trans "DPI по горизонтали" %}</label>
+                            <div class="col-sm-3">
+                                <input type="number" class="form-control" id="preset-dpi-x" min="0" placeholder="300">
+                            </div>
+                            <label class="col-sm-3 control-label" for="preset-dpi-y">{% trans "DPI по вертикали" %}</label>
+                            <div class="col-sm-3">
+                                <input type="number" class="form-control" id="preset-dpi-y" min="0" placeholder="300">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-filters">{% trans "Фильтры" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-filters" class="form-control" multiple>
+                                    <option value="grayscale">{% trans "Чёрно-белый" %}</option>
+                                    <option value="invert">{% trans "Инверсия" %}</option>
+                                    <option value="autocontrast">{% trans "Автоконтраст" %}</option>
+                                    <option value="equalize">{% trans "Выравнивание" %}</option>
+                                    <option value="posterize">{% trans "Постеризация" %}</option>
+                                    <option value="solarize">{% trans "Соляризация" %}</option>
+                                </select>
+                                <p class="help-block">{% trans "Можно выбрать несколько фильтров" %}</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-brightness">{% trans "Яркость" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.1" class="form-control" id="preset-brightness" placeholder="1.0">
+                                <p class="help-block">{% trans "1.0 - без изменений" %}</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-contrast">{% trans "Контраст" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.1" class="form-control" id="preset-contrast" placeholder="1.0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-color">{% trans "Цветовая насыщенность" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.1" class="form-control" id="preset-color" placeholder="1.0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-sharpness">{% trans "Резкость" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.1" class="form-control" id="preset-sharpness" placeholder="1.0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-watermark-text">{% trans "Текст водяного знака" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-watermark-text" placeholder="{% trans "Например, Конфиденциально" %}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-watermark-font-size">{% trans "Размер шрифта водяного знака" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" class="form-control" id="preset-watermark-font-size" min="1" placeholder="24">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-watermark-position">{% trans "Позиция водяного знака (x,y)" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-watermark-position" placeholder="10,10">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-watermark-color">{% trans "Цвет водяного знака" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-watermark-color" placeholder="255,255,255,128">
+                                <p class="help-block">{% trans "RGBA, последний параметр — прозрачность" %}</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-description">{% trans "Описание" %}</label>
+                            <div class="col-sm-9">
+                                <textarea id="preset-description" class="form-control" rows="3"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-sm-offset-3 col-sm-9">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fa fa-save"></i> {% trans "Создать" %}
+                                </button>
+                                <a href="#/distribution/presets/" class="btn btn-default">
+                                    <i class="fa fa-arrow-left"></i> {% trans "Отмена" %}
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="preset-alert" class="alert" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+(function() {
+    const form = document.getElementById('preset-form');
+    const alertBox = document.getElementById('preset-alert');
+
+    function showAlert(message, type) {
+        alertBox.textContent = message;
+        alertBox.className = 'alert alert-' + type;
+        alertBox.style.display = 'block';
+    }
+
+    function getCookie(name) {
+        const cookies = document.cookie ? document.cookie.split(';') : [];
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                return decodeURIComponent(cookie.substring(name.length + 1));
+            }
+        }
+        return null;
+    }
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const csrfToken = getCookie('csrftoken');
+        if (!csrfToken) {
+            showAlert('{% trans "CSRF токен не найден. Обновите страницу и попробуйте ещё раз." %}', 'danger');
+            return;
+        }
+
+        const filtersSelect = document.getElementById('preset-filters');
+        const selectedFilters = Array.from(filtersSelect.selectedOptions).map(option => option.value);
+
+        const watermarkPayload = {};
+        const watermarkText = document.getElementById('preset-watermark-text').value;
+        if (watermarkText) {
+            watermarkPayload.text = watermarkText;
+            const fontSize = parseInt(document.getElementById('preset-watermark-font-size').value);
+            if (!isNaN(fontSize)) {
+                watermarkPayload.font_size = fontSize;
+            }
+            const positionValue = document.getElementById('preset-watermark-position').value;
+            if (positionValue) {
+                const parts = positionValue.split(',').map(part => parseInt(part.trim()));
+                if (parts.length === 2 && parts.every(value => !isNaN(value))) {
+                    watermarkPayload.position = parts;
+                }
+            }
+            const colorValue = document.getElementById('preset-watermark-color').value;
+            if (colorValue) {
+                const colorParts = colorValue.split(',').map(part => parseInt(part.trim()));
+                if (colorParts.length === 4 && colorParts.every(value => !isNaN(value))) {
+                    watermarkPayload.font_color = colorParts;
+                }
+            }
+        }
+
+        const payload = {
+            name: document.getElementById('preset-name').value,
+            recipient: document.getElementById('preset-recipient').value,
+            resource_type: document.getElementById('preset-resource').value,
+            format: document.getElementById('preset-format').value,
+            width: parseInt(document.getElementById('preset-width').value) || null,
+            height: parseInt(document.getElementById('preset-height').value) || null,
+            crop: document.getElementById('preset-crop').checked,
+            quality: document.getElementById('preset-quality').value ? parseInt(document.getElementById('preset-quality').value) : null,
+            dpi_x: parseInt(document.getElementById('preset-dpi-x').value) || null,
+            dpi_y: parseInt(document.getElementById('preset-dpi-y').value) || null,
+            filters: selectedFilters,
+            adjust_brightness: document.getElementById('preset-brightness').value ? parseFloat(document.getElementById('preset-brightness').value) : null,
+            adjust_contrast: document.getElementById('preset-contrast').value ? parseFloat(document.getElementById('preset-contrast').value) : null,
+            adjust_color: document.getElementById('preset-color').value ? parseFloat(document.getElementById('preset-color').value) : null,
+            adjust_sharpness: document.getElementById('preset-sharpness').value ? parseFloat(document.getElementById('preset-sharpness').value) : null,
+            description: document.getElementById('preset-description').value || '',
+            watermark: watermarkPayload
+        };
+
+        fetch('/api/v4/distribution/rendition_presets/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    let message = '';
+                    if (typeof data === 'string') {
+                        message = data;
+                    } else if (data.detail) {
+                        message = data.detail;
+                    } else if (typeof data === 'object' && data !== null) {
+                        const collected = [];
+                        Object.keys(data).forEach(key => {
+                            const value = data[key];
+                            if (Array.isArray(value)) {
+                                collected.push(value.join(' '));
+                            } else if (typeof value === 'string') {
+                                collected.push(value);
+                            }
+                        });
+                        message = collected.join(' ') || JSON.stringify(data);
+                    } else {
+                        message = JSON.stringify(data);
+                    }
+                    throw new Error(message);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            showAlert('{% trans "Пресет успешно создан" %}', 'success');
+            setTimeout(() => {
+                window.location.hash = '#/distribution/presets/';
+            }, 1000);
+        })
+        .catch(error => {
+            console.error('Preset creation error:', error);
+            showAlert(error.message || '{% trans "Не удалось создать пресет" %}', 'danger');
+        });
+    });
+})();
+</script>
+{% endblock %}
+

@@ -1,0 +1,180 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{% trans "Публикация" %}: {{ publication.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-file-alt text-primary"></i>
+                        {{ publication.title }}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <p><strong>{% trans "Описание:" %}</strong> {{ publication.description|default:"—" }}</p>
+                            <p><strong>{% trans "Создано:" %}</strong> {{ publication.created|date:"d.m.Y H:i" }}</p>
+                            <p><strong>{% trans "Автор:" %}</strong> {{ publication.owner.get_full_name|default:publication.owner.username }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="btn-group-vertical" style="width: 100%;">
+                                <a href="#" class="btn btn-success" onclick="openShareLinks({{ publication.pk }}); return false;">
+                                    <i class="fa fa-share"></i>
+                                    {% trans "Управлять ссылками" %}
+                                </a>
+                                {% if first_document_file_id %}
+                                <a href="{% url 'distribution:generate_file_renditions' first_document_file_id %}" class="btn btn-primary">
+                                    <i class="fa fa-cogs"></i>
+                                    {% trans "Генерировать версии файлов" %}
+                                </a>
+                                {% else %}
+                                <a href="#" class="btn btn-primary disabled">
+                                    <i class="fa fa-cogs"></i>
+                                    {% trans "Генерировать версии файлов" %}
+                                </a>
+                                {% endif %}
+                                <a href="{% url 'distribution:publication_edit' publication.pk %}" class="btn btn-info">
+                                    <i class="fa fa-edit"></i>
+                                    {% trans "Редактировать публикацию" %}
+                                </a>
+                                <a href="{% url 'distribution:publication_delete' publication.pk %}" class="btn btn-danger">
+                                    <i class="fa fa-trash"></i>
+                                    {% trans "Удалить публикацию" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h4>{% trans "Документы в публикации" %}</h4>
+
+                    {% if items %}
+                        {% for item in items %}
+                            <div class="panel panel-info">
+                                <div class="panel-heading">
+                                    <h5 class="panel-title">
+                                        <i class="fa fa-file"></i>
+                                        {{ item.document_file.filename }}
+                                    </h5>
+                                </div>
+                                <div class="panel-body">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            {% if item.document_file.document.get_api_image_url %}
+                                            <div class="text-center mb-3">
+                                                <img src="{{ item.document_file.document.get_api_image_url }}" alt="{{ item.document_file.document.label }}" class="img-thumbnail" style="max-width: 180px; max-height: 180px;">
+                                            </div>
+                                            {% endif %}
+                                            <p><strong>{% trans "Размер:" %}</strong> {{ item.document_file.size|filesizeformat }}</p>
+                                            <p><strong>{% trans "Тип:" %}</strong> {{ item.document_file.mimetype }}</p>
+                                            <p><strong>{% trans "Документ:" %}</strong>
+                                                <a href="{% url 'documents:document_preview' item.document_file.document.pk %}">
+                                                    {{ item.document_file.document.label }}
+                                                </a>
+                                            </p>
+                                        </div>
+                                        <div class="col-md-8">
+                                            <h5>{% trans "Доступные версии публикации" %}</h5>
+                                            {% if item.renditions.all %}
+                                                <div class="table-responsive">
+                                                    <table class="table table-striped table-condensed">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>{% trans "Пресет" %}</th>
+                                                                <th>{% trans "Формат" %}</th>
+                                                                <th>{% trans "Статус" %}</th>
+                                                                <th></th>
+                                                                <th class="text-right"></th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for rendition in item.renditions.all %}
+                                                                <tr>
+                                                                    <td>
+                                                                        <strong>{{ rendition.preset.name }}</strong><br>
+                                                                        <span class="label label-default">ID {{ rendition.id }}</span>
+                                                                    </td>
+                                                                    <td>{{ rendition.preset.format|upper }}</td>
+                                                                    <td>
+                                                                        {% if rendition.status == 'completed' %}
+                                                                            <span class="label label-success">{% trans "Готово" %}</span>
+                                                                        {% elif rendition.status == 'processing' %}
+                                                                            <span class="label label-warning">{% trans "Обработка" %}</span>
+                                                                        {% else %}
+                                                                            <span class="label label-danger">{% trans "Ошибка" %}</span>
+                                                                        {% endif %}
+                                                                    </td>
+                                                                    <td>
+                                                                        <a href="{% url 'distribution:rendition_download' rendition.id %}" class="btn btn-xs btn-primary">
+                                                                                 <i class="fa fa-download"></i> {% trans "Скачать" %}
+                                                                             </a>
+                                                                    </td>
+                                                                    <td class="text-right">
+                                                                        {% if rendition.status == 'completed' %}
+                                                                        <a href="{% url 'distribution:share_link_create' rendition.id %}" class="btn btn-xs btn-success" title="{% trans "Создать ссылку для этого рендишена" %}">
+                                                                            <i class="fa fa-share"></i> {% trans "Ссылка" %}
+                                                                        </a>
+                                                                        {% endif %}
+                                                                        <form method="post" style="display:inline-block;">
+                                                                            {% csrf_token %}
+                                                                            <input type="hidden" name="delete_rendition_id" value="{{ rendition.id }}">
+                                                                            <button type="submit" class="btn btn-xs btn-danger" onclick="return confirm('{% trans "Удалить эту версию?" %}')">
+                                                                                <i class="fa fa-trash"></i> {% trans "Удалить" %}
+                                                                            </button>
+                                                                        </form>
+                                                                    </td>
+                                                                </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            {% else %}
+                                                <div class="alert.alert-warning">
+                                                    {% trans "Версии публикации ещё не сгенерированы" %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="alert alert-info">
+                                {% trans "В этой публикации пока нет документов" %}
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-info">
+                            {% trans "В этой публикации пока нет документов" %}
+                        </div>
+                    {% endif %}
+
+                    <div class="form-group">
+                        <a href="{% url 'distribution:publication_list' %}" class="btn btn-default">
+                            <i class="fa fa-arrow-left"></i>
+                            {% trans "Вернуться к списку" %}
+                        </a>
+                        <a href="{% url 'distribution:add_documents_to_publication' publication.pk %}" class="btn btn-primary">
+                            <i class="fa fa-plus"></i>
+                            {% trans "Добавить документы" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openShareLinks(publicationId) {
+    window.location.hash = '#/distribution/share-links/manage/?publication=' + publicationId;
+}
+</script>
+{% endblock %}
+

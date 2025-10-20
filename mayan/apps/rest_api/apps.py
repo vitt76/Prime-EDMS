@@ -47,5 +47,12 @@ class RESTAPIApp(MayanAppConfig):
 
         for app in apps.get_app_configs():
             if getattr(app, 'has_rest_api', False):
-                app_api_urls = import_string(dotted_path='{}.urls.api_urls'.format(app.name))
-                api_version_urls.extend(app_api_urls)
+                print(f"DEBUG: Processing REST API app: {app.name}")
+                try:
+                    app_api_urls = import_string(dotted_path='{}.urls.api_urls'.format(app.name))
+                    print(f"DEBUG: Imported {len(app_api_urls)} URLs for {app.name}")
+                    print(f"DEBUG: First URL pattern: {app_api_urls[0] if app_api_urls else 'None'}")
+                    api_version_urls.extend(app_api_urls)
+                    print(f"DEBUG: api_version_urls length after extend: {len(api_version_urls)}")
+                except Exception as e:
+                    print(f"ERROR: Failed to import API URLs for {app.name}: {e}")

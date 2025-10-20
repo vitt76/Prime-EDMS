@@ -1,0 +1,298 @@
+{% extends "appearance/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Редактирование пресета" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-pencil text-primary"></i>
+                        {% trans "Редактирование пресета" %}: {{ preset.name }}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <form id="preset-edit-form" class="form-horizontal">
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-name">{% trans "Название" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-name" value="{{ preset.name }}" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-recipient">{% trans "Получатель" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-recipient" class="form-control">
+                                    <option value="">{% trans "Не выбран" %}</option>
+                                    {% for recipient in recipients %}
+                                    <option value="{{ recipient.id }}" {% if preset.recipient and preset.recipient.id == recipient.id %}selected{% endif %}>
+                                        {{ recipient.name|default:recipient.email }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <p class="help-block">{% trans "Выберите получателя, связанного с этим пресетом (необязательно)" %}</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-resource">{% trans "Тип ресурса" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-resource" class="form-control" required>
+                                    <option value="image" {% if preset.resource_type == 'image' %}selected{% endif %}>{% trans "Изображение" %}</option>
+                                    <option value="document" {% if preset.resource_type == 'document' %}selected{% endif %}>{% trans "Документ" %}</option>
+                                    <option value="video" {% if preset.resource_type == 'video' %}selected{% endif %}>{% trans "Видео" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-format">{% trans "Формат" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-format" class="form-control" required>
+                                    <option value="jpeg" {% if preset.format == 'jpeg' %}selected{% endif %}>JPEG</option>
+                                    <option value="png" {% if preset.format == 'png' %}selected{% endif %}>PNG</option>
+                                    <option value="pdf" {% if preset.format == 'pdf' %}selected{% endif %}>PDF</option>
+                                    <option value="mp4" {% if preset.format == 'mp4' %}selected{% endif %}>MP4</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-width">{% trans "Ширина" %}</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control" id="preset-width" min="0" value="{{ preset.width|default_if_none:'' }}">
+                            </div>
+                            <label class="col-sm-1 control-label" for="preset-height">{% trans "Высота" %}</label>
+                            <div class="col-sm-4">
+                                <input type="number" class="form-control" id="preset-height" min="0" value="{{ preset.height|default_if_none:'' }}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-sm-offset-3 col-sm-9">
+                                <div class="checkbox">
+                                    <label>
+                                        <input type="checkbox" id="preset-crop" {% if preset.crop %}checked{% endif %}> {% trans "Обрезать до точного размера" %}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-quality">{% trans "Качество" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" class="form-control" id="preset-quality" min="0" max="100" value="{{ preset.quality|default_if_none:'' }}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-dpi-x">{% trans "DPI по горизонтали" %}</label>
+                            <div class="col-sm-3">
+                                <input type="number" class="form-control" id="preset-dpi-x" min="0" value="{{ preset.dpi_x|default_if_none:'' }}">
+                            </div>
+                            <label class="col-sm-3 control-label" for="preset-dpi-y">{% trans "DPI по вертикали" %}</label>
+                            <div class="col-sm-3">
+                                <input type="number" class="form-control" id="preset-dpi-y" min="0" value="{{ preset.dpi_y|default_if_none:'' }}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-filters">{% trans "Фильтры" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-filters" class="form-control" multiple>
+                                    <option value="grayscale" {% if 'grayscale' in preset.filters %}selected{% endif %}>{% trans "Чёрно-белый" %}</option>
+                                    <option value="invert" {% if 'invert' in preset.filters %}selected{% endif %}>{% trans "Инверсия" %}</option>
+                                    <option value="autocontrast" {% if 'autocontrast' in preset.filters %}selected{% endif %}>{% trans "Автоконтраст" %}</option>
+                                    <option value="equalize" {% if 'equalize' in preset.filters %}selected{% endif %}>{% trans "Выравнивание" %}</option>
+                                    <option value="posterize" {% if 'posterize' in preset.filters %}selected{% endif %}>{% trans "Постеризация" %}</option>
+                                    <option value="solarize" {% if 'solarize' in preset.filters %}selected{% endif %}>{% trans "Соляризация" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-brightness">{% trans "Яркость" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.1" class="form-control" id="preset-brightness" value="{{ preset.adjust_brightness|default_if_none:'' }}" placeholder="1.0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-contrast">{% trans "Контраст" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.1" class="form-control" id="preset-contrast" value="{{ preset.adjust_contrast|default_if_none:'' }}" placeholder="1.0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-color">{% trans "Цветовая насыщенность" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.1" class="form-control" id="preset-color" value="{{ preset.adjust_color|default_if_none:'' }}" placeholder="1.0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-sharpness">{% trans "Резкость" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" step="0.1" class="form-control" id="preset-sharpness" value="{{ preset.adjust_sharpness|default_if_none:'' }}" placeholder="1.0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-watermark-text">{% trans "Текст водяного знака" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-watermark-text" value="{{ preset.watermark.text|default_if_none:'' }}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-watermark-font-size">{% trans "Размер шрифта водяного знака" %}</label>
+                            <div class="col-sm-9">
+                                <input type="number" class="form-control" id="preset-watermark-font-size" min="1" value="{{ preset.watermark.font_size|default_if_none:'' }}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-watermark-position">{% trans "Позиция водяного знака (x,y)" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-watermark-position" value="{% if preset.watermark.position %}{{ preset.watermark.position.0 }},{{ preset.watermark.position.1 }}{% endif %}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-watermark-color">{% trans "Цвет водяного знака" %}</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="preset-watermark-color" value="{% if preset.watermark.font_color %}{{ preset.watermark.font_color.0 }},{{ preset.watermark.font_color.1 }},{{ preset.watermark.font_color.2 }},{{ preset.watermark.font_color.3 }}{% endif %}">
+                                <p class="help-block">{% trans "RGBA, последний параметр — прозрачность" %}</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-description">{% trans "Описание" %}</label>
+                            <div class="col-sm-9">
+                                <textarea id="preset-description" class="form-control" rows="3">{{ preset.description }}</textarea>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-sm-offset-3 col-sm-9">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa fa-save"></i> {% trans "Сохранить" %}
+                                </button>
+                                <a href="#/distribution/presets/" class="btn btn-default">
+                                    <i class="fa fa-arrow-left"></i> {% trans "Отмена" %}
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="preset-edit-alert" class="alert" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const form = document.getElementById('preset-edit-form');
+    const alertBox = document.getElementById('preset-edit-alert');
+    const presetId = {{ preset.id }};
+
+    function showAlert(message, type) {
+        alertBox.textContent = message;
+        alertBox.className = 'alert alert-' + type;
+        alertBox.style.display = 'block';
+    }
+
+    function getCookie(name) {
+        const cookies = document.cookie ? document.cookie.split(';') : [];
+        for (let cookie of cookies) {
+            cookie = cookie.trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                return decodeURIComponent(cookie.substring(name.length + 1));
+            }
+        }
+        return null;
+    }
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const filtersSelect = document.getElementById('preset-filters');
+        const selectedFilters = Array.from(filtersSelect.selectedOptions).map(option => option.value);
+
+        const watermarkPayload = {};
+        const watermarkText = document.getElementById('preset-watermark-text').value;
+        if (watermarkText) {
+            watermarkPayload.text = watermarkText;
+            const fontSize = parseInt(document.getElementById('preset-watermark-font-size').value);
+            if (!isNaN(fontSize)) {
+                watermarkPayload.font_size = fontSize;
+            }
+            const positionValue = document.getElementById('preset-watermark-position').value;
+            if (positionValue) {
+                const parts = positionValue.split(',').map(part => parseInt(part.trim()));
+                if (parts.length === 2 && parts.every(value => !isNaN(value))) {
+                    watermarkPayload.position = parts;
+                }
+            }
+            const colorValue = document.getElementById('preset-watermark-color').value;
+            if (colorValue) {
+                const colorParts = colorValue.split(',').map(part => parseInt(part.trim()));
+                if (colorParts.length === 4 && colorParts.every(value => !isNaN(value))) {
+                    watermarkPayload.font_color = colorParts;
+                }
+            }
+        }
+
+        const payload = {
+            name: document.getElementById('preset-name').value,
+            recipient: document.getElementById('preset-recipient').value || null,
+            resource_type: document.getElementById('preset-resource').value,
+            format: document.getElementById('preset-format').value,
+            width: parseInt(document.getElementById('preset-width').value) || null,
+            height: parseInt(document.getElementById('preset-height').value) || null,
+            crop: document.getElementById('preset-crop').checked,
+            quality: document.getElementById('preset-quality').value ? parseInt(document.getElementById('preset-quality').value) : null,
+            dpi_x: parseInt(document.getElementById('preset-dpi-x').value) || null,
+            dpi_y: parseInt(document.getElementById('preset-dpi-y').value) || null,
+            filters: selectedFilters,
+            adjust_brightness: document.getElementById('preset-brightness').value ? parseFloat(document.getElementById('preset-brightness').value) : null,
+            adjust_contrast: document.getElementById('preset-contrast').value ? parseFloat(document.getElementById('preset-contrast').value) : null,
+            adjust_color: document.getElementById('preset-color').value ? parseFloat(document.getElementById('preset-color').value) : null,
+            adjust_sharpness: document.getElementById('preset-sharpness').value ? parseFloat(document.getElementById('preset-sharpness').value) : null,
+            description: document.getElementById('preset-description').value || '',
+            watermark: watermarkPayload
+        };
+
+        const csrfToken = getCookie('csrftoken');
+        if (!csrfToken) {
+            showAlert('{% trans "CSRF токен не найден. Обновите страницу." %}', 'danger');
+            return;
+        }
+
+        fetch(`/api/v4/distribution/rendition_presets/${presetId}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    let message = '';
+                    if (data.detail) {
+                        message = data.detail;
+                    } else if (typeof data === 'object') {
+                        message = Object.values(data).flat().join(' ');
+                    } else {
+                        message = JSON.stringify(data);
+                    }
+                    throw new Error(message);
+                });
+            }
+            return response.json();
+        })
+        .then(() => {
+            showAlert('{% trans "Пресет обновлён" %}', 'success');
+            setTimeout(() => {
+                window.location.hash = '#/distribution/presets/';
+            }, 1000);
+        })
+        .catch(error => {
+            showAlert(error.message || '{% trans "Не удалось обновить пресет" %}', 'danger');
+        });
+    });
+})();
+</script>
+{% endblock %}

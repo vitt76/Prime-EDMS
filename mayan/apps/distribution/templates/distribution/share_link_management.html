@@ -1,0 +1,322 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{% trans "Управление ссылками" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-link text-primary"></i>
+                        {% trans "Ссылки для скачивания" %}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="row m-b-15">
+                        <div class="col-md-12">
+                            {% if current_publication %}
+                                <div class="alert alert-info">
+                                    <strong>{% trans "Публикация:" %}</strong> {{ current_publication.title }}
+                                    <br>
+                                    <small class="text-muted">{% trans "Для создания новых ссылок перейдите в детали публикации" %}</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if share_links %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>{% trans "Публикация / Рендишен" %}</th>
+                                        <th>{% trans "Ссылка" %}</th>
+                                        <th>{% trans "Создана" %}</th>
+                                        <th>{% trans "Истекает" %}</th>
+                                        <th>{% trans "Скачиваний" %}</th>
+                                        <th>{% trans "Статус" %}</th>
+                                        <th>{% trans "Действия" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for link in share_links %}
+                                        <tr>
+                                            <td>
+                                                <strong>{{ link.rendition.publication_item.publication.title }}</strong><br>
+                                                <small class="text-muted">{{ link.rendition.preset.name }} ({{ link.rendition.preset.format|upper }})</small>
+                                            </td>
+                                            <td>
+                                                <code>{{ link.token }}</code>
+                                                <button class="btn btn-xs btn-default" onclick="copyToClipboard('{{ link.token }}')">
+                                                    <i class="fa fa-copy"></i>
+                                                </button>
+                                            </td>
+                                            <td>{{ link.created|date:"d.m.Y H:i" }}</td>
+                                            <td>
+                                                {% if link.expires_at %}
+                                                    {{ link.expires_at|date:"d.m.Y H:i" }}
+                                                {% else %}
+                                                    {% trans "Бессрочно" %}
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ link.downloads_count }} / {% if link.max_downloads %}{{ link.max_downloads }}{% else %}∞{% endif %}</td>
+                                            <td>
+                                                {% if link.is_valid %}
+                                                    <span class="label label-success">{% trans "Активна" %}</span>
+                                                {% else %}
+                                                    <span class="label label-danger">{% trans "Истекла" %}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="http://localhost/{{ link.token }}/" target="_blank" class="btn btn-xs btn-primary" title="{% trans "Открыть файл" %}">
+                                                    <i class="fa fa-external-link"></i>
+                                                </a>
+                                                <button type="button" class="btn btn-xs btn-warning" title="{% trans "Редактировать" %}" onclick="editShareLink({{ link.id }})">
+                                                    <i class="fa fa-edit"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-xs btn-danger" title="{% trans "Удалить" %}" onclick="deleteShareLink({{ link.id }})">
+                                                    <i class="fa fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "У вас пока нет ссылок для скачивания." %}
+                        </div>
+                    {% endif %}
+
+                    <div class="form-group">
+                        <a href="{% url 'distribution:publication_list' %}" class="btn btn-default">
+                            <i class="fa fa-arrow-left"></i>
+                            {% trans "Вернуться к публикациям" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="shareLinkModal" tabindex="-1" role="dialog" aria-labelledby="shareLinkModalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="shareLinkModalLabel">{% trans "Редактирование ссылки" %}</h4>
+            </div>
+            <div class="modal-body">
+                <form id="share-link-form">
+                    <div class="form-group">
+                        <label for="share-link-recipient">{% trans "Получатель" %}</label>
+                        <select id="share-link-recipient" class="form-control">
+                            <option value="">{% trans "Не выбран (общая ссылка)" %}</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="share-link-expires-at">{% trans "Истекает" %}</label>
+                        <input type="datetime-local" class="form-control" id="share-link-expires-at">
+                        <small class="help-block">{% trans "Оставьте пустым для бессрочной ссылки" %}</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="share-link-max-downloads">{% trans "Максимум скачиваний" %}</label>
+                        <input type="number" class="form-control" id="share-link-max-downloads" min="0">
+                        <small class="help-block">{% trans "Оставьте пустым для неограниченного количества" %}</small>
+                    </div>
+                </form>
+                <div id="share-link-form-alert" class="alert alert-danger" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Отмена" %}</button>
+                <button type="button" class="btn btn-primary" id="share-link-save-btn">{% trans "Сохранить" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        console.log('Copied to clipboard: ' + text);
+    });
+}
+
+let editingShareLinkId = null;
+
+function editShareLink(linkId) {
+    editingShareLinkId = linkId;
+    console.log('Editing share link:', linkId);
+
+    // Get share link data
+    fetch(`/api/v4/distribution/share_links/${linkId}/`, {
+        credentials: 'include'
+    }).then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('Share link не найден или у вас нет доступа к нему');
+            } else if (response.status === 403) {
+                throw new Error('У вас нет доступа к этому share link');
+            } else {
+                throw new Error(`Ошибка сервера: ${response.status} ${response.statusText}`);
+            }
+        }
+        return response.json();
+    }).then(data => {
+        console.log('Share link data:', data);
+        // Populate form
+        populateRecipients().then(() => {
+            document.getElementById('share-link-recipient').value = data.recipient || '';
+            document.getElementById('share-link-expires-at').value = data.expires_at ?
+                new Date(data.expires_at).toISOString().slice(0, 16) : '';
+            document.getElementById('share-link-max-downloads').value = data.max_downloads || '';
+
+            // Show modal
+            $('#shareLinkModal').modal('show');
+        });
+    }).catch(error => {
+        alert('Ошибка загрузки данных ссылки: ' + error.message);
+    });
+}
+
+function deleteShareLink(linkId) {
+    if (!confirm('{% trans "Удалить эту ссылку?" %}')) {
+        return;
+    }
+
+    const csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+    fetch(`/api/v4/distribution/share_links/${linkId}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': csrfToken || '',
+            'Accept': 'application/json'
+        },
+        credentials: 'include'
+    }).then(response => {
+        if (response.ok || response.status === 204) {
+            location.reload();
+        } else {
+            return response.json().then(data => {
+                const message = data.detail || JSON.stringify(data);
+                throw new Error(message);
+            });
+        }
+    }).catch(error => {
+        alert(error.message || '{% trans "Не удалось удалить ссылку" %}');
+    });
+}
+
+function populateRecipients() {
+    return fetch('/api/v4/distribution/recipients/', {
+        credentials: 'include'
+    }).then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to load recipients');
+        }
+        return response.json();
+    }).then(data => {
+        const select = document.getElementById('share-link-recipient');
+        // Clear existing options except the first one
+        select.innerHTML = '<option value="">{% trans "Не выбран (общая ссылка)" %}</option>';
+
+        if (data.results) {
+            data.results.forEach(recipient => {
+                const option = document.createElement('option');
+                option.value = recipient.id;
+                option.textContent = recipient.name || recipient.email;
+                select.appendChild(option);
+            });
+        }
+    });
+}
+
+function saveShareLink() {
+    console.log('Saving share link:', editingShareLinkId);
+
+    const csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+    if (!csrfToken) {
+        showShareLinkAlert('{% trans "CSRF токен не найден. Обновите страницу." %}', 'danger');
+        return;
+    }
+
+    const payload = {
+        recipient: document.getElementById('share-link-recipient').value || null,
+        expires_at: document.getElementById('share-link-expires-at').value || null,
+        max_downloads: document.getElementById('share-link-max-downloads').value ?
+            parseInt(document.getElementById('share-link-max-downloads').value) : null
+    };
+
+    console.log('Sending payload:', payload);
+    console.log('URL:', `/api/v4/distribution/share_links/${editingShareLinkId}/`);
+
+    fetch(`/api/v4/distribution/share_links/${editingShareLinkId}/`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+    }).then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                let message = '';
+                if (data.detail) {
+                    message = data.detail;
+                } else if (typeof data === 'object') {
+                    message = Object.values(data).flat().join(' ');
+                } else {
+                    message = response.statusText;
+                }
+                throw new Error(message);
+            });
+        }
+        return response.json();
+    }).then(() => {
+        $('#shareLinkModal').modal('hide');
+        location.reload();
+    }).catch(error => {
+        showShareLinkAlert(error.message || '{% trans "Не удалось сохранить" %}', 'danger');
+    });
+}
+
+function showShareLinkAlert(message, type = 'info') {
+    const alertBox = document.getElementById('share-link-form-alert');
+    alertBox.textContent = message;
+    alertBox.className = `alert alert-${type}`;
+    alertBox.style.display = 'block';
+}
+
+// Bind save button handler when modal is shown
+$('#shareLinkModal').on('shown.bs.modal', function() {
+    const saveBtn = document.getElementById('share-link-save-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveShareLink);
+        console.log('Save button handler bound');
+    } else {
+        console.error('Save button not found');
+    }
+});
+
+$('#shareLinkModal').on('hidden.bs.modal', function() {
+    editingShareLinkId = null;
+    document.getElementById('share-link-form').reset();
+    document.getElementById('share-link-form-alert').style.display = 'none';
+
+    // Remove the event listener to prevent multiple bindings
+    const saveBtn = document.getElementById('share-link-save-btn');
+    if (saveBtn) {
+        saveBtn.removeEventListener('click', saveShareLink);
+    }
+});
+</script>
+{% endblock %}
+

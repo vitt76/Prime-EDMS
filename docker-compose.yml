@@ -5,6 +5,7 @@ volumes:
   rabbitmq_data:
   redis_data:
   mayan_data:
+  mayan_renditions:
 
 services:
   postgresql:
@@ -63,20 +64,28 @@ services:
     image: prime-edms_app:latest
     container_name: prime-edms_app_1
     environment:
+      MAYAN_MEDIA_ROOT: '/opt/mayan-edms/data'
       MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql'}}"
       MAYAN_CELERY_BROKER_URL: amqp://mayan:mayanrabbitpass@rabbitmq:5672/mayan
       MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
       MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock
       MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:mayanredispassword@redis:6379/2'}"
       MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
-      # Force add our converter extension via environment
-      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension']"
+      MAYAN_WORKER_A_QUEUES: converter,sources_fast,distribution
+      # Override the hardcoded supervisor config
+      COMMAND_WORKER_A: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker %(ENV_MAYAN_WORKER_A_CONCURRENCY)s --hostname=mayan-edms-worker_a.%%h --loglevel=ERROR -Ofair --queues=converter,sources_fast,distribution %(ENV_MAYAN_WORKER_A_MAX_MEMORY_PER_CHILD)s %(ENV_MAYAN_WORKER_A_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
+      # Force add our extensions via environment
+      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
       PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
     volumes:
       - mayan_data:/var/lib/mayan
+      - mayan_renditions:/opt/mayan-edms/data
       - ./config.yml:/opt/mayan-edms/config.yml:ro
       - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension:ro
+      - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution:ro
+      - ./mayan/apps/rest_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api
+      - ./mayan/urls:/opt/mayan-edms/lib/python3.9/site-packages/mayan/urls
     ports:
       - "80:8000"
     depends_on:
@@ -87,9 +96,9 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 60s

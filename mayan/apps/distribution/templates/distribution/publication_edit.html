@@ -1,0 +1,61 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-edit text-primary"></i>
+                        {{ title }}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <div class="form-group">
+                            <label for="{{ form.title.id_for_label }}">{% trans "Название публикации" %} *</label>
+                            {{ form.title }}
+                            {% if form.title.errors %}
+                                <div class="text-danger">
+                                    {{ form.title.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="{{ form.description.id_for_label }}">{% trans "Описание" %}</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <div class="text-danger">
+                                    {{ form.description.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                {% trans "Необязательное описание публикации для получателей" %}
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <a href="{% url 'distribution:publication_detail' publication.pk %}" class="btn btn-default">
+                                <i class="fa fa-arrow-left"></i>
+                                {% trans "Отмена" %}
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fa fa-save"></i>
+                                {% trans "Сохранить изменения" %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Скрипт управления Mayan EDMS для Ubuntu
+# Скрипт управления Prime-EDMS для Ubuntu
 # Использование: ./ubuntu-start.sh [start|stop|restart|logs|status|clean]
 
 set -e
@@ -67,13 +67,13 @@ check_docker() {
     fi
 }
 
-# Запуск Mayan EDMS
+# Запуск Prime-EDMS
 start_mayan() {
-    print_header "Запуск Mayan EDMS..."
+    print_header "Запуск Prime-EDMS..."
 
     # Проверка существования контейнеров
     if docker ps -q -f name="${PROJECT_NAME}_app_1" | grep -q .; then
-        print_warning "Mayan EDMS уже запущен"
+        print_warning "Prime-EDMS уже запущен"
         return 0
     fi
 
@@ -108,6 +108,10 @@ start_mayan() {
         print_warning "PostgreSQL не запустился за 150 секунд"
         exit 1
     fi
+
+    # Ждем запуска приложения
+    print_success "Ожидание запуска Prime-EDMS..."
+    sleep 30
 
     # Ждем готовности Redis
     print_header "Ожидание Redis..."
@@ -146,37 +150,44 @@ start_mayan() {
     check_network "Redis" "redis" "6379" || print_warning "Redis недоступен"
     check_network "RabbitMQ" "rabbitmq" "5672" || print_warning "RabbitMQ недоступен"
 
-    # Проверяем загрузку расширения
+    # Проверяем загрузку расширений
     if docker exec "${PROJECT_NAME}_app_1" python3 -c "
 import sys
 sys.path.insert(0, '/opt/mayan-edms/lib/python3.9/site-packages')
 try:
     import mayan.apps.converter_pipeline_extension
-    print('✅ Расширение converter_pipeline_extension загружено')
+    import mayan.apps.distribution
+    print('✅ Расширения converter_pipeline_extension и distribution загружены')
 except ImportError as e:
-    print('❌ Ошибка загрузки расширения:', e)
+    print('❌ Ошибка загрузки расширений:', e)
     sys.exit(1)
 " 2>/dev/null; then
-        print_success "Расширение converter_pipeline_extension активно"
+        print_success "Расширения converter_pipeline_extension и distribution активны"
     else
-        print_error "Расширение converter_pipeline_extension не загружено"
+        print_error "Расширения не загружены"
     fi
 
     # Проверка статуса
     if docker ps -q -f name="${PROJECT_NAME}_app_1" | grep -q .; then
-        print_success "Mayan EDMS запущен!"
+        print_success "Prime-EDMS запущен!"
         echo ""
         echo "🌐 Доступен по адресу: http://localhost"
-        echo "🔗 Конвертер: http://localhost/#/converter-pipeline/media-conversion/1"
+        echo "📁 Публикации: http://localhost/#/distribution/publications/"
+        echo "⚙️  Пресеты: http://localhost/#/distribution/presets/"
+        echo "👥 Получатели: http://localhost/#/distribution/recipients/"
+        echo ""
+        echo "🔧 Расширения активны:"
+        echo "  ✅ converter_pipeline_extension (63+ форматов)"
+        echo "  ✅ distribution (рендишены + share links)"
     else
         print_error "Ошибка запуска приложения. Проверьте логи: ./ubuntu-start.sh logs"
         exit 1
     fi
 }
 
-# Остановка Mayan EDMS
+# Остановка Prime-EDMS
 stop_mayan() {
-    print_header "Остановка Mayan EDMS..."
+    print_header "Остановка Prime-EDMS..."
 
     # Остановка контейнера приложения
     if docker ps -q -f name="${PROJECT_NAME}_app_1" | grep -q .; then
@@ -258,15 +269,21 @@ restart_mayan() {
     done
 
     # Ждем запуска приложения
-    print_success "Ожидание запуска Mayan EDMS..."
+    print_success "Ожидание запуска Prime-EDMS..."
     sleep 30
 
     # Проверка статуса
     if docker ps -q -f name="${PROJECT_NAME}_app_1" | grep -q .; then
-        print_success "Mayan EDMS перезапущен!"
+        print_success "Prime-EDMS перезапущен!"
         echo ""
         echo "🌐 Доступен по адресу: http://localhost"
-        echo "🔧 Расширение converter_pipeline_extension активно"
+        echo "📁 Публикации: http://localhost/#/distribution/publications/"
+        echo "⚙️  Пресеты: http://localhost/#/distribution/presets/"
+        echo "👥 Получатели: http://localhost/#/distribution/recipients/"
+        echo ""
+        echo "🔧 Расширения активны:"
+        echo "  ✅ converter_pipeline_extension (63+ форматов)"
+        echo "  ✅ distribution (рендишены + share links)"
     else
         print_error "Ошибка перезапуска приложения. Проверьте логи: ./ubuntu-start.sh logs"
         exit 1
@@ -275,13 +292,13 @@ restart_mayan() {
 
 # Просмотр логов
 show_logs() {
-    print_header "Логи Mayan EDMS (Ctrl+C для выхода):"
+    print_header "Логи Prime-EDMS (Ctrl+C для выхода):"
     docker logs -f ${PROJECT_NAME}_app_1 2>&1 || docker-compose -f $COMPOSE_FILE logs -f
 }
 
 # Статус системы
 show_status() {
-    print_header "Статус контейнеров:"
+    print_header "Статус контейнеров Prime-EDMS:"
     docker-compose -f $COMPOSE_FILE ps
     echo ""
     docker ps --format "table {{.Names}}\t{{.Status}}" | grep "${PROJECT_NAME}_app_1\|NAMES" || echo "Контейнер приложения не найден"
@@ -324,14 +341,14 @@ clean_system() {
 
 # Справка
 show_help() {
-    echo "Управление Mayan EDMS для Ubuntu"
+    echo "Управление Prime-EDMS для Ubuntu"
     echo ""
     echo "Использование: $0 [КОМАНДА]"
     echo ""
     echo "Команды:"
-    echo "  start   - Запустить Mayan EDMS"
-    echo "  stop    - Остановить Mayan EDMS"
-    echo "  restart - Перезапустить Mayan EDMS"
+    echo "  start   - Запустить Prime-EDMS"
+    echo "  stop    - Остановить Prime-EDMS"
+    echo "  restart - Перезапустить Prime-EDMS"
     echo "  logs    - Показать логи"
     echo "  status  - Показать статус"
     echo "  clean   - Очистить все данные (ОПАСНО!)"

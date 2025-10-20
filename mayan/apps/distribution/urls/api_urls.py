@@ -1,0 +1,126 @@
+from django.http import JsonResponse
+from django.urls import include, path
+
+from ..views import (
+    APIAccessLogListView, APIGenerateRenditionsView, APIGeneratedRenditionDetailView,
+    APIGeneratedRenditionListView, APIPublicationDetailView,
+    APIPublicationItemDetailView, APIPublicationItemListView,
+    APIPublicationListView, APIRecipientDetailView, APIRecipientListDetailView,
+    APIRecipientListListView, APIRecipientListView, APIRenditionPresetDetailView,
+    APIRenditionPresetListView, APIShareLinkDetailView, APIShareLinkListView
+)
+
+# API URLs для distribution
+print("DEBUG: api_urls.py loaded, creating urlpatterns")
+distribution_api_patterns = [
+    path(
+        route='recipients/',
+        view=APIRecipientListView.as_view(),
+        name='recipient-list'
+    ),
+    path(
+        route='recipients/<int:pk>/',
+        view=APIRecipientDetailView.as_view(),
+        name='recipient-detail'
+    ),
+
+    # Recipient Lists
+    path(
+        route='recipient_lists/',
+        view=APIRecipientListListView.as_view(),
+        name='recipientlist-list'
+    ),
+    path(
+        route='recipient_lists/<int:recipient_list_id>/',
+        view=APIRecipientListDetailView.as_view(),
+        name='recipientlist-detail'
+    ),
+
+    # Rendition Presets
+    path(
+        route='rendition_presets/',
+        view=APIRenditionPresetListView.as_view(),
+        name='renditionpreset-list'
+    ),
+    path(
+        route='rendition_presets/<int:pk>/',
+        view=APIRenditionPresetDetailView.as_view(),
+        name='renditionpreset-detail'
+    ),
+
+    # Publications
+    path(
+        route='publications/',
+        view=APIPublicationListView.as_view(),
+        name='publication-list'
+    ),
+    path(
+        route='publications/<int:publication_id>/',
+        view=APIPublicationDetailView.as_view(),
+        name='publication-detail'
+    ),
+
+    # Publication Items
+    path(
+        route='publication_items/',
+        view=APIPublicationItemListView.as_view(),
+        name='publicationitem-list'
+    ),
+    path(
+        route='publication_items/<int:publication_item_id>/',
+        view=APIPublicationItemDetailView.as_view(),
+        name='publicationitem-detail'
+    ),
+
+    # Share Links
+    path(
+        route='share_links/',
+        view=APIShareLinkListView.as_view(),
+        name='sharelink-list'
+    ),
+    path(
+        route='share_links/<int:pk>/',
+        view=APIShareLinkDetailView.as_view(),
+        name='sharelink-detail'
+    ),
+
+    # Generated Renditions
+    path(
+        route='generated_renditions/',
+        view=APIGeneratedRenditionListView.as_view(),
+        name='generatedrendition-list'
+    ),
+    path(
+        route='generated_renditions/<int:pk>/',
+        view=APIGeneratedRenditionDetailView.as_view(),
+        name='generatedrendition-detail'
+    ),
+
+    # Access Logs
+    path(
+        route='access_logs/',
+        view=APIAccessLogListView.as_view(),
+        name='accesslog-list'
+    ),
+
+    # Test endpoint
+    path(
+        route='test/',
+        view=lambda request: JsonResponse({'status': 'ok', 'app': 'distribution'}),
+        name='distribution-test'
+    ),
+
+    # Generate renditions
+    path(
+        route='publications/<int:publication_id>/generate_renditions/',
+        view=APIGenerateRenditionsView.as_view(),
+        name='publication-generate-renditions'
+    ),
+]
+
+urlpatterns = [
+    path(
+        route='distribution/',
+        view=include((distribution_api_patterns, 'distribution'), namespace='distribution')
+    )
+]

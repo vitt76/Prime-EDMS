@@ -1,0 +1,62 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{% trans "Distribution Test Template" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-success">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-check text-success"></i>
+                        {% trans "Distribution SPA Template Test" %}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <h1 class="text-success">{{ test_message }}</h1>
+                    <p class="lead">{% trans "If you see this message, SPA integration is working!" %}</p>
+
+                    <div class="alert alert-info">
+                        <h4>{% trans "Next steps:" %}</h4>
+                        <ul>
+                            <li>{% trans "Create proper PublicationListView template" %}</li>
+                            <li>{% trans "Implement all UI views with SPA-compatible templates" %}</li>
+                            <li>{% trans "Test menu integration" %}</li>
+                        </ul>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h4>{% trans "Available API Endpoints:" %}</h4>
+                            <ul class="list-group">
+                                <li class="list-group-item">
+                                    <a href="/api/v4/distribution/publications/" target="_blank">
+                                        /api/v4/distribution/publications/
+                                    </a>
+                                </li>
+                                <li class="list-group-item">
+                                    <a href="/api/v4/distribution/recipients/" target="_blank">
+                                        /api/v4/distribution/recipients/
+                                    </a>
+                                </li>
+                                <li class="list-group-item">
+                                    <a href="/api/v4/distribution/rendition_presets/" target="_blank">
+                                        /api/v4/distribution/rendition_presets/
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h4>{% trans "Navigation:" %}</h4>
+                            <p><a href="/documents/" class="btn btn-primary">{% trans "Back to Documents" %}</a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

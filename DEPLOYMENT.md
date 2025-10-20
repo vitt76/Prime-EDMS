@@ -1,4 +1,4 @@
-# 🚀 Развертывание Mayan EDMS
+# 🚀 Развертывание Prime-EDMS
 
 ## Быстрое развертывание на новой машине
 
@@ -22,8 +22,8 @@ cd Prime-EDMS
 #### Для Ubuntu (нативно):
 ```bash
 # В Ubuntu
-git clone https://github.com/vitt76/Prime-EDMS.git mayan-edms
-cd mayan-edms
+git clone https://github.com/vitt76/Prime-EDMS.git prime-edms
+cd prime-edms
 ```
 
 ### Шаг 2: Настройка WSL2
@@ -40,10 +40,11 @@ wsl --set-default-version 2
 # Запустите Ubuntu WSL2 и перейдите в директорию проекта
 cd /mnt/c/Users/$USER/PycharmProjects/Prime-EDMS
 
-# Запустите автоматическую установку
-make setup
-# или
-./setup-wsl.sh
+# Запустите автоматическую установку системы
+sudo bash ubuntu-setup.sh
+
+# Перезайдите в систему или выполните
+newgrp docker
 ```
 
 ### Шаг 4: Перезапуск WSL2
@@ -54,14 +55,24 @@ wsl --shutdown
 wsl
 ```
 
-### Шаг 5: Запуск Mayan EDMS
+### Шаг 4: Подготовка проекта
 
 ```bash
-# В WSL2 Ubuntu
-cd /mnt/c/Users/$USER/PycharmProjects/Prime-EDMS
+# В Ubuntu
+cd ~/prime-edms
+
+# Подготовьте проект (создание образов, конфигурация)
+./ubuntu-prepare.sh
+```
+
+### Шаг 5: Запуск Prime-EDMS
+
+```bash
+# В Ubuntu
+cd ~/prime-edms
 
 # Запуск системы
-make start
+./ubuntu-start.sh start
 # или
 docker-compose -f docker-compose.simple.yml up -d
 ```
@@ -69,6 +80,16 @@ docker-compose -f docker-compose.simple.yml up -d
 ### Шаг 6: Доступ к системе
 
 Откройте браузер и перейдите: **http://localhost**
+
+**Доступные разделы:**
+- 🌐 **Главная**: http://localhost
+- 📁 **Публикации**: http://localhost/#/distribution/publications/
+- ⚙️ **Пресеты**: http://localhost/#/distribution/presets/
+- 👥 **Получатели**: http://localhost/#/distribution/recipients/
+
+**Расширения активны:**
+- ✅ **converter_pipeline_extension**: 63+ форматов файлов
+- ✅ **distribution**: рендишены + share links
 
 ## 🐧 Развертывание на Ubuntu (нативно)
 
@@ -80,8 +101,8 @@ docker-compose -f docker-compose.simple.yml up -d
 
 ```bash
 # В Ubuntu
-git clone https://github.com/vitt76/Prime-EDMS.git mayan-edms
-cd mayan-edms
+git clone https://github.com/vitt76/Prime-EDMS.git prime-edms
+cd prime-edms
 ```
 
 ### Шаг 3: Автоматическая установка
@@ -98,7 +119,14 @@ cd mayan-edms
 newgrp docker
 ```
 
-### Шаг 5: Запуск Mayan EDMS
+### Шаг 5: Подготовка проекта
+
+```bash
+# Подготовьте проект (создание образов, конфигурация)
+./ubuntu-prepare.sh
+```
+
+### Шаг 6: Запуск Prime-EDMS
 
 ```bash
 # Запуск системы

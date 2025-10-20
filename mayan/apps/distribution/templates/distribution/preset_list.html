@@ -1,0 +1,104 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{% trans "Пресеты рендишенов" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-cogs text-primary"></i>
+                        {% trans "Пресеты версий файлов" %}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="clearfix" style="margin-bottom: 15px;">
+                        <a href="#" class="btn btn-success pull-right" onclick="openPresetCreate(); return false;">
+                            <i class="fa fa-plus"></i>
+                            {% trans "Создать пресет" %}
+                        </a>
+                    </div>
+                    {% if presets %}
+                        <div class="row">
+                            {% for preset in presets %}
+                                <div class="col-md-4">
+                                    <div class="panel panel-info">
+                                        <div class="panel-heading">
+                                            <h5 class="panel-title">{{ preset.name }}</h5>
+                                        </div>
+                                        <div class="panel-body">
+                                            <p><strong>{% trans "Формат:" %}</strong> {{ preset.format|upper }}</p>
+                                            <p><strong>{% trans "Размер:" %}</strong> {{ preset.width }}x{{ preset.height }}</p>
+                                            <p><strong>{% trans "Обрезка:" %}</strong> {{ preset.crop|yesno:_("Да,Нет") }}</p>
+                                            <p><strong>{% trans "Качество:" %}</strong> {{ preset.quality }}%</p>
+                                            <p><strong>{% trans "DPI:" %}</strong> {{ preset.dpi_x }} × {{ preset.dpi_y }}</p>
+                                            <p><strong>{% trans "Фильтры:" %}</strong> {{ preset.filters|join:", " }}</p>
+                                            <p><strong>{% trans "Яркость/Контраст/Цвет/Резкость:" %}</strong>
+                                                {{ preset.adjust_brightness }} / {{ preset.adjust_contrast }} /
+                                                {{ preset.adjust_color }} / {{ preset.adjust_sharpness }}
+                                            </p>
+                                            <p><strong>{% trans "Получатель:" %}</strong> {{ preset.recipient.name|default:preset.recipient.email }}</p>
+                                            <div class="btn-group">
+                                                <a href="#" class="btn btn-sm btn-primary" onclick="openPresetEdit({{ preset.id }}); return false;">
+                                                    <i class="fa fa-pencil"></i> {% trans "Редактировать" %}
+                                                </a>
+                                                <button class="btn btn-sm btn-danger" onclick="deletePreset({{ preset.id }}); return false;">
+                                                    <i class="fa fa-trash"></i> {% trans "Удалить" %}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "Пока нет пресетов." %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+function openPresetCreate() {
+    window.location.hash = '#/distribution/presets/create/';
+}
+
+function openPresetEdit(presetId) {
+    window.location.hash = '#/distribution/presets/' + presetId + '/edit/';
+}
+
+function deletePreset(presetId) {
+    if (!confirm('{% trans "Удалить пресет?" %}')) {
+        return;
+    }
+
+    const csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+    fetch(`/api/v4/distribution/rendition_presets/${presetId}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': csrfToken || '',
+            'Accept': 'application/json'
+        },
+        credentials: 'include'
+    }).then(response => {
+        if (response.ok || response.status === 204) {
+            window.location.reload();
+        } else {
+            return response.json().then(data => {
+                alert(JSON.stringify(data));
+            });
+        }
+    }).catch(error => {
+        alert(error.message);
+    });
+}
+</script>
+{% endblock %}

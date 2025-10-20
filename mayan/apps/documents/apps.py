@@ -217,6 +217,7 @@ class DocumentsApp(MayanAppConfig):
 
     def ready(self):
         super().ready()
+        print("🔍 Documents app ready() method called")
 
         Document = self.get_model(model_name='Document')
         DocumentFile = self.get_model(model_name='DocumentFile')
@@ -781,6 +782,7 @@ class DocumentsApp(MayanAppConfig):
             ), sources=(Document,)
         )
 
+
         menu_multi_item.bind_links(
             links=(
                 link_document_favorites_add_multiple,
@@ -827,6 +829,8 @@ class DocumentsApp(MayanAppConfig):
             ),
             sources=(DocumentFile,)
         )
+
+
         menu_return.bind_links(
             links=(
                 link_document_file_return_list,

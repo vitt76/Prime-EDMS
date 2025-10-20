@@ -1,0 +1,117 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{% trans "Ссылки для скачивания" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-link text-primary"></i>
+                        {% trans "Ссылки для скачивания" %}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    {% if current_publication %}
+                        <div class="alert alert-info">
+                            <strong>{% trans "Публикация:" %}</strong> {{ current_publication.title }}
+                        </div>
+                    {% endif %}
+                    <div class="row m-b-15">
+                        <div class="col-md-12 text-right">
+                            {% if current_publication %}
+                                <a href="/distribution/share-links/create/{{ current_publication.pk }}/"
+                                   data-absolute-hash="/distribution/share-links/create/{{ current_publication.pk }}/"
+                                   class="btn btn-primary create-share-link">
+                                    <i class="fa fa-plus"></i>
+                                    {% trans "Создать ссылку" %}
+                                </a>
+                            {% else %}
+                                <button type="button" class="btn btn-primary" disabled>
+                                    <i class="fa fa-plus"></i>
+                                    {% trans "Создать ссылку" %}
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if share_links %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>{% trans "Публикация" %}</th>
+                                        <th>{% trans "Ссылка" %}</th>
+                                        <th>{% trans "Создано" %}</th>
+                                        <th>{% trans "Истекает" %}</th>
+                                        <th>{% trans "Скачиваний" %}</th>
+                                        <th>{% trans "Статус" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for link in share_links %}
+                                        <tr>
+                                            <td>{{ link.publication.title }}</td>
+                                            <td>
+                                                <code>{{ link.token|truncatechars:20 }}</code>
+                                                <button class="btn btn-xs btn-default" onclick="copyToClipboard('{{ link.token }}')">
+                                                    <i class="fa fa-copy"></i>
+                                                </button>
+                                            </td>
+                                            <td>{{ link.created|date:"d.m.Y H:i" }}</td>
+                                            <td>
+                                                {% if link.expires_at %}
+                                                    {{ link.expires_at|date:"d.m.Y H:i" }}
+                                                {% else %}
+                                                    {% trans "Бессрочно" %}
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ link.download_count }} / {% if link.max_downloads %}{{ link.max_downloads }}{% else %}∞{% endif %}</td>
+                                            <td>
+                                                {% if link.is_valid %}
+                                                    <span class="label label-success">{% trans "Активна" %}</span>
+                                                {% else %}
+                                                    <span class="label label-danger">{% trans "Истекла" %}</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "У вас пока нет ссылок для скачивания." %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        // Можно добавить уведомление об успешном копировании
+        console.log('Copied to clipboard: ' + text);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('a.create-share-link').forEach(function(link) {
+        const target = link.dataset.absoluteHash;
+        if (target) {
+            link.addEventListener('click', function(event) {
+                event.preventDefault();
+                window.location.hash = target;
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

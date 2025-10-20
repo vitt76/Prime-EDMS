@@ -32,3 +32,6 @@ if 'silk' in settings.INSTALLED_APPS:
         urlpatterns += [  # NOQA
             url(regex=r'^silk/', view=include('silk.urls', namespace='silk'))
         ]
+
+# Note: converter_pipeline_extension is registered automatically
+# via MayanAppConfig for extra_apps in config.yml

@@ -62,6 +62,7 @@ if [ ! -f "config.yml" ]; then
 common:
   extra_apps:
     - mayan.apps.converter_pipeline_extension
+    - mayan.apps.distribution
 EOF
     print_success "config.yml создан"
 else
@@ -81,9 +82,15 @@ else
     print_success "app.env уже существует"
 fi
 
-# Проверка наличия расширения
+# Проверка наличия расширений
 if [ ! -d "mayan/apps/converter_pipeline_extension" ]; then
     print_error "Расширение converter_pipeline_extension не найдено в mayan/apps/"
+    print_warning "Убедитесь, что весь проект скопирован"
+    exit 1
+fi
+
+if [ ! -d "mayan/apps/distribution" ]; then
+    print_error "Расширение distribution не найдено в mayan/apps/"
     print_warning "Убедитесь, что весь проект скопирован"
     exit 1
 fi
@@ -104,12 +111,33 @@ RUN apt-get update && \
         python3-reportlab \
         python3-pip \
         python3-dev \
-        build-essential && \
+        build-essential \
+        gettext && \
     pip3 install reportlab --upgrade && \
     rm -rf /var/lib/apt/lists/*
 
-# Копирование расширения
+# Копирование расширений
 COPY mayan/apps/converter_pipeline_extension /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
+COPY mayan/apps/distribution /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
+
+# Копирование измененных файлов Mayan EDMS
+COPY mayan/apps/documents/links/document_file_links.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/links/document_file_links.py
+COPY mayan/apps/documents/icons.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/icons.py
+COPY mayan/apps/documents/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/apps.py
+COPY mayan/apps/distribution/serializers/publication_serializers.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/serializers/publication_serializers.py
+COPY mayan/apps/distribution/serializers/preset_serializers.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/serializers/preset_serializers.py
+COPY mayan/apps/distribution/serializers/recipient_serializers.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/serializers/recipient_serializers.py
+COPY mayan/apps/distribution/ui_views.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/ui_views.py
+COPY mayan/apps/distribution/urls/urls.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/urls/urls.py
+COPY mayan/apps/distribution/urls/api_urls.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/urls/api_urls.py
+COPY mayan/apps/distribution/templates /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/templates
+COPY mayan/settings/base.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
+
+# Копирование файлов переводов
+COPY mayan/apps/documents/locale /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/locale
+
+# Компиляция переводов
+RUN msgfmt /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/locale/ru/LC_MESSAGES/django.po -o /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/locale/ru/LC_MESSAGES/django.mo
 
 EOF
     print_success "Dockerfile.app создан"
@@ -121,8 +149,15 @@ print_success "Docker образ собран"
 
 print_success "Подготовка проекта завершена!"
 echo ""
-echo "🚀 Теперь можно запускать Mayan EDMS:"
+echo "🚀 Теперь можно запускать Prime-EDMS:"
 echo "   ./ubuntu-start.sh start"
 echo ""
-echo "📋 После запуска откройте http://localhost в браузере"
-echo "🔧 Расширение converter_pipeline_extension будет активно"
+echo "📋 После запуска доступно:"
+echo "🌐 Mayan EDMS: http://localhost"
+echo "📁 Публикации: http://localhost/#/distribution/publications/"
+echo "⚙️  Пресеты: http://localhost/#/distribution/presets/"
+echo "👥 Получатели: http://localhost/#/distribution/recipients/"
+echo ""
+echo "🔧 Расширения:"
+echo "  ✅ converter_pipeline_extension (63+ форматов файлов)"
+echo "  ✅ distribution (рендишены + share links)"

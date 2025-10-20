@@ -1,0 +1,94 @@
+{% extends "appearance/base.html" %}
+
+{% load i18n static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        <i class="fa fa-download text-primary"></i>
+                        {{ title }}
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="well">
+                                <h4>{% trans "Информация о файле" %}</h4>
+                                <p><strong>{% trans "Название:" %}</strong> {{ document_file.filename }}</p>
+                                <p><strong>{% trans "Размер:" %}</strong> {{ document_file.size|filesizeformat }}</p>
+                                <p><strong>{% trans "Тип:" %}</strong> {{ document_file.mimetype }}</p>
+
+                                <hr>
+                                <h5>{% trans "Файл входит в публикации" %}</h5>
+                                {% if publications %}
+                                    <ul class="list-unstyled">
+                                        {% for publication in publications %}
+                                            <li>
+                                                <i class="fa fa-share-alt text-success"></i>
+                                                <a href="{% url 'distribution:publication_detail' publication.pk %}">
+                                                    {{ publication.title }}
+                                                </a>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <div class="alert alert-warning">
+                                        {% trans "Файл еще не добавлен ни в одну публикацию." %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            {% if presets %}
+                                <form method="post">
+                                    {% csrf_token %}
+
+                                    <div class="form-group">
+                                        <label>{% trans "Выберите пресеты для генерации" %}</label>
+                                        {% for preset in presets %}
+                                            <div class="checkbox">
+                                                <label>
+                                                    <input type="checkbox" name="preset_ids" value="{{ preset.pk }}">
+                                                    <strong>{{ preset.name }}</strong>
+                                                    ({{ preset.format|upper }}, {{ preset.width }}x{{ preset.height }}, {{ preset.quality }}%)
+                                                </label>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+
+                                    <div class="alert alert-info">
+                                        <i class="fa fa-info-circle"></i>
+                                        {% trans "Генерация версий файлов будет выполнена в фоне. Это может занять некоторое время." %}
+                                    </div>
+
+                                    <div class="form-group">
+                                        <button type="submit" class="btn btn-primary" {% if not publications %}disabled{% endif %}>
+                                            <i class="fa fa-cogs"></i>
+                                            {% trans "Генерировать версии" %}
+                                        </button>
+                                        <a href="{% url 'documents:document_file_list' document_file.document.pk %}" class="btn btn-default">
+                                            {% trans "Отмена" %}
+                                        </a>
+                                    </div>
+                                </form>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="fa fa-exclamation-triangle"></i>
+                                    {% trans "Нет доступных пресетов для генерации версий." %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
