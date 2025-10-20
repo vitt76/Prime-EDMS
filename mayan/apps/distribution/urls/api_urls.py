@@ -79,7 +79,7 @@ distribution_api_patterns = [
         name='sharelink-list'
     ),
     path(
-        route='share_links/<int:share_link_id>/',
+        route='share_links/<int:pk>/',
         view=APIShareLinkDetailView.as_view(),
         name='sharelink-detail'
     ),

@@ -137,7 +137,7 @@ class APIShareLinkListView(generics.ListCreateAPIView):
             return queryset.none()
 
         # Filter to show only share links for publications owned by current user
-        return queryset.filter(publication__owner=user)
+        return queryset.filter(rendition__publication_item__publication__owner=user)
 
 
 class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -164,7 +164,7 @@ class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
             return queryset.none()
 
         # Filter to show only share links for publications owned by current user
-        return queryset.filter(publication__owner=user)
+        return queryset.filter(rendition__publication_item__publication__owner=user)
 
 
 class APIGeneratedRenditionListView(generics.ListAPIView):
@@ -221,7 +221,7 @@ class APIAccessLogListView(generics.ListAPIView):
             return queryset.none()
 
         # Filter to show only logs for share links of publications owned by current user
-        return queryset.filter(share_link__publication__owner=user)
+        return queryset.filter(share_link__rendition__publication_item__publication__owner=user)
 
 
 class APIGenerateRenditionsView(generics.RetrieveAPIView):

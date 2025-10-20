@@ -71,7 +71,7 @@ class ShareLinkSerializer(serializers.ModelSerializer):
 
     class Meta:
         fields = (
-            'id', 'publication', 'token', 'recipient', 'expires_at',
+            'id', 'rendition', 'token', 'recipient', 'expires_at',
             'max_downloads', 'downloads_count', 'created', 'last_accessed'
         )
         model = ShareLink
