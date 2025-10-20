@@ -49,7 +49,12 @@
                         <div class="form-group">
                             <label class="col-sm-3 control-label" for="preset-format">{% trans "Формат" %}</label>
                             <div class="col-sm-9">
-                                <input type="text" class="form-control" id="preset-format" value="{{ preset.format }}" required>
+                                <select id="preset-format" class="form-control" required>
+                                    <option value="jpeg" {% if preset.format == 'jpeg' %}selected{% endif %}>JPEG</option>
+                                    <option value="png" {% if preset.format == 'png' %}selected{% endif %}>PNG</option>
+                                    <option value="pdf" {% if preset.format == 'pdf' %}selected{% endif %}>PDF</option>
+                                    <option value="mp4" {% if preset.format == 'mp4' %}selected{% endif %}>MP4</option>
+                                </select>
                             </div>
                         </div>
                         <div class="form-group">
