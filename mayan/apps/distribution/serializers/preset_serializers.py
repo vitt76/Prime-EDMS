@@ -20,5 +20,5 @@ class RenditionPresetSerializer(serializers.ModelSerializer):
             'adjust_brightness', 'adjust_color', 'adjust_contrast',
             'adjust_sharpness', 'crop', 'description', 'dpi_x', 'dpi_y',
             'filters', 'format', 'height', 'id', 'name', 'quality',
-            'resource_type', 'watermark', 'width'
+            'recipient', 'resource_type', 'watermark', 'width'
         )

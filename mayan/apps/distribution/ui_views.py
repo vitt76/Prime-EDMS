@@ -55,6 +55,11 @@ class PresetCreateTemplateView(TemplateView):
     """SPA-compatible view for creating a preset"""
     template_name = 'distribution/preset_create.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['recipients'] = Recipient.objects.all().order_by('name', 'email')
+        return context
+
 
 class PresetEditTemplateView(TemplateView):
     """SPA-compatible view for editing a preset"""
@@ -64,6 +69,7 @@ class PresetEditTemplateView(TemplateView):
         context = super().get_context_data(**kwargs)
         preset = get_object_or_404(RenditionPreset, pk=self.kwargs['preset_id'])
         context['preset'] = preset
+        context['recipients'] = Recipient.objects.all().order_by('name', 'email')
         return context
 
 

@@ -175,6 +175,11 @@ class RenditionPreset(models.Model):
         blank=True,
         help_text=_('Sharpness factor (1.0 = original)')
     )
+    recipient = models.ForeignKey(
+        'Recipient',
+        on_delete=models.CASCADE,
+        help_text=_('Associated recipient for this preset')
+    )
     name = models.CharField(
         max_length=255,
         unique=True,

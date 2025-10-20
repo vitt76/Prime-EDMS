@@ -24,6 +24,19 @@
                             </div>
                         </div>
                         <div class="form-group">
+                            <label class="col-sm-3 control-label" for="preset-recipient">{% trans "Получатель" %}</label>
+                            <div class="col-sm-9">
+                                <select id="preset-recipient" class="form-control" required>
+                                    {% for recipient in recipients %}
+                                    <option value="{{ recipient.id }}">
+                                        {{ recipient.name|default:recipient.email }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <p class="help-block">{% trans "Выберите получателя, связанного с этим пресетом" %}</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
                             <label class="col-sm-3 control-label" for="preset-resource">{% trans "Тип ресурса" %}</label>
                             <div class="col-sm-9">
                                 <select id="preset-resource" class="form-control" required>
@@ -223,6 +236,7 @@
 
         const payload = {
             name: document.getElementById('preset-name').value,
+            recipient: document.getElementById('preset-recipient').value,
             resource_type: document.getElementById('preset-resource').value,
             format: document.getElementById('preset-format').value,
             width: parseInt(document.getElementById('preset-width').value) || null,
