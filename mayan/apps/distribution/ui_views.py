@@ -578,6 +578,28 @@ class ShareLinkManagementView(LoginRequiredMixin, ListView):
 
 # ===== ПОЛНОЦЕННЫЕ UI VIEWS =====
 
+class PublicationEditView(LoginRequiredMixin, UpdateView):
+    """Редактирование публикации"""
+    model = Publication
+    template_name = 'distribution/publication_edit.html'
+    fields = ['title', 'description']
+    context_object_name = 'publication'
+
+    def get_queryset(self):
+        queryset = Publication.objects.all()
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(owner=self.request.user)
+        return queryset
+
+    def get_success_url(self):
+        return reverse('distribution:publication_detail', kwargs={'pk': self.object.pk})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = _('Редактирование публикации: {}').format(self.object.title)
+        return context
+
+
 class PublicationCreateView(LoginRequiredMixin, CreateView):
     """Создание новой публикации"""
     model = Publication

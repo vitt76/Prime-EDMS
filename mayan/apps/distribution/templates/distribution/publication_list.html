@@ -130,7 +130,7 @@ function renderPublications(publications) {
         '<tr>' +
         '<th>{% trans "Название" %}</th>' +
         '<th>{% trans "Описание" %}</th>' +
-        '<th>{% trans "Документов" %}</th>' +
+        '<th>{% trans "Версий" %}</th>' +
         '<th>{% trans "Создано" %}</th>' +
         '<th>{% trans "Владелец" %}</th>' +
         '<th>{% trans "Действия" %}</th>' +
@@ -142,7 +142,7 @@ function renderPublications(publications) {
         html += '<tr>' +
             '<td><strong>' + (publication.title || '—') + '</strong></td>' +
             '<td>' + (publication.description ? publication.description.substring(0, 50) + (publication.description.length > 50 ? '...' : '') : '—') + '</td>' +
-            '<td>' + (publication.items_count || 0) + '</td>' +
+            '<td>' + (publication.renditions_count || 0) + '</td>' +
             '<td>' + new Date(publication.created).toLocaleDateString() + '</td>' +
             '<td>' + (publication.owner_username || '—') + '</td>' +
             '<td>' +

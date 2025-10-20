@@ -15,22 +15,37 @@ class PublicationItemSerializer(serializers.ModelSerializer):
 class PublicationSerializer(serializers.ModelSerializer):
     items = PublicationItemSerializer(many=True, read_only=True)
     owner = serializers.SerializerMethodField()
+    owner_username = serializers.SerializerMethodField()
+    items_count = serializers.SerializerMethodField()
+    renditions_count = serializers.SerializerMethodField()
 
     class Meta:
         fields = (
-            'id', 'owner', 'title', 'description', 'access_policy',
+            'id', 'owner', 'owner_username', 'title', 'description', 'access_policy',
             'expires_at', 'max_downloads', 'presets', 'recipient_lists',
-            'downloads_count', 'items',
+            'downloads_count', 'items', 'items_count', 'renditions_count',
             'created', 'modified'
         )
         model = Publication
-        read_only_fields = ('id', 'created', 'modified', 'downloads_count', 'owner')
+        read_only_fields = ('id', 'created', 'modified', 'downloads_count', 'owner', 'owner_username', 'items_count', 'renditions_count')
 
     def get_owner(self, obj):
         owner = obj.owner
         if owner:
             return owner.get_username()
         return None
+
+    def get_owner_username(self, obj):
+        owner = obj.owner
+        if owner:
+            return owner.get_username()
+        return None
+
+    def get_items_count(self, obj):
+        return obj.items.count()
+
+    def get_renditions_count(self, obj):
+        return GeneratedRendition.objects.filter(publication_item__publication=obj).count()
 
     def _strip_internal_fields(self, validated_data):
         validated_data.pop('_instance_extra_data', None)

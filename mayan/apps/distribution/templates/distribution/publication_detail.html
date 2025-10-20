@@ -26,7 +26,7 @@
                             <div class="btn-group-vertical" style="width: 100%;">
                                 <a href="#" class="btn btn-success" onclick="openShareLinks({{ publication.pk }}); return false;">
                                     <i class="fa fa-share"></i>
-                                    {% trans "Создать ссылку для скачивания" %}
+                                    {% trans "Управлять ссылками" %}
                                 </a>
                                 {% if first_document_file_id %}
                                 <a href="{% url 'distribution:generate_file_renditions' first_document_file_id %}" class="btn btn-primary">
@@ -39,6 +39,10 @@
                                     {% trans "Генерировать версии файлов" %}
                                 </a>
                                 {% endif %}
+                                <a href="{% url 'distribution:publication_edit' publication.pk %}" class="btn btn-info">
+                                    <i class="fa fa-edit"></i>
+                                    {% trans "Редактировать публикацию" %}
+                                </a>
                                 <a href="{% url 'distribution:publication_delete' publication.pk %}" class="btn btn-danger">
                                     <i class="fa fa-trash"></i>
                                     {% trans "Удалить публикацию" %}

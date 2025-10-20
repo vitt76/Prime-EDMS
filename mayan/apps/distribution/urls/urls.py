@@ -5,7 +5,7 @@ from ..ui_views import (
     AddDocumentsToPublicationView, AddToPublicationView, DocumentPublicationsView, GenerateFileRenditionsView,
     PresetCreateTemplateView, PresetDeleteView, PresetEditTemplateView, PresetsTemplateView,
     PublicationCreateFromDocumentView, PublicationCreateMultipleView, PublicationCreateTemplateView,
-    PublicationDeleteView, PublicationDetailView, PublicationListTemplateView,
+    PublicationDeleteView, PublicationDetailView, PublicationEditView, PublicationListTemplateView,
     RecipientsTemplateView, ShareLinkManagementView, ShareLinksTemplateView,
     RenditionDownloadView
 )
@@ -67,6 +67,11 @@ ui_urlpatterns = [
         'distribution/publications/<int:pk>/',
         PublicationDetailView.as_view(),
         name='publication_detail'
+    ),
+    path(
+        'distribution/publications/<int:pk>/edit/',
+        PublicationEditView.as_view(),
+        name='publication_edit'
     ),
     path(
         'distribution/publications/<int:pk>/delete/',
