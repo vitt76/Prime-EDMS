@@ -80,6 +80,14 @@ link_distribution_presets = Link(
     view='distribution:preset_list'
 )
 
+# Получатели
+link_distribution_recipients = Link(
+    icon=icon_distribution_user,
+    permissions=(permission_recipient_manage,),
+    text=_('Получатели'),
+    view='distribution:recipient_list'
+)
+
 # Управление получателями - UI страница
 link_recipient_management = Link(
     icon=icon_distribution_user,
