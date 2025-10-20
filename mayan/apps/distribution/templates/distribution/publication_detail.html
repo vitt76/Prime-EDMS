@@ -85,9 +85,8 @@
                                                                 <th>{% trans "Пресет" %}</th>
                                                                 <th>{% trans "Формат" %}</th>
                                                                 <th>{% trans "Статус" %}</th>
-                                                                <th>{% trans "Сообщение" %}</th>
-                                                                <th>{% trans "Ссылка" %}</th>
-                                                                <th class="text-right">{% trans "Действия" %}</th>
+                                                                <th></th>
+                                                                <th class="text-right"></th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -105,13 +104,6 @@
                                                                             <span class="label label-warning">{% trans "Обработка" %}</span>
                                                                         {% else %}
                                                                             <span class="label label-danger">{% trans "Ошибка" %}</span>
-                                                                        {% endif %}
-                                                                    </td>
-                                                                    <td style="max-width: 220px;">
-                                                                        {% if rendition.error_message %}
-                                                                            <span class="text-danger">{{ rendition.error_message }}</span>
-                                                                        {% else %}
-                                                                            <span class="text-muted">{% trans "Нет" %}</span>
                                                                         {% endif %}
                                                                     </td>
                                                                     <td>
