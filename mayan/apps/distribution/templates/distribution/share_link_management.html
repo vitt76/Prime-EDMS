@@ -238,6 +238,8 @@ function populateRecipients() {
 }
 
 function saveShareLink() {
+    console.log('Saving share link:', editingShareLinkId);
+
     const csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
     if (!csrfToken) {
         showShareLinkAlert('{% trans "CSRF токен не найден. Обновите страницу." %}', 'danger');
@@ -250,6 +252,9 @@ function saveShareLink() {
         max_downloads: document.getElementById('share-link-max-downloads').value ?
             parseInt(document.getElementById('share-link-max-downloads').value) : null
     };
+
+    console.log('Sending payload:', payload);
+    console.log('URL:', `/api/v4/distribution/share_links/${editingShareLinkId}/`);
 
     fetch(`/api/v4/distribution/share_links/${editingShareLinkId}/`, {
         method: 'PATCH',

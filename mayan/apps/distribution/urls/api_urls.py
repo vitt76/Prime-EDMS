@@ -19,7 +19,7 @@ distribution_api_patterns = [
         name='recipient-list'
     ),
     path(
-        route='recipients/<int:recipient_id>/',
+        route='recipients/<int:pk>/',
         view=APIRecipientDetailView.as_view(),
         name='recipient-detail'
     ),
