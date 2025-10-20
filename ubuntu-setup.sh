@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Скрипт автоматической установки Mayan EDMS на Ubuntu
+# Скрипт автоматической установки Prime-EDMS на Ubuntu
 # Запускать с правами root или через sudo
 
 set -e
 
-echo "🚀 Начинаем установку Mayan EDMS на Ubuntu..."
+echo "🚀 Начинаем установку Prime-EDMS на Ubuntu..."
 
 # Проверка дистрибутива
 if ! grep -q "Ubuntu" /etc/os-release; then
@@ -55,8 +55,8 @@ sudo systemctl stop nginx 2>/dev/null || true
 sudo systemctl disable apache2 2>/dev/null || true
 sudo systemctl disable nginx 2>/dev/null || true
 
-# Установка зависимостей для расширения converter_pipeline_extension
-echo "📦 Установка зависимостей для converter_pipeline_extension..."
+# Установка зависимостей для расширений converter_pipeline_extension и distribution
+echo "📦 Установка зависимостей для расширений..."
 sudo apt install -y ffmpeg python3-pip python3-dev build-essential python3-pil python3-reportlab
 
 # Установка reportlab в систему
@@ -71,10 +71,10 @@ echo ""
 echo "📋 Следующие шаги:"
 echo "1. Перезайдите в систему или выполните: newgrp docker"
 echo "2. Перейдите в директорию проекта:"
-echo "   cd ~/mayan-edms"
+echo "   cd ~/prime-edms"
 echo "3. Подготовьте проект:"
 echo "   ./ubuntu-prepare.sh"
-echo "4. Запустите Mayan EDMS:"
+echo "4. Запустите Prime-EDMS:"
 echo "   ./ubuntu-start.sh start"
 echo "5. Откройте http://localhost в браузере"
 echo ""
