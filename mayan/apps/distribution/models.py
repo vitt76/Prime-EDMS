@@ -92,6 +92,7 @@ class RenditionPreset(models.Model):
     FORMAT_CHOICES = [
         ('jpeg', 'JPEG'),
         ('png', 'PNG'),
+        ('webp', 'WebP'),
         ('tiff', 'TIFF'),
         ('pdf', 'PDF'),
         ('mp4', 'MP4'),
