@@ -1,0 +1,940 @@
+{% extends 'appearance/base.html' %}
+
+{% load i18n static %}
+
+{% block stylesheets %}
+{# <link rel="stylesheet" href="{% static 'image_editor/editor.css' %}"> #}
+<style>
+.image-editor { margin-top: 20px; }
+.image-editor__title { margin-bottom: 20px; }
+.image-editor__canvas-wrapper { border: 1px solid #ddd; min-height: 400px; position: relative; }
+.image-editor__canvas { max-width: 100%; }
+.image-editor__tools button + button { margin-top: 10px; }
+.image-editor__actions .btn { margin-top: 10px; }
+
+/* Стили для активных инструментов и фильтров */
+.image-editor__tools button.active {
+    background-color: #337ab7;
+    border-color: #2e6da4;
+    color: white;
+}
+.image-editor__tools button.active:hover {
+    background-color: #286090;
+    border-color: #204d74;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid image-editor" data-document-file-id="{{ document_file.pk }}">
+    <div class="row">
+        <div class="col-md-12">
+            <h3 class="image-editor__title">
+                <i class="fa fa-pencil-alt"></i>
+                {% trans 'Редактор изображения' %}
+            </h3>
+        </div>
+    </div>
+
+    <div class="row image-editor__workspace">
+        <div class="col-md-9">
+            <div class="image-editor__canvas-wrapper">
+                <canvas id="image-editor-canvas" class="image-editor__canvas"></canvas>
+                <img id="image-editor-source" src="" alt="{{ document_file }}" style="display: none;">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4 class="panel-title">{% trans 'Инструменты' %}</h4>
+                </div>
+                <div class="panel-body image-editor__tools">
+                    <!-- Основные инструменты -->
+                    <div class="btn-group-vertical btn-block" role="group">
+                        <button class="btn btn-default" data-tool="select">
+                            <i class="fa fa-mouse-pointer"></i> {% trans 'Выделение' %}
+                        </button>
+                        <button class="btn btn-default" data-tool="crop">
+                            <i class="fa fa-crop"></i> {% trans 'Обрезка' %}
+                        </button>
+                        <button class="btn btn-default" data-tool="brush">
+                            <i class="fa fa-paint-brush"></i> {% trans 'Кисть' %}
+                        </button>
+                        <button class="btn btn-default" data-tool="eraser">
+                            <i class="fa fa-eraser"></i> {% trans 'Ластик' %}
+                        </button>
+                        <button class="btn btn-default" data-tool="text">
+                            <i class="fa fa-font"></i> {% trans 'Текст' %}
+                        </button>
+                    </div>
+
+                    <hr>
+
+                    <!-- Трансформации -->
+                    <div class="btn-group-vertical btn-block" role="group">
+                        <button class="btn btn-default btn-sm" data-tool="rotate-left">
+                            <i class="fa fa-undo"></i> {% trans 'Поворот влево' %}
+                        </button>
+                        <button class="btn btn-default btn-sm" data-tool="rotate-right">
+                            <i class="fa fa-redo"></i> {% trans 'Поворот вправо' %}
+                        </button>
+                        <button class="btn btn-default btn-sm" data-tool="flip-horizontal">
+                            <i class="fa fa-exchange-alt"></i> {% trans 'Отразить ↔' %}
+                        </button>
+                        <button class="btn btn-default btn-sm" data-tool="flip-vertical">
+                            <i class="fa fa-arrows-alt-v"></i> {% trans 'Отразить ↕' %}
+                        </button>
+                    </div>
+
+                    <hr>
+
+                    <!-- Параметры рисования -->
+                    <div id="drawing-settings" style="display: none;">
+                        <label for="brush-size">{% trans 'Размер:' %}</label>
+                        <input type="range" id="brush-size" min="1" max="50" value="5">
+                        <span id="brush-size-value">5</span>px
+
+                        <label for="brush-color">{% trans 'Цвет:' %}</label>
+                        <input type="color" id="brush-color" value="#000000">
+
+                        <label for="brush-opacity">{% trans 'Прозрачность:' %}</label>
+                        <input type="range" id="brush-opacity" min="1" max="100" value="100">
+                        <span id="brush-opacity-value">100</span>%
+                    </div>
+
+                    <!-- Параметры текста -->
+                    <div id="text-settings" style="display: none;">
+                        <label for="text-input">{% trans 'Текст:' %}</label>
+                        <input type="text" id="text-input" class="form-control" placeholder="{% trans 'Введите текст' %}">
+
+                        <label for="text-size">{% trans 'Размер:' %}</label>
+                        <input type="range" id="text-size" min="10" max="100" value="20">
+                        <span id="text-size-value">20</span>px
+
+                        <label for="text-color">{% trans 'Цвет:' %}</label>
+                        <input type="color" id="text-color" value="#000000">
+
+                        <button id="add-text-btn" class="btn btn-primary btn-block btn-sm">
+                            <i class="fa fa-plus"></i> {% trans 'Добавить текст' %}
+                        </button>
+                    </div>
+
+                    <!-- Управление обрезкой -->
+                    <div id="crop-settings" style="display: none;">
+                        <p class="text-info small">{% trans 'Перетащите границы для выбора области обрезки' %}</p>
+                        <div class="btn-group btn-block" role="group">
+                            <button id="apply-crop-btn" class="btn btn-success btn-sm">
+                                <i class="fa fa-check"></i> {% trans 'Применить' %}
+                            </button>
+                            <button id="cancel-crop-btn" class="btn btn-default btn-sm">
+                                <i class="fa fa-times"></i> {% trans 'Отмена' %}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Коррекция цвета -->
+                    <hr>
+                    <label for="image-editor-brightness">{% trans 'Яркость' %}</label>
+                    <input type="range" id="image-editor-brightness" min="-100" max="100" value="0">
+
+                    <label for="image-editor-contrast">{% trans 'Контраст' %}</label>
+                    <input type="range" id="image-editor-contrast" min="-100" max="100" value="0">
+
+                    <!-- Дополнительные фильтры -->
+                    <hr>
+                    <label>{% trans 'Фильтры:' %}</label>
+                    <div class="btn-group-vertical btn-block" role="group">
+                        <button class="btn btn-default btn-sm" data-filter="none">
+                            <i class="fa fa-ban"></i> {% trans 'Без фильтра' %}
+                        </button>
+                        <button class="btn btn-default btn-sm" data-filter="grayscale">
+                            <i class="fa fa-adjust"></i> {% trans 'Ч/Б' %}
+                        </button>
+                        <button class="btn btn-default btn-sm" data-filter="sepia">
+                            <i class="fa fa-sun"></i> {% trans 'Сепия' %}
+                        </button>
+                        <button class="btn btn-default btn-sm" data-filter="blur">
+                            <i class="fa fa-eye-slash"></i> {% trans 'Размытие' %}
+                        </button>
+                        <button class="btn btn-default btn-sm" data-filter="sharpen">
+                            <i class="fa fa-eye"></i> {% trans 'Резкость' %}
+                        </button>
+                    </div>
+
+                    <!-- Управление историей -->
+                    <hr>
+                    <div class="btn-group btn-block" role="group">
+                        <button id="undo-btn" class="btn btn-default btn-sm" disabled>
+                            <i class="fa fa-undo"></i> {% trans 'Отмена' %}
+                        </button>
+                        <button id="redo-btn" class="btn btn-default btn-sm" disabled>
+                            <i class="fa fa-redo"></i> {% trans 'Повтор' %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h4 class="panel-title">{% trans 'Сохранение' %}</h4>
+                </div>
+                <div class="panel-body image-editor__actions">
+                    <textarea id="image-editor-comment" class="form-control" rows="2" placeholder="{% trans 'Комментарий к новой версии' %}"></textarea>
+                    <button id="image-editor-save" class="btn btn-primary btn-block">
+                        <i class="fa fa-save"></i> {% trans 'Сохранить новую версию' %}
+                    </button>
+                    <a href="#" onclick="history.back()" class="btn btn-default btn-block">
+                        <i class="fa fa-arrow-left"></i> {% trans 'Назад к файлу' %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+{# CropperJS для обрезки изображений #}
+<script src="{% static 'redactions/node_modules/cropperjs/dist/cropper.js' %}"></script>
+<script>
+    // Конфигурация редактора
+    window.imageEditorConfig = {
+        documentFileId: {{ document_file.pk|default:"null" }},
+        saveUrl: "{% url 'image_editor:save_image' document_file.pk %}",
+        csrfToken: "{{ csrf_token }}"
+    };
+
+    // Полнофункциональный редактор изображений
+    (function() {
+        const canvas = document.getElementById('image-editor-canvas');
+        const context = canvas.getContext('2d');
+        const sourceImage = document.getElementById('image-editor-source');
+        const saveButton = document.getElementById('image-editor-save');
+        const commentField = document.getElementById('image-editor-comment');
+        const brightnessControl = document.getElementById('image-editor-brightness');
+        const contrastControl = document.getElementById('image-editor-contrast');
+
+        // Новые элементы управления
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        const brushSizeControl = document.getElementById('brush-size');
+        const brushSizeValue = document.getElementById('brush-size-value');
+        const brushColorControl = document.getElementById('brush-color');
+        const brushOpacityControl = document.getElementById('brush-opacity');
+        const brushOpacityValue = document.getElementById('brush-opacity-value');
+        const textInput = document.getElementById('text-input');
+        const textSizeControl = document.getElementById('text-size');
+        const textSizeValue = document.getElementById('text-size-value');
+        const textColorControl = document.getElementById('text-color');
+        const addTextBtn = document.getElementById('add-text-btn');
+        const applyCropBtn = document.getElementById('apply-crop-btn');
+        const cancelCropBtn = document.getElementById('cancel-crop-btn');
+        const drawingSettings = document.getElementById('drawing-settings');
+        const textSettings = document.getElementById('text-settings');
+
+        let currentTool = null;
+        let currentFilters = {
+            brightness: 0,
+            contrast: 0,
+            filter: 'none'  // none, grayscale, sepia, blur, sharpen
+        };
+
+        // Параметры рисования
+        let brushSettings = {
+            brushSize: 5,
+            brushColor: '#000000',
+            brushOpacity: 1.0
+        };
+
+        // Параметры текста
+        let textConfig = {
+            text: '',
+            fontSize: 20,
+            color: '#000000',
+            x: 50,
+            y: 50
+        };
+
+        // История операций для undo/redo
+        let history = [];
+        let historyIndex = -1;
+        const MAX_HISTORY = 20;
+
+        // CropperJS для обрезки
+        let cropper = null;
+
+        // Показать ошибку пользователю
+        function showError(message) {
+            const canvasWrapper = document.querySelector('.image-editor__canvas-wrapper');
+            if (canvasWrapper) {
+                canvasWrapper.innerHTML = `
+                    <div class="alert alert-danger" style="margin: 20px;">
+                        <h4><i class="fa fa-exclamation-triangle"></i> Ошибка загрузки изображения</h4>
+                        <p>${message}</p>
+                        <p><small>Проверьте, что файл существует и является изображением.</small></p>
+                    </div>
+                `;
+            }
+            console.error('Editor error:', message);
+        }
+
+        // Функции работы с историей
+        function saveToHistory() {
+            // Проверяем, что canvas инициализирован и имеет размеры
+            if (canvas.width === 0 || canvas.height === 0) {
+                console.warn('Canvas not initialized yet, skipping history save');
+                return;
+            }
+
+            // Сохраняем текущее состояние canvas
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+            // Удаляем историю после текущей позиции
+            history = history.slice(0, historyIndex + 1);
+
+            // Добавляем новое состояние
+            history.push(new ImageData(
+                new Uint8ClampedArray(imageData.data),
+                imageData.width,
+                imageData.height
+            ));
+
+            // Ограничиваем размер истории
+            if (history.length > MAX_HISTORY) {
+                history.shift();
+            } else {
+                historyIndex++;
+            }
+
+            updateHistoryButtons();
+        }
+
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                restoreFromHistory();
+            }
+        }
+
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                restoreFromHistory();
+            }
+        }
+
+        function restoreFromHistory() {
+            if (historyIndex >= 0 && historyIndex < history.length) {
+                const imageData = history[historyIndex];
+                context.putImageData(imageData, 0, 0);
+                applyFilters(); // Восстанавливаем фильтры
+            }
+            updateHistoryButtons();
+        }
+
+        function updateHistoryButtons() {
+            undoBtn.disabled = historyIndex <= 0;
+            redoBtn.disabled = historyIndex >= history.length - 1;
+        }
+
+        // Функции работы с CropperJS
+        function initCropper() {
+            if (cropper) {
+                cropper.destroy();
+            }
+
+            // Создаем временное изображение для cropper
+            const tempImage = new Image();
+            tempImage.src = canvas.toDataURL();
+
+            tempImage.onload = function() {
+                // Заменяем canvas на изображение для cropper
+                const canvasContainer = canvas.parentNode;
+                const cropperContainer = document.createElement('div');
+                cropperContainer.id = 'cropper-container';
+                cropperContainer.style.position = 'relative';
+                cropperContainer.style.maxWidth = '100%';
+
+                canvasContainer.replaceChild(cropperContainer, canvas);
+
+                const cropperImage = document.createElement('img');
+                cropperImage.src = tempImage.src;
+                cropperImage.style.maxWidth = '100%';
+                cropperContainer.appendChild(cropperImage);
+
+                cropper = new Cropper(cropperImage, {
+                    aspectRatio: NaN, // Свободная обрезка
+                    viewMode: 1,
+                    dragMode: 'move',
+                    responsive: true,
+                    restore: false,
+                    checkCrossOrigin: false,
+                    checkOrientation: false,
+                    modal: true,
+                    guides: true,
+                    center: true,
+                    highlight: false,
+                    background: false,
+                    autoCrop: true,
+                    autoCropArea: 0.8,
+                    movable: true,
+                    rotatable: true,
+                    scalable: true,
+                    zoomable: true,
+                    zoomOnTouch: true,
+                    zoomOnWheel: true,
+                    wheelZoomRatio: 0.1,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    toggleDragModeOnDblclick: true,
+                });
+            };
+        }
+
+        function applyCrop() {
+            if (!cropper) return;
+
+            saveToHistory();
+
+            const croppedCanvas = cropper.getCroppedCanvas();
+
+            // Возвращаем canvas на место
+            const cropperContainer = document.getElementById('cropper-container');
+            const canvasContainer = cropperContainer.parentNode;
+
+            canvas.width = croppedCanvas.width;
+            canvas.height = croppedCanvas.height;
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(croppedCanvas, 0, 0);
+
+            canvasContainer.replaceChild(canvas, cropperContainer);
+            cropper.destroy();
+            cropper = null;
+
+            console.log('Image cropped successfully');
+        }
+
+        function cancelCrop() {
+            if (!cropper) return;
+
+            // Возвращаем canvas на место без изменений
+            const cropperContainer = document.getElementById('cropper-container');
+            const canvasContainer = cropperContainer.parentNode;
+
+            canvasContainer.replaceChild(canvas, cropperContainer);
+            cropper.destroy();
+            cropper = null;
+
+            console.log('Crop cancelled');
+        }
+
+        // Инициализация Canvas
+        function initializeCanvas() {
+            // Используем конфигурацию из window.imageEditorConfig
+            const documentFileId = window.imageEditorConfig.documentFileId;
+            const mimetype = '{{ document_file.mimetype|default:"" }}';
+            const filename = '{{ document_file.filename|default:"" }}';
+
+            console.log('Initializing canvas for file:', filename, 'MIME:', mimetype, 'ID:', documentFileId);
+
+            if (!documentFileId) {
+                console.error('Document file ID is not available');
+                showError('Файл не найден или недоступен.');
+                return;
+            }
+
+            if (!mimetype || !mimetype.startsWith('image/')) {
+                console.error('File is not an image:', mimetype);
+                showError('Выбранный файл не является изображением.');
+                return;
+            }
+
+            // Используем простой подход - загружаем изображение через API
+            const apiUrl = '{{ document_file.get_api_image_url }}';
+            if (!apiUrl) {
+                console.error('API image URL is not available');
+                showError('Не удалось получить URL изображения.');
+                return;
+            }
+
+            console.log('Loading image from API URL:', apiUrl);
+
+            // Показываем индикатор загрузки
+            const canvasWrapper = document.querySelector('.image-editor__canvas-wrapper');
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.innerHTML = `
+                <div class="text-center" style="padding: 40px;">
+                    <i class="fa fa-spinner fa-spin fa-2x"></i>
+                    <p style="margin-top: 10px;">Загрузка изображения...</p>
+                </div>
+            `;
+            canvasWrapper.appendChild(loadingIndicator);
+
+            sourceImage.src = apiUrl;
+            sourceImage.onload = function() {
+                canvas.width = sourceImage.naturalWidth;
+                canvas.height = sourceImage.naturalHeight;
+
+                if (canvas.width > 0 && canvas.height > 0) {
+                    context.drawImage(sourceImage, 0, 0);
+
+                    // Удаляем индикатор загрузки
+                    if (loadingIndicator && loadingIndicator.parentNode) {
+                        loadingIndicator.parentNode.removeChild(loadingIndicator);
+                    }
+
+                    // Сохраняем начальное состояние в историю
+                    setTimeout(() => saveToHistory(), 100);
+
+                    console.log('Image loaded on canvas:', canvas.width, 'x', canvas.height);
+                } else {
+                    console.error('Failed to load image - invalid dimensions');
+                    if (loadingIndicator && loadingIndicator.parentNode) {
+                        loadingIndicator.parentNode.removeChild(loadingIndicator);
+                    }
+                    showError('Изображение имеет некорректные размеры.');
+                }
+            };
+
+            sourceImage.onerror = function() {
+                console.error('Failed to load image from API URL');
+
+                // Удаляем индикатор загрузки
+                if (loadingIndicator && loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+
+                // Попробуем альтернативный подход через fetch
+                console.log('Trying fallback approach...');
+
+                fetch('/documents/files/' + documentFileId + '/preview/', {
+                    method: 'GET',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                })
+                .then(dataUrl => {
+                    sourceImage.src = dataUrl;
+                    console.log('Image loaded via fallback method');
+                })
+                .catch(error => {
+                    console.error('Fallback loading also failed:', error);
+                    showError('Не удалось загрузить изображение. Попробуйте другой файл.');
+                });
+            };
+
+            if (sourceImage.complete) {
+                sourceImage.onload();
+            }
+        }
+
+        // Обработчик клика по canvas для размещения текста
+        function handleCanvasClick(event) {
+            if (currentTool !== 'text') return;
+
+            const rect = canvas.getBoundingClientRect();
+            textConfig.x = event.clientX - rect.left;
+            textConfig.y = event.clientY - rect.top;
+
+            console.log(`Text position set to: (${textConfig.x}, ${textConfig.y})`);
+        }
+
+        // Сохранение изображения
+        function handleSave() {
+            console.log('Save button clicked');
+
+            canvas.toBlob(function(blob) {
+                if (!blob) {
+                    alert('Не удалось получить данные изображения');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('image_content', blob, 'edited-image.png');
+                formData.append('comment', commentField.value);
+
+                fetch(window.imageEditorConfig.saveUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': window.imageEditorConfig.csrfToken
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Новая версия успешно сохранена.');
+                        window.location.href = '/documents/files/' + data.document_file_id + '/preview/';
+                    } else {
+                        alert('Ошибка при сохранении: ' + JSON.stringify(data.errors));
+                    }
+                })
+                .catch(error => {
+                    console.error('Save error:', error);
+                    alert('Ошибка при сохранении файла.');
+                });
+            }, 'image/png');
+        }
+
+        // Обработчики инструментов
+        function handleToolClick(event) {
+            const button = event.currentTarget;
+            const tool = button.getAttribute('data-tool');
+
+            // Снимаем выделение с предыдущего инструмента
+            document.querySelectorAll('[data-tool]').forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            // Скрываем все панели настроек
+            drawingSettings.style.display = 'none';
+            textSettings.style.display = 'none';
+            document.getElementById('crop-settings').style.display = 'none';
+
+            currentTool = tool;
+
+            switch (tool) {
+                case 'brush':
+                case 'eraser':
+                    drawingSettings.style.display = 'block';
+                    canvas.style.cursor = 'crosshair';
+                    break;
+                case 'text':
+                    textSettings.style.display = 'block';
+                    canvas.style.cursor = 'text';
+                    break;
+                case 'select':
+                    canvas.style.cursor = 'default';
+                    console.log(`${tool} tool selected`);
+                    break;
+                case 'crop':
+                    document.getElementById('crop-settings').style.display = 'block';
+                    initCropper();
+                    break;
+                case 'rotate-left':
+                    resetFilters();
+                    saveToHistory();
+                    rotateImage(-90);
+                    break;
+                case 'rotate-right':
+                    resetFilters();
+                    saveToHistory();
+                    rotateImage(90);
+                    break;
+                case 'flip-horizontal':
+                    resetFilters();
+                    saveToHistory();
+                    flipImage('horizontal');
+                    break;
+                case 'flip-vertical':
+                    resetFilters();
+                    saveToHistory();
+                    flipImage('vertical');
+                    break;
+            }
+        }
+
+        // Поворот изображения
+        function rotateImage(degrees) {
+            const tempCanvas = document.createElement('canvas');
+            const tempContext = tempCanvas.getContext('2d');
+
+            // Для поворота на 90/-90 градусов меняем размеры
+            if (Math.abs(degrees) === 90) {
+                tempCanvas.width = canvas.height;
+                tempCanvas.height = canvas.width;
+
+                tempContext.translate(tempCanvas.width / 2, tempCanvas.height / 2);
+                tempContext.rotate(degrees * Math.PI / 180);
+                tempContext.translate(-canvas.width / 2, -canvas.height / 2);
+                tempContext.drawImage(canvas, 0, 0);
+
+                canvas.width = tempCanvas.width;
+                canvas.height = tempCanvas.height;
+                context.clearRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(tempCanvas, 0, 0);
+            }
+
+            console.log(`Image rotated by ${degrees} degrees`);
+        }
+
+        // Отражение изображения
+        function flipImage(direction) {
+            const tempCanvas = document.createElement('canvas');
+            const tempContext = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+
+            tempContext.save();
+
+            if (direction === 'horizontal') {
+                tempContext.scale(-1, 1);
+                tempContext.drawImage(canvas, -canvas.width, 0);
+            } else if (direction === 'vertical') {
+                tempContext.scale(1, -1);
+                tempContext.drawImage(canvas, 0, -canvas.height);
+            }
+
+            tempContext.restore();
+
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(tempCanvas, 0, 0);
+
+            console.log(`Image flipped ${direction}`);
+        }
+
+        // Применение фильтров яркости, контраста и дополнительных эффектов
+        function applyFilters() {
+            let filterParts = [];
+
+            // Яркость и контраст
+            if (currentFilters.brightness !== 0 || currentFilters.contrast !== 0) {
+                const brightness = (currentFilters.brightness / 100) + 1;
+                const contrast = (currentFilters.contrast / 100) + 1;
+                filterParts.push(`brightness(${brightness}) contrast(${contrast})`);
+            }
+
+            // Дополнительные фильтры
+            switch (currentFilters.filter) {
+                case 'grayscale':
+                    filterParts.push('grayscale(100%)');
+                    break;
+                case 'sepia':
+                    filterParts.push('sepia(100%)');
+                    break;
+                case 'blur':
+                    filterParts.push('blur(2px)');
+                    break;
+                case 'sharpen':
+                    // Для резкости используем комбинацию фильтров
+                    filterParts.push('contrast(1.2) brightness(1.1)');
+                    break;
+                case 'none':
+                default:
+                    // Ничего не добавляем
+                    break;
+            }
+
+            const filterString = filterParts.length > 0 ? filterParts.join(' ') : 'none';
+            canvas.style.filter = filterString;
+            console.log(`Applied filters: ${filterString}`);
+        }
+
+        // Сброс фильтров при применении других инструментов
+        function resetFilters() {
+            currentFilters.brightness = 0;
+            currentFilters.contrast = 0;
+            currentFilters.filter = 'none';
+            brightnessControl.value = 0;
+            contrastControl.value = 0;
+            canvas.style.filter = 'none';
+
+            // Снимаем выделение с кнопок фильтров
+            document.querySelectorAll('[data-filter]').forEach(btn => btn.classList.remove('active'));
+            document.querySelector('[data-filter="none"]').classList.add('active');
+        }
+
+        // Обработчики изменения слайдеров
+        function handleBrightnessChange(event) {
+            currentFilters.brightness = parseInt(event.target.value);
+            applyFilters();
+        }
+
+        function handleContrastChange(event) {
+            currentFilters.contrast = parseInt(event.target.value);
+            applyFilters();
+        }
+
+        // Обработчик фильтров
+        function handleFilterClick(event) {
+            const button = event.currentTarget;
+            const filter = button.getAttribute('data-filter');
+
+            // Снимаем выделение с других кнопок
+            document.querySelectorAll('[data-filter]').forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            currentFilters.filter = filter;
+            applyFilters();
+
+            console.log(`Applied filter: ${filter}`);
+        }
+
+        // Обработчики настроек рисования
+        function handleBrushSizeChange(event) {
+            brushSettings.brushSize = parseInt(event.target.value);
+            brushSizeValue.textContent = brushSettings.brushSize;
+        }
+
+        function handleBrushColorChange(event) {
+            brushSettings.brushColor = event.target.value;
+        }
+
+        function handleBrushOpacityChange(event) {
+            brushSettings.brushOpacity = parseInt(event.target.value) / 100;
+            brushOpacityValue.textContent = event.target.value;
+        }
+
+        // Обработчики настроек текста
+        function handleTextSizeChange(event) {
+            textConfig.fontSize = parseInt(event.target.value);
+            textSizeValue.textContent = textConfig.fontSize;
+        }
+
+        function handleTextColorChange(event) {
+            textConfig.color = event.target.value;
+        }
+
+        function handleTextInputChange(event) {
+            textConfig.text = event.target.value;
+        }
+
+        // Добавление текста на изображение
+        function addText() {
+            if (!textConfig.text.trim()) {
+                alert('Введите текст для добавления');
+                return;
+            }
+
+            saveToHistory();
+
+            context.save();
+            context.font = `${textConfig.fontSize}px Arial`;
+            context.fillStyle = textConfig.color;
+            context.fillText(textConfig.text, textConfig.x, textConfig.y);
+            context.restore();
+
+            console.log(`Added text: "${textConfig.text}" at (${textConfig.x}, ${textConfig.y})`);
+        }
+
+        // Обработчики событий мыши для рисования
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        function startDrawing(event) {
+            if (currentTool !== 'brush' && currentTool !== 'eraser') return;
+
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastX = event.clientX - rect.left;
+            lastY = event.clientY - rect.top;
+
+            saveToHistory();
+        }
+
+        function draw(event) {
+            if (!isDrawing || (currentTool !== 'brush' && currentTool !== 'eraser')) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const currentX = event.clientX - rect.left;
+            const currentY = event.clientY - rect.top;
+
+            context.save();
+
+            if (currentTool === 'brush') {
+                context.globalAlpha = brushSettings.brushOpacity;
+                context.strokeStyle = brushSettings.brushColor;
+                context.lineWidth = brushSettings.brushSize;
+                context.lineCap = 'round';
+                context.lineJoin = 'round';
+            } else if (currentTool === 'eraser') {
+                context.globalCompositeOperation = 'destination-out';
+                context.lineWidth = brushSettings.brushSize;
+            }
+
+            context.beginPath();
+            context.moveTo(lastX, lastY);
+            context.lineTo(currentX, currentY);
+            context.stroke();
+
+            context.restore();
+
+            lastX = currentX;
+            lastY = currentY;
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        // Инициализация
+        function init() {
+            console.log('Image Editor initializing...');
+
+            // Загрузка изображения
+            initializeCanvas();
+
+            // Обработчики инструментов
+            document.querySelectorAll('[data-tool]').forEach(button => {
+                button.addEventListener('click', handleToolClick);
+            });
+
+            // Обработчики фильтров
+            brightnessControl.addEventListener('input', handleBrightnessChange);
+            contrastControl.addEventListener('input', handleContrastChange);
+
+            // Обработчики кнопок фильтров
+            document.querySelectorAll('[data-filter]').forEach(button => {
+                button.addEventListener('click', handleFilterClick);
+            });
+
+            // Обработчики настроек рисования
+            brushSizeControl.addEventListener('input', handleBrushSizeChange);
+            brushColorControl.addEventListener('input', handleBrushColorChange);
+            brushOpacityControl.addEventListener('input', handleBrushOpacityChange);
+
+            // Обработчики настроек текста
+            textInput.addEventListener('input', handleTextInputChange);
+            textSizeControl.addEventListener('input', handleTextSizeChange);
+            textColorControl.addEventListener('input', handleTextColorChange);
+            addTextBtn.addEventListener('click', addText);
+
+            // Обработчики обрезки
+            applyCropBtn.addEventListener('click', applyCrop);
+            cancelCropBtn.addEventListener('click', cancelCrop);
+
+            // Обработчики истории
+            undoBtn.addEventListener('click', undo);
+            redoBtn.addEventListener('click', redo);
+
+            // Обработчики рисования и кликов
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            canvas.addEventListener('click', handleCanvasClick);
+
+            // Обработчик сохранения
+            saveButton.addEventListener('click', handleSave);
+
+            // Активируем кнопку "без фильтра" по умолчанию
+            document.querySelector('[data-filter="none"]').classList.add('active');
+
+            console.log('Image Editor ready');
+        }
+
+        // Запуск при загрузке страницы
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+</script>
+{% endblock %}

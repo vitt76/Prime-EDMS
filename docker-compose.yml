@@ -75,17 +75,16 @@ services:
       # Override the hardcoded supervisor config
       COMMAND_WORKER_A: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker %(ENV_MAYAN_WORKER_A_CONCURRENCY)s --hostname=mayan-edms-worker_a.%%h --loglevel=ERROR -Ofair --queues=converter,sources_fast,distribution %(ENV_MAYAN_WORKER_A_MAX_MEMORY_PER_CHILD)s %(ENV_MAYAN_WORKER_A_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
       # Force add our extensions via environment
-      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution']"
+      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
       PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
     volumes:
       - mayan_data:/var/lib/mayan
       - mayan_renditions:/opt/mayan-edms/data
       - ./config.yml:/opt/mayan-edms/config.yml:ro
-      - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension:ro
-      - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution:ro
-      - ./mayan/apps/rest_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api
-      - ./mayan/urls:/opt/mayan-edms/lib/python3.9/site-packages/mayan/urls
+      - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
+      - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
+      - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
     ports:
       - "80:8000"
     depends_on:
