@@ -23,41 +23,24 @@ class ImageEditorView(SingleObjectDetailView):
     template_name = 'image_editor/editor.html'
 
     def get_extra_context(self):
-        # Отладка
+        # Временно упрощенная версия для отладки
         print("=== ImageEditorView.get_extra_context called ===")
         print(f"object: {self.object}")
         print(f"object.pk: {self.object.pk if self.object else None}")
 
         if not self.object:
-            messages.error(self.request, _('Файл не найден.'))
+            print("ERROR: Object not found")
             return {
                 'document_file': None,
                 'document': None,
-                'title': _('Ошибка: файл не найден'),
+                'title': 'Ошибка: файл не найден',
             }
 
-        # Проверяем тип файла
-        if not self.object.mimetype or not self.object.mimetype.startswith('image/'):
-            messages.error(self.request, _('Выбранный файл не является изображением. MIME-тип: %s') % (self.object.mimetype or 'Не определен'))
-            return {
-                'document_file': self.object,
-                'document': self.object.document,
-                'title': _('Ошибка: файл не является изображением'),
-            }
-
-        # Проверяем, что файл существует и имеет размер
-        if self.object.size == 0:
-            messages.error(self.request, _('Файл пустой или поврежден.'))
-            return {
-                'document_file': self.object,
-                'document': self.object.document,
-                'title': _('Ошибка: файл пустой'),
-            }
-
+        print("SUCCESS: Object found, returning context")
         return {
             'document_file': self.object,
             'document': self.object.document,
-            'title': _('Редактирование изображения: %s') % self.object.filename,
+            'title': f'Редактирование изображения: {self.object.filename}',
         }
 
 
