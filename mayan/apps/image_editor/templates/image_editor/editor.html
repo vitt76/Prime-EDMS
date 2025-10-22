@@ -182,9 +182,30 @@
                     <!-- Управление обрезкой -->
                     <div id="crop-settings" style="display: none;">
                         <p class="text-info small">{% trans 'Выделите область обрезки, перетаскивая углы и края синей рамки' %}</p>
+
+                        <!-- Точные размеры -->
+                        <div class="form-group">
+                            <label for="crop-width" class="control-label">{% trans 'Ширина (px):' %}</label>
+                            <input type="number" id="crop-width" class="form-control" min="1" placeholder="{% trans 'Ширина' %}">
+                        </div>
+                        <div class="form-group">
+                            <label for="crop-height" class="control-label">{% trans 'Высота (px):' %}</label>
+                            <input type="number" id="crop-height" class="form-control" min="1" placeholder="{% trans 'Высота' %}">
+                        </div>
+                        <div class="checkbox">
+                            <label>
+                                <input type="checkbox" id="crop-maintain-ratio"> {% trans 'Сохранять пропорции' %}
+                            </label>
+                        </div>
+                        <button id="apply-size-btn" class="btn btn-info btn-sm btn-block">
+                            <i class="fa fa-arrows-alt"></i> {% trans 'Применить размеры' %}
+                        </button>
+
+                        <hr>
+
                         <div class="btn-group btn-block" role="group">
                             <button id="apply-crop-btn" class="btn btn-success btn-sm">
-                                <i class="fa fa-check"></i> {% trans 'Применить' %}
+                                <i class="fa fa-check"></i> {% trans 'Применить обрезку' %}
                             </button>
                             <button id="cancel-crop-btn" class="btn btn-default btn-sm">
                                 <i class="fa fa-times"></i> {% trans 'Отмена' %}
@@ -297,6 +318,10 @@
         const addTextBtn = document.getElementById('add-text-btn');
         const applyCropBtn = document.getElementById('apply-crop-btn');
         const cancelCropBtn = document.getElementById('cancel-crop-btn');
+        const applySizeBtn = document.getElementById('apply-size-btn');
+        const cropWidthInput = document.getElementById('crop-width');
+        const cropHeightInput = document.getElementById('crop-height');
+        const cropMaintainRatio = document.getElementById('crop-maintain-ratio');
         const drawingSettings = document.getElementById('drawing-settings');
         const textSettings = document.getElementById('text-settings');
 
@@ -419,7 +444,92 @@
         // Переменная для хранения состояния canvas перед cropper
         let canvasStateBeforeCrop = null;
 
+        // Функция для применения box blur
+        function applyBoxBlur(data, width, height, radius) {
+            const tempData = new Uint8ClampedArray(data);
+            const radiusSquared = radius * radius;
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let r = 0, g = 0, b = 0, a = 0, count = 0;
+
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        for (let dx = -radius; dx <= radius; dx++) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+
+                            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                const offset = (ny * width + nx) * 4;
+                                r += tempData[offset];
+                                g += tempData[offset + 1];
+                                b += tempData[offset + 2];
+                                a += tempData[offset + 3];
+                                count++;
+                            }
+                        }
+                    }
+
+                    const offset = (y * width + x) * 4;
+                    data[offset] = r / count;
+                    data[offset + 1] = g / count;
+                    data[offset + 2] = b / count;
+                    data[offset + 3] = a / count;
+                }
+            }
+        }
+
         // Функции работы с CropperJS
+        function updateCropSizeInputs() {
+            if (cropper) {
+                const cropData = cropper.getData();
+                cropWidthInput.value = Math.round(cropData.width);
+                cropHeightInput.value = Math.round(cropData.height);
+            }
+        }
+
+        function applyCropSize() {
+            if (!cropper) return;
+
+            const width = parseInt(cropWidthInput.value);
+            const height = parseInt(cropHeightInput.value);
+
+            if (!width || !height || width <= 0 || height <= 0) {
+                alert('Введите корректные размеры');
+                return;
+            }
+
+            // Получаем текущие данные cropper'а
+            const currentData = cropper.getData();
+
+            if (cropMaintainRatio.checked && currentData.width && currentData.height) {
+                // Сохраняем пропорции
+                const ratio = currentData.width / currentData.height;
+                const newData = { ...currentData };
+
+                if (width / height > ratio) {
+                    // Ограничиваем по высоте
+                    newData.height = height;
+                    newData.width = height * ratio;
+                } else {
+                    // Ограничиваем по ширине
+                    newData.width = width;
+                    newData.height = width / ratio;
+                }
+
+                cropper.setData(newData);
+            } else {
+                // Устанавливаем точные размеры
+                cropper.setData({
+                    ...currentData,
+                    width: width,
+                    height: height
+                });
+            }
+
+            // Обновляем поля ввода
+            updateCropSizeInputs();
+        }
+
         function initCropper() {
             if (!cropperJSLoaded) {
                 console.warn('CropperJS not loaded yet');
@@ -475,7 +585,14 @@
                     cropBoxMovable: true,
                     cropBoxResizable: true,
                     toggleDragModeOnDblclick: true,
+                    crop: function(event) {
+                        // Обновляем поля размеров при изменении crop рамки
+                        updateCropSizeInputs();
+                    }
                 });
+
+                // Заполняем поля начальными размерами
+                updateCropSizeInputs();
             };
         }
 
@@ -606,7 +723,7 @@
 
                 // Попробуем альтернативный подход через fetch
 
-                fetch('/documents/files/' + documentFileId + '/preview/', {
+                fetch('/documents/documents/files/' + documentFileId + '/preview/', {
                     method: 'GET',
                     headers: {
                         'X-CSRFToken': '{{ csrf_token }}',
@@ -657,8 +774,72 @@
 
         // Сохранение изображения
         function handleSave() {
+            // Создаем временный canvas с примененными фильтрами для сохранения
+            const tempCanvas = document.createElement('canvas');
+            const tempContext = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
 
-            canvas.toBlob(function(blob) {
+            // Копируем изображение
+            tempContext.drawImage(canvas, 0, 0);
+
+            // Применяем яркость и контраст программно
+            if (currentFilters.brightness !== 0 || currentFilters.contrast !== 0 || currentFilters.filter !== 'none') {
+                const imageData = tempContext.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                const data = imageData.data;
+
+                // Применяем яркость и контраст
+                const brightness = (currentFilters.brightness / 100) + 1;
+                const contrast = (currentFilters.contrast / 100) + 1;
+
+                for (let i = 0; i < data.length; i += 4) {
+                    // Яркость
+                    data[i] *= brightness;     // Red
+                    data[i + 1] *= brightness; // Green
+                    data[i + 2] *= brightness; // Blue
+
+                    // Контраст
+                    data[i] = ((data[i] - 128) * contrast) + 128;
+                    data[i + 1] = ((data[i + 1] - 128) * contrast) + 128;
+                    data[i + 2] = ((data[i + 2] - 128) * contrast) + 128;
+                }
+
+                // Применяем дополнительные фильтры
+                switch (currentFilters.filter) {
+                    case 'grayscale':
+                        for (let i = 0; i < data.length; i += 4) {
+                            const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+                            data[i] = data[i + 1] = data[i + 2] = gray;
+                        }
+                        break;
+                    case 'sepia':
+                        for (let i = 0; i < data.length; i += 4) {
+                            const r = data[i];
+                            const g = data[i + 1];
+                            const b = data[i + 2];
+                            data[i] = Math.min(255, (r * 0.393) + (g * 0.769) + (b * 0.189));
+                            data[i + 1] = Math.min(255, (r * 0.349) + (g * 0.686) + (b * 0.168));
+                            data[i + 2] = Math.min(255, (r * 0.272) + (g * 0.534) + (b * 0.131));
+                        }
+                        break;
+                    case 'blur':
+                        // Простое размытие (box blur)
+                        applyBoxBlur(data, tempCanvas.width, tempCanvas.height, 2);
+                        break;
+                    case 'sharpen':
+                        // Простая резкость через контраст
+                        for (let i = 0; i < data.length; i += 4) {
+                            data[i] = Math.min(255, data[i] * 1.2);
+                            data[i + 1] = Math.min(255, data[i + 1] * 1.2);
+                            data[i + 2] = Math.min(255, data[i + 2] * 1.2);
+                        }
+                        break;
+                }
+
+                tempContext.putImageData(imageData, 0, 0);
+            }
+
+            tempCanvas.toBlob(function(blob) {
                 if (!blob) {
                     alert('Не удалось получить данные изображения');
                     return;
@@ -679,7 +860,7 @@
                 .then(data => {
                     if (data.success) {
                         alert('Новая версия успешно сохранена.');
-                        window.location.href = '/documents/files/' + data.document_file_id + '/preview/';
+                        window.location.href = '/documents/documents/files/' + data.document_file_id + '/preview/';
                     } else {
                         alert('Ошибка при сохранении: ' + JSON.stringify(data.errors));
                     }
@@ -1019,6 +1200,7 @@
             // Обработчики обрезки
             applyCropBtn.addEventListener('click', applyCrop);
             cancelCropBtn.addEventListener('click', cancelCrop);
+            applySizeBtn.addEventListener('click', applyCropSize);
 
             // Обработчики истории
             undoBtn.addEventListener('click', undo);

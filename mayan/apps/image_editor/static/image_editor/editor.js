@@ -84,7 +84,7 @@
                 .then(data => {
                     if (data.success) {
                         alert('Новая версия успешно сохранена.');
-                        window.location.href = `/documents/files/${data.document_file_id}/preview/`;
+                        window.location.href = `/documents/documents/files/${data.document_file_id}/preview/`;
                     } else {
                         alert('Ошибка при сохранении: ' + JSON.stringify(data.errors));
                     }
