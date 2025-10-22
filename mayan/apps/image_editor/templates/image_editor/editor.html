@@ -647,8 +647,11 @@
             if (currentTool !== 'text') return;
 
             const rect = canvas.getBoundingClientRect();
-            textConfig.x = event.clientX - rect.left;
-            textConfig.y = event.clientY - rect.top;
+            // Учитываем масштабирование canvas
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            textConfig.x = (event.clientX - rect.left) * scaleX;
+            textConfig.y = (event.clientY - rect.top) * scaleY;
 
         }
 
@@ -935,8 +938,11 @@
 
             isDrawing = true;
             const rect = canvas.getBoundingClientRect();
-            lastX = event.clientX - rect.left;
-            lastY = event.clientY - rect.top;
+            // Учитываем масштабирование canvas
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            lastX = (event.clientX - rect.left) * scaleX;
+            lastY = (event.clientY - rect.top) * scaleY;
 
             saveToHistory();
         }
@@ -945,8 +951,11 @@
             if (!isDrawing || (currentTool !== 'brush' && currentTool !== 'eraser')) return;
 
             const rect = canvas.getBoundingClientRect();
-            const currentX = event.clientX - rect.left;
-            const currentY = event.clientY - rect.top;
+            // Учитываем масштабирование canvas
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const currentX = (event.clientX - rect.left) * scaleX;
+            const currentY = (event.clientY - rect.top) * scaleY;
 
             context.save();
 
