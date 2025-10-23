@@ -66,6 +66,7 @@ class MediaConversionView(SingleObjectDetailView):
             return [
                 ('jpeg', 'JPEG'),
                 ('png', 'PNG'),
+                ('webp', 'WebP'),
                 ('tiff', 'TIFF'),
                 ('pdf', 'PDF'),
             ]
@@ -326,6 +327,8 @@ class MediaConversionView(SingleObjectDetailView):
                         image.save(output_buffer, format='JPEG', quality=85)
                     elif output_format == 'png':
                         image.save(output_buffer, format='PNG')
+                    elif output_format == 'webp':
+                        image.save(output_buffer, format='WebP', quality=85)
                     elif output_format == 'tiff':
                         image.save(output_buffer, format='TIFF')
                     elif output_format == 'pdf':

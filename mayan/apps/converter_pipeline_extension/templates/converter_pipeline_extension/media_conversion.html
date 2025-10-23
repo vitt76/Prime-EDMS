@@ -120,10 +120,9 @@
                                                 {% trans "Выходной формат" %}
                                             </label>
                                             <select class="form-control" id="output_format" name="output_format">
-                                                <option value="pdf">PDF Document</option>
-                                                <option value="jpeg">JPEG Image</option>
-                                                <option value="png">PNG Image</option>
-                                                <option value="tiff">TIFF Image</option>
+                                                {% for format_code, format_name in supported_formats %}
+                                                <option value="{{ format_code }}">{{ format_name }}</option>
+                                                {% endfor %}
                                             </select>
                                             <small class="form-text text-muted">
                                                 {% trans "Выберите желаемый выходной формат для конвертированного файла." %}

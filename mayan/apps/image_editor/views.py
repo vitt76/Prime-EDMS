@@ -61,13 +61,58 @@ class ImageEditorSaveView(ExternalObjectViewMixin, View):
         image_file = form.cleaned_data['image_content']
         action_id = form.cleaned_data['action_id'] or DocumentFileActionUseNewPages.backend_id
         comment = form.cleaned_data.get('comment') or _('Редактирование изображения через редактор')
+        target_format = form.cleaned_data.get('format', 'jpeg').upper()
 
-        new_document_file = document_file.document.file_new(
-            file_object=image_file,
-            action=action_id,
-            comment=comment,
-            filename=document_file.filename,
-            _user=request.user
-        )
+        # Конвертируем изображение в выбранный формат
+        try:
+            from PIL import Image
+            import io
+
+            # Открываем изображение
+            image = Image.open(image_file)
+            print(f"Original image format: {image.format}, mode: {image.mode}")
+
+            # Конвертируем в нужный формат
+            output_buffer = io.BytesIO()
+            if target_format == 'PNG':
+                image.save(output_buffer, format='PNG')
+                content_type = 'image/png'
+                file_extension = 'png'
+            elif target_format == 'WEBP':
+                image.save(output_buffer, format='WebP')
+                content_type = 'image/webp'
+                file_extension = 'webp'
+            elif target_format == 'TIFF':
+                image.save(output_buffer, format='TIFF')
+                content_type = 'image/tiff'
+                file_extension = 'tiff'
+            else:
+                # По умолчанию JPEG
+                image.save(output_buffer, format='JPEG')
+                content_type = 'image/jpeg'
+                file_extension = 'jpeg'
+
+            print(f"Converted to {target_format}, buffer size: {output_buffer.tell()}")
+
+            # Создаем новый файл с конвертированным изображением
+            output_buffer.seek(0)
+            from django.core.files.base import ContentFile
+            converted_file = ContentFile(output_buffer.getvalue(), name=f'converted.{file_extension}')
+
+            new_document_file = document_file.document.file_new(
+                file_object=converted_file,
+                action=action_id,
+                comment=f'{comment} (конвертировано в {target_format})',
+                filename=document_file.filename,
+                _user=request.user
+            )
+
+            print(f"New document file created with ID: {new_document_file.pk}")
+
+        except Exception as e:
+            print(f"Conversion error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'success': False, 'errors': {'conversion': f'Ошибка конвертации: {str(e)}'}}, status=500)
 
         return JsonResponse({'success': True, 'document_file_id': new_document_file.pk})

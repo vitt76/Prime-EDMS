@@ -261,6 +261,18 @@
                 </div>
                 <div class="panel-body image-editor__actions">
                     <textarea id="image-editor-comment" class="form-control" rows="2" placeholder="{% trans 'Комментарий к новой версии' %}"></textarea>
+
+                    <div class="form-group">
+                        <label for="image-editor-format">{% trans 'Формат файла:' %}</label>
+                        <select id="image-editor-format" class="form-control">
+                            <option value="jpeg">JPEG</option>
+                            <option value="png">PNG</option>
+                            <option value="webp">WebP</option>
+                            <option value="tiff">TIFF</option>
+                        </select>
+                        <small class="help-block">{% trans 'Выберите формат для сохранения отредактированного изображения' %}</small>
+                    </div>
+
                     <button id="image-editor-save" class="btn btn-primary btn-block">
                         <i class="fa fa-save"></i> {% trans 'Сохранить новую версию' %}
                     </button>
@@ -300,6 +312,7 @@
         const sourceImage = document.getElementById('image-editor-source');
         const saveButton = document.getElementById('image-editor-save');
         const commentField = document.getElementById('image-editor-comment');
+        const formatField = document.getElementById('image-editor-format');
         const brightnessControl = document.getElementById('image-editor-brightness');
         const contrastControl = document.getElementById('image-editor-contrast');
 
@@ -839,15 +852,25 @@
                 tempContext.putImageData(imageData, 0, 0);
             }
 
-            tempCanvas.toBlob(function(blob) {
-                if (!blob) {
-                    alert('Не удалось получить данные изображения');
-                    return;
-                }
+                const selectedFormat = formatField.value;
+                const mimeType = selectedFormat === 'jpeg' ? 'image/jpeg' :
+                                 selectedFormat === 'png' ? 'image/png' :
+                                 selectedFormat === 'webp' ? 'image/webp' :
+                                 selectedFormat === 'tiff' ? 'image/tiff' : 'image/png';
 
-                const formData = new FormData();
-                formData.append('image_content', blob, 'edited-image.png');
-                formData.append('comment', commentField.value);
+                tempCanvas.toBlob(function(blob) {
+                    if (!blob) {
+                        alert('Не удалось получить данные изображения');
+                        return;
+                    }
+
+                    const fileName = `edited-image.${selectedFormat}`;
+
+                    const formData = new FormData();
+                    formData.append('image_content', blob, fileName);
+                    formData.append('comment', commentField.value);
+                    formData.append('format', selectedFormat);
+                }, mimeType);
 
                 fetch(window.imageEditorConfig.saveUrl, {
                     method: 'POST',
