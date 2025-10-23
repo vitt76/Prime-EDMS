@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import ImageEditorView, ImageEditorSaveView
+from .views import ImageEditorView, ImageEditorSaveView, WatermarkListView, WatermarkAssetView
 
 app_name = 'image_editor'
 
@@ -18,8 +18,19 @@ ui_urlpatterns = [
     )
 ]
 
-# API URL patterns (пока пустые)
-api_urls = []
+# API URL patterns
+api_urls = [
+    path(
+        'watermarks/',
+        WatermarkListView.as_view(),
+        name='list_watermarks'
+    ),
+    path(
+        'watermark/<int:asset_id>/',
+        WatermarkAssetView.as_view(),
+        name='get_watermark'
+    ),
+]
 
 # Основные URL patterns
 urlpatterns = ui_urlpatterns + api_urls

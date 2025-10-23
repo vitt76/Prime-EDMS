@@ -133,31 +133,6 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="col-sm-3 control-label" for="preset-watermark-text">{% trans "Текст водяного знака" %}</label>
-                            <div class="col-sm-9">
-                                <input type="text" class="form-control" id="preset-watermark-text" placeholder="{% trans "Например, Конфиденциально" %}">
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="col-sm-3 control-label" for="preset-watermark-font-size">{% trans "Размер шрифта водяного знака" %}</label>
-                            <div class="col-sm-9">
-                                <input type="number" class="form-control" id="preset-watermark-font-size" min="1" placeholder="24">
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="col-sm-3 control-label" for="preset-watermark-position">{% trans "Позиция водяного знака (x,y)" %}</label>
-                            <div class="col-sm-9">
-                                <input type="text" class="form-control" id="preset-watermark-position" placeholder="10,10">
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="col-sm-3 control-label" for="preset-watermark-color">{% trans "Цвет водяного знака" %}</label>
-                            <div class="col-sm-9">
-                                <input type="text" class="form-control" id="preset-watermark-color" placeholder="255,255,255,128">
-                                <p class="help-block">{% trans "RGBA, последний параметр — прозрачность" %}</p>
-                            </div>
-                        </div>
-                        <div class="form-group">
                             <label class="col-sm-3 control-label" for="preset-description">{% trans "Описание" %}</label>
                             <div class="col-sm-9">
                                 <textarea id="preset-description" class="form-control" rows="3"></textarea>
@@ -216,29 +191,6 @@
         const filtersSelect = document.getElementById('preset-filters');
         const selectedFilters = Array.from(filtersSelect.selectedOptions).map(option => option.value);
 
-        const watermarkPayload = {};
-        const watermarkText = document.getElementById('preset-watermark-text').value;
-        if (watermarkText) {
-            watermarkPayload.text = watermarkText;
-            const fontSize = parseInt(document.getElementById('preset-watermark-font-size').value);
-            if (!isNaN(fontSize)) {
-                watermarkPayload.font_size = fontSize;
-            }
-            const positionValue = document.getElementById('preset-watermark-position').value;
-            if (positionValue) {
-                const parts = positionValue.split(',').map(part => parseInt(part.trim()));
-                if (parts.length === 2 && parts.every(value => !isNaN(value))) {
-                    watermarkPayload.position = parts;
-                }
-            }
-            const colorValue = document.getElementById('preset-watermark-color').value;
-            if (colorValue) {
-                const colorParts = colorValue.split(',').map(part => parseInt(part.trim()));
-                if (colorParts.length === 4 && colorParts.every(value => !isNaN(value))) {
-                    watermarkPayload.font_color = colorParts;
-                }
-            }
-        }
 
         const payload = {
             name: document.getElementById('preset-name').value,
@@ -256,8 +208,7 @@
             adjust_contrast: document.getElementById('preset-contrast').value ? parseFloat(document.getElementById('preset-contrast').value) : null,
             adjust_color: document.getElementById('preset-color').value ? parseFloat(document.getElementById('preset-color').value) : null,
             adjust_sharpness: document.getElementById('preset-sharpness').value ? parseFloat(document.getElementById('preset-sharpness').value) : null,
-            description: document.getElementById('preset-description').value || '',
-            watermark: watermarkPayload
+            description: document.getElementById('preset-description').value || ''
         };
 
         fetch('/api/v4/distribution/rendition_presets/', {

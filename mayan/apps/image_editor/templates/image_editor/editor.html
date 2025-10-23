@@ -70,6 +70,9 @@
                         <button class="btn btn-default" data-tool="text">
                             <i class="fa fa-font"></i> {% trans 'Текст' %}
                         </button>
+                        <button class="btn btn-default" data-tool="watermark">
+                            <i class="fa fa-tint"></i> {% trans 'Водяной знак' %}
+                        </button>
                     </div>
 
                     <hr>
@@ -120,6 +123,53 @@
 
                         <button id="add-text-btn" class="btn btn-primary btn-block btn-sm">
                             <i class="fa fa-plus"></i> {% trans 'Добавить текст' %}
+                        </button>
+                    </div>
+
+                    <!-- Настройки водяного знака -->
+                    <div id="watermark-settings" style="display: none;">
+                        <label for="watermark-select">{% trans 'Выберите водяной знак:' %}</label>
+                        <select id="watermark-select" class="form-control">
+                            <option value="">{% trans 'Загрузка...' %}</option>
+                        </select>
+
+                        <div class="form-group" style="margin-top: 10px;">
+                            <label for="watermark-opacity">{% trans 'Прозрачность:' %}</label>
+                            <input type="range" id="watermark-opacity" min="1" max="100" value="50">
+                            <span id="watermark-opacity-value">50</span>%
+                        </div>
+
+                        <div class="form-group">
+                            <label for="watermark-position">{% trans 'Позиция:' %}</label>
+                            <select id="watermark-position" class="form-control">
+                                <option value="center">{% trans 'Центр' %}</option>
+                                <option value="top-left">{% trans 'Верхний левый угол' %}</option>
+                                <option value="top-right">{% trans 'Верхний правый угол' %}</option>
+                                <option value="bottom-left">{% trans 'Нижний левый угол' %}</option>
+                                <option value="bottom-right">{% trans 'Нижний правый угол' %}</option>
+                                <option value="custom">{% trans 'Пользовательская' %}</option>
+                            </select>
+                        </div>
+
+                        <div id="watermark-custom-position" style="display: none;">
+                            <div class="form-group">
+                                <label for="watermark-x">X (px):</label>
+                                <input type="number" id="watermark-x" class="form-control" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="watermark-y">Y (px):</label>
+                                <input type="number" id="watermark-y" class="form-control" min="0">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="watermark-scale">{% trans 'Масштаб:' %}</label>
+                            <input type="range" id="watermark-scale" min="10" max="200" value="100">
+                            <span id="watermark-scale-value">100</span>%
+                        </div>
+
+                        <button id="apply-watermark-btn" class="btn btn-info btn-block btn-sm">
+                            <i class="fa fa-plus"></i> {% trans 'Применить водяной знак' %}
                         </button>
                     </div>
 
@@ -305,6 +355,10 @@
 
         // Переменная для хранения состояния canvas перед cropper
         let canvasStateBeforeCrop = null;
+
+        // Водяные знаки
+        let currentWatermarkImage = null;
+        let watermarksLoaded = false;
 
         // История операций для undo/redo
         let history = [];
@@ -576,6 +630,119 @@
             }
         }
 
+        // Функции работы с водяными знаками
+        function loadWatermarks() {
+            if (watermarksLoaded) return;
+
+            console.log('Loading watermarks...');
+
+            $.ajax({
+                url: '{% url "image_editor:list_watermarks" %}',
+                method: 'GET',
+                success: function(data) {
+                    const select = document.getElementById('watermark-select');
+                    select.innerHTML = '<option value="">Выберите водяной знак</option>';
+
+                    data.watermarks.forEach(function(watermark) {
+                        const option = document.createElement('option');
+                        option.value = watermark.id;
+                        option.textContent = watermark.label;
+                        select.appendChild(option);
+                    });
+
+                    watermarksLoaded = true;
+                    console.log('Watermarks loaded:', data.watermarks.length);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load watermarks:', error);
+                    const select = document.getElementById('watermark-select');
+                    select.innerHTML = '<option value="">Ошибка загрузки</option>';
+                }
+            });
+        }
+
+        function loadWatermarkImage(assetId) {
+            return $.ajax({
+                url: '{% url "image_editor:get_watermark" 0 %}'.replace('0', assetId),
+                method: 'GET'
+            });
+        }
+
+        function applyWatermark() {
+            const watermarkSelect = document.getElementById('watermark-select');
+            const selectedId = watermarkSelect.value;
+
+            if (!selectedId) {
+                alert('Выберите водяной знак');
+                return;
+            }
+
+            console.log('Applying watermark:', selectedId);
+
+            loadWatermarkImage(selectedId).done(function(data) {
+                saveToHistory();
+
+                const watermarkImg = new Image();
+                watermarkImg.onload = function() {
+                    // Настройки водяного знака
+                    const opacity = parseInt(document.getElementById('watermark-opacity').value) / 100;
+                    const position = document.getElementById('watermark-position').value;
+                    const scale = parseInt(document.getElementById('watermark-scale').value) / 100;
+
+                    // Рассчитываем размеры водяного знака
+                    const watermarkWidth = watermarkImg.width * scale;
+                    const watermarkHeight = watermarkImg.height * scale;
+
+                    // Рассчитываем позицию
+                    let x, y;
+                    switch (position) {
+                        case 'center':
+                            x = (canvas.width - watermarkWidth) / 2;
+                            y = (canvas.height - watermarkHeight) / 2;
+                            break;
+                        case 'top-left':
+                            x = 10;
+                            y = 10;
+                            break;
+                        case 'top-right':
+                            x = canvas.width - watermarkWidth - 10;
+                            y = 10;
+                            break;
+                        case 'bottom-left':
+                            x = 10;
+                            y = canvas.height - watermarkHeight - 10;
+                            break;
+                        case 'bottom-right':
+                            x = canvas.width - watermarkWidth - 10;
+                            y = canvas.height - watermarkHeight - 10;
+                            break;
+                        case 'custom':
+                            x = parseInt(document.getElementById('watermark-x').value) || 0;
+                            y = parseInt(document.getElementById('watermark-y').value) || 0;
+                            break;
+                    }
+
+                    // Сохраняем текущее состояние canvas
+                    context.save();
+
+                    // Устанавливаем прозрачность
+                    context.globalAlpha = opacity;
+
+                    // Рисуем водяной знак
+                    context.drawImage(watermarkImg, x, y, watermarkWidth, watermarkHeight);
+
+                    // Восстанавливаем состояние canvas
+                    context.restore();
+
+                    console.log('Watermark applied successfully');
+                };
+                watermarkImg.src = data.data_url;
+            }).fail(function(xhr, status, error) {
+                console.error('Failed to load watermark image:', error);
+                alert('Ошибка загрузки водяного знака');
+            });
+        }
+
         // Инициализация Canvas
         function initializeCanvas() {
             const documentFileId = window.imageEditorConfig.documentFileId;
@@ -810,6 +977,7 @@
             document.getElementById('drawing-settings').style.display = 'none';
             document.getElementById('text-settings').style.display = 'none';
             document.getElementById('crop-settings').style.display = 'none';
+            document.getElementById('watermark-settings').style.display = 'none';
 
             currentTool = tool;
 
@@ -826,6 +994,10 @@
                 case 'crop':
                     document.getElementById('crop-settings').style.display = 'block';
                     initCropper();
+                    break;
+                case 'watermark':
+                    document.getElementById('watermark-settings').style.display = 'block';
+                    loadWatermarks();
                     break;
                 case 'select':
                     canvas.style.cursor = 'default';
@@ -1098,6 +1270,23 @@
             document.getElementById('apply-size-btn').addEventListener('click', applyCropSize);
             document.getElementById('apply-crop-btn').addEventListener('click', applyCrop);
             document.getElementById('cancel-crop-btn').addEventListener('click', cancelCrop);
+
+            // Обработчики для водяных знаков
+            document.getElementById('watermark-position').addEventListener('change', function() {
+                const customPosition = document.getElementById('watermark-custom-position');
+                if (this.value === 'custom') {
+                    customPosition.style.display = 'block';
+                } else {
+                    customPosition.style.display = 'none';
+                }
+            });
+            document.getElementById('watermark-opacity').addEventListener('input', function() {
+                document.getElementById('watermark-opacity-value').textContent = this.value;
+            });
+            document.getElementById('watermark-scale').addEventListener('input', function() {
+                document.getElementById('watermark-scale-value').textContent = this.value;
+            });
+            document.getElementById('apply-watermark-btn').addEventListener('click', applyWatermark);
 
             canvas.addEventListener('mousedown', startDrawing);
             canvas.addEventListener('mousemove', draw);

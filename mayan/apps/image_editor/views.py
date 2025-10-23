@@ -113,3 +113,50 @@ class ImageEditorSaveView(ExternalObjectViewMixin, View):
             return JsonResponse({'success': False, 'errors': {'conversion': f'Ошибка конвертации: {str(e)}'}}, status=500)
 
         return JsonResponse({'success': True, 'document_file_id': new_document_file.pk})
+
+
+class WatermarkListView(View):
+    """Получение списка водяных знаков."""
+
+    def get(self, request):
+        try:
+            from mayan.apps.converter.models import Asset
+            watermarks = []
+            for asset in Asset.objects.filter(category='watermark'):
+                watermarks.append({
+                    'id': asset.id,
+                    'label': asset.label,
+                })
+
+            return JsonResponse({'watermarks': watermarks})
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+
+class WatermarkAssetView(View):
+    """Получение данных водяного знака по ID."""
+
+    def get(self, request, asset_id):
+        try:
+            from mayan.apps.converter.models import Asset
+            asset = Asset.objects.get(id=asset_id, category='watermark')
+
+            # Прочитать файл и закодировать в base64
+            with asset.file.open() as f:
+                import base64
+                file_content = f.read()
+                encoded = base64.b64encode(file_content).decode('utf-8')
+                mime_type = 'image/png'  # Можно определить по расширению файла
+                data_url = f'data:{mime_type};base64,{encoded}'
+
+            return JsonResponse({
+                'id': asset.id,
+                'label': asset.label,
+                'data_url': data_url,
+            })
+
+        except Asset.DoesNotExist:
+            return JsonResponse({'error': 'Watermark not found'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
