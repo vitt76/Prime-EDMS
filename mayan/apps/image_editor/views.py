@@ -23,20 +23,8 @@ class ImageEditorView(SingleObjectDetailView):
     template_name = 'image_editor/editor.html'
 
     def get_extra_context(self):
-        # Временно упрощенная версия для отладки
-        print("=== ImageEditorView.get_extra_context called ===")
-        print(f"object: {self.object}")
-        print(f"object.pk: {self.object.pk if self.object else None}")
+        print(f"=== ImageEditorView: Processing document file {self.object.pk} ===")
 
-        if not self.object:
-            print("ERROR: Object not found")
-            return {
-                'document_file': None,
-                'document': None,
-                'title': 'Ошибка: файл не найден',
-            }
-
-        print("SUCCESS: Object found, returning context")
         return {
             'document_file': self.object,
             'document': self.object.document,
@@ -97,13 +85,22 @@ class ImageEditorSaveView(ExternalObjectViewMixin, View):
             # Создаем новый файл с конвертированным изображением
             output_buffer.seek(0)
             from django.core.files.base import ContentFile
+
+            # Изменяем расширение файла на новое
+            original_name = document_file.filename
+            if '.' in original_name:
+                base_name = original_name.rsplit('.', 1)[0]
+                new_filename = f"{base_name}.{file_extension.lower()}"
+            else:
+                new_filename = f"{original_name}.{file_extension.lower()}"
+
             converted_file = ContentFile(output_buffer.getvalue(), name=f'converted.{file_extension}')
 
             new_document_file = document_file.document.file_new(
                 file_object=converted_file,
                 action=action_id,
                 comment=f'{comment} (конвертировано в {target_format})',
-                filename=document_file.filename,
+                filename=new_filename,
                 _user=request.user
             )
 

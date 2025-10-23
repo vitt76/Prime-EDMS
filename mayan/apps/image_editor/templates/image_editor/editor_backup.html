@@ -58,9 +58,6 @@
                         <button class="btn btn-default" data-tool="select">
                             <i class="fa fa-mouse-pointer"></i> {% trans 'Выделение' %}
                         </button>
-                        <button class="btn btn-default" data-tool="crop">
-                            <i class="fa fa-crop"></i> {% trans 'Обрезка' %}
-                        </button>
                         <button class="btn btn-default" data-tool="brush">
                             <i class="fa fa-paint-brush"></i> {% trans 'Кисть' %}
                         </button>
@@ -121,40 +118,6 @@
                         <button id="add-text-btn" class="btn btn-primary btn-block btn-sm">
                             <i class="fa fa-plus"></i> {% trans 'Добавить текст' %}
                         </button>
-                    </div>
-
-                    <!-- Управление обрезкой -->
-                    <div id="crop-settings" style="display: none;">
-                        <p class="text-info small">{% trans 'Выделите область обрезки, перетаскивая углы и края синей рамки' %}</p>
-
-                        <!-- Точные размеры -->
-                        <div class="form-group">
-                            <label for="crop-width" class="control-label">{% trans 'Ширина (px):' %}</label>
-                            <input type="number" id="crop-width" class="form-control" min="1" placeholder="{% trans 'Ширина' %}">
-                        </div>
-                        <div class="form-group">
-                            <label for="crop-height" class="control-label">{% trans 'Высота (px):' %}</label>
-                            <input type="number" id="crop-height" class="form-control" min="1" placeholder="{% trans 'Высота' %}">
-                        </div>
-                        <div class="checkbox">
-                            <label>
-                                <input type="checkbox" id="crop-maintain-ratio"> {% trans 'Сохранять пропорции' %}
-                            </label>
-                        </div>
-                        <button id="apply-size-btn" class="btn btn-info btn-sm btn-block">
-                            <i class="fa fa-arrows-alt"></i> {% trans 'Применить размеры' %}
-                        </button>
-
-                        <hr>
-
-                        <div class="btn-group btn-block" role="group">
-                            <button id="apply-crop-btn" class="btn btn-success btn-sm">
-                                <i class="fa fa-check"></i> {% trans 'Применить обрезку' %}
-                            </button>
-                            <button id="cancel-crop-btn" class="btn btn-default btn-sm">
-                                <i class="fa fa-times"></i> {% trans 'Отмена' %}
-                            </button>
-                        </div>
                     </div>
 
                     <!-- Коррекция цвета -->
@@ -220,7 +183,7 @@
                     <button id="image-editor-save" class="btn btn-primary btn-block">
                         <i class="fa fa-save"></i> {% trans 'Сохранить новую версию' %}
                     </button>
-                    <a href="{% url 'documents:document_file_preview' document_file.pk %}" class="btn btn-default btn-block">
+                    <a href="#" onclick="history.back()" class="btn btn-default btn-block">
                         <i class="fa fa-arrow-left"></i> {% trans 'Назад к файлу' %}
                     </a>
                 </div>
@@ -242,17 +205,6 @@
     // Полнофункциональный редактор изображений
     (function() {
         console.log('=== IMAGE EDITOR INITIALIZING ===');
-
-        // Загрузка CropperJS
-        let cropperJSLoaded = false;
-        $.getScript("{% static 'redactions/node_modules/cropperjs/dist/cropper.js' %}")
-        .done(function (script, textStatus) {
-            console.log('CropperJS loaded successfully');
-            cropperJSLoaded = true;
-        })
-        .fail(function (jqxhr, settings, exception) {
-            console.error('Failed to load CropperJS:', exception);
-        });
 
         const canvas = document.getElementById('image-editor-canvas');
         const context = canvas.getContext('2d');
@@ -299,12 +251,6 @@
             x: 50,
             y: 50
         };
-
-        // CropperJS для обрезки
-        let cropper = null;
-
-        // Переменная для хранения состояния canvas перед cropper
-        let canvasStateBeforeCrop = null;
 
         // История операций для undo/redo
         let history = [];
@@ -400,180 +346,6 @@
         function updateHistoryButtons() {
             undoBtn.disabled = historyIndex <= 0;
             redoBtn.disabled = historyIndex >= history.length - 1;
-        }
-
-        // Функции работы с CropperJS
-        function updateCropSizeInputs() {
-            if (cropper) {
-                const cropData = cropper.getData();
-                document.getElementById('crop-width').value = Math.round(cropData.width);
-                document.getElementById('crop-height').value = Math.round(cropData.height);
-            }
-        }
-
-        function applyCropSize() {
-            if (!cropper) return;
-
-            const width = parseInt(document.getElementById('crop-width').value);
-            const height = parseInt(document.getElementById('crop-height').value);
-
-            if (!width || !height || width <= 0 || height <= 0) {
-                alert('Введите корректные размеры');
-                return;
-            }
-
-            const currentData = cropper.getData();
-
-            if (document.getElementById('crop-maintain-ratio').checked && currentData.width && currentData.height) {
-                const ratio = currentData.width / currentData.height;
-                const newData = { ...currentData };
-
-                if (width / height > ratio) {
-                    newData.height = height;
-                    newData.width = height * ratio;
-                } else {
-                    newData.width = width;
-                    newData.height = width / ratio;
-                }
-
-                cropper.setData(newData);
-            } else {
-                cropper.setData({
-                    ...currentData,
-                    width: width,
-                    height: height
-                });
-            }
-
-            updateCropSizeInputs();
-        }
-
-        function initCropper() {
-            console.log('Initializing Cropper...');
-
-            if (!cropperJSLoaded) {
-                console.warn('CropperJS not loaded yet');
-                alert('CropperJS загружается, попробуйте еще раз через секунду');
-                return;
-            }
-
-            if (cropper) {
-                cropper.destroy();
-            }
-
-            // Сохраняем текущее состояние canvas перед активацией cropper
-            try {
-                canvasStateBeforeCrop = {
-                    imageData: context.getImageData(0, 0, canvas.width, canvas.height),
-                    width: canvas.width,
-                    height: canvas.height
-                };
-            } catch (e) {
-                console.warn('Could not save canvas state:', e);
-                canvasStateBeforeCrop = null;
-            }
-
-            // Создаем временное изображение для cropper
-            const tempImage = new Image();
-            tempImage.src = canvas.toDataURL();
-
-            tempImage.onload = function() {
-                // Заменяем canvas на изображение для cropper
-                const canvasContainer = canvas.parentNode;
-                const cropperContainer = document.createElement('div');
-                cropperContainer.id = 'cropper-container';
-                cropperContainer.style.position = 'relative';
-                cropperContainer.style.maxWidth = '100%';
-
-                canvasContainer.replaceChild(cropperContainer, canvas);
-
-                const cropperImage = document.createElement('img');
-                cropperImage.src = tempImage.src;
-                cropperImage.style.maxWidth = '100%';
-                cropperContainer.appendChild(cropperImage);
-
-                cropper = new Cropper(cropperImage, {
-                    aspectRatio: NaN, // Свободная обрезка
-                    viewMode: 1,
-                    dragMode: 'move',
-                    responsive: true,
-                    restore: false,
-                    checkCrossOrigin: false,
-                    checkOrientation: false,
-                    modal: true,
-                    guides: true,
-                    center: true,
-                    highlight: true,
-                    background: true,
-                    autoCrop: true,
-                    autoCropArea: 0.8,
-                    movable: true,
-                    rotatable: true,
-                    scalable: true,
-                    zoomable: true,
-                    zoomOnTouch: true,
-                    zoomOnWheel: true,
-                    wheelZoomRatio: 0.1,
-                    cropBoxMovable: true,
-                    cropBoxResizable: true,
-                    toggleDragModeOnDblclick: true,
-                    crop: function(event) {
-                        // Обновляем поля размеров при изменении crop рамки
-                        updateCropSizeInputs();
-                    }
-                });
-
-                // Заполняем поля начальными размерами
-                updateCropSizeInputs();
-            };
-        }
-
-        function applyCrop() {
-            if (!cropper) return;
-
-            saveToHistory();
-
-            const croppedCanvas = cropper.getCroppedCanvas();
-
-            // Возвращаем canvas на место
-            const cropperContainer = document.getElementById('cropper-container');
-            const canvasContainer = cropperContainer.parentNode;
-
-            canvas.width = croppedCanvas.width;
-            canvas.height = croppedCanvas.height;
-            context.clearRect(0, 0, canvas.width, canvas.height);
-            context.drawImage(croppedCanvas, 0, 0);
-
-            canvasContainer.replaceChild(canvas, cropperContainer);
-            cropper.destroy();
-            cropper = null;
-
-            // Очищаем сохраненное состояние, так как обрезка применена
-            canvasStateBeforeCrop = null;
-        }
-
-        function cancelCrop() {
-            if (!cropper) return;
-
-            // Возвращаем canvas на место и восстанавливаем предыдущее состояние
-            const cropperContainer = document.getElementById('cropper-container');
-            const canvasContainer = cropperContainer.parentNode;
-
-            canvasContainer.replaceChild(canvas, cropperContainer);
-            cropper.destroy();
-            cropper = null;
-
-            // Восстанавливаем состояние canvas до активации cropper
-            if (canvasStateBeforeCrop) {
-                try {
-                    canvas.width = canvasStateBeforeCrop.width;
-                    canvas.height = canvasStateBeforeCrop.height;
-                    context.putImageData(canvasStateBeforeCrop.imageData, 0, 0);
-                } catch (e) {
-                    console.warn('Could not restore canvas state:', e);
-                }
-                canvasStateBeforeCrop = null;
-            }
         }
 
         // Инициализация Canvas
@@ -809,7 +581,6 @@
 
             document.getElementById('drawing-settings').style.display = 'none';
             document.getElementById('text-settings').style.display = 'none';
-            document.getElementById('crop-settings').style.display = 'none';
 
             currentTool = tool;
 
@@ -823,32 +594,8 @@
                     document.getElementById('text-settings').style.display = 'block';
                     canvas.style.cursor = 'text';
                     break;
-                case 'crop':
-                    document.getElementById('crop-settings').style.display = 'block';
-                    initCropper();
-                    break;
                 case 'select':
                     canvas.style.cursor = 'default';
-                    break;
-                case 'rotate-left':
-                    resetFilters();
-                    saveToHistory();
-                    rotateImage(-90);
-                    break;
-                case 'rotate-right':
-                    resetFilters();
-                    saveToHistory();
-                    rotateImage(90);
-                    break;
-                case 'flip-horizontal':
-                    resetFilters();
-                    saveToHistory();
-                    flipImage('horizontal');
-                    break;
-                case 'flip-vertical':
-                    resetFilters();
-                    saveToHistory();
-                    flipImage('vertical');
                     break;
             }
         }
@@ -1093,11 +840,6 @@
 
             undoBtn.addEventListener('click', undo);
             redoBtn.addEventListener('click', redo);
-
-            // Обработчики для crop
-            document.getElementById('apply-size-btn').addEventListener('click', applyCropSize);
-            document.getElementById('apply-crop-btn').addEventListener('click', applyCrop);
-            document.getElementById('cancel-crop-btn').addEventListener('click', cancelCrop);
 
             canvas.addEventListener('mousedown', startDrawing);
             canvas.addEventListener('mousemove', draw);

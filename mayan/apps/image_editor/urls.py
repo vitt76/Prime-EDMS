@@ -21,5 +21,11 @@ ui_urlpatterns = [
 # API URL patterns (пока пустые)
 api_urls = []
 
-# Основные URL patterns для обратной совместимости
-urlpatterns = ui_urlpatterns
+# Основные URL patterns
+urlpatterns = ui_urlpatterns + api_urls
+
+# ДОПОЛНИТЕЛЬНЫЙ URL ДЛЯ ТЕСТИРОВАНИЯ (ОБЫЧНАЯ НАВИГАЦИЯ)
+from .views import ImageEditorView
+urlpatterns += [
+    path('test/<int:document_file_id>/', ImageEditorView.as_view(), name='test_editor'),
+]
