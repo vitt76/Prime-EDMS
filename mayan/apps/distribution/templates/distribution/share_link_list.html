@@ -24,8 +24,7 @@
                     <div class="row m-b-15">
                         <div class="col-md-12 text-right">
                             {% if current_publication %}
-                                <a href="/distribution/share-links/create/{{ current_publication.pk }}/"
-                                   data-absolute-hash="/distribution/share-links/create/{{ current_publication.pk }}/"
+                                <a href="{% url 'distribution:share_link_create' %}?publication={{ current_publication.pk }}"
                                    class="btn btn-primary create-share-link">
                                     <i class="fa fa-plus"></i>
                                     {% trans "Создать ссылку" %}

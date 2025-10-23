@@ -12,12 +12,43 @@
                 <div class="panel-heading">
                     <h3 class="panel-title">
                         <i class="fa fa-link text-primary"></i>
-                        {% blocktrans with preset=rendition.preset.name title=publication.title %}Создание ссылки для рендишена «{{ preset }}» публикации «{{ title }}»{% endblocktrans %}
+                        {% trans "Создание ссылки для общего доступа" %}
                     </h3>
                 </div>
                 <div class="panel-body">
                     <form method="post" class="form-horizontal">
                         {% csrf_token %}
+
+                        <div class="form-group">
+                            <label for="publication" class="col-sm-3 control-label">{% trans "Публикация" %}</label>
+                            <div class="col-sm-9">
+                                <select class="form-control" id="publication" name="publication_select" onchange="filterRenditions()">
+                                    <option value="">{% trans "Выберите публикацию" %}</option>
+                                    {% for publication in publications %}
+                                    <option value="{{ publication.pk }}" {% if selected_publication and selected_publication.pk == publication.pk %}selected{% endif %}>
+                                        {{ publication.title }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="rendition" class="col-sm-3 control-label">{% trans "Рендишен" %}</label>
+                            <div class="col-sm-9">
+                                <select class="form-control" id="rendition" name="rendition" required>
+                                    <option value="">{% trans "Сначала выберите публикацию" %}</option>
+                                    {% for rendition in renditions %}
+                                    <option value="{{ rendition.pk }}"
+                                            data-publication="{{ rendition.publication_item.publication.pk }}"
+                                            {% if selected_rendition and selected_rendition.pk == rendition.pk %}selected{% endif %}>
+                                        {{ rendition.publication_item.publication.title }} - {{ rendition.preset.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <span class="help-block">{% trans "Выберите рендишен для создания ссылки." %}</span>
+                            </div>
+                        </div>
 
                         <div class="form-group">
                             <label for="expires_at" class="col-sm-3 control-label">{% trans "Истекает" %}</label>
@@ -40,7 +71,7 @@
                                     <i class="fa fa-save"></i>
                                     {% trans "Создать" %}
                                 </button>
-                                <a href="{% url 'distribution:share_link_manage' %}?publication={{ publication.pk }}" class="btn btn-default">
+                                <a href="{% url 'distribution:share_link_manage' %}{% if selected_publication %}?publication={{ selected_publication.pk }}{% endif %}" class="btn btn-default">
                                     <i class="fa fa-arrow-left"></i>
                                     {% trans "Отмена" %}
                                 </a>
@@ -52,4 +83,49 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block javascript %}
+<script>
+    function filterRenditions() {
+        const publicationId = document.getElementById('publication').value;
+        const renditionSelect = document.getElementById('rendition');
+        const options = renditionSelect.querySelectorAll('option');
+
+        // Показываем/скрываем опции рендишенов
+        options.forEach(option => {
+            if (option.value === '') {
+                // Оставляем опцию "Сначала выберите публикацию"
+                option.style.display = publicationId ? 'none' : 'block';
+                return;
+            }
+
+            const optionPublicationId = option.getAttribute('data-publication');
+            if (publicationId && optionPublicationId === publicationId) {
+                option.style.display = 'block';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+
+        // Сбрасываем выбор рендишена при смене публикации
+        if (!renditionSelect.querySelector('option[style*="block"]:checked')) {
+            renditionSelect.value = '';
+        }
+
+        // Обновляем текст подсказки
+        const helpText = publicationId ?
+            'Выберите рендишен из выбранной публикации.' :
+            'Сначала выберите публикацию.';
+        document.querySelector('#rendition + .help-block').textContent = helpText;
+    }
+
+    jQuery(document).ready(function() {
+        $('.help-block').hide();
+        $('label').hide();
+
+        // Применяем фильтрацию при загрузке страницы
+        filterRenditions();
+    });
+</script>
 {% endblock %}

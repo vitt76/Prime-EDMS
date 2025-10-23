@@ -126,9 +126,14 @@ ui_urlpatterns = [
         name='share_link_manage'
     ),
     path(
-        'distribution/share-links/create/<int:rendition_id>/',
+        'distribution/share-links/create/',
         ShareLinkCreateView.as_view(),
         name='share_link_create'
+    ),
+    path(
+        'distribution/share-links/create/<int:rendition_id>/',
+        ShareLinkCreateView.as_view(),
+        name='share_link_create_with_rendition'
     ),
 ]
 
