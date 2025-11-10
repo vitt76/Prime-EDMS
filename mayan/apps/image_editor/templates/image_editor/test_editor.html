@@ -1,0 +1,28 @@
+<!-- MINIMAL TEST PAGE FOR AJAX DEBUGGING -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Editor Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test { background: #f0f0f0; padding: 20px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <div class="test">
+        <h1>Image Editor Test Page</h1>
+        <p>If you see this, AJAX navigation works!</p>
+        <p>Document File ID from URL: {{ document_file_id }}</p>
+        <p>Test Message: {{ test_message }}</p>
+        <p>Current Time: {{ current_time }}</p>
+    </div>
+
+    <script>
+        console.log('=== MINIMAL TEST SCRIPT LOADED ===');
+        console.log('Document file ID from template:', '{{ document_file_id }}');
+        console.log('Test message:', '{{ test_message }}');
+        console.log('Current location:', window.location.href);
+        console.log('=== SCRIPT EXECUTION SUCCESSFUL ===');
+    </script>
+</body>
+</html>

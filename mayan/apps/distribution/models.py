@@ -92,6 +92,7 @@ class RenditionPreset(models.Model):
     FORMAT_CHOICES = [
         ('jpeg', 'JPEG'),
         ('png', 'PNG'),
+        ('webp', 'WebP'),
         ('tiff', 'TIFF'),
         ('pdf', 'PDF'),
         ('mp4', 'MP4'),
@@ -339,7 +340,7 @@ class ShareLink(models.Model):
     token = models.CharField(
         max_length=64,
         unique=True,
-        default=lambda: str(uuid.uuid4()),
+        default='',
         help_text=_('Unique access token')
     )
     recipient = models.ForeignKey(
@@ -377,6 +378,11 @@ class ShareLink(models.Model):
 
     def __str__(self):
         return f"{self.rendition.publication_item.publication.title} → {self.rendition.preset.name} → {self.token[:8]}..."
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = str(uuid.uuid4())
+        super().save(*args, **kwargs)
 
     def is_valid(self):
         """

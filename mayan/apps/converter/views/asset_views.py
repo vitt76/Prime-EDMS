@@ -26,7 +26,7 @@ logger = logging.getLogger(name=__name__)
 
 
 class AssetCreateView(SingleObjectCreateView):
-    fields = ('label', 'internal_name', 'file')
+    fields = ('label', 'internal_name', 'category', 'file')
     model = Asset
     view_icon = icon_asset_create
     view_permission = permission_asset_create
@@ -104,7 +104,7 @@ class AssetDetailView(SingleObjectDetailView):
 
 
 class AssetEditView(SingleObjectEditView):
-    fields = ('label', 'internal_name', 'file')
+    fields = ('label', 'internal_name', 'category', 'file')
     model = Asset
     object_permission = permission_asset_edit
     pk_url_kwarg = 'asset_id'

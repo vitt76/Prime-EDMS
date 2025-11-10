@@ -1,0 +1,25 @@
+.image-editor {
+    margin-top: 20px;
+}
+
+.image-editor__title {
+    margin-bottom: 20px;
+}
+
+.image-editor__canvas-wrapper {
+    border: 1px solid #ddd;
+    min-height: 400px;
+    position: relative;
+}
+
+.image-editor__canvas {
+    max-width: 100%;
+}
+
+.image-editor__tools button + button {
+    margin-top: 10px;
+}
+
+.image-editor__actions .btn {
+    margin-top: 10px;
+}

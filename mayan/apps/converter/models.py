@@ -57,6 +57,11 @@ class Asset(ExtraDataModelMixin, models.Model):
         storage=DefinedStorageLazy(name=STORAGE_NAME_ASSETS),
         upload_to=upload_to, verbose_name=_('File')
     )
+    category = models.CharField(
+        max_length=32, blank=True, help_text=_(
+            'Optional category for the asset (e.g., watermark, logo)'
+        ), verbose_name=_('Category')
+    )
 
     class Meta:
         ordering = ('label',)

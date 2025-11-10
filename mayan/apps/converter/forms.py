@@ -22,7 +22,7 @@ class AssetDetailForm(DetailForm):
         self.fields['preview'].initial = kwargs['instance']
 
     class Meta:
-        fields = ('label', 'internal_name', 'preview')
+        fields = ('label', 'internal_name', 'category', 'preview')
         model = Asset
 
 

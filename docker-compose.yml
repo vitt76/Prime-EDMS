@@ -18,7 +18,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mayan -d mayan"]
@@ -33,7 +33,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "6380:6379"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
@@ -61,31 +61,32 @@ services:
       retries: 5
 
   app:
-    image: prime-edms_app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.app
     container_name: prime-edms_app_1
     environment:
       MAYAN_MEDIA_ROOT: '/opt/mayan-edms/data'
-      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql'}}"
+      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql','PORT':'5432'}}"
       MAYAN_CELERY_BROKER_URL: amqp://mayan:mayanrabbitpass@rabbitmq:5672/mayan
       MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
       MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock
-      MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:mayanredispassword@redis:6379/2'}"
+      MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:mayanredispassword@redis:6379/1'}"
       MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
       MAYAN_WORKER_A_QUEUES: converter,sources_fast,distribution
       # Override the hardcoded supervisor config
       COMMAND_WORKER_A: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker %(ENV_MAYAN_WORKER_A_CONCURRENCY)s --hostname=mayan-edms-worker_a.%%h --loglevel=ERROR -Ofair --queues=converter,sources_fast,distribution %(ENV_MAYAN_WORKER_A_MAX_MEMORY_PER_CHILD)s %(ENV_MAYAN_WORKER_A_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
       # Force add our extensions via environment
-      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution']"
+      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
       PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
     volumes:
       - mayan_data:/var/lib/mayan
       - mayan_renditions:/opt/mayan-edms/data
       - ./config.yml:/opt/mayan-edms/config.yml:ro
-      - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension:ro
-      - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution:ro
-      - ./mayan/apps/rest_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api
-      - ./mayan/urls:/opt/mayan-edms/lib/python3.9/site-packages/mayan/urls
+      - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
+      - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
+      - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
     ports:
       - "80:8000"
     depends_on:

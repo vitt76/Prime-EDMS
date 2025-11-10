@@ -13,8 +13,9 @@ RUN apt-get update && \
     pip3 install reportlab --upgrade && \
     rm -rf /var/lib/apt/lists/*
 
-# Копирование расширения
+# Копирование расширения (обновлено)
 COPY mayan/apps/converter_pipeline_extension /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
+COPY mayan/apps/image_editor /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
 
 # Копирование измененных файлов Mayan EDMS
 COPY mayan/apps/documents/links/document_file_links.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/links/document_file_links.py
@@ -33,3 +34,4 @@ COPY mayan/apps/documents/locale /opt/mayan-edms/lib/python3.9/site-packages/may
 # Компиляция переводов
 RUN msgfmt /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/locale/ru/LC_MESSAGES/django.po -o /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/locale/ru/LC_MESSAGES/django.mo
 
+# Build timestamp: 10/23/2025 15:16:12

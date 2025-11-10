@@ -118,7 +118,7 @@
                                                                     </td>
                                                                     <td class="text-right">
                                                                         {% if rendition.status == 'completed' %}
-                                                                        <a href="{% url 'distribution:share_link_create' rendition.id %}" class="btn btn-xs btn-success" title="{% trans "Создать ссылку для этого рендишена" %}">
+                                                                        <a href="{% url 'distribution:share_link_create_with_rendition' rendition.id %}" class="btn btn-xs btn-success" title="{% trans "Создать ссылку для этого рендишена" %}">
                                                                             <i class="fa fa-share"></i> {% trans "Ссылка" %}
                                                                         </a>
                                                                         {% endif %}

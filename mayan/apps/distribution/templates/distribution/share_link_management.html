@@ -113,22 +113,49 @@
                 <h4 class="modal-title" id="shareLinkModalLabel">{% trans "Редактирование ссылки" %}</h4>
             </div>
             <div class="modal-body">
-                <form id="share-link-form">
+                <form id="share-link-form" class="form-horizontal">
                     <div class="form-group">
-                        <label for="share-link-recipient">{% trans "Получатель" %}</label>
-                        <select id="share-link-recipient" class="form-control">
-                            <option value="">{% trans "Не выбран (общая ссылка)" %}</option>
-                        </select>
+                        <label for="share-link-publication" class="col-sm-3 control-label">{% trans "Публикация" %}</label>
+                        <div class="col-sm-9">
+                            <select class="form-control" id="share-link-publication" onchange="filterEditRenditions()">
+                                <option value="">{% trans "Выберите публикацию" %}</option>
+                                {% for publication in publications %}
+                                <option value="{{ publication.pk }}">{{ publication.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
+
                     <div class="form-group">
-                        <label for="share-link-expires-at">{% trans "Истекает" %}</label>
-                        <input type="datetime-local" class="form-control" id="share-link-expires-at">
-                        <small class="help-block">{% trans "Оставьте пустым для бессрочной ссылки" %}</small>
+                        <label for="share-link-rendition" class="col-sm-3 control-label">{% trans "Рендишен" %}</label>
+                        <div class="col-sm-9">
+                            <select class="form-control" id="share-link-rendition" required>
+                                <option value="">{% trans "Сначала выберите публикацию" %}</option>
+                                {% for rendition in renditions %}
+                                <option value="{{ rendition.pk }}"
+                                        data-publication="{{ rendition.publication_item.publication.pk }}">
+                                    {{ rendition.publication_item.publication.title }} - {{ rendition.preset.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <span class="help-block">{% trans "Выберите рендишен для ссылки." %}</span>
+                        </div>
                     </div>
+
                     <div class="form-group">
-                        <label for="share-link-max-downloads">{% trans "Максимум скачиваний" %}</label>
-                        <input type="number" class="form-control" id="share-link-max-downloads" min="0">
-                        <small class="help-block">{% trans "Оставьте пустым для неограниченного количества" %}</small>
+                        <label for="share-link-expires-at" class="col-sm-3 control-label">{% trans "Истекает" %}</label>
+                        <div class="col-sm-9">
+                            <input type="datetime-local" class="form-control" id="share-link-expires-at">
+                            <small class="help-block">{% trans "Оставьте пустым для бессрочной ссылки" %}</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="share-link-max-downloads" class="col-sm-3 control-label">{% trans "Максимум скачиваний" %}</label>
+                        <div class="col-sm-9">
+                            <input type="number" class="form-control" id="share-link-max-downloads" min="0">
+                            <small class="help-block">{% trans "Оставьте пустым для неограниченного количества" %}</small>
+                        </div>
                     </div>
                 </form>
                 <div id="share-link-form-alert" class="alert alert-danger" style="display: none;"></div>
@@ -171,16 +198,29 @@ function editShareLink(linkId) {
         return response.json();
     }).then(data => {
         console.log('Share link data:', data);
-        // Populate form
-        populateRecipients().then(() => {
-            document.getElementById('share-link-recipient').value = data.recipient || '';
-            document.getElementById('share-link-expires-at').value = data.expires_at ?
-                new Date(data.expires_at).toISOString().slice(0, 16) : '';
-            document.getElementById('share-link-max-downloads').value = data.max_downloads || '';
+        // Populate form fields
+        // Find the rendition in the template data to get publication info
+        const renditions = Array.from(document.querySelectorAll('#share-link-rendition option'));
+        const currentRenditionOption = renditions.find(option => option.value == data.rendition);
 
-            // Show modal
-            $('#shareLinkModal').modal('show');
-        });
+        if (currentRenditionOption) {
+            const publicationId = currentRenditionOption.getAttribute('data-publication');
+            document.getElementById('share-link-publication').value = publicationId || '';
+            document.getElementById('share-link-rendition').value = data.rendition || '';
+        } else {
+            console.warn('Rendition not found in template options:', data.rendition);
+            document.getElementById('share-link-rendition').value = data.rendition || '';
+        }
+
+        document.getElementById('share-link-expires-at').value = data.expires_at ?
+            new Date(data.expires_at).toISOString().slice(0, 16) : '';
+        document.getElementById('share-link-max-downloads').value = data.max_downloads || '';
+
+        // Apply filtering for renditions
+        filterEditRenditions();
+
+        // Show modal
+        $('#shareLinkModal').modal('show');
     }).catch(error => {
         alert('Ошибка загрузки данных ссылки: ' + error.message);
     });
@@ -213,28 +253,31 @@ function deleteShareLink(linkId) {
     });
 }
 
-function populateRecipients() {
-    return fetch('/api/v4/distribution/recipients/', {
-        credentials: 'include'
-    }).then(response => {
-        if (!response.ok) {
-            throw new Error('Failed to load recipients');
-        }
-        return response.json();
-    }).then(data => {
-        const select = document.getElementById('share-link-recipient');
-        // Clear existing options except the first one
-        select.innerHTML = '<option value="">{% trans "Не выбран (общая ссылка)" %}</option>';
+function filterEditRenditions() {
+    const publicationId = document.getElementById('share-link-publication').value;
+    const renditionSelect = document.getElementById('share-link-rendition');
+    const options = renditionSelect.querySelectorAll('option');
 
-        if (data.results) {
-            data.results.forEach(recipient => {
-                const option = document.createElement('option');
-                option.value = recipient.id;
-                option.textContent = recipient.name || recipient.email;
-                select.appendChild(option);
-            });
+    // Показываем/скрываем опции рендишенов
+    options.forEach(option => {
+        if (option.value === '') {
+            // Оставляем опцию "Сначала выберите публикацию"
+            option.style.display = publicationId ? 'none' : 'block';
+            return;
+        }
+
+        const optionPublicationId = option.getAttribute('data-publication');
+        if (publicationId && optionPublicationId === publicationId) {
+            option.style.display = 'block';
+        } else {
+            option.style.display = 'none';
         }
     });
+
+    // Сбрасываем выбор рендишена при смене публикации
+    if (!renditionSelect.querySelector('option[style*="block"]:checked')) {
+        renditionSelect.value = '';
+    }
 }
 
 function saveShareLink() {
@@ -246,8 +289,14 @@ function saveShareLink() {
         return;
     }
 
+    const renditionId = document.getElementById('share-link-rendition').value;
+    if (!renditionId) {
+        showShareLinkAlert('{% trans "Выберите рендишен" %}', 'danger');
+        return;
+    }
+
     const payload = {
-        recipient: document.getElementById('share-link-recipient').value || null,
+        rendition: parseInt(renditionId),
         expires_at: document.getElementById('share-link-expires-at').value || null,
         max_downloads: document.getElementById('share-link-max-downloads').value ?
             parseInt(document.getElementById('share-link-max-downloads').value) : null
@@ -316,6 +365,12 @@ $('#shareLinkModal').on('hidden.bs.modal', function() {
     if (saveBtn) {
         saveBtn.removeEventListener('click', saveShareLink);
     }
+});
+
+jQuery(document).ready(function() {
+    // Hide labels and help blocks only outside of modals
+    $('.help-block').not('.modal .help-block').hide();
+    $('label').not('.modal label').hide();
 });
 </script>
 {% endblock %}

@@ -572,6 +572,23 @@ class ShareLinkManagementView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+
+        # Получаем все публикации пользователя
+        publications = Publication.objects.filter(owner=self.request.user)
+
+        # Получаем все рендишены из этих публикаций
+        renditions = GeneratedRendition.objects.filter(
+            publication_item__publication__owner=self.request.user
+        ).select_related(
+            'publication_item__publication',
+            'preset'
+        ).order_by('publication_item__publication__title', 'preset__name')
+
+        context.update({
+            'publications': publications,
+            'renditions': renditions,
+        })
+
         publication_id = self.request.GET.get('publication')
         if publication_id:
             try:
