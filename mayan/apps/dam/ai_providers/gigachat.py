@@ -1,10 +1,5 @@
-import json
 import logging
-import time
 from typing import Dict, List, Any
-
-import requests
-from django.conf import settings
 
 from .base import BaseAIProvider, AIProviderError, AIProviderRateLimitError, AIProviderAuthError
 
@@ -13,14 +8,14 @@ logger = logging.getLogger(__name__)
 
 class GigaChatProvider(BaseAIProvider):
     """
-    GigaChat provider for AI analysis.
+    GigaChat provider using official gigachat library.
 
-    Sber's GigaChat model with some vision capabilities.
+    Sber's GigaChat model with Russian language support.
     """
 
     name = 'gigachat'
-    display_name = 'GigaChat'
-    description = 'Russian AI model by Sber'
+    display_name = 'GigaChat (Official)'
+    description = 'Russian AI model by Sber (official library)'
 
     supports_vision = False  # Limited vision support
     supports_text = True
@@ -29,116 +24,57 @@ class GigaChatProvider(BaseAIProvider):
     supports_color_analysis = False
     supports_alt_text_generation = True
 
-    def __init__(self, client_id: str, client_secret: str, model: str = 'GigaChat', **kwargs):
-        super().__init__('', **kwargs)  # API key not used directly
-        self.client_id = client_id
-        self.client_secret = client_secret
+    def __init__(self, credentials: str = None, scope: str = 'GIGACHAT_API_PERS',
+                 verify_ssl_certs: bool = False, model: str = 'GigaChat', **kwargs):
+        super().__init__('', **kwargs)
+        self.credentials = credentials
+        self.scope = scope
+        self.verify_ssl_certs = verify_ssl_certs
         self.model = model
-        self.base_url = 'https://gigachat.devices.sberbank.ru/api/v1'
-        self.timeout = kwargs.get('timeout', 30)
-        self._access_token = None
-        self._token_expires = 0
+        self._client = None
 
-    def _get_access_token(self) -> str:
+    def _get_client(self):
+        """Get or create GigaChat client."""
+        if self._client is None:
+            try:
+                from gigachat import GigaChat
+                self._client = GigaChat(
+                    credentials=self.credentials,
+                    scope=self.scope,
+                    verify_ssl_certs=self.verify_ssl_certs,
+                    model=self.model
+                )
+            except ImportError:
+                raise AIProviderError("gigachat library not installed")
+            except Exception as e:
+                raise AIProviderError(f"Failed to initialize GigaChat client: {e}")
+        return self._client
+
+    def _make_request(self, prompt: str, **kwargs) -> str:
         """
-        Get or refresh access token for GigaChat API.
-
-        Returns:
-            Access token
+        Make request using official GigaChat library.
         """
-        current_time = time.time()
-
-        # Check if token is still valid (with 5 minute buffer)
-        if self._access_token and current_time < (self._token_expires - 300):
-            return self._access_token
-
-        # Get new token
-        auth_url = 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth'
-
-        data = {
-            'scope': 'GIGACHAT_API_PERS'
-        }
-
         try:
-            response = requests.post(
-                auth_url,
-                auth=(self.client_id, self.client_secret),
-                data=data,
-                timeout=self.timeout
-            )
+            client = self._get_client()
 
-            if not response.ok:
-                if response.status_code == 429:
-                    raise AIProviderRateLimitError("GigaChat rate limit exceeded")
-                elif response.status_code == 401:
-                    raise AIProviderAuthError("Invalid GigaChat credentials")
-                else:
-                    raise AIProviderError(f"GigaChat auth error: {response.status_code} - {response.text}")
+            # Use the chat method
+            response = client.chat(prompt)
 
-            result = response.json()
-            self._access_token = result['access_token']
+            # Handle response format
+            if hasattr(response, 'choices') and response.choices:
+                return response.choices[0].message.content
+            elif isinstance(response, str):
+                return response
+            else:
+                return str(response)
 
-            # Token expires in 30 minutes (1800 seconds)
-            self._token_expires = current_time + 1800
-
-            return self._access_token
-
-        except requests.exceptions.Timeout:
-            raise AIProviderError("GigaChat auth timeout")
-        except requests.exceptions.RequestException as e:
-            raise AIProviderError(f"GigaChat auth request failed: {e}")
-
-    def _make_request(self, messages: List[Dict], **kwargs) -> str:
-        """
-        Make request to GigaChat API.
-
-        Args:
-            messages: Chat messages
-            **kwargs: Additional parameters
-
-        Returns:
-            Generated text response
-        """
-        access_token = self._get_access_token()
-
-        headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Content-Type': 'application/json'
-        }
-
-        data = {
-            'model': self.model,
-            'messages': messages,
-            'max_tokens': kwargs.get('max_tokens', 1000),
-            'temperature': kwargs.get('temperature', 0.7),
-            'stream': False
-        }
-
-        try:
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=self.timeout
-            )
-
-            if response.status_code == 429:
+        except Exception as e:
+            if "rate limit" in str(e).lower() or "429" in str(e):
                 raise AIProviderRateLimitError("GigaChat rate limit exceeded")
-            elif response.status_code == 401:
-                # Token might be expired, reset it
-                self._access_token = None
-                self._token_expires = 0
-                raise AIProviderAuthError("GigaChat token expired")
-            elif not response.ok:
-                raise AIProviderError(f"GigaChat API error: {response.status_code} - {response.text}")
-
-            result = response.json()
-            return result['choices'][0]['message']['content']
-
-        except requests.exceptions.Timeout:
-            raise AIProviderError("GigaChat API timeout")
-        except requests.exceptions.RequestException as e:
-            raise AIProviderError(f"GigaChat API request failed: {e}")
+            elif "auth" in str(e).lower() or "token" in str(e).lower() or "401" in str(e):
+                raise AIProviderAuthError(f"GigaChat authentication failed: {e}")
+            else:
+                raise AIProviderError(f"GigaChat request failed: {e}")
 
     def analyze_image(self, image_data: bytes, mime_type: str) -> Dict[str, Any]:
         """Limited image analysis through text descriptions."""
@@ -159,14 +95,13 @@ class GigaChatProvider(BaseAIProvider):
     def extract_tags(self, image_data: bytes, mime_type: str) -> List[str]:
         """Generate tags using GigaChat."""
         prompt = f"""Проанализируйте файл типа {mime_type} и предложите релевантные теги/ключевые слова.
-        Учитывайте тип файла и возможное содержание. Предоставьте теги через запятую."""
+        Учитывайте тип файла и возможное содержание. Предоставьте теги через запятую на русском языке."""
 
         try:
-            response = self._make_request([{'role': 'user', 'content': prompt}])
+            response = self._make_request(prompt, max_tokens=200)
             tags = [tag.strip() for tag in response.split(',') if tag.strip()]
             return tags[:15]  # Limit to 15 tags
         except AIProviderError:
-            # Fallback tags based on mime type
             return self._get_fallback_tags(mime_type)
 
     def _get_fallback_tags(self, mime_type: str) -> List[str]:
@@ -174,11 +109,11 @@ class GigaChatProvider(BaseAIProvider):
         base_tags = ['файл']
 
         if 'image' in mime_type:
-            base_tags.append('изображение')
+            base_tags.extend(['изображение', 'графика'])
             if 'jpeg' in mime_type:
                 base_tags.extend(['фото', 'JPEG'])
             elif 'png' in mime_type:
-                base_tags.extend(['графика', 'PNG'])
+                base_tags.extend(['прозрачный', 'PNG'])
         elif 'video' in mime_type:
             base_tags.extend(['видео', 'мультимедиа'])
         elif 'audio' in mime_type:
@@ -197,14 +132,14 @@ class GigaChatProvider(BaseAIProvider):
         Сосредоточьтесь на возможном содержании файла."""
 
         try:
-            return self._make_request([{'role': 'user', 'content': prompt}], max_tokens=100)
+            return self._make_request(prompt, max_tokens=150)
         except AIProviderError:
             return f"Файл типа {mime_type}"
 
     def is_available(self) -> bool:
         """Check if GigaChat is available."""
         try:
-            return bool(self.client_id and self.client_secret)
+            return bool(self.credentials)
         except Exception as e:
             logger.error(f"GigaChat availability check failed: {e}")
             return False

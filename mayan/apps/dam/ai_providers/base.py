@@ -152,13 +152,15 @@ class BaseAIProvider(metaclass=abc.ABCMeta):
         }
 
 
+# Global registry instance
+_providers_registry = {}
+
 class AIProviderRegistry:
     """
     Registry for AI providers.
 
     Manages registration and instantiation of AI providers.
     """
-    _providers = {}
 
     @classmethod
     def register(cls, provider_id: str, provider_class_path: str):
@@ -169,7 +171,8 @@ class AIProviderRegistry:
             provider_id: Unique identifier for the provider
             provider_class_path: Import path to the provider class
         """
-        cls._providers[provider_id] = provider_class_path
+        global _providers_registry
+        _providers_registry[provider_id] = provider_class_path
         logger.info(f"Registered AI provider: {provider_id}")
 
     @classmethod
@@ -183,11 +186,12 @@ class AIProviderRegistry:
         Returns:
             Provider class
         """
-        if provider_id not in cls._providers:
+        global _providers_registry
+        if provider_id not in _providers_registry:
             raise ValueError(f"Unknown AI provider: {provider_id}")
 
         from django.utils.module_loading import import_string
-        return import_string(cls._providers[provider_id])
+        return import_string(_providers_registry[provider_id])
 
     @classmethod
     def get_available_providers(cls) -> List[str]:
@@ -197,7 +201,8 @@ class AIProviderRegistry:
         Returns:
             List of provider identifiers
         """
-        return list(cls._providers.keys())
+        global _providers_registry
+        return list(_providers_registry.keys())
 
     @classmethod
     def create_provider(cls, provider_id: str, **kwargs) -> BaseAIProvider:

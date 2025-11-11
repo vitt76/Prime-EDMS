@@ -10,7 +10,7 @@ RUN apt-get update && \
         python3-dev \
         build-essential \
         gettext && \
-    pip3 install reportlab --upgrade && \
+    pip3 install reportlab cryptography PyJWT "gigachat<0.1.43" "pydantic<2.0" "typing-extensions<4.6" yandexgptlite --upgrade && \
     rm -rf /var/lib/apt/lists/*
 
 # Копирование расширения (обновлено)

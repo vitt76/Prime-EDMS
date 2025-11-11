@@ -138,7 +138,7 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
 
 def get_provider_config(provider_name: str) -> Dict[str, Any]:
     """
-    Get configuration for AI provider from settings.
+    Get configuration for AI provider from environment variables.
 
     Args:
         provider_name: Name of the provider
@@ -146,24 +146,29 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
     Returns:
         Dict with provider configuration
     """
+    import os
+
     config_mapping = {
         'openai': {
-            'api_key': getattr(settings, 'DAM_OPENAI_API_KEY', None),
-            'model': getattr(settings, 'DAM_OPENAI_MODEL', 'gpt-4-vision-preview')
+            'api_key': os.environ.get('DAM_OPENAI_API_KEY'),
+            'model': os.environ.get('DAM_OPENAI_MODEL', 'gpt-4-vision-preview')
         },
         'yandexgpt': {
-            'api_key': getattr(settings, 'DAM_YANDEXGPT_API_KEY', None),
-            'folder_id': getattr(settings, 'DAM_YANDEXGPT_FOLDER_ID', None)
+            'api_key': os.environ.get('DAM_YANDEXGPT_API_KEY'),
+            'folder_id': os.environ.get('DAM_YANDEXGPT_FOLDER_ID'),
+            'iam_token': os.environ.get('DAM_YANDEXGPT_IAM_TOKEN'),
+            'service_account_key_id': os.environ.get('DAM_YANDEXGPT_KEY_ID'),
+            'service_account_key_secret': os.environ.get('DAM_YANDEXGPT_PRIVATE_KEY')
         },
         'gigachat': {
-            'client_id': getattr(settings, 'DAM_GIGACHAT_CLIENT_ID', None),
-            'client_secret': getattr(settings, 'DAM_GIGACHAT_CLIENT_SECRET', None)
+            'client_id': os.environ.get('DAM_GIGACHAT_CLIENT_ID'),
+            'client_secret': os.environ.get('DAM_GIGACHAT_CLIENT_SECRET')
         },
         'claude': {
-            'api_key': getattr(settings, 'DAM_CLAUDE_API_KEY', None)
+            'api_key': os.environ.get('DAM_CLAUDE_API_KEY')
         },
         'gemini': {
-            'api_key': getattr(settings, 'DAM_GEMINI_API_KEY', None)
+            'api_key': os.environ.get('DAM_GEMINI_API_KEY')
         }
     }
 

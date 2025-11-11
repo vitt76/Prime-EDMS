@@ -80,6 +80,15 @@ services:
       MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor', 'mayan.apps.dam']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
       PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
+      # AI Provider configurations
+      DAM_GIGACHAT_CREDENTIALS: "${DAM_GIGACHAT_CREDENTIALS}"
+      DAM_GIGACHAT_SCOPE: "${DAM_GIGACHAT_SCOPE}"
+      DAM_GIGACHAT_VERIFY_SSL_CERTS: "${DAM_GIGACHAT_VERIFY_SSL_CERTS}"
+      DAM_YANDEXGPT_API_KEY: "${DAM_YANDEXGPT_API_KEY}"
+      DAM_YANDEXGPT_IAM_TOKEN: "${DAM_YANDEXGPT_IAM_TOKEN}"
+      DAM_YANDEXGPT_KEY_ID: "${DAM_YANDEXGPT_KEY_ID}"
+      DAM_YANDEXGPT_PRIVATE_KEY: "${DAM_YANDEXGPT_PRIVATE_KEY}"
+      DAM_YANDEXGPT_FOLDER_ID: "${DAM_YANDEXGPT_FOLDER_ID}"
     volumes:
       - mayan_data:/var/lib/mayan
       - mayan_renditions:/opt/mayan-edms/data

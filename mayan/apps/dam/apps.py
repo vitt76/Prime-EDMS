@@ -20,6 +20,7 @@ class DAMApp(MayanAppConfig):
 
     def ready(self):
         super().ready()
+        print('🎨 DAM module ready() called!')
         print('🎨 DAM module loaded successfully!')
 
         # Регистрация AI провайдеров
@@ -28,9 +29,13 @@ class DAMApp(MayanAppConfig):
         # Регистрация сигналов
         self._register_signals()
 
+        print('🎨 DAM module initialization completed!')
+
     def _register_ai_providers(self):
         """Регистрация доступных AI провайдеров"""
         from .ai_providers import AIProviderRegistry
+
+        print(f'🤖 Registering AI providers...')
 
         # Регистрация провайдеров
         AIProviderRegistry.register('openai', 'mayan.apps.dam.ai_providers.openai.OpenAIProvider')
@@ -39,6 +44,7 @@ class DAMApp(MayanAppConfig):
         AIProviderRegistry.register('yandexgpt', 'mayan.apps.dam.ai_providers.yandex.YandexGPTProvider')
         AIProviderRegistry.register('gigachat', 'mayan.apps.dam.ai_providers.gigachat.GigaChatProvider')
 
+        print(f'🤖 AI providers registered: {list(AIProviderRegistry._providers.keys())}')
         print('🤖 AI providers registered successfully!')
 
     def _register_signals(self):
