@@ -15,6 +15,8 @@ class DocumentAIAnalysisSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'document', 'document_title', 'document_filename',
             'ai_description', 'ai_tags', 'dominant_colors', 'alt_text',
+            'categories', 'language', 'people', 'locations',
+            'copyright_notice', 'usage_rights', 'rights_expiry',
             'ai_provider', 'analysis_status', 'created', 'updated', 'analysis_completed'
         ]
         read_only_fields = ['id', 'created', 'updated', 'analysis_completed']

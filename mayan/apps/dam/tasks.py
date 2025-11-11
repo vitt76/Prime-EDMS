@@ -51,6 +51,14 @@ def analyze_document_with_ai(self, document_id: int):
         ai_analysis.ai_tags = analysis_results.get('tags', [])
         ai_analysis.dominant_colors = analysis_results.get('colors', [])
         ai_analysis.alt_text = analysis_results.get('alt_text', '')
+        # Extended fields (optional in provider response)
+        ai_analysis.categories = analysis_results.get('categories', [])
+        ai_analysis.language = analysis_results.get('language', '')
+        ai_analysis.people = analysis_results.get('people', [])
+        ai_analysis.locations = analysis_results.get('locations', [])
+        ai_analysis.copyright_notice = analysis_results.get('copyright')
+        ai_analysis.usage_rights = analysis_results.get('usage_rights')
+        ai_analysis.rights_expiry = analysis_results.get('rights_expiry')
         ai_analysis.analysis_status = 'completed'
         ai_analysis.ai_provider = analysis_results.get('provider', 'unknown')
         ai_analysis.save()
@@ -100,8 +108,8 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
 
     mime_type = document_file.mimetype or 'application/octet-stream'
 
-    # Try providers in order of preference
-    providers_to_try = ['openai', 'yandexgpt', 'gigachat']  # TODO: Add claude, gemini
+    # Try providers in order of proven availability (GigaChat first)
+    providers_to_try = ['gigachat', 'openai', 'claude', 'gemini', 'yandexgpt']
 
     for provider_name in providers_to_try:
         try:
@@ -161,8 +169,10 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
             'service_account_key_secret': os.environ.get('DAM_YANDEXGPT_PRIVATE_KEY')
         },
         'gigachat': {
-            'client_id': os.environ.get('DAM_GIGACHAT_CLIENT_ID'),
-            'client_secret': os.environ.get('DAM_GIGACHAT_CLIENT_SECRET')
+            # Official library expects base64(client_id:client_secret) in credentials
+            'credentials': os.environ.get('DAM_GIGACHAT_CREDENTIALS'),
+            'scope': os.environ.get('DAM_GIGACHAT_SCOPE', 'GIGACHAT_API_PERS'),
+            'verify_ssl_certs': os.environ.get('DAM_GIGACHAT_VERIFY_SSL_CERTS', 'False').lower() == 'true'
         },
         'claude': {
             'api_key': os.environ.get('DAM_CLAUDE_API_KEY')

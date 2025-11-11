@@ -19,6 +19,58 @@ class DocumentAIAnalysis(ExtraDataModelMixin, models.Model):
         verbose_name=_('Document')
     )
 
+    # Rights and governance
+    copyright_notice = models.TextField(
+        blank=True,
+        null=True,
+        help_text=_('Copyright notice extracted or inferred by AI'),
+        verbose_name=_('Copyright Notice')
+    )
+
+    usage_rights = models.TextField(
+        blank=True,
+        null=True,
+        help_text=_('Usage rights or license details inferred by AI'),
+        verbose_name=_('Usage Rights')
+    )
+
+    rights_expiry = models.DateField(
+        blank=True,
+        null=True,
+        help_text=_('Date when usage rights expire'),
+        verbose_name=_('Rights Expiry')
+    )
+
+    # Taxonomy
+    categories = models.JSONField(
+        blank=True,
+        null=True,
+        help_text=_('Categories assigned by AI as JSON array'),
+        verbose_name=_('Categories')
+    )
+
+    language = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text=_('Detected primary language (BCP-47)'),
+        verbose_name=_('Language')
+    )
+
+    # Entities
+    people = models.JSONField(
+        blank=True,
+        null=True,
+        help_text=_('People detected or mentioned, as JSON array'),
+        verbose_name=_('People')
+    )
+
+    locations = models.JSONField(
+        blank=True,
+        null=True,
+        help_text=_('Locations detected or mentioned, as JSON array'),
+        verbose_name=_('Locations')
+    )
+
     # AI-generated content
     ai_description = models.TextField(
         blank=True,

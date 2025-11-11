@@ -35,3 +35,8 @@ if 'silk' in settings.INSTALLED_APPS:
 
 # Note: converter_pipeline_extension is registered automatically
 # via MayanAppConfig for extra_apps in config.yml
+
+if 'mayan.apps.dam' in settings.INSTALLED_APPS:
+    urlpatterns += [  # NOQA
+        url(regex=r'^dam/', view=include('mayan.apps.dam.urls'))
+    ]

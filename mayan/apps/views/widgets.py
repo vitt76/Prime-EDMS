@@ -132,6 +132,50 @@ class PlainWidget(forms.widgets.Widget):
         return mark_safe(s='%s' % value)
 
 
+class DAMWidget(forms.widgets.Widget):
+    """
+    Widget for DAM analysis field that loads content via AJAX.
+    """
+    def render(self, name, value, attrs=None, renderer=None):
+        if attrs is None:
+            attrs = {}
+
+        # Get document ID from attrs
+        document_id = attrs.get('data-document-id', '')
+
+        # Render placeholder that will be replaced by AJAX
+        html = f'''
+        <div id="dam-loading-{document_id}" class="dam-analysis-container" data-document-id="{document_id}">
+            <div class="text-center text-muted">
+                <i class="fas fa-spinner fa-spin"></i>
+                Загрузка DAM анализа...
+            </div>
+        </div>
+        <script>
+        $(document).ready(function() {{
+            var container = $('#dam-loading-{document_id}');
+            var docId = container.data('document-id');
+
+            if (docId) {{
+                // Load DAM content via AJAX
+                $.ajax({{
+                    url: '/api/dam/document-detail/',
+                    data: {{ document_id: docId }},
+                    success: function(response) {{
+                        container.replaceWith(response.html);
+                    }},
+                    error: function(xhr) {{
+                        console.error('DAM loading failed:', xhr);
+                        container.html('<div class="alert alert-danger">Ошибка загрузки DAM анализа</div>');
+                    }}
+                }});
+            }}
+        }});
+        </script>
+        '''
+        return mark_safe(html)
+
+
 class TextAreaDiv(forms.widgets.Widget):
     """
     Class to define a form widget that simulates the behavior of a

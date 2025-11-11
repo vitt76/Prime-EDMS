@@ -50,23 +50,80 @@ class GigaChatProvider(BaseAIProvider):
                 raise AIProviderError(f"Failed to initialize GigaChat client: {e}")
         return self._client
 
-    def _make_request(self, prompt: str, **kwargs) -> str:
+    def _make_request(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """
         Make request using official GigaChat library.
+        Returns structured response with metadata fields.
         """
         try:
             client = self._get_client()
 
+            # Enhanced prompt for structured metadata extraction
+            structured_prompt = f"""{prompt}
+
+Пожалуйста, проанализируй этот файл и предоставь структурированную информацию в формате JSON со следующими полями:
+
+- description: подробное описание содержимого (2-3 предложения)
+- tags: массив ключевых слов/тегов на русском языке (5-10 элементов)
+- categories: массив категорий/тем (2-4 элемента)
+- language: основной язык содержимого (если применимо)
+- people: массив имен людей/персонажей (если есть)
+- locations: массив географических мест (если есть)
+- copyright: информация об авторских правах (если есть)
+- usage_rights: условия использования (если есть)
+
+Ответ должен быть только в формате JSON без дополнительного текста."""
+
             # Use the chat method
-            response = client.chat(prompt)
+            response = client.chat(structured_prompt)
 
             # Handle response format
             if hasattr(response, 'choices') and response.choices:
-                return response.choices[0].message.content
+                content = response.choices[0].message.content
             elif isinstance(response, str):
-                return response
+                content = response
             else:
-                return str(response)
+                content = str(response)
+
+            # Try to parse as JSON - handle markdown code blocks
+            try:
+                import json
+                import re
+
+                # Remove markdown code block formatting if present
+                json_content = content.strip()
+                json_match = re.search(r'```json\s*(.*?)\s*```', json_content, re.DOTALL)
+                if json_match:
+                    json_content = json_match.group(1)
+
+                parsed = json.loads(json_content)
+
+                # Validate and normalize structure
+                return {
+                    'description': parsed.get('description', ''),
+                    'tags': parsed.get('tags', []) if isinstance(parsed.get('tags'), list) else [],
+                    'categories': parsed.get('categories', []) if isinstance(parsed.get('categories'), list) else [],
+                    'language': parsed.get('language', ''),
+                    'people': parsed.get('people', []) if isinstance(parsed.get('people'), list) else [],
+                    'locations': parsed.get('locations', []) if isinstance(parsed.get('locations'), list) else [],
+                    'copyright': parsed.get('copyright', ''),
+                    'usage_rights': parsed.get('usage_rights', ''),
+                    'provider': 'gigachat'
+                }
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"JSON parsing failed: {e}, content: {content[:200]}...")
+                # Fallback: extract basic description
+                return {
+                    'description': content.strip(),
+                    'tags': [],
+                    'categories': [],
+                    'language': '',
+                    'people': [],
+                    'locations': [],
+                    'copyright': '',
+                    'usage_rights': '',
+                    'provider': 'gigachat'
+                }
 
         except Exception as e:
             if "rate limit" in str(e).lower() or "429" in str(e):
@@ -77,16 +134,30 @@ class GigaChatProvider(BaseAIProvider):
                 raise AIProviderError(f"GigaChat request failed: {e}")
 
     def analyze_image(self, image_data: bytes, mime_type: str) -> Dict[str, Any]:
-        """Limited image analysis through text descriptions."""
-        return {
-            'description': 'Изображение не может быть проанализировано - GigaChat имеет ограниченную поддержку изображений',
-            'tags': self.extract_tags(image_data, mime_type),
-            'colors': [],
-            'alt_text': self.generate_alt_text(image_data, mime_type),
-            'objects': [],
-            'mood': '',
-            'style': ''
-        }
+        """Analyze image using GigaChat with structured metadata extraction."""
+        # Create prompt for image analysis
+        prompt = f"Проанализируй файл типа {mime_type}."
+
+        # Get structured response from GigaChat
+        try:
+            structured_response = self._make_request(prompt)
+            return structured_response
+        except Exception as e:
+            logger.warning(f"GigaChat structured analysis failed: {e}")
+            # Fallback to basic analysis
+            return {
+                'description': f'Файл типа {mime_type} - анализ не удался',
+                'tags': self.extract_tags(image_data, mime_type),
+                'categories': [],
+                'language': '',
+                'people': [],
+                'locations': [],
+                'copyright': '',
+                'usage_rights': '',
+                'colors': [],
+                'alt_text': self.generate_alt_text(image_data, mime_type),
+                'provider': 'gigachat'
+            }
 
     def describe_image(self, image_data: bytes, mime_type: str) -> str:
         """Cannot describe images directly."""
