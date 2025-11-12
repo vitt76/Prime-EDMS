@@ -183,7 +183,7 @@ function reanalyzeDAM(documentId) {
         }
 
         $.ajax({
-            url: '/api/dam/ai-analysis/analyze/',
+            url: '/digital-assets/api/ai-analysis/analyze/',
             method: 'POST',
             headers: {
                 'X-CSRFToken': getCookie('csrftoken')
@@ -209,7 +209,7 @@ function editDAMMetadata(analysisId) {
 function loadDAMContent(documentId) {
     // Reload the DAM AJAX template
     $.ajax({
-        url: '/api/dam/document-detail/',
+        url: '/digital-assets/api/document-detail/',
         data: { document_id: documentId },
         success: function(response) {
             $('#dam-content').html(response.html);

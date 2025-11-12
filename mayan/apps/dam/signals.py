@@ -4,7 +4,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from mayan.apps.documents.models import DocumentFile
-from mayan.apps.documents.events import event_document_file_created
+# from mayan.apps.documents.events import event_document_file_created  # Not used
 
 from .models import DocumentAIAnalysis
 from .tasks import analyze_document_with_ai
@@ -19,44 +19,52 @@ def trigger_ai_analysis(sender, instance, created, **kwargs):
 
     Only analyzes image files to avoid unnecessary API calls.
     """
+    logger.info(f"🔔 Signal triggered for document file: {instance.filename}, created: {created}")
+
     if not created:
+        logger.debug(f"Skipping signal - file not created: {instance.filename}")
         return
 
     # Check if file is an image
     if not instance.mimetype or not instance.mimetype.startswith('image/'):
-        logger.debug(f"Skipping AI analysis for non-image file: {instance.filename} ({instance.mimetype})")
+        logger.info(f"⏭️ Skipping AI analysis for non-image file: {instance.filename} ({instance.mimetype})")
         return
 
-    # Check if AI analysis already exists
+    # Check if AI analysis already exists and is completed
     if hasattr(instance.document, 'ai_analysis'):
-        logger.debug(f"AI analysis already exists for document: {instance.document}")
-        return
+        analysis = instance.document.ai_analysis
+        if analysis.analysis_status == 'completed':
+            logger.info(f"⏭️ AI analysis already completed for document: {instance.document}")
+            return
+        elif analysis.analysis_status == 'pending' or analysis.analysis_status == 'running':
+            logger.info(f"⏭️ AI analysis already in progress for document: {instance.document}")
+            return
 
     # Create AI analysis record
     ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
         document=instance.document,
         defaults={
             'analysis_status': 'pending',
-            'ai_provider': 'openai'  # Default provider
+            'ai_provider': ''  # Empty provider initially
         }
     )
 
     if created:
-        logger.info(f"Created AI analysis record for document: {instance.document}")
+        logger.info(f"✅ Created AI analysis record for document: {instance.document}")
 
         # Trigger async AI analysis with delay to allow file processing
-        analyze_document_with_ai.apply_async(
-            args=[instance.document.id],
-            countdown=30  # Wait 30 seconds for file processing
-        )
-        logger.info(f"Scheduled AI analysis for document: {instance.document}")
+        try:
+            task_result = analyze_document_with_ai.apply_async(
+                args=[instance.document.id],
+                countdown=5  # Reduced delay for testing
+            )
+            logger.info(f"📋 Scheduled AI analysis task {task_result.id} for document: {instance.document}")
+        except Exception as e:
+            logger.error(f"❌ Failed to schedule AI analysis: {e}")
     else:
-        logger.debug(f"AI analysis record already exists for document: {instance.document}")
+        logger.info(f"⏭️ AI analysis record already exists for document: {instance.document}")
 
 
-@receiver(event_document_file_created)
-def log_document_file_creation(sender, instance, **kwargs):
-    """
-    Log when document files are created for monitoring purposes.
-    """
-    logger.info(f"Document file created: {instance.filename} (ID: {instance.id})")
+# Note: Mayan EDMS events are not Django signals, so we can't use @receiver decorator
+# Instead, we'll use the Mayan event system if needed
+# For now, we'll rely on the post_save signal above

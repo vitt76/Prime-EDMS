@@ -7,7 +7,9 @@ from .api_views import (
     DocumentAIAnalysisViewSet,
     DAMMetadataPresetViewSet,
     AIAnalysisStatusView,
-    DAMDocumentDetailView
+    DAMDocumentDetailView,
+    DAMDocumentListView,
+    DAMDashboardStatsView
 )
 from .views import (
     DAMDashboardView,
@@ -29,6 +31,8 @@ api_urlpatterns = [
     path('', include(router.urls)),
     path('analysis-status/', AIAnalysisStatusView.as_view(), name='analysis-status'),
     path('document-detail/', DAMDocumentDetailView.as_view(), name='document-detail'),
+    path('documents/', DAMDocumentListView.as_view(), name='document-list'),
+    path('dashboard-stats/', DAMDashboardStatsView.as_view(), name='dashboard-stats'),
 ]
 
 # Alias for REST API auto-discovery
@@ -37,7 +41,7 @@ api_urls = api_urlpatterns
 # UI URL patterns
 ui_urlpatterns = [
     path(
-        '',
+        'digital-assets/',
         DAMDashboardView.as_view(),
         name='dashboard'
     ),

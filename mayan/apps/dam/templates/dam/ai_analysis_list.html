@@ -1,0 +1,89 @@
+{% extends 'appearance/generic_list_horizontal.html' %}
+{% load i18n %}
+{% load common_tags %}
+
+{% block title %}{% trans 'AI Analysis Results' %}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-xs-12">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h3 class="panel-title">
+                    <i class="fa fa-brain"></i>
+                    {% trans 'AI Analysis Results' %}
+                </h3>
+            </div>
+            <div class="panel-body">
+                {% if object_list %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>{% trans 'Document' %}</th>
+                                <th>{% trans 'Status' %}</th>
+                                <th>{% trans 'Provider' %}</th>
+                                <th>{% trans 'Created' %}</th>
+                                <th>{% trans 'Description' %}</th>
+                                <th>{% trans 'Actions' %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for analysis in object_list %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'documents:document_preview' document_id=analysis.document.pk %}">
+                                        {{ analysis.document.label }}
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if analysis.analysis_status == 'completed' %}
+                                        <span class="label label-success">{% trans 'Completed' %}</span>
+                                    {% elif analysis.analysis_status == 'pending' %}
+                                        <span class="label label-warning">{% trans 'Pending' %}</span>
+                                    {% elif analysis.analysis_status == 'running' %}
+                                        <span class="label label-info">{% trans 'Running' %}</span>
+                                    {% elif analysis.analysis_status == 'failed' %}
+                                        <span class="label label-danger">{% trans 'Failed' %}</span>
+                                    {% else %}
+                                        <span class="label label-default">{{ analysis.analysis_status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ analysis.ai_provider|default:'-' }}</td>
+                                <td>{{ analysis.created|date:'Y-m-d H:i' }}</td>
+                                <td>
+                                    {% if analysis.ai_description %}
+                                        {{ analysis.ai_description|truncatechars:100 }}
+                                    {% else %}
+                                        <em>{% trans 'No description' %}</em>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'dam:asset_detail' ai_analysis_id=analysis.pk %}" class="btn btn-sm btn-default">
+                                        <i class="fa fa-eye"></i> {% trans 'View' %}
+                                    </a>
+                                    {% if analysis.analysis_status == 'completed' %}
+                                    <a href="{% url 'dam:asset_edit' ai_analysis_id=analysis.pk %}" class="btn btn-sm btn-default">
+                                        <i class="fa fa-edit"></i> {% trans 'Edit' %}
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination can be added later if needed -->
+
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fa fa-info-circle"></i>
+                    {% trans 'No AI analyses found.' %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

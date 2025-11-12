@@ -66,7 +66,7 @@ services:
       dockerfile: Dockerfile.app
     container_name: prime-edms_app_1
     environment:
-      MAYAN_MEDIA_ROOT: '/opt/mayan-edms/data'
+      MAYAN_MEDIA_ROOT: '/var/lib/mayan'
       MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql','PORT':'5432'}}"
       MAYAN_CELERY_BROKER_URL: amqp://mayan:mayanrabbitpass@rabbitmq:5672/mayan
       MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
@@ -91,7 +91,6 @@ services:
       DAM_YANDEXGPT_FOLDER_ID: "${DAM_YANDEXGPT_FOLDER_ID}"
     volumes:
       - mayan_data:/var/lib/mayan
-      - mayan_renditions:/opt/mayan-edms/data
       - ./config.yml:/opt/mayan-edms/config.yml:ro
       - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
       - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution

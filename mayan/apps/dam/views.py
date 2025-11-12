@@ -3,7 +3,9 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
-from django.views.generic import DetailView, TemplateView, UpdateView
+from django.views.generic import DetailView, ListView, TemplateView, UpdateView
+
+from mayan.apps.views.generics import SimpleView
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document
@@ -12,6 +14,7 @@ from mayan.apps.views.generics import (
     ConfirmView, MultipleObjectFormActionView, SingleObjectCreateView,
     SingleObjectDeleteView, SingleObjectEditView, SingleObjectListView
 )
+from mayan.apps.views.mixins import ViewPermissionCheckViewMixin
 
 from .forms import DocumentAIAnalysisForm
 from .icons import icon_dam, icon_ai_analysis_list
@@ -123,7 +126,7 @@ class DocumentAIAnalysisReanalyzeView(ConfirmView):
         )
 
 
-class DAMDashboardView(TemplateView):
+class DAMDashboardView(SimpleView):
     """
     DAM dashboard with statistics and overview.
     """
@@ -163,25 +166,28 @@ class DAMDashboardView(TemplateView):
         return context
 
 
-class DocumentAIAnalysisListView(SingleObjectListView):
+class DocumentAIAnalysisListView(ViewPermissionCheckViewMixin, ListView):
     """
     List view for all AI analyses.
     """
     model = DocumentAIAnalysis
+    template_name = 'dam/ai_analysis_list.html'
+    context_object_name = 'object_list'
     object_permission = permission_ai_analysis_view
-    view_icon = icon_ai_analysis_list
 
-    def get_extra_context(self):
-        return {
-            'title': _('AI Analysis Results'),
-            'hide_object': True,
-        }
-
-    def get_source_queryset(self):
+    def get_queryset(self):
         return DocumentAIAnalysis.objects.select_related('document').order_by('-created')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update({
+            'title': _('AI Analysis Results'),
+            'hide_object': True,
+        })
+        return context
 
-class DAMTestView(TemplateView):
+
+class DAMTestView(SimpleView):
     """
     Test view for DAM functionality.
     """
@@ -189,8 +195,6 @@ class DAMTestView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from mayan.apps.documents.models import Document
-        context['documents'] = Document.objects.all()[:10]  # First 10 documents
         return context
 
 

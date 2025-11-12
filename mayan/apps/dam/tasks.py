@@ -12,7 +12,7 @@ from .ai_providers import AIProviderRegistry
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')
 def analyze_document_with_ai(self, document_id: int):
     """
     Analyze document with AI and update metadata.
@@ -88,6 +88,75 @@ def analyze_document_with_ai(self, document_id: int):
             logger.error(f"Max retries exceeded for document {document_id}")
 
 
+def get_document_image_data(document_file: DocumentFile) -> bytes:
+    """
+    Get document image data. For image files, read directly. For documents, use internal generation.
+
+    Args:
+        document_file: DocumentFile instance
+
+    Returns:
+        Image data as bytes
+    """
+    try:
+        logger.info(f"Getting image data for document_file: {document_file}")
+
+        # Check if this is an image file (JPEG, PNG, etc.)
+        mimetype = document_file.mimetype or ''
+        if mimetype.startswith('image/'):
+            # For image files, we can try to read directly
+            logger.info(f"Document is an image file ({mimetype}), trying direct read")
+            try:
+                with document_file.open() as file_obj:
+                    image_data = file_obj.read()
+                logger.info(f"Successfully read image data directly, size: {len(image_data)} bytes")
+                return image_data
+            except Exception as e:
+                logger.warning(f"Direct read failed: {e}, falling back to page generation")
+
+        # For non-image files or if direct read failed, use page-based approach
+        first_page = document_file.pages.first()
+        if not first_page:
+            logger.error("No pages found in document file")
+            return None
+
+        logger.info(f"Using page-based image generation for page: {first_page} (ID: {first_page.pk})")
+
+        # Use Mayan EDMS get_image method which handles caching internally
+        from PIL import Image
+        import io
+
+        # Get the image using Mayan's method
+        image = first_page.get_image()
+
+        # Convert to bytes if it's a PIL Image
+        if isinstance(image, Image.Image):
+            # Resize if needed
+            if image.width > 1600:
+                # Calculate new height maintaining aspect ratio
+                aspect_ratio = image.height / image.width
+                new_height = int(1600 * aspect_ratio)
+                image = image.resize((1600, new_height), Image.LANCZOS)
+
+            # Convert to bytes
+            output = io.BytesIO()
+            image.save(output, format='JPEG', quality=95)
+            image_data = output.getvalue()
+            output.close()
+        else:
+            # Assume it's already bytes
+            image_data = image
+
+        logger.info(f"Successfully got image data, size: {len(image_data)} bytes")
+        return image_data
+
+    except Exception as e:
+        logger.error(f"Failed to get image data: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
     """
     Perform AI analysis using available providers.
@@ -98,13 +167,49 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
     Returns:
         Dict with analysis results
     """
-    # Get file data
+    import os
+
+    # Get file data - use direct file access (since we fixed volume mapping)
+    logger.info(f"Starting AI analysis for document_file: {document_file} (mimetype: {document_file.mimetype})")
+
     try:
+        # Use direct file access (should work now with proper volume mapping)
+        logger.info("Reading file data directly...")
         with document_file.open() as file_obj:
             image_data = file_obj.read()
+        logger.info(f"✅ Successfully read file data directly, size: {len(image_data)} bytes")
+        logger.info(f"📍 File path: {document_file.file.path}")
+        logger.info(f"📊 File exists at path: {os.path.exists(document_file.file.path)}")
+
+        # Additional validation
+        if len(image_data) < 100:
+            logger.warning(f"⚠️ File is very small ({len(image_data)} bytes), might be corrupted")
+        if not image_data.startswith((b'\xff\xd8\xff', b'GIF87a', b'GIF89a', b'\x89PNG')):
+            logger.warning("⚠️ File does not start with known image header")
+
+        # Log file signature for debugging
+        import hashlib
+        file_hash = hashlib.md5(image_data[:1000]).hexdigest()[:8]
+        logger.info(f"🔒 File signature: {file_hash}")
+        logger.info(f"📏 Expected size from DB: {document_file.size} bytes")
+
     except Exception as e:
-        logger.error(f"Failed to read file data: {e}")
-        return {}
+        logger.error(f"❌ Could not read file data: {e}")
+        raise Exception(f"Failed to read document file: {e}")
+
+    # Validate image data
+    logger.info(f"First 100 bytes (hex): {image_data[:100].hex()}")
+    logger.info(f"First 100 bytes (repr): {repr(image_data[:100])}")
+
+    # Check if this looks like valid image data
+    if image_data.startswith(b'\xff\xd8\xff'):
+        logger.info("✅ File appears to be valid JPEG (starts with JPEG SOI marker)")
+    elif image_data.startswith((b'GIF87a', b'GIF89a')):
+        logger.info("✅ File appears to be valid GIF")
+    elif image_data.startswith(b'\x89PNG'):
+        logger.info("✅ File appears to be valid PNG")
+    else:
+        logger.warning("⚠️ File does NOT appear to be valid image (missing known header)")
 
     mime_type = document_file.mimetype or 'application/octet-stream'
 
@@ -113,30 +218,37 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
 
     for provider_name in providers_to_try:
         try:
+            print(f"🔄 Trying provider: {provider_name}")
             provider_class = AIProviderRegistry.get_provider_class(provider_name)
             provider_config = get_provider_config(provider_name)
 
             if not provider_config:
+                print(f"❌ No config for provider {provider_name}")
                 continue
 
+            print(f"⚙️ Config for {provider_name}: {list(provider_config.keys())}")
             provider = provider_class(**provider_config)
 
             if not provider.is_available():
-                logger.debug(f"Provider {provider_name} is not available")
+                print(f"❌ Provider {provider_name} is not available")
                 continue
 
             # Perform analysis
-            logger.info(f"Analyzing document with {provider_name}")
+            print(f"🤖 Analyzing document with {provider_name}")
+            print(f"📊 Image data size: {len(image_data)}, mime_type: {mime_type}")
 
             results = provider.analyze_image(image_data, mime_type)
 
             # Add provider info
             results['provider'] = provider_name
+            print(f"✅ Analysis successful with {provider_name}")
 
             return results
 
         except Exception as e:
-            logger.warning(f"AI analysis with {provider_name} failed: {e}")
+            print(f"❌ AI analysis with {provider_name} failed: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             continue
 
     # Fallback if all providers fail

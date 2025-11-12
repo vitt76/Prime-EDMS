@@ -13,7 +13,7 @@ class DAMApp(MayanAppConfig):
     YandexGPT, and GigaChat.
     """
     app_namespace = 'dam'
-    app_url = 'dam'
+    app_url = 'digital-assets'
     has_rest_api = True
     has_static_media = True
     has_tests = True
@@ -23,8 +23,10 @@ class DAMApp(MayanAppConfig):
 
     def ready(self):
         print(f'🔍 DAM ready() called for {self.name}')
+        print(f'📍 app_url: {self.app_url}, app_namespace: {self.app_namespace}')
         super().ready()
         print('🎨 DAM module ready() called!')
+        print(f'✅ DAM URL should be available at: /{self.app_url}/')
 
         # Force add ourselves to INSTALLED_APPS if not already there
         from django.conf import settings
@@ -52,23 +54,40 @@ class DAMApp(MayanAppConfig):
         except Exception as exc:
             print(f'⚠️ DAM URL registration failed: {exc}')
 
+        # Register supporting components
+        try:
+            self._register_ai_providers()
+            self._register_signals()
+            self._extend_search()
+            self._register_ajax_templates()
+            self._register_menus()
+        except Exception as exc:
+            print(f'⚠️ DAM component registration failed during ready(): {exc}')
+            # Continue with other components even if one fails
+            pass
+
         print('🎨 DAM module loaded successfully!')
 
     def _register_ai_providers(self):
         """Регистрация доступных AI провайдеров"""
-        from .ai_providers import AIProviderRegistry
+        try:
+            from .ai_providers import AIProviderRegistry
 
-        print(f'🤖 Registering AI providers...')
+            print(f'🤖 Registering AI providers...')
 
-        # Регистрация провайдеров
-        AIProviderRegistry.register('openai', 'mayan.apps.dam.ai_providers.openai.OpenAIProvider')
-        AIProviderRegistry.register('claude', 'mayan.apps.dam.ai_providers.claude.ClaudeProvider')
-        AIProviderRegistry.register('gemini', 'mayan.apps.dam.ai_providers.gemini.GeminiProvider')
-        AIProviderRegistry.register('yandexgpt', 'mayan.apps.dam.ai_providers.yandex.YandexGPTProvider')
-        AIProviderRegistry.register('gigachat', 'mayan.apps.dam.ai_providers.gigachat.GigaChatProvider')
+            # Регистрация провайдеров (GigaChat первым как наиболее надежный)
+            AIProviderRegistry.register('gigachat', 'mayan.apps.dam.ai_providers.gigachat.GigaChatProvider')
+            AIProviderRegistry.register('openai', 'mayan.apps.dam.ai_providers.openai.OpenAIProvider')
+            AIProviderRegistry.register('claude', 'mayan.apps.dam.ai_providers.claude.ClaudeProvider')
+            AIProviderRegistry.register('gemini', 'mayan.apps.dam.ai_providers.gemini.GeminiProvider')
+            AIProviderRegistry.register('yandexgpt', 'mayan.apps.dam.ai_providers.yandex.YandexGPTProvider')
 
-        print(f'🤖 AI providers registered: {list(AIProviderRegistry._providers.keys())}')
-        print('🤖 AI providers registered successfully!')
+            print(f'🤖 AI providers registered: {list(AIProviderRegistry.get_available_providers())}')
+            print('🤖 AI providers registered successfully!')
+        except Exception as e:
+            print(f'❌ Failed to register AI providers: {e}')
+            import traceback
+            traceback.print_exc()
 
     def _register_signals(self):
         """Регистрация сигналов для автоматического анализа"""

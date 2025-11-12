@@ -159,7 +159,7 @@ class DAMWidget(forms.widgets.Widget):
             if (docId) {{
                 // Load DAM content via AJAX
                 $.ajax({{
-                    url: '/api/dam/document-detail/',
+                    url: '/dam/api/document-detail/',
                     data: {{ document_id: docId }},
                     success: function(response) {{
                         container.replaceWith(response.html);

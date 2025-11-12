@@ -1,3 +1,6 @@
+from django.core.exceptions import PermissionDenied
+from django.db.models import Count
+
 from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -6,11 +9,15 @@ from rest_framework.viewsets import ModelViewSet
 
 from mayan.apps.documents.models import Document
 from mayan.apps.documents.permissions import permission_document_view
+from mayan.apps.acls.models import AccessControlList
 from mayan.apps.rest_api import generics as mayan_generics
 from mayan.apps.templating.classes import AJAXTemplate
 
 from .models import DocumentAIAnalysis, DAMMetadataPreset
-from .serializers import DocumentAIAnalysisSerializer, DAMMetadataPresetSerializer
+from .serializers import (
+    DocumentAIAnalysisSerializer, DAMMetadataPresetSerializer,
+    DAMDocumentListSerializer
+)
 from .tasks import analyze_document_with_ai
 
 
@@ -148,12 +155,9 @@ class AIAnalysisStatusView(mayan_generics.GenericAPIView):
     """
     API endpoint to get AI analysis status for a document.
     """
+    permission_classes = (IsAuthenticated,)
 
-    @action(detail=False, methods=['get'])
-    def get_status(self, request):
-        """
-        Get AI analysis status for a document.
-        """
+    def get(self, request, *args, **kwargs):
         document_id = request.query_params.get('document_id')
 
         if not document_id:
@@ -163,23 +167,46 @@ class AIAnalysisStatusView(mayan_generics.GenericAPIView):
             )
 
         try:
-            ai_analysis = DocumentAIAnalysis.objects.get(document_id=document_id)
-            return Response({
-                'document_id': document_id,
-                'status': ai_analysis.analysis_status,
-                'provider': ai_analysis.ai_provider,
-                'completed_at': ai_analysis.analysis_completed,
-                'has_description': bool(ai_analysis.ai_description),
-                'tags_count': len(ai_analysis.get_ai_tags_list()),
-                'colors_count': len(ai_analysis.get_dominant_colors_list()),
-                'has_alt_text': bool(ai_analysis.alt_text)
-            })
+            document = Document.objects.get(pk=document_id)
+        except Document.DoesNotExist:
+            return Response(
+                {'error': 'Document not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            AccessControlList.objects.check_access(
+                obj=document,
+                permissions=(permission_document_view,),
+                user=request.user
+            )
+        except PermissionDenied:
+            return Response(
+                {'error': 'Access denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            ai_analysis = document.ai_analysis
         except DocumentAIAnalysis.DoesNotExist:
             return Response({
                 'document_id': document_id,
                 'status': 'not_analyzed',
                 'message': 'Document has not been analyzed with AI yet'
             })
+
+        return Response({
+            'document_id': document_id,
+            'analysis_id': ai_analysis.id,
+            'status': ai_analysis.analysis_status,
+            'provider': ai_analysis.ai_provider,
+            'completed_at': ai_analysis.analysis_completed,
+            'has_description': bool(ai_analysis.ai_description),
+            'tags_count': len(ai_analysis.get_ai_tags_list()),
+            'categories_count': len(ai_analysis.categories or []),
+            'has_alt_text': bool(ai_analysis.alt_text),
+            'updated_at': ai_analysis.updated
+        })
 
 
 class DAMDocumentDetailView(generics.RetrieveAPIView):
@@ -241,4 +268,76 @@ class DAMDocumentDetailView(generics.RetrieveAPIView):
             'name': template.name,
             'html': rendered_content,
             'hex_hash': hex_hash
+        })
+
+
+class DAMDocumentListView(generics.ListAPIView):
+    """
+    List documents with their DAM analysis status.
+    """
+    serializer_class = DAMDocumentListSerializer
+    permission_classes = (IsAuthenticated,)
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = Document.objects.order_by('-id').select_related('ai_analysis')
+
+        # Apply search filter if provided
+        search_query = self.request.query_params.get('q') or self.request.query_params.get('search')
+        if search_query:
+            queryset = queryset.filter(label__icontains=search_query)
+
+        return AccessControlList.objects.restrict_queryset(
+            permission=permission_document_view,
+            queryset=queryset,
+            user=self.request.user
+        )
+
+
+class DAMDashboardStatsView(mayan_generics.GenericAPIView):
+    """
+    Provide dashboard statistics for DAM analyses.
+    """
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, *args, **kwargs):
+        documents_queryset = AccessControlList.objects.restrict_queryset(
+            permission=permission_document_view,
+            queryset=Document.objects.all(),
+            user=request.user
+        )
+
+        total_documents = documents_queryset.count()
+
+        analyses_queryset = DocumentAIAnalysis.objects.filter(
+            document__in=documents_queryset
+        )
+
+        total_analyses = analyses_queryset.count()
+        completed_analyses = analyses_queryset.filter(analysis_status='completed').count()
+        processing_analyses = analyses_queryset.filter(analysis_status='processing').count()
+        pending_analyses = analyses_queryset.filter(analysis_status='pending').count()
+        failed_analyses = analyses_queryset.filter(analysis_status='failed').count()
+
+        provider_breakdown = [
+            {
+                'provider': entry['ai_provider'] or 'unknown',
+                'count': entry['count']
+            }
+            for entry in analyses_queryset.values('ai_provider').annotate(count=Count('ai_provider')).order_by('-count')
+        ]
+
+        return Response({
+            'documents': {
+                'total': total_documents,
+                'with_analysis': total_analyses,
+                'without_analysis': max(total_documents - total_analyses, 0)
+            },
+            'analyses': {
+                'completed': completed_analyses,
+                'processing': processing_analyses,
+                'pending': pending_analyses,
+                'failed': failed_analyses
+            },
+            'providers': provider_breakdown
         })
