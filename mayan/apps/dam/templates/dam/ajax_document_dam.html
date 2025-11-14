@@ -14,6 +14,11 @@
             <div class="mb-3">
                 <strong>Описание:</strong>
                 <p class="mb-2">{{ ai_analysis.ai_description }}</p>
+                {% if ai_analysis.ai_description|slice:":17" == "Техническая информация" %}
+                <div class="alert alert-info mt-2">
+                    <small><i class="fas fa-info-circle"></i> Это техническая информация о файле. AI провайдеры не смогли проанализировать содержимое изображения.</small>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
 
@@ -150,8 +155,10 @@ function reanalyzeDAM(documentId) {
             },
             data: { document_id: documentId },
             success: function(response) {
-                // Reload the DAM content
-                loadDAMContent(documentId);
+                // Reload the DAM content with fresh data
+                setTimeout(function() {
+                    loadDAMContent(documentId);
+                }, 1000); // Wait 1 second for analysis to start
             },
             error: function(xhr) {
                 alert('{% trans "Error starting analysis:" %} ' + xhr.responseJSON.detail);
@@ -167,9 +174,10 @@ function editDAMMetadata(analysisId) {
 }
 
 function loadDAMContent(documentId) {
-    // Reload the DAM AJAX template
+    // Reload the DAM AJAX template with cache busting
     $.ajax({
-        url: '/digital-assets/api/document-detail/' + documentId + '/',
+        url: '/digital-assets/api/document-detail/' + documentId + '/?_=' + new Date().getTime(),
+        cache: false,
         success: function(response) {
             $('#dam-content').html(response.html);
         },

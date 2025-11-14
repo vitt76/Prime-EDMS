@@ -21,9 +21,14 @@ def analyze_document_with_ai(self, document_id: int):
         document_id: ID of the document to analyze
     """
     try:
+        logger.info(f"🚀 Starting AI analysis for document {document_id}")
+
         # Get document and its latest file
         document = Document.objects.get(id=document_id)
         document_file = document.files.order_by('-timestamp').first()
+
+        logger.info(f"📄 Document: {document.label} (ID: {document_id})")
+        logger.info(f"📁 Document file: {document_file} (mimetype: {document_file.mimetype})")
 
         if not document_file:
             logger.error(f"No files found for document {document_id}")
@@ -35,6 +40,8 @@ def analyze_document_with_ai(self, document_id: int):
             defaults={'analysis_status': 'processing'}
         )
 
+        logger.info(f"🔍 AI Analysis record: created={created}, status={ai_analysis.analysis_status}")
+
         if not created and ai_analysis.analysis_status == 'completed':
             logger.info(f"AI analysis already completed for document {document_id}")
             return
@@ -44,7 +51,9 @@ def analyze_document_with_ai(self, document_id: int):
         ai_analysis.save()
 
         # Get AI analysis results
+        logger.info(f"🤖 Calling perform_ai_analysis for document {document_id}")
         analysis_results = perform_ai_analysis(document_file)
+        logger.info(f"✅ perform_ai_analysis returned: {analysis_results.get('provider', 'unknown')}")
 
         # Update AI analysis record
         ai_analysis.ai_description = analysis_results.get('description', '')
@@ -227,19 +236,31 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
         logger.error(f"❌ Could not read file data: {e}")
         raise Exception(f"Failed to read document file: {e}")
 
-    # Validate image data
-    logger.info(f"First 100 bytes (hex): {image_data[:100].hex()}")
-    logger.info(f"First 100 bytes (repr): {repr(image_data[:100])}")
+        # Validate image data
+        logger.info(f"First 100 bytes (hex): {image_data[:100].hex()}")
+        logger.info(f"First 100 bytes (repr): {repr(image_data[:100])}")
 
-    # Check if this looks like valid image data
-    if image_data.startswith(b'\xff\xd8\xff'):
-        logger.info("✅ File appears to be valid JPEG (starts with JPEG SOI marker)")
-    elif image_data.startswith((b'GIF87a', b'GIF89a')):
-        logger.info("✅ File appears to be valid GIF")
-    elif image_data.startswith(b'\x89PNG'):
-        logger.info("✅ File appears to be valid PNG")
-    else:
-        logger.warning("⚠️ File does NOT appear to be valid image (missing known header)")
+        # Check file size limit for GigaChat (4MB)
+        file_size_mb = len(image_data) / (1024 * 1024)
+        logger.info(f"📏 File size: {file_size_mb:.2f} MB")
+
+        if file_size_mb > 4:
+            logger.warning(f"⚠️ File is too large ({file_size_mb:.2f} MB) for GigaChat API (limit: 4MB)")
+            # Skip GigaChat for large files
+            providers_to_try.remove('gigachat')
+
+        # Check if this looks like valid image data
+        if image_data.startswith(b'\xff\xd8\xff'):
+            logger.info("✅ File appears to be valid JPEG (starts with JPEG SOI marker)")
+        elif image_data.startswith((b'GIF87a', b'GIF89a')):
+            logger.info("✅ File appears to be valid GIF")
+        elif image_data.startswith(b'\x89PNG'):
+            logger.info("✅ File appears to be valid PNG")
+        else:
+            logger.warning("⚠️ File does NOT appear to be valid image (missing known header)")
+            # Skip all providers for invalid images
+            logger.error("❌ Invalid image format, skipping AI analysis")
+            return get_fallback_analysis(mime_type)
 
     mime_type = document_file.mimetype or 'application/octet-stream'
 
@@ -267,7 +288,13 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
             logger.info(f"🤖 Analyzing document with {provider_name}")
             logger.info(f"📊 Image data size: {len(image_data)}, mime_type: {mime_type}")
 
-            results = provider.analyze_image(image_data, mime_type)
+            # Only use providers that support image description
+            if provider.supports_image_description:
+                results = provider.analyze_image(image_data, mime_type)
+            else:
+                # Skip providers that don't support image description
+                logger.warning(f"⚠️ Provider {provider_name} doesn't support image description, skipping")
+                continue
 
             # Add provider info
             results['provider'] = provider_name
@@ -279,11 +306,17 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
             logger.error(f"❌ AI analysis with {provider_name} failed: {e}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
+
+            # Add more detailed error info
+            if hasattr(e, 'response'):
+                logger.error(f"Response status: {getattr(e.response, 'status_code', 'unknown')}")
+                logger.error(f"Response content: {getattr(e.response, 'text', 'unknown')[:500]}")
+
             continue
 
     # Fallback if all providers fail
     logger.error("All AI providers failed, using fallback analysis")
-    return get_fallback_analysis(mime_type)
+    return get_fallback_analysis(mime_type, image_data)
 
 
 def get_provider_config(provider_name: str) -> Dict[str, Any]:
@@ -329,21 +362,87 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
     return {k: v for k, v in config.items() if v is not None}
 
 
-def get_fallback_analysis(mime_type: str) -> Dict[str, Any]:
+def get_fallback_analysis(mime_type: str, image_data: bytes = None) -> Dict[str, Any]:
     """
     Provide fallback analysis when AI providers are unavailable.
+    This provides basic technical information, not content analysis.
 
     Args:
         mime_type: MIME type of the file
+        image_data: Raw file data for additional analysis
 
     Returns:
-        Basic analysis results
+        Basic technical analysis results
     """
+    # Provide technical information about the file
+    if mime_type.startswith('image/'):
+        format_name = mime_type.split("/")[1].upper()
+        description = f'Техническая информация: изображение в формате {format_name}'
+        tags = ['изображение', 'графика', format_name.lower()]
+
+        # Get technical metadata
+        if image_data:
+            try:
+                from PIL import Image
+                import io
+
+                img = Image.open(io.BytesIO(image_data))
+                width, height = img.size
+                mode = img.mode
+                file_size_kb = len(image_data) / 1024
+
+                description = f'Техническая информация: изображение {format_name}, {width}×{height} пикселей, {file_size_kb:.1f} KB, режим {mode}'
+                tags.extend([f'{width}x{height}', f'{file_size_kb:.0f}kb', f'режим_{mode}'])
+
+                # Color mode tags
+                if mode == 'RGB':
+                    tags.append('цветное')
+                elif mode == 'L':
+                    tags.append('черно-белое')
+                elif mode == 'RGBA':
+                    tags.append('прозрачное')
+
+            except Exception as e:
+                logger.warning(f"Could not get technical info: {e}")
+                description = f'Техническая информация: файл типа {mime_type}'
+
+        alt_text = description
+        categories = ['медиа', 'изображения']
+
+    elif mime_type.startswith('video/'):
+        format_name = mime_type.split("/")[1].upper()
+        description = f'Техническая информация: видеофайл в формате {format_name}'
+        alt_text = description
+        tags = ['видео', 'мультимедиа', format_name.lower()]
+        categories = ['мультимедиа', 'видео']
+    elif mime_type.startswith('audio/'):
+        format_name = mime_type.split("/")[1].upper()
+        description = f'Техническая информация: аудиофайл в формате {format_name}'
+        alt_text = description
+        tags = ['аудио', 'мультимедиа', format_name.lower()]
+        categories = ['мультимедиа', 'аудио']
+    elif mime_type == 'application/pdf':
+        description = 'Техническая информация: PDF документ'
+        alt_text = 'PDF файл'
+        tags = ['PDF', 'документ', 'текст']
+        categories = ['документы', 'текст']
+    else:
+        description = f'Техническая информация: файл типа {mime_type}'
+        alt_text = description
+        tags = get_basic_tags_for_mime_type(mime_type)
+        categories = ['файлы']
+
     return {
-        'description': f'Файл типа {mime_type}',
-        'tags': get_basic_tags_for_mime_type(mime_type),
+        'description': description,
+        'tags': tags,
+        'categories': categories,
+        'language': '',
+        'people': [],
+        'locations': [],
+        'copyright': '',
+        'usage_rights': '',
         'colors': [],
-        'alt_text': f'Файл типа {mime_type}',
+        'alt_text': alt_text,
         'provider': 'fallback'
     }
 

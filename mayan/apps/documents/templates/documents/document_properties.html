@@ -169,15 +169,29 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <a href="{% url 'documents:document_download' document.pk %}" class="btn btn-outline-primary btn-block mb-2">
+                    {% if document.latest_file %}
+                    <a href="{% url 'documents:document_file_download' document.latest_file.pk %}" class="btn btn-outline-primary btn-block mb-2">
                         <i class="fas fa-download"></i>
                         {% trans "Download" %}
                     </a>
-                    <a href="{% url 'documents:document_print' document.pk %}" class="btn btn-outline-secondary btn-block mb-2">
+                    {% else %}
+                    <button class="btn btn-outline-primary btn-block mb-2 disabled">
+                        <i class="fas fa-download"></i>
+                        {% trans "Download" %}
+                    </button>
+                    {% endif %}
+                    {% if document.latest_version %}
+                    <a href="{% url 'documents:document_version_print_view' document.latest_version.pk %}" class="btn btn-outline-secondary btn-block mb-2">
                         <i class="fas fa-print"></i>
                         {% trans "Print" %}
                     </a>
-                    <a href="{% url 'converter:document_transform' document.pk %}" class="btn btn-outline-info btn-block">
+                    {% else %}
+                    <button class="btn btn-outline-secondary btn-block mb-2 disabled">
+                        <i class="fas fa-print"></i>
+                        {% trans "Print" %}
+                    </button>
+                    {% endif %}
+                    <a href="#" class="btn btn-outline-info btn-block disabled">
                         <i class="fas fa-magic"></i>
                         {% trans "Convert" %}
                     </a>
