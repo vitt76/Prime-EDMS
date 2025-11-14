@@ -208,6 +208,7 @@ class DocumentPropertiesView(SingleObjectDetailView):
             'document': self.object,
             'object': self.object,
             'title': _('Properties of document: %s') % self.object,
+            'non_html_title': True,  # Disable automatic title generation
         }
 
         # Add DAM analysis data directly to context
@@ -262,28 +263,6 @@ class DocumentPropertiesView(SingleObjectDetailView):
                 dam_data['categories_html'] = "".join([f'<span class="badge badge-info mr-1 mb-1">{cat}</span>' for cat in ai_analysis.categories])
                 logger.info(f"Categories: {ai_analysis.categories}")
 
-            # Special hardcoded test for document 39
-            if self.object.id == 39:
-                logger.info("Using hardcoded data for document 39")
-                dam_data = {
-                    'status': 'completed',
-                    'description': 'На фотографии изображена уютная городская площадь вечером, освещенная теплым светом фонарей и уличных ламп. Люди прогуливаются вдоль кафе и магазинов, наслаждаясь атмосферой вечернего города.',
-                    'tags_html': '<span class="badge badge-primary mr-1 mb-1">городская_площадь</span><span class="badge badge-primary mr-1 mb-1">вечерний_город</span><span class="badge badge-primary mr-1 mb-1">фонари</span>',
-                    'categories_html': '<span class="badge badge-info mr-1 mb-1">городская_жизнь</span><span class="badge badge-info mr-1 mb-1">улицы</span><span class="badge badge-info mr-1 mb-1">вечерняя_атмосфера</span>',
-                    'provider': 'gigachat',
-                    'completed_date': '12.11.2025 18:51'
-                }
-            # Special hardcoded test for document 43 (mitsubishi)
-            elif self.object.id == 43:
-                logger.info("Using hardcoded data for document 43")
-                dam_data = {
-                    'status': 'completed',
-                    'description': 'Техническая информация: изображение JPEG, 789×789 пикселей, 292.1 KB, режим RGB',
-                    'tags_html': '<span class="badge badge-primary mr-1 mb-1">изображение</span><span class="badge badge-primary mr-1 mb-1">графика</span><span class="badge badge-primary mr-1 mb-1">jpeg</span><span class="badge badge-primary mr-1 mb-1">789x789</span><span class="badge badge-primary mr-1 mb-1">292kb</span><span class="badge badge-primary mr-1 mb-1">режим_RGB</span><span class="badge badge-primary mr-1 mb-1">цветное</span>',
-                    'categories_html': '<span class="badge badge-info mr-1 mb-1">медиа</span><span class="badge badge-info mr-1 mb-1">изображения</span>',
-                    'provider': 'fallback',
-                    'completed_date': '14.11.2025 11:46'
-                }
 
             context['dam_analysis_data'] = dam_data
             logger.info(f"Successfully set dam_analysis_data for document {self.object.id}")
