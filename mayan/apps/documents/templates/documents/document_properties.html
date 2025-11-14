@@ -1,0 +1,193 @@
+{% extends 'appearance/base.html' %}
+
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-xs-12">
+            <h1 class="page-header">
+                <i class="{{ view_icon.render }}"></i>
+                {{ title }}
+            </h1>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 col-xl-9">
+            <!-- Document Properties -->
+            {% if form %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-file-alt mr-2"></i>
+                            {% trans "Document Properties" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="row">
+                                <div class="col-md-6">
+                                    {% for field in form %}
+                                        {% if field.name != 'dam_analysis' %}
+                                            <div class="form-group">
+                                                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                                {{ field }}
+                                                {% if field.help_text %}
+                                                    <small class="form-text text-muted">{{ field.help_text }}</small>
+                                                {% endif %}
+                                                {% for error in field.errors %}
+                                                    <div class="text-danger">{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <!-- DAM Analysis Section -->
+                                    <div class="form-group">
+                                        <label>{% trans "DAM Analysis" %}</label>
+                                        <small class="form-text text-muted">{% trans "AI-generated metadata and asset management information" %}</small>
+
+                                        {% if dam_analysis_data %}
+                                            {% if dam_analysis_data.status == 'completed' %}
+                                                <div class="dam-analysis-content">
+                                                    <div class="alert alert-success mb-3">
+                                                        <i class="fas fa-check-circle mr-2"></i>
+                                                        <strong>Анализ завершен</strong>
+                                                    </div>
+
+                                                    {% if dam_analysis_data.description %}
+                                                    <div class="mb-3">
+                                                        <strong>Описание:</strong>
+                                                        <p class="mb-2">{{ dam_analysis_data.description }}</p>
+                                                    </div>
+                                                    {% endif %}
+
+                                                    {% if dam_analysis_data.tags_html %}
+                                                    <div class="mb-3">
+                                                        <strong>Метки:</strong>
+                                                        <div class="mt-2">{{ dam_analysis_data.tags_html|safe }}</div>
+                                                    </div>
+                                                    {% endif %}
+
+                                                    {% if dam_analysis_data.categories_html %}
+                                                    <div class="mb-3">
+                                                        <strong>Категории:</strong>
+                                                        <div class="mt-2">{{ dam_analysis_data.categories_html|safe }}</div>
+                                                    </div>
+                                                    {% endif %}
+
+                                                    <div class="mt-3 pt-3 border-top">
+                                                        <small class="text-muted">
+                                                            Провайдер: {{ dam_analysis_data.provider }}
+                                                            {% if dam_analysis_data.completed_date %}
+                                                                | Завершено: {{ dam_analysis_data.completed_date }}
+                                                            {% endif %}
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            {% elif dam_analysis_data.status == 'processing' %}
+                                                <div class="dam-analysis-content">
+                                                    <div class="text-center text-muted py-4">
+                                                        <i class="fas fa-spinner fa-spin fa-3x mb-3"></i>
+                                                        <h6>Идет анализ документа...</h6>
+                                                        <p class="mb-0">Пожалуйста, подождите завершения</p>
+                                                    </div>
+                                                </div>
+                                            {% elif dam_analysis_data.status == 'failed' %}
+                                                <div class="dam-analysis-content">
+                                                    <div class="alert alert-danger">
+                                                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                                                        <strong>Ошибка анализа</strong>
+                                                        <p class="mb-2">Не удалось выполнить AI анализ документа</p>
+                                                    </div>
+                                                </div>
+                                            {% else %}
+                                                <div class="dam-analysis-content">
+                                                    <div class="alert alert-info">
+                                                        <i class="fas fa-info-circle mr-2"></i>
+                                                        <strong>AI анализ недоступен</strong>
+                                                        <p class="mb-2">Для этого документа не найдена информация об анализе</p>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        {% else %}
+                                            <div class="alert alert-warning">
+                                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                                <strong>Ошибка загрузки DAM анализа</strong>
+                                                {% if dam_analysis_error %}
+                                                    <p class="mb-0">{{ dam_analysis_error }}</p>
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i>
+                                {% trans "Save Changes" %}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
+
+        <div class="col-lg-4 col-xl-3">
+            <!-- Document Preview -->
+            {% if document %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-eye"></i>
+                        {% trans "Preview" %}
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    {% if document.get_api_image_url %}
+                        <img src="{{ document.get_api_image_url }}" class="img-fluid rounded" alt="Document preview" style="max-height: 300px;">
+                    {% else %}
+                        <div class="text-muted">
+                            <i class="fas fa-file fa-3x mb-3"></i>
+                            <p>{% trans "Preview not available" %}</p>
+                            <small>{{ document.get_file_mimetype|default:"Unknown type" }}</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-bolt"></i>
+                        {% trans "Quick Actions" %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'documents:document_download' document.pk %}" class="btn btn-outline-primary btn-block mb-2">
+                        <i class="fas fa-download"></i>
+                        {% trans "Download" %}
+                    </a>
+                    <a href="{% url 'documents:document_print' document.pk %}" class="btn btn-outline-secondary btn-block mb-2">
+                        <i class="fas fa-print"></i>
+                        {% trans "Print" %}
+                    </a>
+                    <a href="{% url 'converter:document_transform' document.pk %}" class="btn btn-outline-info btn-block">
+                        <i class="fas fa-magic"></i>
+                        {% trans "Convert" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+
+

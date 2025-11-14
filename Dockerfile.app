@@ -21,6 +21,10 @@ COPY mayan/apps/image_editor /opt/mayan-edms/lib/python3.9/site-packages/mayan/a
 COPY mayan/apps/documents/links/document_file_links.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/links/document_file_links.py
 COPY mayan/apps/documents/icons.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/icons.py
 COPY mayan/apps/documents/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/apps.py
+COPY mayan/apps/views/widgets.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/views/widgets.py
+COPY mayan/apps/documents/forms /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/forms
+COPY mayan/apps/documents/templates /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/templates
+COPY mayan/apps/dam /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
 COPY mayan/apps/distribution/models.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/models.py
 COPY mayan/apps/distribution/serializers/publication_serializers.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/serializers/publication_serializers.py
 COPY mayan/apps/distribution/ui_views.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/ui_views.py

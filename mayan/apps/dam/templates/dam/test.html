@@ -413,7 +413,7 @@
             </div>
         `);
 
-        return $.get(endpoints.detail, { document_id: documentId })
+        return $.get(`${endpoints.detail}${documentId}/`)
             .done(response => {
                 $('#analysisDetail').html(response.html);
             })

@@ -79,7 +79,7 @@ services:
       # Force add our extensions via environment
       MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor', 'mayan.apps.dam.apps.DAMApp']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
-      PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
+      PYTHONPATH: /mnt/c/Users/vitt7/PycharmProjects/Prime-EDMS:/opt/mayan-edms/lib/python3.9/site-packages
       # AI Provider configurations
       DAM_GIGACHAT_CREDENTIALS: "${DAM_GIGACHAT_CREDENTIALS}"
       DAM_GIGACHAT_SCOPE: "${DAM_GIGACHAT_SCOPE}"

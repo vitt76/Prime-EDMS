@@ -169,6 +169,36 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
     """
     import os
 
+    # Ensure AI providers are registered in Celery context
+    from .ai_providers import AIProviderRegistry
+    try:
+        # Force re-registration in Celery context
+        logger.info('🤖 Forcing AI provider registration in Celery context...')
+
+        # Clear existing registrations
+        if hasattr(AIProviderRegistry, '_providers'):
+            AIProviderRegistry._providers = {}
+
+        # Import and register all providers
+        from .ai_providers.gigachat import GigaChatProvider
+        from .ai_providers.openai import OpenAIProvider
+        from .ai_providers.claude import ClaudeProvider
+        from .ai_providers.gemini import GeminiProvider
+        from .ai_providers.yandex import YandexGPTProvider
+
+        AIProviderRegistry.register('gigachat', 'mayan.apps.dam.ai_providers.gigachat.GigaChatProvider')
+        AIProviderRegistry.register('openai', 'mayan.apps.dam.ai_providers.openai.OpenAIProvider')
+        AIProviderRegistry.register('claude', 'mayan.apps.dam.ai_providers.claude.ClaudeProvider')
+        AIProviderRegistry.register('gemini', 'mayan.apps.dam.ai_providers.gemini.GeminiProvider')
+        AIProviderRegistry.register('yandexgpt', 'mayan.apps.dam.ai_providers.yandex.YandexGPTProvider')
+
+        available_providers = list(AIProviderRegistry.get_available_providers())
+        logger.info(f'🤖 AI providers registered in Celery context: {available_providers}')
+    except Exception as e:
+        logger.error(f'❌ Failed to register AI providers in Celery: {e}')
+        import traceback
+        logger.error(f'Traceback: {traceback.format_exc()}')
+
     # Get file data - use direct file access (since we fixed volume mapping)
     logger.info(f"Starting AI analysis for document_file: {document_file} (mimetype: {document_file.mimetype})")
 
@@ -218,37 +248,37 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
 
     for provider_name in providers_to_try:
         try:
-            print(f"🔄 Trying provider: {provider_name}")
+            logger.info(f"🔄 Trying provider: {provider_name}")
             provider_class = AIProviderRegistry.get_provider_class(provider_name)
             provider_config = get_provider_config(provider_name)
 
             if not provider_config:
-                print(f"❌ No config for provider {provider_name}")
+                logger.warning(f"❌ No config for provider {provider_name}")
                 continue
 
-            print(f"⚙️ Config for {provider_name}: {list(provider_config.keys())}")
+            logger.info(f"⚙️ Config for {provider_name}: {list(provider_config.keys())}")
             provider = provider_class(**provider_config)
 
             if not provider.is_available():
-                print(f"❌ Provider {provider_name} is not available")
+                logger.warning(f"❌ Provider {provider_name} is not available")
                 continue
 
             # Perform analysis
-            print(f"🤖 Analyzing document with {provider_name}")
-            print(f"📊 Image data size: {len(image_data)}, mime_type: {mime_type}")
+            logger.info(f"🤖 Analyzing document with {provider_name}")
+            logger.info(f"📊 Image data size: {len(image_data)}, mime_type: {mime_type}")
 
             results = provider.analyze_image(image_data, mime_type)
 
             # Add provider info
             results['provider'] = provider_name
-            print(f"✅ Analysis successful with {provider_name}")
+            logger.info(f"✅ Analysis successful with {provider_name}")
 
             return results
 
         except Exception as e:
-            print(f"❌ AI analysis with {provider_name} failed: {e}")
+            logger.error(f"❌ AI analysis with {provider_name} failed: {e}")
             import traceback
-            print(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             continue
 
     # Fallback if all providers fail

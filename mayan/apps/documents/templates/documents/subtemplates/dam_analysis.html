@@ -1,0 +1,21 @@
+{% load i18n %}
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            <i class="fas fa-robot"></i>
+            {% trans "AI Analysis" %}
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if dam_html %}
+            {{ dam_html|safe }}
+        {% else %}
+            <div class="alert alert-info">
+                <strong>{% trans "DAM Integration Test" %}</strong>
+                <p>{% trans "AI analysis will appear here when API is configured." %}</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+

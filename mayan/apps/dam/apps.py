@@ -25,6 +25,10 @@ class DAMApp(MayanAppConfig):
         print(f'🔍 DAM ready() called for {self.name}')
         print(f'📍 app_url: {self.app_url}, app_namespace: {self.app_namespace}')
         super().ready()
+
+        # Add DAM property to Document model
+        self._add_dam_property_to_document()
+
         print('🎨 DAM module ready() called!')
         print(f'✅ DAM URL should be available at: /{self.app_url}/')
 
@@ -113,6 +117,27 @@ class DAMApp(MayanAppConfig):
             print('🔄 DAM AJAX templates registered!')
         except Exception as e:
             print(f'⚠️  DAM AJAX templates registration failed: {e}')
+
+    def _add_dam_property_to_document(self):
+        """Add dam_analysis property to Document model dynamically."""
+        try:
+            from mayan.apps.documents.models import Document
+
+            def dam_analysis_property(self):
+                """
+                Get AI analysis for this document.
+                Returns None if no analysis exists (for form compatibility).
+                """
+                try:
+                    return self.ai_analysis
+                except:
+                    return None
+
+            # Add property to Document model
+            Document.dam_analysis = property(dam_analysis_property)
+            print('✅ Added dam_analysis property to Document model')
+        except Exception as e:
+            print(f'⚠️  Failed to add dam_analysis property: {e}')
 
     def _register_menus(self):
         """Register DAM links in document menus."""

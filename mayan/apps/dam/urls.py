@@ -30,7 +30,7 @@ router.register(r'metadata-presets', DAMMetadataPresetViewSet, basename='metadat
 api_urlpatterns = [
     path('', include(router.urls)),
     path('analysis-status/', AIAnalysisStatusView.as_view(), name='analysis-status'),
-    path('document-detail/', DAMDocumentDetailView.as_view(), name='document-detail'),
+    path('document-detail/<int:document_id>/', DAMDocumentDetailView.as_view(), name='document-detail'),
     path('documents/', DAMDocumentListView.as_view(), name='document-list'),
     path('dashboard-stats/', DAMDashboardStatsView.as_view(), name='dashboard-stats'),
 ]

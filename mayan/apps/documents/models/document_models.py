@@ -322,6 +322,17 @@ class Document(
         except self.versions.model.DoesNotExist:
             return self.versions.none()
 
+    @property
+    def dam_analysis(self):
+        """
+        Get AI analysis for this document.
+        Returns empty string if no analysis exists (for form compatibility).
+        """
+        try:
+            return self.ai_analysis
+        except:
+            return None
+
 
 class DocumentSearchResult(Document):
     class Meta:
