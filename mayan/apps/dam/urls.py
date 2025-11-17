@@ -1,4 +1,5 @@
 from django.urls import path, include
+from django.views.generic import TemplateView, RedirectView
 from rest_framework import routers
 
 app_name = 'dam'
@@ -40,6 +41,11 @@ api_urls = api_urlpatterns
 
 # UI URL patterns
 ui_urlpatterns = [
+    path(
+        'settings/',
+        RedirectView.as_view(url='/settings/namespaces/dam/', permanent=False),
+        name='settings'
+    ),
     path(
         'digital-assets/',
         DAMDashboardView.as_view(),

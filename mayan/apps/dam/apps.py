@@ -26,6 +26,14 @@ class DAMApp(MayanAppConfig):
         print(f'📍 app_url: {self.app_url}, app_namespace: {self.app_namespace}')
         super().ready()
 
+        # Регистрация настроек в системе
+        try:
+            from .settings import namespace
+            # Namespace registration happens automatically when imported
+            print('✅ DAM settings registered!')
+        except Exception as e:
+            print(f'⚠️ DAM settings registration failed: {e}')
+
         # Add DAM property to Document model
         self._add_dam_property_to_document()
 
@@ -65,6 +73,7 @@ class DAMApp(MayanAppConfig):
             self._extend_search()
             self._register_ajax_templates()
             self._register_menus()
+            self._register_settings_menu()
         except Exception as exc:
             print(f'⚠️ DAM component registration failed during ready(): {exc}')
             # Continue with other components even if one fails
@@ -155,3 +164,18 @@ class DAMApp(MayanAppConfig):
             print('📋 DAM links added to Documents menu!')
         except Exception as e:
             print(f'⚠️  DAM menu registration failed: {e}')
+
+    def _register_settings_menu(self):
+        """Register DAM settings link in system menu."""
+        try:
+            from .links import link_dam_settings
+
+            # Add DAM settings to setup menu
+            from mayan.apps.common.menus import menu_setup
+            menu_setup.bind_links(
+                links=(link_dam_settings,),
+                position=20
+            )
+            print('📋 DAM settings link added to System menu!')
+        except Exception as e:
+            print(f'⚠️  DAM settings menu registration failed: {e}')

@@ -19,9 +19,16 @@ def trigger_ai_analysis(sender, instance, created, **kwargs):
 
     Only analyzes image files to avoid unnecessary API calls.
     """
+    from django.conf import settings
+
     logger.info(f"🔔 Signal triggered for document file: {instance.filename}, created: {created}")
     logger.info(f"📄 Document: {instance.document}, Document ID: {instance.document.id}")
     logger.info(f"🗂️  MIME type: {instance.mimetype}")
+
+    # Check if auto-trigger is enabled
+    if not getattr(settings, 'DAM_AI_ANALYSIS_AUTO_TRIGGER', True):
+        logger.info(f"⏭️ Auto AI analysis is disabled, skipping: {instance.filename}")
+        return
 
     if not created:
         logger.debug(f"⏭️ Skipping signal - file not created: {instance.filename}")

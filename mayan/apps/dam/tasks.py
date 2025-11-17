@@ -21,6 +21,13 @@ def analyze_document_with_ai(self, document_id: int):
         document_id: ID of the document to analyze
     """
     try:
+        from django.conf import settings
+
+        # Check if AI analysis is enabled
+        if not getattr(settings, 'DAM_AI_ANALYSIS_ENABLED', True):
+            logger.info(f"🚫 AI analysis is disabled, skipping document {document_id}")
+            return
+
         logger.info(f"🚀 Starting AI analysis for document {document_id}")
 
         # Get document and its latest file

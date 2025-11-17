@@ -27,10 +27,13 @@ class GigaChatProvider(BaseAIProvider):
     def __init__(self, credentials: str = None, scope: str = 'GIGACHAT_API_PERS',
                  verify_ssl_certs: bool = False, model: str = 'GigaChat', **kwargs):
         super().__init__('', **kwargs)
-        self.credentials = credentials
-        self.scope = scope
-        self.verify_ssl_certs = verify_ssl_certs
-        self.model = model
+
+        # Use settings with environment variable fallback
+        self.credentials = credentials or self.get_setting('CREDENTIALS', os.getenv('DAM_GIGACHAT_CREDENTIALS', ''))
+        self.scope = scope or self.get_setting('SCOPE', os.getenv('DAM_GIGACHAT_SCOPE', 'GIGACHAT_API_PERS'))
+        self.verify_ssl_certs = verify_ssl_certs if verify_ssl_certs is not None else self.get_setting('VERIFY_SSL_CERTS', False)
+        self.model = model or self.get_setting('MODEL', os.getenv('DAM_GIGACHAT_MODEL', 'GigaChat'))
+
         self._client = None
 
     def _get_client(self):

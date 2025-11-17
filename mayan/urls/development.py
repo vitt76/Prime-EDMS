@@ -40,5 +40,6 @@ if 'silk' in settings.INSTALLED_APPS:
 from django.views.generic import TemplateView
 urlpatterns += [  # NOQA
     url(regex=r'^digital-assets/digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='dam-dashboard-spa-route'),
-    url(regex=r'^digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='dam-spa-route')
+    url(regex=r'^digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='dam-spa-route'),
+    url(regex=r'^settings/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='settings-spa-route')
 ]

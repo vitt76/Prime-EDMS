@@ -1,7 +1,9 @@
 import abc
+import os
 from typing import Dict, List, Optional, Any
 import logging
 
+from django.conf import settings
 from django.utils.translation import ugettext_lazy as _
 
 logger = logging.getLogger(__name__)
@@ -49,8 +51,27 @@ class BaseAIProvider(metaclass=abc.ABCMeta):
             api_key: API key for the provider
             **kwargs: Additional configuration options
         """
-        self.api_key = api_key
-        self.config = kwargs
+        self._settings_cache = {}
+
+    def get_setting(self, setting_name: str, default=None):
+        """Get setting value from Django smart_settings or environment variables."""
+        cache_key = f"{self.name}_{setting_name}"
+
+        if cache_key in self._settings_cache:
+            return self._settings_cache[cache_key]
+
+        # Try Django smart_setting first
+        django_setting_name = f'DAM_{self.name.upper()}_{setting_name}'
+        django_setting = getattr(settings, django_setting_name, None)
+        if django_setting is not None and django_setting != '':
+            self._settings_cache[cache_key] = django_setting
+            return django_setting
+
+        # Fallback to environment variable
+        env_var = f'DAM_{self.name.upper()}_{setting_name}'
+        env_value = os.getenv(env_var, default)
+        self._settings_cache[cache_key] = env_value
+        return env_value
 
     @abc.abstractmethod
     def analyze_image(self, image_data: bytes, mime_type: str) -> Dict[str, Any]:
