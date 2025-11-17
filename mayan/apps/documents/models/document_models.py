@@ -326,7 +326,7 @@ class Document(
     def dam_analysis(self):
         """
         Get AI analysis for this document.
-        Returns empty string if no analysis exists (for form compatibility).
+        Returns the analysis object for form compatibility.
         """
         try:
             return self.ai_analysis
