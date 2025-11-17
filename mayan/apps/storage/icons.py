@@ -10,3 +10,6 @@ icon_download_file_list = Icon(
     driver_name='fontawesome-dual', primary_symbol='server',
     secondary_symbol='arrow-down'
 )
+icon_storage_settings = Icon(
+    driver_name='fontawesome', symbol='cog'
+)

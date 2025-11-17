@@ -4,7 +4,7 @@ from mayan.apps.navigation.classes import Link
 
 from .icons import (
     icon_download_file_delete, icon_download_file_download,
-    icon_download_file_list
+    icon_download_file_list, icon_storage_settings
 )
 
 link_download_file_delete = Link(
@@ -18,4 +18,9 @@ link_download_file_download = Link(
 link_download_file_list = Link(
     icon=icon_download_file_list, text=_('Download files'),
     view='storage:download_file_list'
+)
+link_storage_settings = Link(
+    icon=icon_storage_settings,
+    text=_('Storage Settings'),
+    view='storage:settings'
 )
