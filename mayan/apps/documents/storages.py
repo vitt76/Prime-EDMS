@@ -45,6 +45,9 @@ def get_document_storage_kwargs():
                 'verify': setting_s3_verify.value,
                 'default_acl': 'private',
                 'file_overwrite': False,
+                # Дополнительные параметры для Beget S3
+                'addressing_style': 'path',
+                'signature_version': 's3v4',  # Попробуем s3v4
             }
     except ImportError:
         pass

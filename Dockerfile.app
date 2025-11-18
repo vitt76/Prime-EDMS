@@ -29,6 +29,8 @@ COPY mayan/apps/documents/storages.py /opt/mayan-edms/lib/python3.9/site-package
 COPY mayan/apps/documents/search.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/search.py
 COPY mayan/apps/dam /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
 COPY mayan/apps/storage /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/storage
+COPY mayan/apps/smart_settings/classes.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/smart_settings/classes.py
+COPY mayan/apps/lock_manager/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/lock_manager/apps.py
 COPY mayan/apps/distribution/models.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/models.py
 COPY mayan/apps/distribution/serializers/publication_serializers.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/serializers/publication_serializers.py
 COPY mayan/apps/distribution/ui_views.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution/ui_views.py
