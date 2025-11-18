@@ -72,12 +72,15 @@ fi
 # Создание app.env если не существует
 if [ ! -f "app.env" ]; then
     print_header "Создание app.env..."
-    cat > app.env << 'EOF'
+    # Генерируем случайный SECRET_KEY
+    SECRET_KEY=$(openssl rand -base64 32)
+    cat > app.env << EOF
 # Mayan EDMS Environment Variables
-MAYAN_SECRET_KEY=your-secret-key-change-in-production-$(openssl rand -hex 32)
+MAYAN_SECRET_KEY=${SECRET_KEY}
 MAYAN_DEBUG=False
+MAYAN_ALLOWED_HOSTS=localhost,127.0.0.1
 EOF
-    print_success "app.env создан"
+    print_success "app.env создан с автоматически сгенерированным SECRET_KEY"
 else
     print_success "app.env уже существует"
 fi

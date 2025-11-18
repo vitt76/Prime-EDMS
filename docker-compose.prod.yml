@@ -17,15 +17,14 @@ services:
       POSTGRES_PASSWORD: ${MAYAN_DATABASE_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Remove external ports in production - only for development
-    # ports:
-    #   - "5433:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mayan -d mayan"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - mayan
 
   redis:
     image: redis:6.2-alpine
@@ -33,15 +32,14 @@ services:
     command: redis-server --requirepass ${MAYAN_REDIS_PASSWORD}
     volumes:
       - redis_data:/data
-    # Remove external ports in production - only for development
-    # ports:
-    #   - "6380:6379"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
+    networks:
+      - mayan
 
   rabbitmq:
     image: rabbitmq:3.10-management-alpine
@@ -52,16 +50,14 @@ services:
       RABBITMQ_DEFAULT_VHOST: mayan
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-    # Remove external ports in production - only for development
-    # ports:
-    #   - "5672:5672"
-    #   - "15672:15672"
     restart: unless-stopped
     healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - mayan
 
   app:
     build:
@@ -70,9 +66,9 @@ services:
     container_name: prime-edms_app_1
     environment:
       MAYAN_MEDIA_ROOT: '/var/lib/mayan'
-      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql','PORT':'5432'}}"
-      MAYAN_CELERY_BROKER_URL: amqp://mayan:mayanrabbitpass@rabbitmq:5672/mayan
-      MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
+      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'${MAYAN_DATABASE_PASSWORD}','USER':'mayan','HOST':'postgresql','PORT':'5432'}}"
+      MAYAN_CELERY_BROKER_URL: amqp://mayan:${MAYAN_RABBITMQ_PASSWORD}@rabbitmq:5672/mayan
+      MAYAN_CELERY_RESULT_BACKEND: redis://:${MAYAN_REDIS_PASSWORD}@redis:6379/1
       MAYAN_LOCK_MANAGER_BACKEND: ""
       MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{}"
       MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
@@ -83,6 +79,8 @@ services:
       MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor', 'mayan.apps.dam.apps.DAMApp']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
       PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
+      # Production settings
+      MAYAN_SETTINGS_MODULE: mayan.settings.production
       # AI Provider configurations
       DAM_GIGACHAT_CREDENTIALS: "${DAM_GIGACHAT_CREDENTIALS}"
       DAM_GIGACHAT_SCOPE: "${DAM_GIGACHAT_SCOPE}"
@@ -92,15 +90,15 @@ services:
       DAM_YANDEXGPT_KEY_ID: "${DAM_YANDEXGPT_KEY_ID}"
       DAM_YANDEXGPT_PRIVATE_KEY: "${DAM_YANDEXGPT_PRIVATE_KEY}"
       DAM_YANDEXGPT_FOLDER_ID: "${DAM_YANDEXGPT_FOLDER_ID}"
+      # Security settings
+      MAYAN_SECRET_KEY: "${MAYAN_SECRET_KEY}"
+      MAYAN_DEBUG: "False"
+      MAYAN_ALLOWED_HOSTS: "${MAYAN_ALLOWED_HOSTS:-localhost,127.0.0.1}"
     volumes:
       - mayan_data:/var/lib/mayan
       - ./config.yml:/opt/mayan-edms/config.yml:ro
-      - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
-      - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
-      - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
-      - ./mayan/apps/dam:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
     ports:
-      - "80:8000"
+      - "8000:8000"
     depends_on:
       postgresql:
         condition: service_healthy
@@ -109,9 +107,15 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: unless-stopped
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:8000/"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 60s
+    networks:
+      - mayan
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  mayan:
+    driver: bridge
