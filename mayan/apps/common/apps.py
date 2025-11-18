@@ -87,6 +87,7 @@ class MayanAppConfig(apps.AppConfig):
                     )
                 ),
             )
+            logger.info(f'🛤️ Registered URL pattern: ^{top_url} -> {self.name} (namespace: {app_namespace})')
 
         try:
             passthru_urlpatterns = import_string(

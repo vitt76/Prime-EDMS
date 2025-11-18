@@ -1,0 +1,189 @@
+{% load i18n %}
+{% load static %}
+
+<div id="dam-content" class="dam-analysis-content">
+    {% if ai_analysis %}
+        {% if ai_analysis.analysis_status == 'completed' %}
+            <!-- AI Analysis Results -->
+            <div class="alert alert-success mb-3">
+                <i class="fas fa-check-circle mr-2"></i>
+                <strong>Анализ завершен</strong>
+            </div>
+
+            {% if ai_analysis.ai_description %}
+            <div class="mb-3">
+                <strong>Описание:</strong>
+                <p class="mb-2">{{ ai_analysis.ai_description }}</p>
+                {% if ai_analysis.ai_description|slice:":17" == "Техническая информация" %}
+                <div class="alert alert-info mt-2">
+                    <small><i class="fas fa-info-circle"></i> Это техническая информация о файле. AI провайдеры не смогли проанализировать содержимое изображения.</small>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if ai_analysis.get_ai_tags_list %}
+            <div class="mb-3">
+                <strong>Метки:</strong>
+                <div class="mt-2">
+                    {% for tag in ai_analysis.get_ai_tags_list %}
+                        <span class="badge badge-primary mr-1 mb-1">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if ai_analysis.categories %}
+            <div class="mb-3">
+                <strong>Категории:</strong>
+                <div class="mt-2">
+                    {% for category in ai_analysis.categories %}
+                        <span class="badge badge-info mr-1 mb-1">{{ category }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if ai_analysis.people %}
+            <div class="mb-3">
+                <strong>Люди:</strong>
+                <div class="mt-2">
+                    {% for person in ai_analysis.people %}
+                        <span class="badge badge-success mr-1 mb-1">{{ person }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if ai_analysis.locations %}
+            <div class="mb-3">
+                <strong>Места:</strong>
+                <div class="mt-2">
+                    {% for location in ai_analysis.locations %}
+                        <span class="badge badge-warning mr-1 mb-1">{{ location }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="mt-3 pt-3 border-top">
+                <small class="text-muted">
+                    Провайдер: {{ ai_analysis.ai_provider|default:"Неизвестен" }}
+                    {% if ai_analysis.analysis_completed %}
+                        | Завершено: {{ ai_analysis.analysis_completed|date:"d.m.Y H:i" }}
+                    {% endif %}
+                </small>
+            </div>
+
+            <div class="mt-3">
+                <button class="btn btn-sm btn-outline-primary" onclick="reanalyzeDAM({{ document.id }})">
+                    <i class="fas fa-sync mr-1"></i>
+                    Повторить анализ
+                </button>
+            </div>
+
+        {% elif ai_analysis.analysis_status == 'processing' %}
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-spinner fa-spin fa-3x mb-3"></i>
+                <h6>Идет анализ документа...</h6>
+                <p class="mb-0">Пожалуйста, подождите завершения</p>
+            </div>
+
+        {% elif ai_analysis.analysis_status == 'failed' %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                <strong>Ошибка анализа</strong>
+                <p class="mb-2">Не удалось выполнить AI анализ документа</p>
+                <button class="btn btn-sm btn-danger" onclick="reanalyzeDAM({{ document.id }})">
+                    <i class="fas fa-sync mr-1"></i>
+                    Повторить
+                </button>
+            </div>
+
+        {% else %}
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-brain fa-3x mb-3"></i>
+                <h6>AI анализ не выполнен</h6>
+                <p class="mb-3">Документ еще не анализировался искусственным интеллектом</p>
+                <button class="btn btn-primary" onclick="reanalyzeDAM({{ document.id }})">
+                    <i class="fas fa-play mr-1"></i>
+                    Запустить анализ
+                </button>
+            </div>
+        {% endif %}
+
+    {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle mr-2"></i>
+            <strong>AI анализ недоступен</strong>
+            <p class="mb-2">Для этого документа не найдена информация об анализе</p>
+            <button class="btn btn-sm btn-primary" onclick="reanalyzeDAM({{ document.id }})">
+                <i class="fas fa-play mr-1"></i>
+                Запустить анализ
+            </button>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function reanalyzeDAM(documentId) {
+    if (confirm('{% trans "Start AI analysis for this document?" %}')) {
+        // Show loading
+        $('#dam-content').html('<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><p>{% trans "Starting analysis..." %}</p></div>');
+
+        // Make API call with CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        $.ajax({
+            url: '/digital-assets/api/ai-analysis/analyze/',
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: { document_id: documentId },
+            success: function(response) {
+                // Reload the DAM content with fresh data
+                setTimeout(function() {
+                    loadDAMContent(documentId);
+                }, 1000); // Wait 1 second for analysis to start
+            },
+            error: function(xhr) {
+                alert('{% trans "Error starting analysis:" %} ' + xhr.responseJSON.detail);
+                loadDAMContent(documentId); // Reload on error
+            }
+        });
+    }
+}
+
+function editDAMMetadata(analysisId) {
+    // This would open an edit modal or redirect to edit page
+    alert('{% trans "Edit functionality will be implemented in the next step" %}');
+}
+
+function loadDAMContent(documentId) {
+    // Reload the DAM AJAX template with cache busting
+    $.ajax({
+        url: '/digital-assets/api/document-detail/' + documentId + '/?_=' + new Date().getTime(),
+        cache: false,
+        success: function(response) {
+            $('#dam-content').html(response.html);
+        },
+        error: function(xhr) {
+            $('#dam-content').html('<div class="alert alert-danger">{% trans "Error loading DAM content" %}</div>');
+        }
+    });
+}
+</script>

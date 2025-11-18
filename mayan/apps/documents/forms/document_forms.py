@@ -5,6 +5,7 @@ from django import forms
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.views.forms import DetailForm
+from mayan.apps.views.widgets import DAMWidget
 
 from ..models.document_models import Document
 from ..settings import setting_language
@@ -111,6 +112,12 @@ class DocumentPropertiesForm(DetailForm):
                 'func': lambda x: get_language(
                     language_code=document.language
                 )
+            },
+            {
+                'label': _('DAM Analysis'),
+                'field': 'dam_analysis',
+                'widget': DAMWidget(attrs={'data-document-id': document.id}),
+                'help_text': _('AI-generated metadata and asset management information')
             },
         ]
 

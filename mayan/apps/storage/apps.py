@@ -3,7 +3,7 @@ from django.utils.translation import ugettext_lazy as _
 from mayan.apps.acls.classes import ModelPermission
 from mayan.apps.acls.permissions import permission_acl_edit, permission_acl_view
 from mayan.apps.common.apps import MayanAppConfig
-from mayan.apps.common.menus import menu_object, menu_tools
+from mayan.apps.common.menus import menu_object, menu_tools, menu_setup
 from mayan.apps.events.classes import EventModelRegistry, ModelEventType
 from mayan.apps.navigation.classes import SourceColumn
 
@@ -11,7 +11,7 @@ from .classes import DefinedStorage
 from .events import event_download_file_downloaded
 from .links import (
     link_download_file_delete, link_download_file_download,
-    link_download_file_list
+    link_download_file_list, link_storage_settings
 )
 
 
@@ -67,3 +67,17 @@ class StorageApp(MayanAppConfig):
             ), sources=(DownloadFile,)
         )
         menu_tools.bind_links(links=(link_download_file_list,))
+
+        # Register storage settings menu
+        self._register_settings_menu()
+
+    def _register_settings_menu(self):
+        """Register storage settings link in system menu."""
+        try:
+            menu_setup.bind_links(
+                links=(link_storage_settings,),
+                position=25
+            )
+            print('📋 Storage settings link added to System menu!')
+        except Exception as e:
+            print(f'⚠️ Storage settings menu registration failed: {e}')

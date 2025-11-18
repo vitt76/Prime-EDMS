@@ -1,0 +1,273 @@
+# Translation file for DAM (Digital Asset Management) module
+# Copyright (C) 2025 Mayan EDMS
+# This file is distributed under the same license as the Mayan EDMS package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Mayan EDMS\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-11-12 18:45+0000\n"
+"PO-Revision-Date: 2025-11-12 18:45+0000\n"
+"Last-Translator: AI Assistant <ai@example.com>\n"
+"Language-Team: Russian <ru@example.com>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || (n%100>=11 && n%100<=14)? 2 : 3);\n"
+
+#: mayan/apps/dam/apps.py:21 mayan/apps/dam/menus.py:10 mayan/apps/dam/permissions.py:9
+msgid "Digital Asset Management"
+msgstr "Управление цифровыми активами"
+
+#: mayan/apps/dam/links.py:11
+msgid "Dashboard"
+msgstr "Панель управления"
+
+#: mayan/apps/dam/links.py:18
+msgid "AI Analyses"
+msgstr "AI Анализы"
+
+#: mayan/apps/dam/links.py:24
+msgid "DAM Test"
+msgstr "Тест DAM"
+
+#: mayan/apps/dam/permissions.py:13
+msgid "View AI analysis results"
+msgstr "Просмотр результатов AI анализа"
+
+#: mayan/apps/dam/permissions.py:17
+msgid "Create AI analysis"
+msgstr "Создание AI анализа"
+
+#: mayan/apps/dam/permissions.py:21
+msgid "Edit AI analysis results"
+msgstr "Редактирование результатов AI анализа"
+
+#: mayan/apps/dam/permissions.py:25
+msgid "Delete AI analysis"
+msgstr "Удаление AI анализа"
+
+#: mayan/apps/dam/permissions.py:30
+msgid "View metadata presets"
+msgstr "Просмотр предустановок метаданных"
+
+#: mayan/apps/dam/permissions.py:34
+msgid "Create metadata presets"
+msgstr "Создание предустановок метаданных"
+
+#: mayan/apps/dam/permissions.py:38
+msgid "Edit metadata presets"
+msgstr "Редактирование предустановок метаданных"
+
+#: mayan/apps/dam/permissions.py:42
+msgid "Delete metadata presets"
+msgstr "Удаление предустановок метаданных"
+
+#: mayan/apps/dam/models.py:19 mayan/apps/dam/templates/dam/ai_analysis_list.html:43
+msgid "Document"
+msgstr "Документ"
+
+#: mayan/apps/dam/models.py:27 mayan/apps/dam/search.py:47
+msgid "Copyright Notice"
+msgstr "Уведомление об авторских правах"
+
+#: mayan/apps/dam/models.py:34 mayan/apps/dam/search.py:52
+msgid "Usage Rights"
+msgstr "Права использования"
+
+#: mayan/apps/dam/models.py:41
+msgid "Rights Expiry"
+msgstr "Истечение прав"
+
+#: mayan/apps/dam/models.py:49 mayan/apps/dam/forms.py:25
+msgid "Categories"
+msgstr "Категории"
+
+#: mayan/apps/dam/models.py:56 mayan/apps/dam/search.py:73
+msgid "Language"
+msgstr "Язык"
+
+#: mayan/apps/dam/models.py:64 mayan/apps/dam/forms.py:32
+msgid "People"
+msgstr "Люди"
+
+#: mayan/apps/dam/models.py:71 mayan/apps/dam/forms.py:39
+msgid "Locations"
+msgstr "Места"
+
+#: mayan/apps/dam/models.py:79 mayan/apps/dam/search.py:17
+msgid "AI Description"
+msgstr "AI Описание"
+
+#: mayan/apps/dam/models.py:86 mayan/apps/dam/search.py:22 mayan/apps/dam/forms.py:18
+msgid "AI Tags"
+msgstr "AI Теги"
+
+#: mayan/apps/dam/models.py:93
+msgid "Dominant Colors"
+msgstr "Доминирующие цвета"
+
+#: mayan/apps/dam/models.py:101
+msgid "Alt Text"
+msgstr "Альтернативный текст"
+
+#: mayan/apps/dam/models.py:109 mayan/apps/dam/search.py:57 mayan/apps/dam/search.py:78
+msgid "AI Provider"
+msgstr "AI Провайдер"
+
+#: mayan/apps/dam/models.py:115 mayan/apps/dam/templates/dam/ai_analysis_list.html:43
+msgid "Pending"
+msgstr "Ожидание"
+
+#: mayan/apps/dam/models.py:116
+msgid "Processing"
+msgstr "Обработка"
+
+#: mayan/apps/dam/models.py:117 mayan/apps/dam/templates/dam/ai_analysis_list.html:41
+msgid "Completed"
+msgstr "Завершено"
+
+#: mayan/apps/dam/models.py:118 mayan/apps/dam/templates/dam/ai_analysis_list.html:47
+msgid "Failed"
+msgstr "Ошибка"
+
+#: mayan/apps/dam/models.py:122 mayan/apps/dam/search.py:83
+msgid "Analysis Status"
+msgstr "Статус анализа"
+
+#: mayan/apps/dam/models.py:136
+msgid "Document AI Analysis"
+msgstr "AI Анализ документа"
+
+#: mayan/apps/dam/models.py:137
+msgid "Document AI Analyses"
+msgstr "AI Анализы документов"
+
+#: mayan/apps/dam/models.py:164
+msgid "Name"
+msgstr "Название"
+
+#: mayan/apps/dam/models.py:171 mayan/apps/dam/templates/dam/ai_analysis_list.html:47
+msgid "Description"
+msgstr "Описание"
+
+#: mayan/apps/dam/models.py:178
+msgid "AI Providers"
+msgstr "AI Провайдеры"
+
+#: mayan/apps/dam/models.py:185
+msgid "Extract Description"
+msgstr "Извлекать описание"
+
+#: mayan/apps/dam/models.py:191
+msgid "Extract Tags"
+msgstr "Извлекать теги"
+
+#: mayan/apps/dam/models.py:197
+msgid "Extract Colors"
+msgstr "Извлекать цвета"
+
+#: mayan/apps/dam/models.py:203
+msgid "Extract Alt Text"
+msgstr "Извлекать альтернативный текст"
+
+#: mayan/apps/dam/models.py:210
+msgid "Supported MIME Types"
+msgstr "Поддерживаемые MIME типы"
+
+#: mayan/apps/dam/models.py:217
+msgid "Enabled"
+msgstr "Включено"
+
+#: mayan/apps/dam/models.py:221
+msgid "DAM Metadata Preset"
+msgstr "Предустановка метаданных DAM"
+
+#: mayan/apps/dam/models.py:222
+msgid "DAM Metadata Presets"
+msgstr "Предустановки метаданных DAM"
+
+#: mayan/apps/dam/search.py:27
+msgid "AI Categories"
+msgstr "AI Категории"
+
+#: mayan/apps/dam/search.py:32
+msgid "AI Detected Language"
+msgstr "Обнаруженный AI язык"
+
+#: mayan/apps/dam/search.py:37
+msgid "AI Detected People"
+msgstr "Обнаруженные AI люди"
+
+#: mayan/apps/dam/search.py:42
+msgid "AI Detected Locations"
+msgstr "Обнаруженные AI места"
+
+#: mayan/apps/dam/search.py:62
+msgid "AI Analysis Status"
+msgstr "Статус AI анализа"
+
+#: mayan/apps/dam/search.py:68
+msgid "Category (contains)"
+msgstr "Категория (содержит)"
+
+#: mayan/apps/dam/views.py:82
+msgid "AI analysis metadata updated successfully."
+msgstr "Метаданные AI анализа успешно обновлены."
+
+#: mayan/apps/dam/views.py:106
+msgid "Start re-analysis"
+msgstr "Начать повторный анализ"
+
+#: mayan/apps/dam/views.py:107
+msgid "Re-analyze document with AI"
+msgstr "Повторно проанализировать документ с помощью AI"
+
+#: mayan/apps/dam/views.py:119
+msgid "Document re-analysis scheduled. This may take several minutes."
+msgstr "Повторный анализ документа запланирован. Это может занять несколько минут."
+
+#: mayan/apps/dam/views.py:155
+msgid "Digital Asset Management Dashboard"
+msgstr "Панель управления цифровыми активами"
+
+#: mayan/apps/dam/views.py:184 mayan/apps/dam/templates/dam/ai_analysis_list.html:5 mayan/apps/dam/templates/dam/ai_analysis_list.html:14
+msgid "AI Analysis Results"
+msgstr "Результаты AI анализа"
+
+#: mayan/apps/dam/serializers.py:133
+msgid "Not analyzed"
+msgstr "Не проанализировано"
+
+#: mayan/apps/dam/templates/dam/ai_analysis_list.html:44
+msgid "Status"
+msgstr "Статус"
+
+#: mayan/apps/dam/templates/dam/ai_analysis_list.html:45
+msgid "Provider"
+msgstr "Провайдер"
+
+#: mayan/apps/dam/templates/dam/ai_analysis_list.html:46
+msgid "Created"
+msgstr "Создано"
+
+#: mayan/apps/dam/templates/dam/ai_analysis_list.html:48
+msgid "Actions"
+msgstr "Действия"
+
+#: mayan/apps/dam/templates/dam/ai_analysis_list.html:67
+msgid "View"
+msgstr "Просмотр"
+
+#: mayan/apps/dam/templates/dam/ai_analysis_list.html:71
+msgid "Edit"
+msgstr "Редактировать"
+
+#: mayan/apps/dam/templates/dam/ai_analysis_list.html:45
+msgid "Running"
+msgstr "Выполняется"
+
+#: mayan/apps/dam/templates/dam/ai_analysis_list.html:78
+msgid "No AI analyses found."
+msgstr "AI анализы не найдены."

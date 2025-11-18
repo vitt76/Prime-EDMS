@@ -54,3 +54,54 @@ setting_shared_uploaded_file_expiration_interval = namespace.add_setting(
         'deleted.'
     )
 )
+
+# S3 Storage settings
+setting_s3_enabled = namespace.add_setting(
+    default=False,
+    global_name='STORAGE_S3_ENABLED', help_text=_(
+        'Enable S3 compatible storage backend for document files. '
+        'When enabled, new documents will be stored in S3 instead of local filesystem.'
+    )
+)
+setting_s3_endpoint_url = namespace.add_setting(
+    default='https://s3.ru1.storage.beget.cloud',
+    global_name='STORAGE_S3_ENDPOINT_URL', help_text=_(
+        'S3 compatible storage endpoint URL. For Beget S3 use https://s3.ru1.storage.beget.cloud'
+    )
+)
+setting_s3_access_key = namespace.add_setting(
+    default='',
+    global_name='STORAGE_S3_ACCESS_KEY', help_text=_(
+        'S3 access key for authentication.'
+    )
+)
+setting_s3_secret_key = namespace.add_setting(
+    default='',
+    global_name='STORAGE_S3_SECRET_KEY', help_text=_(
+        'S3 secret key for authentication.'
+    )
+)
+setting_s3_bucket_name = namespace.add_setting(
+    default='',
+    global_name='STORAGE_S3_BUCKET_NAME', help_text=_(
+        'S3 bucket name where documents will be stored.'
+    )
+)
+setting_s3_region_name = namespace.add_setting(
+    default='ru-1',
+    global_name='STORAGE_S3_REGION_NAME', help_text=_(
+        'S3 region name. For Beget S3 use ru-1'
+    )
+)
+setting_s3_use_ssl = namespace.add_setting(
+    default=True,
+    global_name='STORAGE_S3_USE_SSL', help_text=_(
+        'Use SSL/TLS for S3 connections.'
+    )
+)
+setting_s3_verify = namespace.add_setting(
+    default=False,
+    global_name='STORAGE_S3_VERIFY', help_text=_(
+        'Verify SSL certificates for S3 connections. Set to False for self-signed certificates.'
+    )
+)

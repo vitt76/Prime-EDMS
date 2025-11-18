@@ -203,3 +203,47 @@ msgstr "Нет файлов для скачивания."
 #: views.py:65
 msgid "Downloads"
 msgstr "Загрузки"
+
+#: links.py:25
+msgid "Storage Settings"
+msgstr "Настройки хранилища"
+
+#: settings.py:59
+msgid ""
+"Enable S3 compatible storage backend for document files. When enabled, new "
+"documents will be stored in S3 instead of local filesystem."
+msgstr ""
+"Включить S3-совместимое хранилище для файлов документов. При включении новые "
+"документы будут храниться в S3 вместо локальной файловой системы."
+
+#: settings.py:67
+msgid "S3 compatible storage endpoint URL. For Beget S3 use https://s3.beget.com"
+msgstr "URL эндпоинта S3-совместимого хранилища. Для Beget S3 используйте https://s3.beget.com"
+
+#: settings.py:75
+msgid "S3 access key for authentication."
+msgstr "Ключ доступа S3 для аутентификации."
+
+#: settings.py:83
+msgid "S3 secret key for authentication."
+msgstr "Секретный ключ S3 для аутентификации."
+
+#: settings.py:91
+msgid "S3 bucket name where documents will be stored."
+msgstr "Имя bucket S3, где будут храниться документы."
+
+#: settings.py:99
+msgid "S3 region name. For Beget S3 use ru-1"
+msgstr "Имя региона S3. Для Beget S3 используйте ru-1"
+
+#: settings.py:107
+msgid "Use SSL/TLS for S3 connections."
+msgstr "Использовать SSL/TLS для S3 соединений."
+
+#: settings.py:115
+msgid ""
+"Verify SSL certificates for S3 connections. Set to False for self-signed "
+"certificates."
+msgstr ""
+"Проверять SSL-сертификаты для S3 соединений. Установите False для "
+"самоподписанных сертификатов."

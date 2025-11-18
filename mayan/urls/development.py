@@ -35,3 +35,11 @@ if 'silk' in settings.INSTALLED_APPS:
 
 # Note: converter_pipeline_extension is registered automatically
 # via MayanAppConfig for extra_apps in config.yml
+
+# Specific routes for DAM SPA pages (exclude API)
+from django.views.generic import TemplateView
+urlpatterns += [  # NOQA
+    url(regex=r'^digital-assets/digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='dam-dashboard-spa-route'),
+    url(regex=r'^digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='dam-spa-route'),
+    url(regex=r'^settings/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='settings-spa-route')
+]

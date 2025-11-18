@@ -15,8 +15,46 @@ from .settings import (
     setting_document_version_page_image_cache_storage_backend_arguments
 )
 
+
+def get_document_storage_backend():
+    """Dynamically choose storage backend based on S3 settings."""
+    try:
+        from mayan.apps.storage.settings import setting_s3_enabled
+        if setting_s3_enabled.value:
+            return 'storages.backends.s3boto3.S3Boto3Storage'
+    except ImportError:
+        pass
+    return setting_document_file_storage_backend.value
+
+
+def get_document_storage_kwargs():
+    """Dynamically choose storage kwargs based on S3 settings."""
+    try:
+        from mayan.apps.storage.settings import (
+            setting_s3_enabled, setting_s3_access_key, setting_s3_secret_key,
+            setting_s3_bucket_name, setting_s3_endpoint_url, setting_s3_region_name,
+            setting_s3_verify
+        )
+        if setting_s3_enabled.value:
+            return {
+                'access_key': setting_s3_access_key.value,
+                'secret_key': setting_s3_secret_key.value,
+                'bucket_name': setting_s3_bucket_name.value,
+                'endpoint_url': setting_s3_endpoint_url.value,
+                'region_name': setting_s3_region_name.value,
+                'verify': setting_s3_verify.value,
+                'default_acl': 'private',
+                'file_overwrite': False,
+                # Дополнительные параметры для Beget S3
+                'addressing_style': 'path',
+                'signature_version': 's3v4',  # Попробуем s3v4
+            }
+    except ImportError:
+        pass
+    return setting_document_file_storage_backend_arguments.value
+
 storage_document_files = DefinedStorage(
-    dotted_path=setting_document_file_storage_backend.value,
+    dotted_path=get_document_storage_backend(),
     error_message=_(
         'Unable to initialize the document file storage. Check '
         'the settings {} and {} for formatting errors.'.format(
@@ -26,7 +64,7 @@ storage_document_files = DefinedStorage(
     ),
     label=_('Document files'),
     name=STORAGE_NAME_DOCUMENT_FILES,
-    kwargs=setting_document_file_storage_backend_arguments.value
+    kwargs=get_document_storage_kwargs()
 )
 
 storage_document_file_image_cache = DefinedStorage(

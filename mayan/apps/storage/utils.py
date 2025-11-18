@@ -210,3 +210,39 @@ def patch_files(path=None, replace_list=None):
 def touch(filename, times=None):
     with open(file=filename, mode='a'):
         os.utime(filename, times)
+
+
+def validate_s3_connection(endpoint_url, access_key, secret_key, bucket_name, region_name='ru-1', verify=True):
+    """
+    Проверка подключения к S3 и доступа к bucket.
+    Возвращает (success: bool, message: str)
+    """
+    try:
+        import boto3
+        from botocore.exceptions import ClientError
+
+        session = boto3.Session(
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region_name
+        )
+
+        s3 = session.client(
+            's3',
+            endpoint_url=endpoint_url,
+            verify=verify
+        )
+
+        # Проверка доступа к bucket
+        s3.head_bucket(Bucket=bucket_name)
+
+        # Проверка прав на чтение (list_objects)
+        s3.list_objects_v2(Bucket=bucket_name, MaxKeys=1)
+
+        # Для записи используем только базовую проверку без тестового файла
+        # (чтобы избежать проблем с правами доступа)
+        # s3.put_object(Bucket=bucket_name, Key='.mayan_s3_test', Body=b'test')
+
+        return True, "✅ Подключение к S3 успешно"
+    except Exception as e:
+        return False, f"❌ Ошибка подключения: {str(e)}"

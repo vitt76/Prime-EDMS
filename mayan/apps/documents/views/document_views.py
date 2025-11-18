@@ -196,6 +196,7 @@ class DocumentPropertiesView(SingleObjectDetailView):
     pk_url_kwarg = 'document_id'
     source_queryset = Document.valid.all()
     view_icon = icon_document_properties_detail
+    template_name = 'documents/document_properties.html'
 
     def dispatch(self, request, *args, **kwargs):
         result = super().dispatch(request, *args, **kwargs)
@@ -203,8 +204,74 @@ class DocumentPropertiesView(SingleObjectDetailView):
         return result
 
     def get_extra_context(self):
-        return {
+        context = {
             'document': self.object,
             'object': self.object,
             'title': _('Properties of document: %s') % self.object,
+            'non_html_title': True,  # Disable automatic title generation
         }
+
+        # Add DAM analysis data directly to context
+        try:
+            from mayan.apps.dam.models import DocumentAIAnalysis
+            import logging
+            logger = logging.getLogger(__name__)
+
+            logger.info(f"Getting DAM analysis data for document {self.object.id}")
+
+            # Try to get existing analysis
+            try:
+                ai_analysis = DocumentAIAnalysis.objects.get(document_id=self.object.id)
+                logger.info(f"Found analysis: status={ai_analysis.analysis_status}, provider={ai_analysis.ai_provider}")
+            except DocumentAIAnalysis.DoesNotExist:
+                logger.info(f"No analysis found for document {self.object.id}, creating new one")
+                # Create new analysis if doesn't exist
+                ai_analysis = DocumentAIAnalysis.objects.create(
+                    document=self.object,
+                    analysis_status='pending'
+                )
+
+            # Prepare DAM data for template
+            try:
+                if ai_analysis.analysis_completed:
+                    completed_date = ai_analysis.analysis_completed.strftime("%d.%m.%Y %H:%M")
+                else:
+                    completed_date = None
+                logger.info(f"Completed date: {completed_date}")
+            except Exception as date_error:
+                logger.error(f"Error formatting completed date: {date_error}")
+                completed_date = None
+
+            dam_data = {
+                'status': ai_analysis.analysis_status,
+                'description': ai_analysis.ai_description,
+                'provider': ai_analysis.ai_provider or 'Неизвестен',
+                'completed_date': completed_date,
+            }
+
+            # Get tags and categories
+            if hasattr(ai_analysis, 'get_ai_tags_list'):
+                tags_list = ai_analysis.get_ai_tags_list()
+                dam_data['tags_html'] = "".join([f'<span class="badge badge-primary mr-1 mb-1">{tag}</span>' for tag in tags_list]) if tags_list else ''
+                logger.info(f"Tags: {tags_list}")
+            else:
+                dam_data['tags_html'] = ''
+                logger.warning("No get_ai_tags_list method")
+
+            dam_data['categories_html'] = ""
+            if ai_analysis.categories:
+                dam_data['categories_html'] = "".join([f'<span class="badge badge-info mr-1 mb-1">{cat}</span>' for cat in ai_analysis.categories])
+                logger.info(f"Categories: {ai_analysis.categories}")
+
+
+            context['dam_analysis_data'] = dam_data
+            logger.info(f"Successfully set dam_analysis_data for document {self.object.id}")
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error getting DAM analysis data for document {self.object.id}: {e}", exc_info=True)
+            context['dam_analysis_error'] = str(e)
+            context['dam_analysis_data'] = {'status': 'error', 'error': str(e)}
+
+        return context

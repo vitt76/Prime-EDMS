@@ -1,0 +1,565 @@
+{% extends "appearance/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Digital Asset Management" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid dam-dashboard">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header mb-4 d-flex justify-content-between align-items-center flex-wrap">
+                <div>
+                    <h3 class="page-title mb-1">
+                        <i class="fas fa-images mr-2 text-primary"></i>
+                        {% trans "Digital Asset Insights" %}
+                    </h3>
+                    <p class="text-muted mb-0">
+                        {% trans "Monitor AI-generated metadata, trigger GigaChat analysis, and review results across your Mayan documents." %}
+                    </p>
+                </div>
+                <div class="mt-3 mt-md-0">
+                    <button id="btnAnalyzeSelected" class="btn btn-primary mr-2" disabled>
+                        <i class="fas fa-robot mr-1"></i>
+                        {% trans "Run AI Analysis" %}
+                    </button>
+                    <button id="btnRefreshSelected" class="btn btn-outline-secondary mr-2" disabled>
+                        <i class="fas fa-sync mr-1"></i>
+                        {% trans "Refresh Status" %}
+                    </button>
+                    <button id="btnOpenDocument" class="btn btn-outline-info" disabled>
+                        <i class="fas fa-external-link-alt mr-1"></i>
+                        {% trans "Open Document" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="messageArea" class="mb-3"></div>
+
+    <div class="row">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <small class="text-muted text-uppercase">{% trans "Total Documents" %}</small>
+                    <div class="d-flex align-items-baseline justify-content-between">
+                        <h3 id="stat-total-docs" class="mb-0">—</h3>
+                        <span class="badge badge-light text-muted">{% trans "tracked" %}</span>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        {% trans "Documents available for analysis" %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <small class="text-muted text-uppercase">{% trans "Completed Analyses" %}</small>
+                    <div class="d-flex align-items-baseline justify-content-between">
+                        <h3 id="stat-completed" class="mb-0 text-success">—</h3>
+                        <span class="badge badge-success">{% trans "ready" %}</span>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        {% trans "Documents enriched by GigaChat" %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <small class="text-muted text-uppercase">{% trans "In Progress" %}</small>
+                    <div class="d-flex align-items-baseline justify-content-between">
+                        <h3 id="stat-processing" class="mb-0 text-info">—</h3>
+                        <span class="badge badge-info">{% trans "running" %}</span>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        {% trans "Documents currently being analyzed" %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <small class="text-muted text-uppercase">{% trans "Attention Needed" %}</small>
+                    <div class="d-flex align-items-baseline justify-content-between">
+                        <h3 id="stat-failed" class="mb-0 text-danger">—</h3>
+                        <span class="badge badge-danger">{% trans "failed" %}</span>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        {% trans "Documents requiring re-analysis" %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-5 col-xl-4 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header border-0 pb-0">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-folder-open mr-2 text-primary"></i>
+                        {% trans "Documents" %}
+                    </h5>
+                </div>
+                <div class="card-body pt-3">
+                    <div class="input-group mb-3">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        </div>
+                        <input id="documentSearch" type="search" class="form-control" placeholder="{% trans 'Search by label...' %}">
+                    </div>
+
+                    <div class="table-responsive dam-doc-table">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th scope="col">{% trans "Document" %}</th>
+                                    <th scope="col" class="text-right">{% trans "Status" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody id="documentTableBody">
+                                <tr>
+                                    <td colspan="2" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin mr-2"></i>
+                                        {% trans "Loading documents..." %}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-3">
+                        <small class="text-muted text-uppercase d-block">{% trans "Provider usage" %}</small>
+                        <ul class="list-unstyled mb-0" id="providerBreakdown">
+                            <li class="text-muted">{% trans "Awaiting data..." %}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7 col-xl-8 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header border-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 id="selectedDocumentTitle" class="card-title mb-0 text-truncate">
+                                {% trans "Select a document to view AI metadata" %}
+                            </h5>
+                            <small id="selectedDocumentMeta" class="text-muted"></small>
+                        </div>
+                        <div id="analysisStatusBadge"></div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="analysisDetail" class="dam-analysis-detail text-muted text-center py-5">
+                        <i class="fas fa-magic fa-2x mb-3 text-secondary"></i>
+                        <p class="mb-0">{% trans "Choose a document on the left to load GigaChat-generated metadata, entities, and rights information." %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function($) {
+    const endpoints = {
+        documents: '/digital-assets/api/documents/',
+        stats: '/digital-assets/api/dashboard-stats/',
+        analyze: '/digital-assets/api/ai-analysis/analyze/',
+        status: '/digital-assets/api/analysis-status/',
+        detail: '/digital-assets/api/document-detail/'
+    };
+
+    const state = {
+        documents: [],
+        selectedDocumentId: null,
+        selectedDocument: null,
+        loadingDetail: false,
+        searchTimeout: null
+    };
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    $.ajaxSetup({
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    });
+
+    function showMessage(message, level='info') {
+        const icons = {
+            info: 'fas fa-info-circle',
+            success: 'fas fa-check-circle',
+            danger: 'fas fa-exclamation-triangle',
+            warning: 'fas fa-exclamation-circle'
+        };
+
+        const alert = $(
+            `<div class="alert alert-${level} alert-dismissible fade show" role="alert">
+                <i class="${icons[level] || icons.info} mr-2"></i>${message}
+                <button type="button" class="close" data-dismiss="alert" aria-label="{% trans "Close" %}">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>`
+        );
+
+        $('#messageArea').append(alert);
+        setTimeout(() => alert.alert('close'), 8000);
+    }
+
+    function statusBadgeClass(status) {
+        switch (status) {
+            case 'completed':
+                return 'badge-success';
+            case 'processing':
+                return 'badge-info';
+            case 'pending':
+                return 'badge-secondary';
+            case 'failed':
+                return 'badge-danger';
+            default:
+                return 'badge-light text-muted';
+        }
+    }
+
+    function renderProviderBreakdown(providers) {
+        const container = $('#providerBreakdown');
+        container.empty();
+
+        if (!providers || !providers.length) {
+            container.append(`<li class="text-muted">{% trans "No completed analyses yet." %}</li>`);
+            return;
+        }
+
+        providers.forEach(entry => {
+            const label = entry.provider || '{% trans "Unknown" %}';
+            container.append(`
+                <li class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="text-muted">${label}</span>
+                    <span class="badge badge-pill badge-light">${entry.count}</span>
+                </li>
+            `);
+        });
+    }
+
+    function updateStats(data) {
+        if (!data) {
+            return;
+        }
+
+        $('#stat-total-docs').text(data.documents?.total ?? '—');
+        $('#stat-completed').text(data.analyses?.completed ?? '—');
+        const inProgress = (data.analyses?.processing ?? 0) + (data.analyses?.pending ?? 0);
+        $('#stat-processing').text(inProgress);
+        $('#stat-failed').text(data.analyses?.failed ?? 0);
+
+        renderProviderBreakdown(data.providers);
+    }
+
+    function loadStats() {
+        return $.getJSON(endpoints.stats)
+            .done(updateStats)
+            .fail(() => showMessage('{% trans "Unable to load DAM statistics." %}', 'warning'));
+    }
+
+    function renderDocumentTable(documents) {
+        const tbody = $('#documentTableBody');
+        tbody.empty();
+
+        if (!documents.length) {
+            tbody.append(`
+                <tr>
+                    <td colspan="2" class="text-center text-muted py-4">
+                        <i class="fas fa-folder-open mr-2"></i>
+                        {% trans "No documents available or matching your search." %}
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        documents.forEach(doc => {
+            const badgeClass = statusBadgeClass(doc.analysis_status);
+            const provider = doc.ai_provider ? `<span class="small d-block text-muted">${doc.ai_provider}</span>` : '';
+
+            const row = $(
+                `<tr data-document-id="${doc.id}" class="cursor-pointer">
+                    <td>
+                        <div class="font-weight-semibold text-truncate">${doc.label}</div>
+                        <div class="small text-muted text-truncate">${doc.latest_filename || '{% trans "No files yet" %}'}</div>
+                    </td>
+                    <td class="text-right align-middle">
+                        <span class="badge ${badgeClass}">${doc.analysis_status_display}</span>
+                        ${provider}
+                    </td>
+                </tr>`
+            );
+
+            row.on('click', () => selectDocument(doc.id));
+            if (doc.id === state.selectedDocumentId) {
+                row.addClass('table-active');
+            }
+
+            tbody.append(row);
+        });
+    }
+
+    function loadDocuments(query='') {
+        const params = query ? { q: query } : {};
+        $('#documentTableBody').html(`
+            <tr>
+                <td colspan="2" class="text-center text-muted py-4">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                    {% trans "Loading documents..." %}
+                </td>
+            </tr>
+        `);
+
+        return $.getJSON(endpoints.documents, params)
+            .done(response => {
+                const documents = Array.isArray(response) ? response : response.results || [];
+                state.documents = documents;
+                renderDocumentTable(documents);
+                if (state.selectedDocumentId) {
+                    const updatedDoc = documents.find(doc => doc.id === state.selectedDocumentId);
+                    if (updatedDoc) {
+                        state.selectedDocument = updatedDoc;
+                        updateActionButtons();
+                    }
+                }
+            })
+            .fail(() => {
+                $('#documentTableBody').html(`
+                    <tr>
+                        <td colspan="2" class="text-center text-danger py-4">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            {% trans "Could not load documents." %}
+                        </td>
+                    </tr>
+                `);
+            });
+    }
+
+    function setAnalysisStatus(statusPayload) {
+        const badgeContainer = $('#analysisStatusBadge');
+        badgeContainer.empty();
+
+        if (!statusPayload) {
+            return;
+        }
+
+        const badgeClass = statusBadgeClass(statusPayload.status);
+        const completed = statusPayload.completed_at
+            ? new Date(statusPayload.completed_at).toLocaleString()
+            : null;
+
+        const badge = $(
+            `<div class="text-right">
+                <span class="badge ${badgeClass} text-uppercase">
+                    ${statusPayload.status.replace('_', ' ')}
+                </span>
+                ${completed ? `<div class="small text-muted">${completed}</div>` : ''}
+            </div>`
+        );
+
+        badgeContainer.append(badge);
+    }
+
+    function updateSelectedMeta(document, statusPayload) {
+        const meta = $('#selectedDocumentMeta');
+        if (!document) {
+            meta.text('');
+            return;
+        }
+
+        const created = new Date(document.datetime_created).toLocaleString();
+        const provider = statusPayload?.provider ? ` · ${statusPayload.provider}` : '';
+        meta.text(`ID ${document.id} · ${created}${provider}`);
+    }
+
+    function loadDocumentStatus(documentId) {
+        return $.getJSON(endpoints.status, { document_id: documentId })
+            .done(statusPayload => {
+                setAnalysisStatus(statusPayload);
+                updateSelectedMeta(state.selectedDocument, statusPayload);
+            })
+            .fail(() => setAnalysisStatus(null));
+    }
+
+    function loadDocumentDetail(documentId) {
+        state.loadingDetail = true;
+        $('#analysisDetail').html(`
+            <div class="text-muted text-center py-5">
+                <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                <p class="mb-0">{% trans "Fetching AI metadata..." %}</p>
+            </div>
+        `);
+
+        return $.get(`${endpoints.detail}${documentId}/`)
+            .done(response => {
+                $('#analysisDetail').html(response.html);
+            })
+            .fail(() => {
+                $('#analysisDetail').html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        {% trans "Unable to load DAM metadata for this document." %}
+                    </div>
+                `);
+            })
+            .always(() => { state.loadingDetail = false; });
+    }
+
+    function updateActionButtons() {
+        const hasSelection = Boolean(state.selectedDocumentId);
+        $('#btnAnalyzeSelected').prop('disabled', !hasSelection);
+        $('#btnRefreshSelected').prop('disabled', !hasSelection);
+        $('#btnOpenDocument').prop('disabled', !hasSelection);
+
+        if (!hasSelection || !state.selectedDocument) {
+            $('#btnAnalyzeSelected').text('{% trans "Run AI Analysis" %}');
+            return;
+        }
+
+        const labelMap = {
+            completed: '{% trans "Re-run AI Analysis" %}',
+            failed: '{% trans "Retry AI Analysis" %}',
+            processing: '{% trans "Running..." %}',
+            pending: '{% trans "Run AI Analysis" %}',
+            not_analyzed: '{% trans "Run AI Analysis" %}'
+        };
+
+        const status = state.selectedDocument.analysis_status || 'not_analyzed';
+        $('#btnAnalyzeSelected').text(labelMap[status] || '{% trans "Run AI Analysis" %}');
+        $('#btnAnalyzeSelected').toggleClass('disabled', status === 'processing');
+    }
+
+    function selectDocument(documentId) {
+        if (state.loadingDetail && documentId === state.selectedDocumentId) {
+            return;
+        }
+
+        const document = state.documents.find(doc => doc.id === documentId);
+        if (!document) {
+            return;
+        }
+
+        state.selectedDocumentId = documentId;
+        state.selectedDocument = document;
+
+        $('#selectedDocumentTitle').text(document.label);
+        $('#selectedDocumentTitle').attr('title', document.label);
+
+        $('#documentTableBody tr').removeClass('table-active');
+        $(`#documentTableBody tr[data-document-id="${documentId}"]`).addClass('table-active');
+
+        updateActionButtons();
+        loadDocumentStatus(documentId);
+        loadDocumentDetail(documentId);
+    }
+
+    function analyzeSelectedDocument() {
+        if (!state.selectedDocumentId) {
+            return;
+        }
+
+        $('#btnAnalyzeSelected').prop('disabled', true);
+        showMessage('{% trans "Triggering AI analysis..." %}', 'info');
+
+        $.ajax({
+            url: endpoints.analyze,
+            method: 'POST',
+            data: { document_id: state.selectedDocumentId }
+        })
+        .done(() => {
+            showMessage('{% trans "GigaChat analysis started. Status will update automatically." %}', 'success');
+            loadDocumentStatus(state.selectedDocumentId);
+
+            // Auto-refresh status after 3 and 8 seconds
+            setTimeout(() => {
+                loadDocumentStatus(state.selectedDocumentId);
+                loadDocuments($('#documentSearch').val());
+            }, 3000);
+
+            setTimeout(() => {
+                loadDocumentStatus(state.selectedDocumentId);
+                loadDocuments($('#documentSearch').val());
+                loadStats(); // Update stats too
+            }, 8000);
+        })
+        .fail(xhr => {
+            const error = xhr.responseJSON?.error || xhr.statusText || '{% trans "Unknown error" %}';
+            showMessage('{% trans "Unable to start AI analysis:" %} ' + error, 'danger');
+        })
+        .always(() => {
+            $('#btnAnalyzeSelected').prop('disabled', false);
+            loadDocuments($('#documentSearch').val());
+        });
+    }
+
+    function refreshSelectedDocument() {
+        if (!state.selectedDocumentId) {
+            return;
+        }
+
+        loadDocuments($('#documentSearch').val());
+        loadDocumentStatus(state.selectedDocumentId);
+        loadDocumentDetail(state.selectedDocumentId);
+    }
+
+    function openDocument() {
+        if (!state.selectedDocumentId) {
+            return;
+        }
+        window.location.hash = '#/documents/documents/' + state.selectedDocumentId + '/properties/';
+    }
+
+    function attachHandlers() {
+        $('#btnAnalyzeSelected').on('click', analyzeSelectedDocument);
+        $('#btnRefreshSelected').on('click', refreshSelectedDocument);
+        $('#btnOpenDocument').on('click', openDocument);
+
+        $('#documentSearch').on('input', function() {
+            clearTimeout(state.searchTimeout);
+            const query = this.value;
+            state.searchTimeout = setTimeout(() => loadDocuments(query), 250);
+        });
+    }
+
+    function initialize() {
+        attachHandlers();
+        $.when(loadStats(), loadDocuments()).then(() => {
+            $('#messageArea').append(`
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    <i class="fas fa-robot mr-2"></i>
+                    {% trans "GigaChat is active. Select a document to review or enrich metadata." %}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="{% trans "Close" %}">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            `);
+        });
+    }
+
+    $(document).ready(initialize);
+})(jQuery);
+</script>
+{% endblock %}

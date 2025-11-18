@@ -388,6 +388,11 @@ class Setting:
         if not self.loaded:
             self.cache_value()
 
+        if self.environment_variable:
+            # For overridden settings, don't show the actual value in the list
+            # to avoid confusion. The value can still be edited if needed.
+            return _('(Overridden)')
+
         return self.yaml
 
     def set(self, value):

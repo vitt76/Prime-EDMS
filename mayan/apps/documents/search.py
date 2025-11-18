@@ -54,6 +54,8 @@ search_model_document.add_model_field(
     field='files__mimetype', label=('Document file MIME type')
 )
 
+# DAM Analysis fields removed to fix search indexing issues
+
 # Document file
 
 search_model_document_file = SearchModel(

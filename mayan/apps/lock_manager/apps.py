@@ -20,6 +20,11 @@ class LockManagerApp(MayanAppConfig):
     def ready(self):
         super().ready()
 
+        # Skip lock backend initialization if backend is empty/disabled
+        if not setting_backend.value or setting_backend.value.strip() == '':
+            logger.info('Lock manager backend is disabled, skipping initialization')
+            return
+
         if PURGE_LOCKS_COMMAND not in sys.argv:
             logger.debug('Starting lock backend connectivity test')
             # Don't test for locks during the `task_manager_purge_locks`

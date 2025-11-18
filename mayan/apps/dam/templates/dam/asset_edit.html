@@ -1,0 +1,202 @@
+{% extends "appearance/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Edit DAM Asset Metadata" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-edit"></i>
+                        {% trans "Edit AI-Generated Metadata" %}
+                    </h5>
+                    <small class="text-muted">
+                        {% trans "Review and manually override AI-generated metadata" %}
+                    </small>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <!-- Description -->
+                        <div class="form-group">
+                            <label for="{{ form.ai_description.id_for_label }}">
+                                <i class="fas fa-align-left"></i>
+                                {% trans "Description" %}
+                            </label>
+                            {{ form.ai_description }}
+                            <small class="form-text text-muted">
+                                {% trans "AI-generated description of the asset content" %}
+                            </small>
+                        </div>
+
+                        <!-- Tags -->
+                        <div class="form-group">
+                            <label for="{{ form.ai_tags.id_for_label }}">
+                                <i class="fas fa-tags"></i>
+                                {% trans "Tags" %}
+                            </label>
+                            {{ form.ai_tags }}
+                            <small class="form-text text-muted">
+                                {% trans "Comma-separated list of tags (e.g., portrait, person, outdoor)" %}
+                            </small>
+                        </div>
+
+                        <!-- Categories -->
+                        <div class="form-group">
+                            <label for="{{ form.categories.id_for_label }}">
+                                <i class="fas fa-folder"></i>
+                                {% trans "Categories" %}
+                            </label>
+                            {{ form.categories }}
+                            <small class="form-text text-muted">
+                                {% trans "Comma-separated list of categories" %}
+                            </small>
+                        </div>
+
+                        <!-- People -->
+                        <div class="form-group">
+                            <label for="{{ form.people.id_for_label }}">
+                                <i class="fas fa-users"></i>
+                                {% trans "People & Entities" %}
+                            </label>
+                            {{ form.people }}
+                            <small class="form-text text-muted">
+                                {% trans "Comma-separated list of people or entities mentioned" %}
+                            </small>
+                        </div>
+
+                        <!-- Locations -->
+                        <div class="form-group">
+                            <label for="{{ form.locations.id_for_label }}">
+                                <i class="fas fa-map-marker-alt"></i>
+                                {% trans "Locations" %}
+                            </label>
+                            {{ form.locations }}
+                            <small class="form-text text-muted">
+                                {% trans "Comma-separated list of locations" %}
+                            </small>
+                        </div>
+
+                        <!-- Language -->
+                        <div class="form-group">
+                            <label for="{{ form.language.id_for_label }}">
+                                <i class="fas fa-language"></i>
+                                {% trans "Language" %}
+                            </label>
+                            {{ form.language }}
+                            <small class="form-text text-muted">
+                                {% trans "Primary language of the content" %}
+                            </small>
+                        </div>
+
+                        <!-- Alt Text -->
+                        <div class="form-group">
+                            <label for="{{ form.alt_text.id_for_label }}">
+                                <i class="fas fa-universal-access"></i>
+                                {% trans "Alt Text" %}
+                            </label>
+                            {{ form.alt_text }}
+                            <small class="form-text text-muted">
+                                {% trans "Alternative text for accessibility" %}
+                            </small>
+                        </div>
+
+                        <!-- Copyright Notice -->
+                        <div class="form-group">
+                            <label for="{{ form.copyright_notice.id_for_label }}">
+                                <i class="fas fa-copyright"></i>
+                                {% trans "Copyright Notice" %}
+                            </label>
+                            {{ form.copyright_notice }}
+                            <small class="form-text text-muted">
+                                {% trans "Copyright information and notices" %}
+                            </small>
+                        </div>
+
+                        <!-- Usage Rights -->
+                        <div class="form-group">
+                            <label for="{{ form.usage_rights.id_for_label }}">
+                                <i class="fas fa-gavel"></i>
+                                {% trans "Usage Rights" %}
+                            </label>
+                            {{ form.usage_rights }}
+                            <small class="form-text text-muted">
+                                {% trans "Terms and conditions for using this asset" %}
+                            </small>
+                        </div>
+
+                        <!-- Rights Expiry -->
+                        <div class="form-group">
+                            <label for="{{ form.rights_expiry.id_for_label }}">
+                                <i class="fas fa-calendar-times"></i>
+                                {% trans "Rights Expiry Date" %}
+                            </label>
+                            {{ form.rights_expiry }}
+                            <small class="form-text text-muted">
+                                {% trans "Date when usage rights expire" %}
+                            </small>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="form-group mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i>
+                                {% trans "Save Changes" %}
+                            </button>
+                            <a href="{% url 'dam:asset_detail' ai_analysis_id=object.pk %}"
+                               class="btn btn-secondary ml-2">
+                                <i class="fas fa-times"></i>
+                                {% trans "Cancel" %}
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Asset Preview -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-image"></i>
+                        {% trans "Asset Preview" %}
+                    </h6>
+                </div>
+                <div class="card-body text-center">
+                    {% with latest_file=object.document.files.order_by('-timestamp').first %}
+                        {% if latest_file %}
+                            {% if latest_file.mimetype|slice:":5" == "image" %}
+                                <img src="{% url 'documents:document_file_page_view' document_id=object.document.pk document_file_id=latest_file.pk page_number=1 %}"
+                                     class="img-fluid rounded" style="max-height: 200px;"
+                                     alt="{% trans 'Asset preview' %}">
+                            {% else %}
+                                <div class="text-muted">
+                                    <i class="fas fa-file fa-2x mb-2"></i>
+                                    <p class="small">{{ latest_file.mimetype }}</p>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+
+            <!-- Info -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <small class="text-muted">
+                        {% trans "Document" %}: {{ object.document.label }}<br>
+                        {% trans "Last analyzed" %}: {{ object.analysis_completed|date:"M j, Y g:i A" }}<br>
+                        {% trans "Provider" %}: {{ object.ai_provider|default:"Unknown" }}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

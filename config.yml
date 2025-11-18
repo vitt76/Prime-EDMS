@@ -3,3 +3,4 @@ common:
     - mayan.apps.converter_pipeline_extension
     - mayan.apps.distribution
     - mayan.apps.image_editor
+    - mayan.apps.dam.apps.DAMApp
