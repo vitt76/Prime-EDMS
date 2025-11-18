@@ -54,7 +54,7 @@ search_model_document.add_model_field(
     field='files__mimetype', label=('Document file MIME type')
 )
 
-# DAM Analysis fields removed to fix search indexing issues
+# DAM Analysis fields are added by mayan.apps.dam.search.extend_document_search()
 
 # Document file
 

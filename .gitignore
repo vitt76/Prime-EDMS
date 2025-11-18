@@ -148,3 +148,12 @@ Thumbs.db
 
 # Temporary files
 temp/
+tmp/
+*.backup
+*.bak
+
+# Test and migration scripts (temporary)
+test_dam_search.py
+reindex_dam_search.py
+reindex_search.py
+migrate_dam.py
