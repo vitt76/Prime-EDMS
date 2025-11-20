@@ -110,3 +110,12 @@ DEFAULT_INDEXING_FALLBACK_COUNTDOWN = 10  # seconds
 DEFAULT_INDEXING_LOCK_TIMEOUT = 300  # 5 minutes - protects against stuck tasks
 DEFAULT_INDEXING_BATCH_MAX_SIZE = 10000  # Maximum batch size to prevent system overload
 DEFAULT_INDEXING_BATCH_CHUNK_SIZE = 1000  # Chunk size for processing large batches
+
+# Periodic reindexing interval
+# Best practice: Check and reindex missed documents every 4-6 hours
+# This ensures documents that may have been missed during initial indexing
+# or due to temporary failures are eventually indexed
+# For high-load DAM systems: 4 hours (14400 seconds)
+# For medium systems: 6 hours (21600 seconds)
+# For low-load systems: 12 hours (43200 seconds)
+DEFAULT_INDEXING_PERIODIC_REINDEX_INTERVAL = 60 * 60 * 4  # 4 hours - оптимально для DAM систем

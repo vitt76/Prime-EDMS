@@ -184,6 +184,22 @@ class IndexingMetrics:
         # This would require iterating through all possible keys
         # For now, just log a warning
         logger.warning('Metrics reset requested - this requires manual cache clearing')
+    
+    def get_total_indexed(self) -> int:
+        """Get total number of successfully indexed documents."""
+        return self.get_metrics().get('index_success', 0)
+    
+    def get_total_failed(self) -> int:
+        """Get total number of failed indexing operations."""
+        return self.get_metrics().get('index_failure', 0)
+    
+    def get_total_retries(self) -> int:
+        """Get total number of retry operations."""
+        return self.get_metrics().get('retry_count', 0)
+    
+    def get_avg_duration(self) -> float:
+        """Get average indexing duration in seconds."""
+        return self.get_metrics().get('index_duration_avg', 0.0)
 
 
 # Global metrics instance

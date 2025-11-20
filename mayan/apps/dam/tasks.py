@@ -35,11 +35,12 @@ def analyze_document_with_ai(self, document_id: int):
         document_file = document.files.order_by('-timestamp').first()
 
         logger.info(f"📄 Document: {document.label} (ID: {document_id})")
-        logger.info(f"📁 Document file: {document_file} (mimetype: {document_file.mimetype})")
-
+        
         if not document_file:
             logger.error(f"No files found for document {document_id}")
             return
+        
+        logger.info(f"📁 Document file: {document_file} (mimetype: {document_file.mimetype if document_file else 'N/A'})")
 
         # Get AI analysis record
         ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
@@ -216,7 +217,13 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
         logger.error(f'Traceback: {traceback.format_exc()}')
 
     # Get file data - use direct file access (since we fixed volume mapping)
-    logger.info(f"Starting AI analysis for document_file: {document_file} (mimetype: {document_file.mimetype})")
+    if not document_file:
+        logger.error("document_file is None, cannot perform AI analysis")
+        return get_fallback_analysis('application/octet-stream')
+    
+    # Get mime_type early to avoid errors
+    mime_type = document_file.mimetype if document_file and hasattr(document_file, 'mimetype') else 'application/octet-stream'
+    logger.info(f"Starting AI analysis for document_file: {document_file} (mimetype: {mime_type})")
 
     try:
         # Use direct file access (should work now with proper volume mapping)
@@ -268,8 +275,6 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
             # Skip all providers for invalid images
             logger.error("❌ Invalid image format, skipping AI analysis")
             return get_fallback_analysis(mime_type)
-
-    mime_type = document_file.mimetype or 'application/octet-stream'
 
     # Try providers in order of proven availability (GigaChat first)
     providers_to_try = ['gigachat', 'openai', 'claude', 'gemini', 'yandexgpt']

@@ -7,8 +7,9 @@ from mayan.apps.task_manager.workers import worker_b, worker_c
 
 from .literals import (
     CHECK_DELETE_PERIOD_INTERVAL, CHECK_TRASH_PERIOD_INTERVAL,
-    DELETE_STALE_STUBS_INTERVAL
+    DELETE_STALE_STUBS_INTERVAL, DEFAULT_INDEXING_PERIODIC_REINDEX_INTERVAL
 )
+from .settings import setting_indexing_periodic_reindex_interval
 
 queue_documents_periodic = CeleryQueue(
     name='documents_periodic', label=_('Documents periodic'), transient=True,
@@ -65,6 +66,12 @@ queue_documents_periodic.add_task_type(
     schedule=timedelta(
         seconds=CHECK_DELETE_PERIOD_INTERVAL
     )
+)
+queue_documents_periodic.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_periodic_reindex_documents',
+    label=_('Periodic document reindexing'),
+    name='task_periodic_reindex_documents',
+    schedule=timedelta(seconds=setting_indexing_periodic_reindex_interval.value),
 )
 
 queue_uploads.add_task_type(

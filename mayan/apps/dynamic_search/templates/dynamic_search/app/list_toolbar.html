@@ -41,11 +41,42 @@
 
             updateFilterButtonClear();
 
+            // Debouncing для оптимизации производительности поиска
+            // Задержка перед отправкой запроса - снижает нагрузку на сервер
+            let searchTimeout;
+            const SEARCH_DEBOUNCE_MS = 400; // 400ms задержка
+            
+            // Обработчик ввода с debouncing
+            $filterInputTerms.on('input', function () {
+                const $this = $(this);
+                const searchValue = $this.val().trim();
+                
+                // Обновляем кнопку очистки
+                updateFilterButtonClear();
+                
+                // Очищаем предыдущий таймер
+                clearTimeout(searchTimeout);
+                
+                // Если поле пустое, сразу очищаем результаты
+                if (!searchValue) {
+                    $formFilter.submit();
+                    return;
+                }
+                
+                // Устанавливаем новый таймер для отправки запроса
+                searchTimeout = setTimeout(function() {
+                    $formFilter.submit();
+                }, SEARCH_DEBOUNCE_MS);
+            });
+            
+            // Сохраняем старый keyup для обратной совместимости (только для кнопки очистки)
             $filterInputTerms.keyup(function () {
                 updateFilterButtonClear();
             });
 
             $filterButtonClear.click(function(){
+                // Очищаем таймер при ручной очистке
+                clearTimeout(searchTimeout);
                 $filterInputTerms.val('');
                 $formFilter.submit();
             });

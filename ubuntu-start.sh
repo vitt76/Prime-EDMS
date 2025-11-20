@@ -77,9 +77,9 @@ start_mayan() {
         return 0
     fi
 
-    # Проверка наличия Docker образа
-    if ! docker images | grep -q "${PROJECT_NAME}_app"; then
-        print_warning "Docker образ не найден. Запустите: ./ubuntu-prepare.sh"
+    # Проверка наличия Docker образа или возможности его собрать
+    if ! docker images | grep -qE "(${PROJECT_NAME}_app|prime-edms_app)" && [ ! -f "Dockerfile.app" ]; then
+        print_warning "Docker образ не найден и Dockerfile.app отсутствует. Запустите: ./ubuntu-prepare.sh"
         exit 1
     fi
 
@@ -171,10 +171,10 @@ except ImportError as e:
     if docker ps -q -f name="${PROJECT_NAME}_app_1" | grep -q .; then
         print_success "Prime-EDMS запущен!"
         echo ""
-        echo "🌐 Доступен по адресу: http://localhost"
-        echo "📁 Публикации: http://localhost/#/distribution/publications/"
-        echo "⚙️  Пресеты: http://localhost/#/distribution/presets/"
-        echo "👥 Получатели: http://localhost/#/distribution/recipients/"
+        echo "🌐 Доступен по адресу: http://localhost:8080"
+        echo "📁 Публикации: http://localhost:8080/#/distribution/publications/"
+        echo "⚙️  Пресеты: http://localhost:8080/#/distribution/presets/"
+        echo "👥 Получатели: http://localhost:8080/#/distribution/recipients/"
         echo ""
         echo "🔧 Расширения активны:"
         echo "  ✅ converter_pipeline_extension (63+ форматов)"
@@ -209,9 +209,9 @@ stop_mayan() {
 restart_mayan() {
     print_header "Перезапуск Mayan EDMS..."
 
-    # Проверка наличия Docker образа
-    if ! docker images | grep -q "${PROJECT_NAME}_app"; then
-        print_warning "Docker образ не найден. Запустите: ./ubuntu-prepare.sh"
+    # Проверка наличия Docker образа или возможности его собрать
+    if ! docker images | grep -qE "(${PROJECT_NAME}_app|prime-edms_app)" && [ ! -f "Dockerfile.app" ]; then
+        print_warning "Docker образ не найден и Dockerfile.app отсутствует. Запустите: ./ubuntu-prepare.sh"
         exit 1
     fi
 
@@ -276,10 +276,10 @@ restart_mayan() {
     if docker ps -q -f name="${PROJECT_NAME}_app_1" | grep -q .; then
         print_success "Prime-EDMS перезапущен!"
         echo ""
-        echo "🌐 Доступен по адресу: http://localhost"
-        echo "📁 Публикации: http://localhost/#/distribution/publications/"
-        echo "⚙️  Пресеты: http://localhost/#/distribution/presets/"
-        echo "👥 Получатели: http://localhost/#/distribution/recipients/"
+        echo "🌐 Доступен по адресу: http://localhost:8080"
+        echo "📁 Публикации: http://localhost:8080/#/distribution/publications/"
+        echo "⚙️  Пресеты: http://localhost:8080/#/distribution/presets/"
+        echo "👥 Получатели: http://localhost:8080/#/distribution/recipients/"
         echo ""
         echo "🔧 Расширения активны:"
         echo "  ✅ converter_pipeline_extension (63+ форматов)"

@@ -370,6 +370,10 @@ DISTRIBUTION_WATERMARK_DEFAULTS = {
     'position': 'center'
 }
 
+# Search backend - use Django backend for better compatibility with DAM features
+# Django backend doesn't require indexing and works directly with database
+SEARCH_BACKEND = 'mayan.apps.dynamic_search.backends.django.DjangoSearchBackend'
+
 # ------ End -----
 
 BASE_INSTALLED_APPS = INSTALLED_APPS

@@ -157,3 +157,24 @@ test_dam_search.py
 reindex_dam_search.py
 reindex_search.py
 migrate_dam.py
+
+# Temporary profiling and diagnostic scripts
+*profile*.py
+*diagnose*.py
+test_functionality_*.py
+
+# Temporary documentation files
+FIX_*.md
+PROFILE_*.md
+INSTRUCTIONS_*.md
+START_*.md
+QUICK_*.md
+*_PERFORMANCE_REPORT.md
+*_PROFILING_*.md
+
+# Temporary diagnostic scripts
+check-and-fix.ps1
+diagnose-and-start.ps1
+check_search_logs.*
+restart_server.ps1
+restart-container.ps1

@@ -47,6 +47,10 @@ search_model_document.add_model_field(
 search_model_document.add_model_field(
     field='files__checksum', label=('Document file checksum')
 )
+# Use files__filename for search - Django ORM will automatically handle the relationship
+# Note: This searches through all files via the 'files' related_name
+# For filtering by valid files only, the search uses Document.valid manager which
+# already filters out trashed documents, so their files won't be included
 search_model_document.add_model_field(
     field='files__filename', label=('Document file filename')
 )

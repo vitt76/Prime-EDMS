@@ -572,6 +572,8 @@ def task_index_instance_conditional(app_label, model_name, object_id, validation
         return
     
     # Execute indexing task asynchronously
+    # NOTE: task_index_instance is registered in 'search' queue, not 'indexing'
+    # Using 'search' queue to ensure task is processed by correct worker
     from mayan.apps.dynamic_search.tasks import task_index_instance
     try:
         task_index_instance.apply_async(
@@ -581,7 +583,7 @@ def task_index_instance_conditional(app_label, model_name, object_id, validation
                 'exclude_model_name': exclude_model_name,
                 'exclude_kwargs': exclude_kwargs
             },
-            queue='indexing'
+            queue='search'  # Fixed: use 'search' queue where task is registered
         )
         logger.debug('Scheduled search indexing for %s.%s (id=%s)', app_label, model_name, object_id)
     except Exception as e:
@@ -665,6 +667,7 @@ def task_index_instance_safe(self, app_label, model_name, object_id, exclude_app
             return
     
     # Call original task asynchronously if validation passed or not a Document
+    # NOTE: task_index_instance is registered in 'search' queue, not 'indexing'
     from mayan.apps.dynamic_search.tasks import task_index_instance
     try:
         # Use apply_async for asynchronous execution
@@ -675,7 +678,7 @@ def task_index_instance_safe(self, app_label, model_name, object_id, exclude_app
                 'exclude_model_name': exclude_model_name,
                 'exclude_kwargs': exclude_kwargs
             },
-            queue='indexing'
+            queue='search'  # Fixed: use 'search' queue where task is registered
         )
     except Exception as e:
         logger.error(
@@ -888,3 +891,91 @@ def task_coordinate_document_batch_index(self, document_ids):
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exception)
         raise
+
+
+@app.task(ignore_result=True)
+def task_periodic_reindex_documents():
+    """
+    Periodic task to reindex documents that may have been missed.
+    
+    This task ensures that documents which may not have been indexed due to:
+    - Temporary system failures
+    - Queue issues
+    - Worker crashes
+    - Network problems
+    
+    are eventually indexed. This is a safety mechanism to maintain search
+    index consistency.
+    
+    Best practices for DAM systems:
+    - High-load systems: Run every 4 hours
+    - Medium systems: Run every 6 hours
+    - Low-load systems: Run every 12 hours
+    
+    The task processes documents in batches to avoid system overload.
+    """
+    from .indexing_coordinator import DocumentIndexCoordinator
+    from .literals import DEFAULT_INDEXING_BATCH_CHUNK_SIZE
+    
+    Document = apps.get_model(app_label='documents', model_name='Document')
+    
+    logger.info('Starting periodic document reindexing...')
+    
+    try:
+        # Get all valid documents that need indexing
+        # We'll process them in batches to avoid overload
+        document_ids = list(Document.valid.values_list('pk', flat=True))
+        total_count = len(document_ids)
+        
+        if total_count == 0:
+            logger.info('No documents found for periodic reindexing')
+            return
+        
+        logger.info(
+            'Found %d documents for periodic reindexing, processing in batches...',
+            total_count
+        )
+        
+        # Process in batches
+        batch_size = DEFAULT_INDEXING_BATCH_CHUNK_SIZE
+        total_success = 0
+        total_errors = 0
+        
+        for i in range(0, len(document_ids), batch_size):
+            batch_ids = document_ids[i:i+batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (len(document_ids) + batch_size - 1) // batch_size
+            
+            try:
+                result = DocumentIndexCoordinator.index_document_batch(
+                    document_ids=batch_ids,
+                    fail_fast=False
+                )
+                
+                success_count = result.get('success_count', 0)
+                error_count = result.get('error_count', 0)
+                total_success += success_count
+                total_errors += error_count
+                
+                logger.debug(
+                    'Periodic reindexing batch %d/%d: %d scheduled, %d errors',
+                    batch_num, total_batches, success_count, error_count
+                )
+                
+            except Exception as e:
+                logger.error(
+                    'Error processing periodic reindexing batch %d/%d: %s',
+                    batch_num, total_batches, e, exc_info=True
+                )
+                total_errors += len(batch_ids)
+        
+        logger.info(
+            'Periodic document reindexing completed: %d documents scheduled, %d errors',
+            total_success, total_errors
+        )
+        
+    except Exception as e:
+        logger.error(
+            'Unexpected error during periodic document reindexing: %s',
+            e, exc_info=True
+        )
