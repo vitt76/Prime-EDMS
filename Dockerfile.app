@@ -10,7 +10,18 @@ RUN apt-get update && \
         python3-dev \
         build-essential \
         gettext && \
-    pip3 install reportlab cryptography PyJWT gigachat "pydantic<2.0" "typing-extensions<4.6" yandexgptlite django-storages boto3 --upgrade && \
+    /opt/mayan-edms/bin/pip install \
+        reportlab \
+        cryptography \
+        PyJWT \
+        gigachat \
+        "pydantic<2.0" \
+        "typing-extensions<4.6" \
+        yandexgptlite \
+        django-storages \
+        boto3 \
+        botocore \
+        --upgrade && \
     rm -rf /var/lib/apt/lists/*
 
 # Копирование расширения (обновлено)

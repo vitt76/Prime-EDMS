@@ -3,6 +3,10 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 
+from mayan.apps.storage.classes import DefinedStorageLazy
+
+from .literals import STORAGE_NAME_DISTRIBUTION_RENDITIONS
+
 User = get_user_model()
 
 
@@ -483,6 +487,7 @@ class GeneratedRendition(models.Model):
         help_text=_('Preset used to generate this rendition')
     )
     file = models.FileField(
+        storage=DefinedStorageLazy(name=STORAGE_NAME_DISTRIBUTION_RENDITIONS),
         upload_to='renditions/distribution/',
         null=True,
         blank=True,

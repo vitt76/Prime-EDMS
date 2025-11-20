@@ -68,14 +68,16 @@ services:
       context: .
       dockerfile: Dockerfile.app
     container_name: prime-edms_app_1
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     environment:
       MAYAN_MEDIA_ROOT: '/var/lib/mayan'
-      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql','PORT':'5432'}}"
-      MAYAN_CELERY_BROKER_URL: amqp://mayan:mayanrabbitpass@rabbitmq:5672/mayan
-      MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
-      MAYAN_LOCK_MANAGER_BACKEND: ""
-      MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{}"
-      MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
+      MAYAN_DATABASES: '{"default":{"ENGINE":"django.db.backends.postgresql","NAME":"mayan","PASSWORD":"XHDvOfhobnvVnYjGNc5fw6zypnJpT","USER":"mayan","HOST":"postgresql","PORT":"5432"}}'
+      MAYAN_CELERY_BROKER_URL: amqp://mayan:${MAYAN_RABBITMQ_PASSWORD}@rabbitmq:5672/mayan
+      MAYAN_CELERY_RESULT_BACKEND: redis://:${MAYAN_REDIS_PASSWORD}@redis:6379/1
+      MAYAN_LOCK_MANAGER_BACKEND: "mayan.apps.lock_manager.backends.redis_lock.RedisLock"
+      MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:${MAYAN_REDIS_PASSWORD}@redis:6379/2'}"
       MAYAN_WORKER_A_QUEUES: converter,sources_fast,distribution
       # Override the hardcoded supervisor config
       COMMAND_WORKER_A: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker %(ENV_MAYAN_WORKER_A_CONCURRENCY)s --hostname=mayan-edms-worker_a.%%h --loglevel=ERROR -Ofair --queues=converter,sources_fast,distribution %(ENV_MAYAN_WORKER_A_MAX_MEMORY_PER_CHILD)s %(ENV_MAYAN_WORKER_A_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
@@ -94,7 +96,6 @@ services:
       DAM_YANDEXGPT_FOLDER_ID: "${DAM_YANDEXGPT_FOLDER_ID}"
     volumes:
       - mayan_data:/var/lib/mayan
-      - ./config.yml:/opt/mayan-edms/config.yml:ro
       - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
       - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
       - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor

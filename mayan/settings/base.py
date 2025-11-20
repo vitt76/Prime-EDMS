@@ -362,15 +362,12 @@ DISTRIBUTION_DEFAULT_EXPIRATION_DAYS = 30
 DISTRIBUTION_MAX_DOWNLOADS = 100
 DISTRIBUTION_FFMPEG_PATH = '/usr/bin/ffmpeg'
 DISTRIBUTION_CONVERT_TIMEOUT = 300  # 5 minutes
-DISTRIBUTION_STORAGE = 'local'  # 'local' or 's3'
 DISTRIBUTION_WATERMARK_DEFAULTS = {
     'text': 'SAMPLE',
     'font_size': 24,
     'opacity': 0.3,
     'position': 'center'
 }
-
-# ------ End -----
 
 BASE_INSTALLED_APPS = INSTALLED_APPS
 

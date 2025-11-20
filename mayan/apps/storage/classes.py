@@ -80,8 +80,30 @@ class DefinedStorage(AppsModuleLoaderMixin):
 
     def get_storage_instance(self):
         try:
-            return self.get_storage_subclass()(**self.kwargs)
+            logger.debug(f'DefaultStorage.get_storage_instance: {self.name}')
+            logger.debug(f'Dotted path: {self.dotted_path}')
+            logger.debug(f'Args keys: {list(self.kwargs.keys())}')
+
+            storage_class = self.get_storage_subclass()
+            logger.debug(f'Storage class: {storage_class}')
+
+            instance = storage_class(**self.kwargs)
+            logger.debug('Storage instance created successfully')
+
+            return instance
         except Exception as exception:
+            print(f'🔴 STORAGE DEBUG: Storage initialization failed for {self.name}')
+            print(f'🔴 STORAGE DEBUG: Dotted path: {self.dotted_path}')
+            print(f'🔴 STORAGE DEBUG: Args: {self.kwargs}')
+            print(f'🔴 STORAGE DEBUG: Exception: {exception}')
+            import traceback
+            print(f'🔴 STORAGE DEBUG: Traceback: {traceback.format_exc()}')
+
+            logger.error(f'Storage initialization failed for {self.name}')
+            logger.error(f'Dotted path: {self.dotted_path}')
+            logger.error(f'Args: {self.kwargs}')
+            logger.error(f'Exception: {exception}')
+
             message = self.error_message or _(
                 'Unable to initialize storage: %(name)s. Check the storage '
                 'backend dotted path and arguments.'

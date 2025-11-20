@@ -1,0 +1,5 @@
+{
+  "summary": "Добавил явные DNS (1.1.1.1, 8.8.8.8) в сервис app внутри docker-compose, пересоздал контейнер и проверил: внутри теперь `socket.gethostbyname('s3.ru1.storage.beget.cloud')` возвращает IP, а тестовый `boto3.client(...).put_object` в PRIME/healthchecks/dns-test.txt прошёл успешно.",
+  "current_status": "Сервис поднят и отвечает по http://localhost (200). Прямые обращения из контейнера к Beget S3 работают; осталось перепроверить загрузку документа через UI/API."
+}
+

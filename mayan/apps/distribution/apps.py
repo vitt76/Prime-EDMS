@@ -20,6 +20,10 @@ class DistributionApp(MayanAppConfig):
         super().ready()
         print('📦 Distribution module loaded successfully!')
 
+        # Ensure settings and storages are registered
+        from . import settings as distribution_settings  # noqa: F401
+        from . import storages as distribution_storages  # noqa: F401
+
         # Force add ourselves to INSTALLED_APPS if not already there
         from django.conf import settings
         app_name = 'mayan.apps.distribution'
