@@ -92,7 +92,22 @@ class SearchBackend:
             handler_factory_index_related_instance_save
         )
 
+        # Check if DocumentIndexCoordinator is available
+        coordinator_available = False
+        try:
+            from mayan.apps.documents.indexing_coordinator import DocumentIndexCoordinator
+            coordinator_available = True
+        except ImportError:
+            pass
+
         for search_model in SearchModel.all():
+            # Skip Document model if coordinator is available
+            # The coordinator will handle Document indexing
+            if (coordinator_available and 
+                search_model.app_label == 'documents' and 
+                search_model.model_name == 'document'):
+                continue
+            
             post_save.connect(
                 dispatch_uid='search_handler_index_instance',
                 receiver=handler_index_instance, sender=search_model.model
@@ -104,6 +119,12 @@ class SearchBackend:
             )
 
             for proxy in search_model.proxies:
+                # Skip Document proxy models if coordinator is available
+                if (coordinator_available and 
+                    search_model.app_label == 'documents' and 
+                    search_model.model_name == 'document'):
+                    continue
+                
                 post_save.connect(
                     dispatch_uid='search_handler_index_instance',
                     receiver=handler_index_instance, sender=proxy
@@ -242,8 +263,16 @@ class SearchBackend:
 
         if QUERY_PARAMETER_ANY_FIELD in query:
             value = query[QUERY_PARAMETER_ANY_FIELD]
-            if value:
-                clean_query = {key: value for key in search_field_names}
+            # Allow empty strings and single character searches
+            # Strip to remove whitespace, but allow empty string for exact matching
+            if value is not None:
+                value_stripped = value.strip() if isinstance(value, str) else str(value)
+                # Only copy value to all search fields if it's not empty
+                # Empty values will be skipped in SearchQuery, so we don't want to create
+                # a query with all fields set to empty strings
+                if value_stripped:
+                    # Copy value to all search fields
+                    clean_query = {key: value_stripped for key in search_field_names}
         else:
             # Allow only valid search fields for the search model and scoping keys.
             clean_query = {
@@ -517,8 +546,8 @@ class SearchField:
         transformation_function=None
     ):
         self._label = label
+        self._help_text = help_text
         self.field = field
-        self.help_text = help_text
         self.search_model = search_model
         self.transformation_function = transformation_function
 
@@ -531,10 +560,21 @@ class SearchField:
     def field_type(self):
         return self.get_model_field().__class__
 
+    @cached_property
+    def help_text(self):
+        """
+        Кешированное свойство для help_text. Использует переданное значение
+        или получает из модели поля.
+        """
+        if self._help_text is not None:
+            return self._help_text
+        return getattr(self.get_model_field(), 'help_text', '')
+
     def get_help_text(self):
-        return self.help_text or getattr(
-            self.get_model_field(), 'help_text', ''
-        )
+        """
+        Метод для обратной совместимости. Использует кешированное свойство.
+        """
+        return self.help_text
 
     def get_model(self):
         return self.search_model.model
@@ -544,8 +584,12 @@ class SearchField:
             model=self.get_model(), path=self.field
         )[-1]
 
-    @property
+    @cached_property
     def label(self):
+        """
+        Кешированное свойство для label. Использует переданное значение
+        или получает из модели поля.
+        """
         return self._label or self.get_model_field().verbose_name
 
     @cached_property
@@ -774,8 +818,18 @@ class SearchModel(AppsModuleLoaderMixin):
         except KeyError:
             raise KeyError('No search field named: %s' % field)
 
-    def get_search_fields(self):
+    @cached_property
+    def search_fields(self):
+        """
+        Кешированный список полей поиска для оптимизации производительности.
+        """
         return list(self.search_fields_dict.values())
+
+    def get_search_fields(self):
+        """
+        Метод для обратной совместимости. Использует кешированное свойство.
+        """
+        return self.search_fields
 
     @cached_property
     def label(self):

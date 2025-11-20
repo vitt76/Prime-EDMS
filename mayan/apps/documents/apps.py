@@ -1,6 +1,10 @@
+import logging
+
 from django.apps import apps
 from django.db.models.signals import post_migrate
 from django.utils.translation import ugettext_lazy as _
+
+logger = logging.getLogger(name=__name__)
 
 from mayan.apps.acls.classes import ModelPermission
 from mayan.apps.acls.permissions import permission_acl_edit, permission_acl_view
@@ -1017,3 +1021,81 @@ class DocumentsApp(MayanAppConfig):
             dispatch_uid='documents_handler_create_default_document_type',
             receiver=handler_create_default_document_type
         )
+
+        # Register unified document indexing coordination handlers
+        # These handlers replace the separate handlers from Dynamic Search
+        # and Document Indexing to eliminate duplication
+        from django.db.models.signals import post_save, pre_delete
+        from .handlers import (
+            handler_coordinate_document_index, handler_coordinate_document_deindex
+        )
+        
+        # Check if other apps have registered their handlers
+        # We need to disconnect them only if they are actually registered
+        # This avoids race conditions with app initialization order
+        post_save_receivers = post_save._live_receivers(sender=Document)
+        pre_delete_receivers = pre_delete._live_receivers(sender=Document)
+        
+        # Disconnect document_indexing handler if registered
+        # Check by looking for the handler in registered receivers
+        for receiver in list(post_save_receivers):
+            # Try to disconnect by dispatch_uid (most reliable)
+            try:
+                post_save.disconnect(
+                    dispatch_uid='document_handler_index_document',
+                    sender=Document
+                )
+                logger.debug('Disconnected document_indexing handler from post_save')
+                break
+            except (ValueError, TypeError):
+                # Handler not registered with this dispatch_uid, continue
+                pass
+        
+        # Disconnect document_indexing pre_delete handler if registered
+        for receiver in list(pre_delete_receivers):
+            try:
+                pre_delete.disconnect(
+                    dispatch_uid='document_indexing_handler_remove_document',
+                    sender=Document
+                )
+                logger.debug('Disconnected document_indexing handler from pre_delete')
+                break
+            except (ValueError, TypeError):
+                # Handler not registered with this dispatch_uid, continue
+                pass
+        
+        # Also try to disconnect dynamic_search handler for Document if it exists
+        # This is a safety measure in case dynamic_search registers before us
+        try:
+            post_save.disconnect(
+                dispatch_uid='search_handler_index_instance',
+                sender=Document
+            )
+            logger.debug('Disconnected dynamic_search handler from post_save for Document')
+        except (ValueError, TypeError):
+            # Handler not registered, that's fine
+            pass
+        
+        try:
+            pre_delete.disconnect(
+                dispatch_uid='search_handler_deindex_instance',
+                sender=Document
+            )
+            logger.debug('Disconnected dynamic_search handler from pre_delete for Document')
+        except (ValueError, TypeError):
+            # Handler not registered, that's fine
+            pass
+        
+        # Register unified coordination handlers
+        post_save.connect(
+            dispatch_uid='documents_handler_coordinate_document_index',
+            receiver=handler_coordinate_document_index,
+            sender=Document
+        )
+        pre_delete.connect(
+            dispatch_uid='documents_handler_coordinate_document_deindex',
+            receiver=handler_coordinate_document_deindex,
+            sender=Document,
+            weak=False
+        )
+        logger.debug('Registered unified document indexing coordination handlers')

@@ -105,19 +105,19 @@ cd ~/prime-edms
 
 # Запуск системы
 ./ubuntu-start.sh start
-# или
-docker-compose -f docker-compose.simple.yml up -d
+# или напрямую через docker-compose
+docker-compose -f docker-compose.yml up -d
 ```
 
 ### Шаг 6: Доступ к системе
 
-Откройте браузер и перейдите: **http://localhost**
+Откройте браузер и перейдите: **http://localhost:8080** (порт 8080 по умолчанию, можно изменить в docker-compose.yml)
 
 **Доступные разделы:**
-- 🌐 **Главная**: http://localhost
-- 📁 **Публикации**: http://localhost/#/distribution/publications/
-- ⚙️ **Пресеты**: http://localhost/#/distribution/presets/
-- 👥 **Получатели**: http://localhost/#/distribution/recipients/
+- 🌐 **Главная**: http://localhost:8080
+- 📁 **Публикации**: http://localhost:8080/#/distribution/publications/
+- ⚙️ **Пресеты**: http://localhost:8080/#/distribution/presets/
+- 👥 **Получатели**: http://localhost:8080/#/distribution/recipients/
 
 **Расширения активны:**
 - ✅ **converter_pipeline_extension**: 63+ форматов файлов
@@ -168,12 +168,12 @@ newgrp docker
 make start
 
 # Или напрямую через docker-compose
-docker-compose -f docker-compose.simple.yml up -d
+docker-compose -f docker-compose.yml up -d
 ```
 
 ### Шаг 6: Доступ к системе
 
-Откройте браузер и перейдите: **http://localhost**
+Откройте браузер и перейдите: **http://localhost:8080** (порт 8080 по умолчанию, можно изменить в docker-compose.yml)
 
 ## 💻 Развертывание на Windows (нативно)
 
@@ -221,7 +221,7 @@ start-windows.bat start
 
 ### Шаг 4: Доступ к системе
 
-Откройте браузер и перейдите: **http://localhost**
+Откройте браузер и перейдите: **http://localhost:8080** (порт 8080 по умолчанию, можно изменить в docker-compose.yml)
 
 ## 🛠️ Альтернативные способы запуска
 
@@ -313,13 +313,13 @@ start-windows.bat clean     # Очистка данных (ОПАСНО!)
 
 ### Изменение порта
 
-Если порт 80 занят, измените его в `docker-compose.simple.yml`:
+Если порт 8080 занят, измените его в `docker-compose.yml`:
 
 ```yaml
 services:
   app:
     ports:
-      - "8080:8000"  # Измените 80 на нужный порт
+      - "80:8000"  # Измените 8080 на нужный порт (например, 80 для стандартного HTTP)
 ```
 
 ### Кастомные настройки
@@ -405,9 +405,9 @@ docker stats
 ```
 
 ### Доступ к сервисам
-- **Mayan EDMS**: http://localhost
-- **RabbitMQ Management**: http://localhost:15672 (mayan/mayanrabbitpass)
-- **PostgreSQL**: localhost:5432 (mayan/mayandbpass)
+- **Mayan EDMS**: http://localhost:8080 (порт можно изменить в docker-compose.yml)
+- **RabbitMQ Management**: http://localhost:15672 (mayan/mayanrabbitpass) - только если порты раскомментированы в docker-compose.yml
+- **PostgreSQL**: localhost:5432 (mayan/mayandbpass) - только если порты раскомментированы в docker-compose.yml
 
 ## 🔒 Production настройки
 
