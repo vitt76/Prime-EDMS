@@ -17,34 +17,25 @@
     <div class="row">
         <div class="col-xs-12">
             <form action="{% url 'search:results' %}" class="form-horizontal" id="formSearch" method="get" role="search">
-                {% if setting_disable_simple_search == False %}
-                    <div class="col-sm-2">
-                {% else %}
-                    <div class="col-sm-8">
+                {% if default_search_model %}
+                    <input type="hidden" name="{% search_get_search_model_name_query_variable %}" value="{{ default_search_model.get_full_name }}" id="search-hidden-search-model">
                 {% endif %}
-                    <select class="form-control" id="search-select-search-model" name="{% search_get_search_model_name_query_variable %}">
-                        {% for search_model in search_models %}
-                        {{ search_model.self.get_full_name }}
-                            <option {% if search_model.get_full_name == default_search_model.get_full_name %}selected{% endif %} value="{{ search_model.get_full_name }}">{{ search_model }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
 
                 {% if setting_disable_simple_search == False %}
                     <div class="col-sm-10">
                 {% else %}
-                    <div class="col-sm-4">
+                    <div class="col-sm-8">
                 {% endif %}
 
                     <div class="input-group">
                         {% if setting_disable_simple_search == False %}
-                            <input class="form-control" name="q" placeholder="{% trans 'Search terms' %}" type="text" value="{{ search_terms|default:'' }}">
+                            <input class="form-control" name="q" placeholder="{% trans 'Search documents...' %}" type="text" value="{{ search_terms|default:'' }}">
                         {% endif %}
                         <span class="input-group-btn">
                             {% if setting_disable_simple_search == False %}
                                 <button class="btn btn-default" type="submit">{% trans 'Search' %}</button>
                                 {% endif %}
-                            <a class="btn btn-primary" href="" id="search-button-search-advanced">{% if setting_disable_simple_search == False %}{% trans 'Advanced' %}{% else %}{% trans 'Advanced search' %}{% endif %}</a>
+                            <a class="btn btn-primary" href="" id="search-button-search-advanced" title="{% trans 'Advanced search with all models and filters' %}">{% if setting_disable_simple_search == False %}{% trans 'Advanced' %}{% else %}{% trans 'Advanced search' %}{% endif %}</a>
                         </span>
                     </div>
                 </div>
@@ -61,11 +52,13 @@
 
 <script>
     jQuery(document).ready(function() {
-        const $selectSearchModel = $('#search-select-search-model');
         const $btnSearchAdvanced = $('#search-button-search-advanced');
-        $btnSearchAdvanced.attr('href', "{% url 'search:search_advanced' %}?{% search_get_search_model_name_query_variable %}=" + $selectSearchModel.val());
-        $selectSearchModel.change(function () {
-            $btnSearchAdvanced.attr('href', "{% url 'search:search_advanced' %}?{% search_get_search_model_name_query_variable %}=" + $(this).val());
-        });
+        {% if default_search_model %}
+            const defaultModelName = "{{ default_search_model.get_full_name }}";
+            $btnSearchAdvanced.attr('href', "{% url 'search:search_advanced' %}?{% search_get_search_model_name_query_variable %}=" + defaultModelName);
+        {% else %}
+            // Fallback if no default model is available
+            $btnSearchAdvanced.attr('href', "{% url 'search:search_advanced' %}");
+        {% endif %}
     });
 </script>

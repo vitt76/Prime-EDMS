@@ -106,3 +106,7 @@ STORAGE_NAME_DOCUMENT_VERSION_PAGE_IMAGE_CACHE = 'documents__documentversionpage
 
 UPDATE_PAGE_COUNT_RETRY_DELAY = 10
 UPLOAD_NEW_VERSION_RETRY_DELAY = 10
+DEFAULT_INDEXING_FALLBACK_COUNTDOWN = 10  # seconds
+DEFAULT_INDEXING_LOCK_TIMEOUT = 300  # 5 minutes - protects against stuck tasks
+DEFAULT_INDEXING_BATCH_MAX_SIZE = 10000  # Maximum batch size to prevent system overload
+DEFAULT_INDEXING_BATCH_CHUNK_SIZE = 1000  # Chunk size for processing large batches

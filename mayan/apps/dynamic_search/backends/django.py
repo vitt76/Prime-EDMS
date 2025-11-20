@@ -36,9 +36,23 @@ class DjangoSearchBackend(SearchBackend):
             search_model=search_model
         )
 
-        return search_model.get_queryset().filter(
+        # Log search query for debugging
+        logger.debug(
+            'DjangoSearchBackend search: query=%s, django_query=%s',
+            query, search_query.django_query
+        )
+
+        queryset = search_model.get_queryset().filter(
             search_query.django_query
         ).distinct()
+
+        # Log results count for debugging
+        logger.debug(
+            'DjangoSearchBackend search results: %d documents found',
+            queryset.count()
+        )
+
+        return queryset
 
     def get_search_query(
         self, query, search_model, global_and_search=False
@@ -99,9 +113,13 @@ class SearchQuery:
         self.text = []
 
         for search_field in search_model.get_search_fields():
-            search_term_collection = SearchTermCollection(
-                text=query.get(search_field.field, '').strip()
-            )
+            field_value = query.get(search_field.field, '').strip()
+
+            # Skip empty fields to avoid unnecessary processing
+            if not field_value:
+                continue
+
+            search_term_collection = SearchTermCollection(text=field_value)
 
             field_query = FieldQuery(
                 search_field=search_field,

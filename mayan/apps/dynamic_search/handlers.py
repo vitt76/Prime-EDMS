@@ -115,6 +115,19 @@ def handler_factory_index_related_instance_m2m(data):
 
 def handler_index_instance(sender, **kwargs):
     instance = kwargs['instance']
+    
+    # Check if this is a Document model and if coordinator is active
+    # If coordinator is active, it will handle Document indexing
+    if instance._meta.app_label == 'documents' and instance._meta.model_name == 'Document':
+        try:
+            from mayan.apps.documents.indexing_coordinator import is_coordinator_active
+            if is_coordinator_active():
+                # Coordinator is active, it will handle Document indexing
+                # Skip this handler to avoid duplicate indexing
+                return
+        except ImportError:
+            # Coordinator module not available, use legacy handler
+            pass
 
     task_index_instance.apply_async(
         kwargs={

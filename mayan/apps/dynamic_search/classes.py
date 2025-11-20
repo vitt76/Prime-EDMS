@@ -92,7 +92,22 @@ class SearchBackend:
             handler_factory_index_related_instance_save
         )
 
+        # Check if DocumentIndexCoordinator is available
+        coordinator_available = False
+        try:
+            from mayan.apps.documents.indexing_coordinator import DocumentIndexCoordinator
+            coordinator_available = True
+        except ImportError:
+            pass
+
         for search_model in SearchModel.all():
+            # Skip Document model if coordinator is available
+            # The coordinator will handle Document indexing
+            if (coordinator_available and 
+                search_model.app_label == 'documents' and 
+                search_model.model_name == 'document'):
+                continue
+            
             post_save.connect(
                 dispatch_uid='search_handler_index_instance',
                 receiver=handler_index_instance, sender=search_model.model
@@ -104,6 +119,12 @@ class SearchBackend:
             )
 
             for proxy in search_model.proxies:
+                # Skip Document proxy models if coordinator is available
+                if (coordinator_available and 
+                    search_model.app_label == 'documents' and 
+                    search_model.model_name == 'document'):
+                    continue
+                
                 post_save.connect(
                     dispatch_uid='search_handler_index_instance',
                     receiver=handler_index_instance, sender=proxy
@@ -242,8 +263,12 @@ class SearchBackend:
 
         if QUERY_PARAMETER_ANY_FIELD in query:
             value = query[QUERY_PARAMETER_ANY_FIELD]
-            if value:
-                clean_query = {key: value for key in search_field_names}
+            # Allow empty strings and single character searches
+            # Strip to remove whitespace, but allow empty string for exact matching
+            if value is not None:
+                value_stripped = value.strip() if isinstance(value, str) else str(value)
+                # Copy value to all search fields, even if empty (for exact matching)
+                clean_query = {key: value_stripped for key in search_field_names}
         else:
             # Allow only valid search fields for the search model and scoping keys.
             clean_query = {

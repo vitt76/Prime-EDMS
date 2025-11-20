@@ -79,3 +79,7 @@ queue_uploads.add_task_type(
     dotted_path='mayan.apps.documents.tasks.task_document_upload',
     label=_('Upload new document')
 )
+
+# Document indexing coordination tasks
+# These tasks are registered in the indexing queue (from document_indexing.queues)
+# Registration happens in document_indexing/queues.py to avoid circular imports
