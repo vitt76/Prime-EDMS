@@ -183,8 +183,6 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
     Returns:
         Dict with analysis results
     """
-    import os
-
     # Ensure AI providers are registered in Celery context
     from .ai_providers import AIProviderRegistry
     try:
@@ -224,8 +222,8 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
         with document_file.open() as file_obj:
             image_data = file_obj.read()
         logger.info(f"✅ Successfully read file data directly, size: {len(image_data)} bytes")
-        logger.info(f"📍 File path: {document_file.file.path}")
-        logger.info(f"📊 File exists at path: {os.path.exists(document_file.file.path)}")
+        storage_key = document_file.file.name
+        logger.info(f"📍 Storage key: {storage_key}")
 
         # Additional validation
         if len(image_data) < 100:

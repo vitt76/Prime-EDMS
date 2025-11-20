@@ -64,7 +64,7 @@ setting_s3_enabled = namespace.add_setting(
     )
 )
 setting_s3_endpoint_url = namespace.add_setting(
-    default='https://s3.ru1.storage.beget.cloud',
+    default='',
     global_name='STORAGE_S3_ENDPOINT_URL', help_text=_(
         'S3 compatible storage endpoint URL. For Beget S3 use https://s3.ru1.storage.beget.cloud'
     )
@@ -88,7 +88,7 @@ setting_s3_bucket_name = namespace.add_setting(
     )
 )
 setting_s3_region_name = namespace.add_setting(
-    default='ru-1',
+    default='',
     global_name='STORAGE_S3_REGION_NAME', help_text=_(
         'S3 region name. For Beget S3 use ru-1'
     )
@@ -100,8 +100,22 @@ setting_s3_use_ssl = namespace.add_setting(
     )
 )
 setting_s3_verify = namespace.add_setting(
-    default=False,
+    default=True,
     global_name='STORAGE_S3_VERIFY', help_text=_(
         'Verify SSL certificates for S3 connections. Set to False for self-signed certificates.'
+    )
+)
+
+setting_s3_location = namespace.add_setting(
+    default='',
+    global_name='STORAGE_S3_LOCATION', help_text=_(
+        'Optional prefix (folder) within the S3 bucket where all documents will be stored.'
+    )
+)
+
+setting_s3_distribution_location = namespace.add_setting(
+    default='PRIME/publications',
+    global_name='STORAGE_S3_DISTRIBUTION_LOCATION', help_text=_(
+        'Optional prefix (folder) within the S3 bucket where generated distribution renditions will be stored.'
     )
 )

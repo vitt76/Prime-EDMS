@@ -4,3 +4,13 @@ common:
     - mayan.apps.distribution
     - mayan.apps.image_editor
     - mayan.apps.dam.apps.DAMApp
+
+storage:
+  s3_enabled: false
+  s3_access_key: ""
+  s3_secret_key: ""
+  s3_bucket_name: ""
+  s3_endpoint_url: ""
+  s3_region_name: ""
+  s3_use_ssl: true
+  s3_verify: true
