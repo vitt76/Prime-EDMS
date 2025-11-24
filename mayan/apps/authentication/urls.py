@@ -1,6 +1,7 @@
 from django.conf.urls import url
 from django.urls import path
 
+from .api_views import APITokenDetailView, APITokenListView
 from .views.authentication_views import (
     MayanLoginView, MayanLogoutView, MayanPasswordChangeDoneView,
     MayanPasswordChangeView, MayanPasswordResetCompleteView,
@@ -86,3 +87,16 @@ urlpatterns = []
 urlpatterns.extend(urlpatterns_authenticattion)
 urlpatterns.extend(urlpatterns_password)
 urlpatterns.extend(urlpatterns_user_impersonation)
+
+api_urls = [
+    url(
+        regex=r'^auth/tokens/$',
+        name='auth-token-list',
+        view=APITokenListView.as_view()
+    ),
+    url(
+        regex=r'^auth/tokens/(?P<token_key>[0-9a-f]{40})/$',
+        name='auth-token-detail',
+        view=APITokenDetailView.as_view()
+    )
+]

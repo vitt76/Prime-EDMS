@@ -31,6 +31,7 @@ logger = logging.getLogger(name=__name__)
 class AuthenticationApp(MayanAppConfig):
     app_namespace = 'authentication'
     app_url = 'authentication'
+    has_rest_api = True
     has_tests = True
     name = 'mayan.apps.authentication'
     verbose_name = _('Authentication')
