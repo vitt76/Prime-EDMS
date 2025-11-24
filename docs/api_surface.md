@@ -130,6 +130,20 @@
 2. Celery задача `analyze_document_with_ai(document_id)` (очередь `documents`).
 3. Результаты записываются в `DocumentAIAnalysis`, документ обновляет метаданные/теги.
 
+### Поддерживаемые AI провайдеры
+- GigaChat, OpenAI, Claude, Gemini, YandexGPT — описаны ранее.
+- **Kie.ai (новый)**: сервис OCR/vision-to-text поверх Kie.ai API, добавленный в `mayan.apps.dam.ai_providers.kieai`. Используется, когда нужно выгрузить изображение в стороннее хранилище и получить текстовое описание.
+  - Настройки (доступны в `http://localhost/#/settings/namespaces/dam/`):
+    - `DAM_KIEAI_API_KEY` — Bearer-токен Kie.ai.
+    - `DAM_KIEAI_BASE_URL` — базовый URL Flux Kontext (`https://api.kie.ai/api/v1/flux/kontext`, авторизация `Authorization: Bearer <key>`).
+    - `DAM_KIEAI_UPLOAD_URL` — полный путь `POST /api/file-stream-upload` (Cloudflare R2).
+    - `DAM_KIEAI_OCR_ENDPOINT` — относительный путь для запуска (`POST /generate`), `DAM_KIEAI_STATUS_ENDPOINT` — путь для проверки (`GET /record-info?taskId=...`). Оба можно задать абсолютными URL при необходимости.
+    - `DAM_KIEAI_UPLOAD_PATH` — виртуальная папка в Cloudflare R2, куда попадают временные файлы.
+    - `DAM_KIEAI_DEFAULT_LANGUAGE`, `DAM_KIEAI_TIMEOUT` — язык результата и таймаут запросов.
+  - Клиентская обвязка лежит в `mayan/apps/dam/services/kie_ai_client.py`: сначала выполняется upload (multipart `fileStream`, `uploadPath`, `fileName`), далее — OCR-вызов. Подробности File Upload API описаны в [официальном примере](https://kieai.redpandaai.co/api/file-stream-upload).
+  - Провайдер активируется добавлением `kieai` в `DAM_AI_PROVIDERS_ACTIVE`. Порядок провайдеров задаёт fallback-очерёдность Celery-задачи.
+  - Детальная оценка провайдера и риски — в `docs/prime/kie_ai_assessment.md`.
+
 ---
 
 ## 10. Distribution (публикации и шэр‑ссылки)

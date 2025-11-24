@@ -1,0 +1,4 @@
+{
+  "summary": "Kie.ai integration now uses Flux Kontext generate/record-info endpoints; client, settings and docs updated; doc #19 finished with provider kieai.",
+  "current_status": "Doc 19 processed by kieai (description is result image URL); doc 18 fails due to missing file on disk."
+}
