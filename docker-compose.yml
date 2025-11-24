@@ -11,10 +11,12 @@ services:
   postgresql:
     image: postgres:12.10-alpine
     container_name: prime-edms_postgresql_1
+    env_file:
+      - app.env
     environment:
       POSTGRES_DB: mayan
       POSTGRES_USER: mayan
-      POSTGRES_PASSWORD: ${MAYAN_DATABASE_PASSWORD}
+      POSTGRES_PASSWORD: ${MAYAN_DATABASE_PASSWORD:-mayandbpass}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     # Remove external ports in production - only for development
@@ -30,7 +32,9 @@ services:
   redis:
     image: redis:6.2-alpine
     container_name: prime-edms_redis_1
-    command: redis-server --requirepass ${MAYAN_REDIS_PASSWORD}
+    env_file:
+      - app.env
+    command: redis-server --requirepass ${MAYAN_REDIS_PASSWORD:-mayanredispassword}
     volumes:
       - redis_data:/data
     # Remove external ports in production - only for development
@@ -46,9 +50,11 @@ services:
   rabbitmq:
     image: rabbitmq:3.10-management-alpine
     container_name: prime-edms_rabbitmq_1
+    env_file:
+      - app.env
     environment:
       RABBITMQ_DEFAULT_USER: mayan
-      RABBITMQ_DEFAULT_PASS: ${MAYAN_RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_PASS: ${MAYAN_RABBITMQ_PASSWORD:-mayanrabbitpass}
       RABBITMQ_DEFAULT_VHOST: mayan
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
@@ -68,16 +74,18 @@ services:
       context: .
       dockerfile: Dockerfile.app
     container_name: prime-edms_app_1
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
+    command: run_all
+    env_file:
+      - app.env
     environment:
       MAYAN_MEDIA_ROOT: '/var/lib/mayan'
-      MAYAN_DATABASES: '{"default":{"ENGINE":"django.db.backends.postgresql","NAME":"mayan","PASSWORD":"XHDvOfhobnvVnYjGNc5fw6zypnJpT","USER":"mayan","HOST":"postgresql","PORT":"5432"}}'
-      MAYAN_CELERY_BROKER_URL: amqp://mayan:${MAYAN_RABBITMQ_PASSWORD}@rabbitmq:5672/mayan
-      MAYAN_CELERY_RESULT_BACKEND: redis://:${MAYAN_REDIS_PASSWORD}@redis:6379/1
-      MAYAN_LOCK_MANAGER_BACKEND: "mayan.apps.lock_manager.backends.redis_lock.RedisLock"
-      MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:${MAYAN_REDIS_PASSWORD}@redis:6379/2'}"
+      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql','PORT':'5432'}}"
+      MAYAN_CELERY_BROKER_URL: amqp://mayan:mayanrabbitpass@rabbitmq:5672/mayan
+      MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
+      MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock
+      MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:mayanredispassword@redis:6379/2','default_timeout':30}"
+      MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
+      MAYAN_SEARCH_BACKEND: mayan.apps.dynamic_search.backends.django.DjangoSearchBackend
       MAYAN_WORKER_A_QUEUES: converter,sources_fast,distribution
       # Override the hardcoded supervisor config
       COMMAND_WORKER_A: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker %(ENV_MAYAN_WORKER_A_CONCURRENCY)s --hostname=mayan-edms-worker_a.%%h --loglevel=ERROR -Ofair --queues=converter,sources_fast,distribution %(ENV_MAYAN_WORKER_A_MAX_MEMORY_PER_CHILD)s %(ENV_MAYAN_WORKER_A_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
@@ -96,12 +104,15 @@ services:
       DAM_YANDEXGPT_FOLDER_ID: "${DAM_YANDEXGPT_FOLDER_ID}"
     volumes:
       - mayan_data:/var/lib/mayan
+      - ./config.yml:/opt/mayan-edms/config.yml:ro
       - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
       - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
       - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
       - ./mayan/apps/dam:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
+      - ./mayan/apps/dynamic_search:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dynamic_search
+      - ./mayan/apps/documents:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents
     ports:
-      - "80:8000"
+      - "8080:8000"
     depends_on:
       postgresql:
         condition: service_healthy
@@ -110,9 +121,9 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: unless-stopped
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:8000/"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s

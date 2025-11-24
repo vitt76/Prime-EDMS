@@ -45,19 +45,23 @@ DJANGO_TO_ELASTICSEARCH_FIELD_MAP = {
 }
 
 # Whoosh specific.
+# Create analyzer with minimum term length = 1 to support single character searches
+from whoosh.analysis import StandardAnalyzer
+whoosh_analyzer = StandardAnalyzer(minsize=1)
+
 DJANGO_TO_WHOOSH_FIELD_MAP = {
     models.AutoField: {
         'field': whoosh.fields.ID(stored=True, unique=True),
         'transformation': str
     },
-    models.CharField: {'field': whoosh.fields.TEXT},
+    models.CharField: {'field': whoosh.fields.TEXT(analyzer=whoosh_analyzer)},
     models.DateTimeField: {
-        'field': whoosh.fields.TEXT,
+        'field': whoosh.fields.TEXT(analyzer=whoosh_analyzer),
         'transformation': lambda value: value.isoformat()
     },
-    models.EmailField: {'field': whoosh.fields.TEXT},
-    models.TextField: {'field': whoosh.fields.TEXT},
-    models.UUIDField: {'field': whoosh.fields.TEXT, 'transformation': str}
+    models.EmailField: {'field': whoosh.fields.TEXT(analyzer=whoosh_analyzer)},
+    models.TextField: {'field': whoosh.fields.TEXT(analyzer=whoosh_analyzer)},
+    models.UUIDField: {'field': whoosh.fields.TEXT(analyzer=whoosh_analyzer), 'transformation': str}
 }
 
 WHOOSH_INDEX_DIRECTORY_NAME = 'whoosh'

@@ -362,12 +362,19 @@ DISTRIBUTION_DEFAULT_EXPIRATION_DAYS = 30
 DISTRIBUTION_MAX_DOWNLOADS = 100
 DISTRIBUTION_FFMPEG_PATH = '/usr/bin/ffmpeg'
 DISTRIBUTION_CONVERT_TIMEOUT = 300  # 5 minutes
+DISTRIBUTION_STORAGE = 'local'  # 'local' or 's3'
 DISTRIBUTION_WATERMARK_DEFAULTS = {
     'text': 'SAMPLE',
     'font_size': 24,
     'opacity': 0.3,
     'position': 'center'
 }
+
+# Search backend - use Django backend for better compatibility with DAM features
+# Django backend doesn't require indexing and works directly with database
+SEARCH_BACKEND = 'mayan.apps.dynamic_search.backends.django.DjangoSearchBackend'
+
+# ------ End -----
 
 BASE_INSTALLED_APPS = INSTALLED_APPS
 

@@ -91,7 +91,7 @@ class DocumentFile(
         upload_to=upload_to, verbose_name=_('File')
     )
     filename = models.CharField(
-        blank=True, max_length=255, verbose_name=_('Filename')
+        blank=True, db_index=True, max_length=255, verbose_name=_('Filename')
     )
     mimetype = models.CharField(
         blank=True, editable=False, help_text=_(

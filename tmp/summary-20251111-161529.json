@@ -1,4 +1,0 @@
-{
-  "summary": "Redis lock caused gunicorn to exit, so the site was down. Flushed Redis, restarted the app, and verified HTTP 200/302 on login and /dam/test/.",
-  "current_status": "All containers healthy; web UI responds (login at /authentication/login/, /dam/test/ redirects when unauthenticated)."
-}
