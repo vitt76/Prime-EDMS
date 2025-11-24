@@ -169,3 +169,23 @@ class DAMDocumentListSerializer(serializers.ModelSerializer):
             return []
         categories = analysis.categories if isinstance(analysis.categories, list) else []
         return categories[:5]
+
+
+class AnalyzeDocumentSerializer(serializers.Serializer):
+    """
+    Serializer for triggering single document analysis.
+    """
+    document = serializers.PrimaryKeyRelatedField(
+        queryset=Document.objects.all(),
+        source='document_instance'
+    )
+
+
+class BulkAnalyzeDocumentsSerializer(serializers.Serializer):
+    """
+    Serializer for triggering analysis of multiple documents.
+    """
+    document_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False
+    )
