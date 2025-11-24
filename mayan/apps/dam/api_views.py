@@ -3,6 +3,7 @@ from django.db.models import Count
 
 from rest_framework import generics, status
 from rest_framework.decorators import action
+from rest_framework.renderers import JSONRenderer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
@@ -11,12 +12,14 @@ from mayan.apps.documents.models import Document
 from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.rest_api import generics as mayan_generics
+from mayan.apps.rest_api.pagination import MayanPageNumberPagination
 from mayan.apps.templating.classes import AJAXTemplate
 
 from .models import DocumentAIAnalysis, DAMMetadataPreset
 from .serializers import (
-    DocumentAIAnalysisSerializer, DAMMetadataPresetSerializer,
-    DAMDocumentListSerializer
+    AnalyzeDocumentSerializer, BulkAnalyzeDocumentsSerializer,
+    DAMDocumentListSerializer, DAMMetadataPresetSerializer,
+    DocumentAIAnalysisSerializer
 )
 from .tasks import analyze_document_with_ai
 
@@ -26,36 +29,26 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
     API endpoint for managing AI analysis of documents.
     """
     serializer_class = DocumentAIAnalysisSerializer
-    queryset = DocumentAIAnalysis.objects.all()
+    queryset = DocumentAIAnalysis.objects.select_related('document').prefetch_related('document__files')
+    renderer_classes = (JSONRenderer,)
 
     @action(detail=False, methods=['post'])
     def analyze(self, request):
         """
         Start AI analysis for a specific document.
         """
-        document_id = request.data.get('document_id')
-
-        if not document_id:
-            return Response(
-                {'error': 'document_id field is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
-            from mayan.apps.documents.models import Document
-            from mayan.apps.acls.models import AccessControlList
-            from mayan.apps.documents.permissions import permission_document_view
+            serializer = AnalyzeDocumentSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-            document = Document.objects.get(pk=document_id)
+            document = serializer.validated_data['document_instance']
 
-            # Check permissions
             AccessControlList.objects.check_access(
                 obj=document,
                 permissions=(permission_document_view,),
                 user=request.user
             )
 
-            # Get or create analysis
             ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
                 document=document,
                 defaults={'analysis_status': 'pending'}
@@ -65,7 +58,7 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
             analyze_document_with_ai.delay(document.id)
 
             return Response({
-                'message': f'AI analysis started for document {document_id}',
+                'message': f'AI analysis started for document {document.pk}',
                 'analysis_id': ai_analysis.id,
                 'status': 'started'
             })
@@ -74,6 +67,11 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
             return Response(
                 {'error': 'Document not found'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+        except PermissionDenied:
+            return Response(
+                {'error': 'Access denied'},
+                status=status.HTTP_403_FORBIDDEN
             )
         except Exception as e:
             return Response(
@@ -104,16 +102,12 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
         """
         Trigger AI analysis for multiple documents.
         """
-        document_ids = request.data.get('document_ids', [])
-
-        if not document_ids:
-            return Response(
-                {'error': 'document_ids field is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Schedule bulk analysis
         from .tasks import bulk_analyze_documents
+
+        serializer = BulkAnalyzeDocumentsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        document_ids = serializer.validated_data['document_ids']
+
         bulk_analyze_documents.delay(document_ids)
 
         return Response({
@@ -128,6 +122,7 @@ class DAMMetadataPresetViewSet(ModelViewSet):
     """
     serializer_class = DAMMetadataPresetSerializer
     queryset = DAMMetadataPreset.objects.all()
+    renderer_classes = (JSONRenderer,)
 
     @action(detail=True, methods=['post'])
     def test_preset(self, request, pk=None):
@@ -156,6 +151,7 @@ class AIAnalysisStatusView(mayan_generics.GenericAPIView):
     API endpoint to get AI analysis status for a document.
     """
     permission_classes = (IsAuthenticated,)
+    renderer_classes = (JSONRenderer,)
 
     def get(self, request, *args, **kwargs):
         document_id = request.query_params.get('document_id')
@@ -213,14 +209,26 @@ class DAMDocumentDetailView(mayan_generics.GenericAPIView):
     """
     Render DAM AJAX template for a specific document.
     """
-    # Temporarily disable authentication for testing
-    permission_classes = ()
+    permission_classes = (IsAuthenticated,)
+    renderer_classes = (JSONRenderer,)
 
     def get(self, request, document_id, *args, **kwargs):
         try:
             document = Document.objects.get(pk=document_id)
         except Document.DoesNotExist:
             return Response({'error': 'Document not found'}, status=404)
+
+        try:
+            AccessControlList.objects.check_access(
+                obj=document,
+                permissions=(permission_document_view,),
+                user=request.user
+            )
+        except PermissionDenied:
+            return Response(
+                {'error': 'Access denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         # Get or create AI analysis
         ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
@@ -255,10 +263,11 @@ class DAMDocumentListView(generics.ListAPIView):
     """
     serializer_class = DAMDocumentListSerializer
     permission_classes = (IsAuthenticated,)
-    pagination_class = None
+    pagination_class = MayanPageNumberPagination
+    renderer_classes = (JSONRenderer,)
 
     def get_queryset(self):
-        queryset = Document.objects.order_by('-id').select_related('ai_analysis')
+        queryset = Document.objects.order_by('-id').select_related('ai_analysis').prefetch_related('files')
 
         # Apply search filter if provided
         search_query = self.request.query_params.get('q') or self.request.query_params.get('search')
@@ -277,6 +286,7 @@ class DAMDashboardStatsView(mayan_generics.GenericAPIView):
     Provide dashboard statistics for DAM analyses.
     """
     permission_classes = (IsAuthenticated,)
+    renderer_classes = (JSONRenderer,)
 
     def get(self, request, *args, **kwargs):
         documents_queryset = AccessControlList.objects.restrict_queryset(

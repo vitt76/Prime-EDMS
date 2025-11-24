@@ -1,0 +1,5 @@
+{
+  "summary": "Перенастроил Mayan так, чтобы smart settings могли сохраняться: убрал привязку read-only конфигурации в docker-compose, пересоздал контейнер app, убедился что STORAGE_S3_LOCATION=PRIME фиксируется в новом файле /var/lib/mayan/config.yml и что приложение снова отвечает.",
+  "current_status": "Контейнер app запущен с обновлённым docker-compose; настройка S3 (включая префикс PRIME) сохраняется в новом конфиге на volume, но тестовый аплоад в S3 ещё не прогонялся."
+}
+

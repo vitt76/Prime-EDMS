@@ -1,0 +1,5 @@
+{
+  "summary": "Сбросил Redis, пересоздал app-контейнер, убедился что gunicorn снова работает; теперь curl http://localhost/ возвращает 200, так что Mayan поднят и smart settings (включая STORAGE_S3_LOCATION=PRIME) доступны.",
+  "current_status": "Сервис на http://localhost отвечает 200 после рестарта; остаётся проверить загрузку документа в S3."
+}
+
