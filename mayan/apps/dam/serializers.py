@@ -175,7 +175,8 @@ class AnalyzeDocumentSerializer(serializers.Serializer):
     """
     Serializer for triggering single document analysis.
     """
-    document = serializers.PrimaryKeyRelatedField(
+    document_id = serializers.PrimaryKeyRelatedField(
+        help_text=_('ID of the document to analyze.'),
         queryset=Document.objects.all(),
         source='document_instance'
     )

@@ -3,7 +3,6 @@ from django.db.models import Count
 
 from rest_framework import generics, status
 from rest_framework.decorators import action
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.renderers import JSONRenderer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,6 +12,7 @@ from mayan.apps.documents.models import Document
 from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.rest_api import generics as mayan_generics
+from mayan.apps.rest_api.pagination import MayanPageNumberPagination
 from mayan.apps.templating.classes import AJAXTemplate
 
 from .models import DocumentAIAnalysis, DAMMetadataPreset
@@ -263,7 +263,7 @@ class DAMDocumentListView(generics.ListAPIView):
     """
     serializer_class = DAMDocumentListSerializer
     permission_classes = (IsAuthenticated,)
-    pagination_class = PageNumberPagination
+    pagination_class = MayanPageNumberPagination
     renderer_classes = (JSONRenderer,)
 
     def get_queryset(self):
