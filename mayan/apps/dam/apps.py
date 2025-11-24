@@ -111,10 +111,9 @@ class DAMApp(MayanAppConfig):
     def _extend_search(self):
         """Extend document search with AI metadata fields."""
         try:
-            # Temporarily disabled to fix search indexing issues
-            # from .search import extend_document_search
-            # extend_document_search()
-            print('🔍 DAM search fields extension disabled to fix indexing issues!')
+            from .search import extend_document_search
+            extend_document_search()
+            print('🔍 DAM search fields extension enabled!')
         except Exception as e:
             print(f'⚠️  DAM search extension failed: {e}')
 

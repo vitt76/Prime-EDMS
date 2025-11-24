@@ -5,14 +5,13 @@ from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
 from django.views.generic import DetailView, ListView, TemplateView, UpdateView
 
-from mayan.apps.views.generics import SimpleView
-
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document
 from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.views.generics import (
-    ConfirmView, MultipleObjectFormActionView, SingleObjectCreateView,
-    SingleObjectDeleteView, SingleObjectEditView, SingleObjectListView
+    ConfirmView, MultipleObjectFormActionView, SimpleView,
+    SingleObjectCreateView, SingleObjectDeleteView, SingleObjectEditView,
+    SingleObjectListView
 )
 from mayan.apps.views.mixins import ViewPermissionCheckViewMixin
 
@@ -26,35 +25,41 @@ from .permissions import (
 from .tasks import analyze_document_with_ai
 
 
-class DocumentAIAnalysisDetailView(DetailView):
+class DocumentAIAnalysisDetailView(SimpleView):
     """
     Detail view for DAM AI analysis results.
     Shows AI-generated metadata, tags, rights, etc.
     """
-    model = DocumentAIAnalysis
     template_name = 'dam/asset_detail.html'
-    pk_url_kwarg = 'ai_analysis_id'
+    view_permission = permission_ai_analysis_view
 
-    def get_queryset(self):
-        return DocumentAIAnalysis.objects.select_related('document')
+    def get_object(self):
+        """Get AI analysis object."""
+        ai_analysis_id = self.kwargs.get('ai_analysis_id')
+        
+        # Get object with related document
+        # view_permission is already checked by SimpleView via ViewPermissionCheckViewMixin
+        ai_analysis = get_object_or_404(
+            DocumentAIAnalysis.objects.select_related('document'),
+            pk=ai_analysis_id
+        )
+        
+        return ai_analysis
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+    def get_extra_context(self):
+        """Add context data for template."""
         ai_analysis = self.get_object()
 
-        # Add document info
-        context['document'] = ai_analysis.document
-        context['latest_file'] = ai_analysis.document.files.order_by('-timestamp').first()
-
-        # Add analysis status info
-        context['can_reanalyze'] = ai_analysis.analysis_status in ['completed', 'failed']
-        context['can_edit'] = ai_analysis.analysis_status == 'completed'
-
-        # Format tags for display
-        context['formatted_tags'] = ai_analysis.get_ai_tags_list()
-        context['formatted_colors'] = ai_analysis.get_dominant_colors_list()
-
-        return context
+        return {
+            'object': ai_analysis,
+            'document': ai_analysis.document,
+            'latest_file': ai_analysis.document.files.order_by('-timestamp').first(),
+            'can_reanalyze': ai_analysis.analysis_status in ['completed', 'failed'],
+            'can_edit': ai_analysis.analysis_status == 'completed',
+            'formatted_tags': ai_analysis.get_ai_tags_list(),
+            'formatted_colors': ai_analysis.get_dominant_colors_list(),
+            'title': _('AI Analysis: %s') % ai_analysis.document.label,
+        }
 
 
 class DocumentAIAnalysisEditView(UpdateView):

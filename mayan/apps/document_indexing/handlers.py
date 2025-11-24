@@ -69,6 +69,25 @@ def handler_event_trigger(sender, **kwargs):
 
 
 def handler_index_document(sender, **kwargs):
+    """
+    Handler for document indexing in Document Indexing system.
+    
+    This handler checks if the DocumentIndexCoordinator is active.
+    If the coordinator is active (handlers registered), this handler
+    will be skipped to avoid duplicate indexing. This provides backward
+    compatibility for cases where the coordinator is not available.
+    """
+    # Check if coordinator is actually active (handlers registered)
+    try:
+        from mayan.apps.documents.indexing_coordinator import is_coordinator_active
+        if is_coordinator_active():
+            # Coordinator is active, it will handle indexing
+            return
+    except ImportError:
+        # Coordinator module not available, use legacy handler
+        pass
+    
+    # Legacy behavior: only index on creation
     if kwargs.get('created', False):
         task_index_instance_document_add.apply_async(
             kwargs={'document_id': kwargs['instance'].pk}
@@ -76,6 +95,25 @@ def handler_index_document(sender, **kwargs):
 
 
 def handler_remove_document(sender, **kwargs):
+    """
+    Handler for document removal from Document Indexing system.
+    
+    This handler checks if the DocumentIndexCoordinator is active.
+    If the coordinator is active (handlers registered), this handler
+    will be skipped to avoid duplicate deindexing. This provides backward
+    compatibility for cases where the coordinator is not available.
+    """
+    # Check if coordinator is actually active (handlers registered)
+    try:
+        from mayan.apps.documents.indexing_coordinator import is_coordinator_active
+        if is_coordinator_active():
+            # Coordinator is active, it will handle deindexing
+            return
+    except ImportError:
+        # Coordinator module not available, use legacy handler
+        pass
+    
+    # Legacy behavior
     task_index_instance_document_remove.apply_async(
         kwargs={
             'document_id': kwargs['instance'].pk

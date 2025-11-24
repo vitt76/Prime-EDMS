@@ -1,4 +1,0 @@
-{
-  "summary": "Registered DAM URLs manually, fixed imports/classes, added api_urls alias; /dam/test/ now redirects to login without session.",
-  "current_status": "Containers restarted; DAMApp active and namespace dam present."
-}

@@ -3,7 +3,8 @@ import logging
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from mayan.apps.documents.models import DocumentFile
+from mayan.apps.documents.models import Document, DocumentFile
+from mayan.apps.dynamic_search.tasks import task_index_instance
 # from mayan.apps.documents.events import event_document_file_created  # Not used
 
 from .models import DocumentAIAnalysis
@@ -84,3 +85,8 @@ def trigger_ai_analysis(sender, instance, created, **kwargs):
 # Note: Mayan EDMS events are not Django signals, so we can't use @receiver decorator
 # Instead, we'll use the Mayan event system if needed
 # For now, we'll rely on the post_save signal above
+
+# NOTE: The ensure_document_indexed handler has been removed.
+# Document indexing is now handled by the unified DocumentIndexCoordinator
+# in mayan.apps.documents.indexing_coordinator, which eliminates duplication
+# between Dynamic Search and Document Indexing systems.

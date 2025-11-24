@@ -19,10 +19,15 @@ class AdvancedSearchForm(forms.Form):
         self.search_model = kwargs.pop('search_model')
         super().__init__(*args, **kwargs)
 
-        for search_field in self.search_model.get_search_fields():
+        # Кешируем результат get_search_fields() для оптимизации
+        search_fields = self.search_model.get_search_fields()
+
+        for search_field in search_fields:
+            # Используем кешированные свойства (help_text и label теперь @cached_property)
             self.fields[search_field.field] = forms.CharField(
-                help_text=search_field.get_help_text(),
-                label=search_field.label, required=False
+                help_text=search_field.help_text,  # Используем cached_property
+                label=search_field.label,  # Используем cached_property
+                required=False
             )
 
 

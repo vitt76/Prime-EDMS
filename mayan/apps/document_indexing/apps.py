@@ -1,6 +1,10 @@
+import logging
+
 from django.apps import apps
 from django.db.models.signals import post_delete, post_save, pre_delete
 from django.utils.translation import ugettext_lazy as _
+
+logger = logging.getLogger(name=__name__)
 
 from mayan.apps.acls.classes import ModelPermission
 from mayan.apps.acls.permissions import (
@@ -310,21 +314,44 @@ class DocumentIndexingApp(MayanAppConfig):
             receiver=handler_delete_empty,
             sender=Document
         )
-        post_save.connect(
-            dispatch_uid='document_handler_index_document',
-            receiver=handler_index_document,
-            sender=Document
-        )
+        
+        # Conditionally register document indexing handlers
+        # Only register if DocumentIndexCoordinator is not active
+        # Check if coordinator is actually active (handlers registered), not just if class exists
+        coordinator_active = False
+        try:
+            from mayan.apps.documents.indexing_coordinator import is_coordinator_active
+            coordinator_active = is_coordinator_active()
+        except ImportError:
+            # Coordinator module not available, proceed with legacy handlers
+            pass
+        
+        # Register handlers only if coordinator is not active
+        # If coordinator is active, it will handle all Document indexing
+        if not coordinator_active:
+            post_save.connect(
+                dispatch_uid='document_handler_index_document',
+                receiver=handler_index_document,
+                sender=Document
+            )
+            logger.debug('Registered document_indexing handler (coordinator not active)')
+        else:
+            logger.debug('Skipped registration of document_indexing handler (coordinator is active)')
         post_save.connect(
             dispatch_uid='document_indexing_handler_event_trigger',
             receiver=handler_event_trigger,
             sender=Action
         )
-        pre_delete.connect(
-            dispatch_uid='document_indexing_handler_remove_document',
-            receiver=handler_remove_document,
-            sender=Document
-        )
+        # Register pre_delete handler only if coordinator is not active
+        if not coordinator_active:
+            pre_delete.connect(
+                dispatch_uid='document_indexing_handler_remove_document',
+                receiver=handler_remove_document,
+                sender=Document
+            )
+            logger.debug('Registered document_indexing pre_delete handler (coordinator not active)')
+        else:
+            logger.debug('Skipped registration of document_indexing pre_delete handler (coordinator is active)')
         signal_post_initial_document_type.connect(
             dispatch_uid='document_indexing_handler_create_default_document_index',
             receiver=handler_create_default_document_index,

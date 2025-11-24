@@ -1,4 +1,0 @@
-{
-  "summary": "Converted the DAM test page into a production dashboard: added document list, stats, provider breakdown, and integrated live GigaChat triggers via new /api/dam/documents and /api/dam/dashboard-stats endpoints. Tweaked analysis status API + serializers to expose rich metadata.",
-  "current_status": "Dashboard at /dam/test/ now lists accessible documents with AI status, allows triggering analysis, and renders detailed metadata using GigaChat results."
-}

@@ -21,7 +21,10 @@ from .literals import (
     DEFAULT_DOCUMENTS_VERSION_PAGE_IMAGE_CACHE_STORAGE_BACKEND_ARGUMENTS,
     DEFAULT_DOCUMENTS_ZOOM_MAX_LEVEL, DEFAULT_DOCUMENTS_ZOOM_MIN_LEVEL,
     DEFAULT_DOCUMENTS_ZOOM_PERCENT_STEP, DEFAULT_LANGUAGE,
-    DEFAULT_LANGUAGE_CODES, DEFAULT_STUB_EXPIRATION_INTERVAL
+    DEFAULT_LANGUAGE_CODES, DEFAULT_STUB_EXPIRATION_INTERVAL,
+    DEFAULT_INDEXING_FALLBACK_COUNTDOWN, DEFAULT_INDEXING_LOCK_TIMEOUT,
+    DEFAULT_INDEXING_BATCH_MAX_SIZE, DEFAULT_INDEXING_BATCH_CHUNK_SIZE,
+    DEFAULT_INDEXING_PERIODIC_REINDEX_INTERVAL
 )
 from .setting_callbacks import (
     callback_update_document_file_page_image_cache_size,
@@ -204,5 +207,57 @@ setting_zoom_percent_step = namespace.add_setting(
     global_name='DOCUMENTS_ZOOM_PERCENT_STEP', help_text=_(
         'Amount in percent zoom in or out a document page per user '
         'interaction.'
+    )
+)
+setting_indexing_fallback_countdown = namespace.add_setting(
+    default=DEFAULT_INDEXING_FALLBACK_COUNTDOWN,
+    global_name='DOCUMENTS_INDEXING_FALLBACK_COUNTDOWN', help_text=_(
+        'Delay in seconds for fallback indexing tasks when Celery chain fails. '
+        'This ensures proper order of execution when chain is unavailable. '
+        'The countdown should be greater than the average execution time of the '
+        'first indexing task (search indexing) to ensure it completes before '
+        'hierarchy indexing starts. Default is 10 seconds. For high-load systems '
+        'with slow indexing, consider increasing this value based on metrics.'
+    )
+)
+setting_indexing_lock_timeout = namespace.add_setting(
+    default=DEFAULT_INDEXING_LOCK_TIMEOUT,
+    global_name='DOCUMENTS_INDEXING_LOCK_TIMEOUT', help_text=_(
+        'Timeout in seconds for distributed locks used during document indexing. '
+        'This protects against stuck tasks that may hold locks indefinitely. '
+        'The timeout should be greater than the maximum expected indexing time '
+        'for a single document. Default is 300 seconds (5 minutes). For large '
+        'documents or slow systems, consider increasing this value.'
+    )
+)
+setting_indexing_batch_max_size = namespace.add_setting(
+    default=DEFAULT_INDEXING_BATCH_MAX_SIZE,
+    global_name='DOCUMENTS_INDEXING_BATCH_MAX_SIZE', help_text=_(
+        'Maximum number of documents that can be processed in a single batch '
+        'indexing operation. This prevents system overload when processing '
+        'very large batches. If a batch exceeds this size, it should be split '
+        'into smaller chunks. Default is 10000 documents.'
+    )
+)
+setting_indexing_batch_chunk_size = namespace.add_setting(
+    default=DEFAULT_INDEXING_BATCH_CHUNK_SIZE,
+    global_name='DOCUMENTS_INDEXING_BATCH_CHUNK_SIZE', help_text=_(
+        'Size of chunks for processing large batch indexing operations. '
+        'Batches larger than this value will be automatically split into '
+        'chunks to avoid memory issues and deep recursion. Default is 1000 '
+        'documents per chunk. For systems with limited memory, consider '
+        'reducing this value.'
+    )
+)
+setting_indexing_periodic_reindex_interval = namespace.add_setting(
+    default=DEFAULT_INDEXING_PERIODIC_REINDEX_INTERVAL,
+    global_name='DOCUMENTS_INDEXING_PERIODIC_REINDEX_INTERVAL', help_text=_(
+        'Interval in seconds for periodic document reindexing. This task '
+        'ensures that documents which may have been missed during initial '
+        'indexing or due to temporary failures are eventually indexed. '
+        'Default is 14400 seconds (4 hours), which is optimal for high-load '
+        'DAM systems. For medium systems, consider 21600 seconds (6 hours). '
+        'For low-load systems, 43200 seconds (12 hours) may be sufficient. '
+        'This is a safety mechanism to maintain search index consistency.'
     )
 )
