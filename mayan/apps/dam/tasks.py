@@ -1,3 +1,5 @@
+import base64
+import binascii
 import logging
 from typing import Dict, Any, List
 
@@ -10,6 +12,91 @@ from .models import DocumentAIAnalysis, DAMMetadataPreset
 from .ai_providers import AIProviderRegistry
 
 logger = logging.getLogger(__name__)
+
+
+def _flatten_setting_value(value, candidate_keys: List[str] = None):
+    """
+    Normalize smart setting values saved via YAML UI.
+
+    Values entered through the interface can end up wrapped in dictionaries
+    (for example: {'DAM_GIGACHAT_CREDENTIALS': '...'}). This helper extracts the
+    actual payload and trims whitespace/newlines.
+    """
+    candidate_keys = candidate_keys or []
+
+    if isinstance(value, dict):
+        for key in candidate_keys:
+            if key in value:
+                value = value[key]
+                break
+        else:
+            if len(value) == 1:
+                value = next(iter(value.values()))
+
+    if isinstance(value, (list, tuple)):
+        value = "\n".join(str(item) for item in value)
+
+    if isinstance(value, str):
+        return value.strip()
+
+    return value
+
+
+def _coerce_bool(value, default=False):
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'on')
+
+    return bool(value)
+
+
+def _looks_like_service_account_payload(value: str) -> bool:
+    lowered = value.lower()
+    return value.strip().startswith('{') or '-----begin private key-----' in lowered or 'service_account' in lowered
+
+
+def _pick_gigachat_credentials(setting_value, env_value: str) -> str:
+    primary = _flatten_setting_value(setting_value, candidate_keys=['DAM_GIGACHAT_CREDENTIALS', 'value'])
+    candidates = [
+        (primary, 'ui'),
+        (env_value, 'env')
+    ]
+
+    for candidate, source in candidates:
+        if not candidate:
+            continue
+        if not isinstance(candidate, str):
+            candidate = str(candidate)
+        candidate = candidate.strip()
+
+        if not candidate:
+            continue
+
+        if _looks_like_service_account_payload(candidate):
+            if source == 'ui':
+                logger.warning(
+                    "⚠️ Detected service account JSON pasted into DAM_GIGACHAT_CREDENTIALS. "
+                    "Please provide base64(client_id:client_secret) as required by the official GigaChat SDK."
+                )
+            continue
+
+        try:
+            base64.b64decode(candidate, validate=True)
+            return candidate
+        except (ValueError, binascii.Error):
+            if source == 'ui':
+                logger.warning(
+                    "⚠️ GigaChat credentials value is not valid base64. "
+                    "It must be base64(client_id:client_secret) as issued by Sber."
+                )
+            continue
+
+    return ''
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')
@@ -335,6 +422,32 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
         Dict with provider configuration
     """
     import os
+    from mayan.apps.dam import settings as dam_settings
+
+    if provider_name == 'gigachat':
+        credentials_env = os.environ.get('DAM_GIGACHAT_CREDENTIALS')
+        credentials = _pick_gigachat_credentials(dam_settings.setting_gigachat_credentials.value, credentials_env)
+        if not credentials:
+            return {}
+
+        scope = _flatten_setting_value(dam_settings.setting_gigachat_scope.value) \
+            or os.environ.get('DAM_GIGACHAT_SCOPE', 'GIGACHAT_API_PERS')
+
+        verify_setting = dam_settings.setting_gigachat_verify_ssl.value
+        verify = _coerce_bool(
+            verify_setting if verify_setting not in (None, '') else os.environ.get('DAM_GIGACHAT_VERIFY_SSL_CERTS'),
+            default=False
+        )
+
+        model = _flatten_setting_value(dam_settings.setting_gigachat_model.value) \
+            or os.environ.get('DAM_GIGACHAT_MODEL', 'GigaChat')
+
+        return {
+            'credentials': credentials,
+            'scope': (scope or 'GIGACHAT_API_PERS').strip(),
+            'verify_ssl_certs': verify,
+            'model': (model or 'GigaChat').strip()
+        }
 
     config_mapping = {
         'openai': {
@@ -348,12 +461,6 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
             'service_account_key_id': os.environ.get('DAM_YANDEXGPT_KEY_ID'),
             'service_account_key_secret': os.environ.get('DAM_YANDEXGPT_PRIVATE_KEY')
         },
-        'gigachat': {
-            # Official library expects base64(client_id:client_secret) in credentials
-            'credentials': os.environ.get('DAM_GIGACHAT_CREDENTIALS'),
-            'scope': os.environ.get('DAM_GIGACHAT_SCOPE', 'GIGACHAT_API_PERS'),
-            'verify_ssl_certs': os.environ.get('DAM_GIGACHAT_VERIFY_SSL_CERTS', 'False').lower() == 'true'
-        },
         'claude': {
             'api_key': os.environ.get('DAM_CLAUDE_API_KEY')
         },
@@ -363,7 +470,6 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
     }
 
     config = config_mapping.get(provider_name, {})
-    # Filter out None values
     return {k: v for k, v in config.items() if v is not None}
 
 

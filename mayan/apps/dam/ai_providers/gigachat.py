@@ -1,5 +1,12 @@
+import io
 import logging
+import mimetypes
+import os
 from typing import Dict, List, Any
+
+from gigachat.exceptions import ResponseError
+from gigachat.models import Chat, Messages
+from PIL import Image
 
 from .base import BaseAIProvider, AIProviderError, AIProviderRateLimitError, AIProviderAuthError
 
@@ -17,9 +24,9 @@ class GigaChatProvider(BaseAIProvider):
     display_name = 'GigaChat (Official)'
     description = 'Russian AI model by Sber (official library)'
 
-    supports_vision = False  # GigaChat doesn't support vision API (only image generation)
+    supports_vision = True
     supports_text = True
-    supports_image_description = False  # GigaChat cannot analyze images, only generate them
+    supports_image_description = True
     supports_tag_extraction = True
     supports_color_analysis = False
     supports_alt_text_generation = True
@@ -137,87 +144,111 @@ class GigaChatProvider(BaseAIProvider):
                 raise AIProviderError(f"GigaChat request failed: {e}")
 
     def analyze_image(self, image_data: bytes, mime_type: str) -> Dict[str, Any]:
-        """Analyze image using GigaChat Vision API."""
-        try:
-            import base64
+        """Analyze image using GigaChat Vision workflow (upload + attachments)."""
+        upload = None
+        client = self._get_client()
 
-            # Convert image to base64
-            image_b64 = base64.b64encode(image_data).decode('utf-8')
+        prompt = """Проанализируй прикреплённое изображение и верни JSON со следующими полями:
 
-            # Create vision prompt for image analysis
-            prompt = """Проанализируй это изображение и предоставь структурированную информацию в формате JSON со следующими полями:
-
-- description: подробное описание содержимого изображения (2-3 предложения)
+- description: подробное описание содержимого (2-3 предложения)
 - tags: массив ключевых слов/тегов на русском языке (5-10 элементов)
 - categories: массив категорий/тем (2-4 элемента)
 - language: основной язык содержимого (если применимо)
-- people: массив имен людей/персонажей (если есть)
+- people: массив имён людей/персонажей (если есть)
 - locations: массив географических мест (если есть)
+- copyright: сведения об авторских правах (если есть)
+- usage_rights: условия использования (если есть)
 
-Ответ должен быть только в формате JSON без дополнительного текста."""
+Ответ должен быть строго в формате JSON без дополнительного текста."""
 
-            client = self._get_client()
+        try:
+            extension = mimetypes.guess_extension(mime_type) or '.bin'
+            filename = f'dam-vision-input{extension}'
 
-            # Try to use GigaChat Vision API
             try:
-                # Create message with image using the correct format for GigaChat
-                messages = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{image_b64}"
-                                }
-                            }
-                        ]
-                    }
-                ]
-
-                response = client.chat(messages=messages, model="GigaChat-2-Plus")
-
-                # Parse response
-                if hasattr(response, 'choices') and response.choices:
-                    content = response.choices[0].message.content
-                elif isinstance(response, str):
-                    content = response
+                upload = self._upload_image(
+                    client=client,
+                    filename=filename,
+                    data=image_data,
+                    mime_type=mime_type
+                )
+            except ResponseError as upload_error:
+                if 'File format' in str(upload_error).lower():
+                    logger.warning('GigaChat rejected %s, converting to JPEG.', mime_type)
+                    converted_bytes, converted_mime, converted_ext = self._convert_to_jpeg(image_data)
+                    upload = self._upload_image(
+                        client=client,
+                        filename=f'dam-vision-input{converted_ext}',
+                        data=converted_bytes,
+                        mime_type=converted_mime
+                    )
                 else:
-                    content = str(response)
+                    raise
 
-                logger.info(f"GigaChat vision response: {content[:300]}...")
+            chat = Chat(
+                model=self.model or "GigaChat",
+                messages=[
+                    Messages(
+                        role='user',
+                        content=prompt,
+                        attachments=[upload.id_]
+                    )
+                ]
+            )
 
-                # Try to parse JSON response
-                try:
-                    import json
-                    result = json.loads(content.strip())
-                    result['provider'] = 'gigachat'
-                    # Ensure all required fields are present
-                    result.setdefault('language', '')
-                    result.setdefault('people', [])
-                    result.setdefault('locations', [])
-                    result.setdefault('copyright', '')
-                    result.setdefault('usage_rights', '')
-                    result.setdefault('colors', [])
-                    result.setdefault('alt_text', result.get('description', f'Изображение в формате {mime_type.split("/")[1].upper()}'))
-                    return result
-                except json.JSONDecodeError as json_error:
-                    logger.warning(f"JSON parsing failed: {json_error}, content: {content[:500]}")
-                    # If not JSON, create structured response from text
-                    return self._parse_vision_response(content)
+            response = client.chat(chat)
 
-            except Exception as vision_error:
-                logger.warning(f"GigaChat vision API failed: {vision_error}")
-                # Fallback to text-only analysis
-                return self._fallback_image_analysis(mime_type, image_data)
+            if hasattr(response, 'choices') and response.choices:
+                content = response.choices[0].message.content
+            elif isinstance(response, str):
+                content = response
+            else:
+                content = str(response)
+
+            logger.info(f"GigaChat vision response: {content[:300]}...")
+
+            try:
+                import json
+                parsed = json.loads(content.strip())
+            except json.JSONDecodeError as json_error:
+                logger.warning(f"JSON parsing failed: {json_error}, content: {content[:500]}")
+                return self._parse_vision_response(content)
+            else:
+                parsed.setdefault('language', '')
+                parsed.setdefault('people', [])
+                parsed.setdefault('locations', [])
+                parsed.setdefault('copyright', '')
+                parsed.setdefault('usage_rights', '')
+                parsed.setdefault('colors', [])
+                parsed.setdefault(
+                    'alt_text',
+                    parsed.get('description', f'Изображение в формате {mime_type.split("/")[1].upper()}')
+                )
+                parsed['provider'] = 'gigachat'
+                return parsed
 
         except Exception as e:
             logger.error(f"GigaChat image analysis failed: {e}")
             return self._fallback_image_analysis(mime_type, image_data)
+        finally:
+            if upload:
+                try:
+                    client.delete_file(upload.id_)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to delete temporary GigaChat file {upload.id_}: {cleanup_error}")
+
+    def _upload_image(self, client, filename: str, data: bytes, mime_type: str):
+        return client.upload_file(
+            file=(filename, data, mime_type),
+            purpose='general'
+        )
+
+    def _convert_to_jpeg(self, image_data: bytes):
+        image = Image.open(io.BytesIO(image_data))
+        buffer = io.BytesIO()
+        image.convert('RGB').save(buffer, format='JPEG', quality=90)
+        buffer.seek(0)
+        return buffer.read(), 'image/jpeg', '.jpg'
 
     def _parse_vision_response(self, content: str) -> Dict[str, Any]:
         """Parse vision API response into structured format."""
