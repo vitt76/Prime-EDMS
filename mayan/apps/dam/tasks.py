@@ -3,15 +3,21 @@ import binascii
 import logging
 from typing import Dict, Any, List
 
+import requests
+
 from celery import shared_task
 from django.conf import settings
 
 from mayan.apps.documents.models import Document, DocumentFile
+from mayan.apps.dam import settings as dam_settings
 
 from .models import DocumentAIAnalysis, DAMMetadataPreset
 from .ai_providers import AIProviderRegistry
 
 logger = logging.getLogger(__name__)
+
+
+DEFAULT_PROVIDER_SEQUENCE = ['gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai']
 
 
 def _flatten_setting_value(value, candidate_keys: List[str] = None):
@@ -53,6 +59,20 @@ def _coerce_bool(value, default=False):
         return value.strip().lower() in ('1', 'true', 'yes', 'on')
 
     return bool(value)
+
+
+def _coerce_list(value) -> List[str]:
+    if not value:
+        return []
+
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    if isinstance(value, str):
+        parts = [item.strip() for item in value.replace('\n', ',').split(',')]
+        return [item for item in parts if item]
+
+    return [str(value).strip()]
 
 
 def _looks_like_service_account_payload(value: str) -> bool:
@@ -286,12 +306,14 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
         from .ai_providers.claude import ClaudeProvider
         from .ai_providers.gemini import GeminiProvider
         from .ai_providers.yandex import YandexGPTProvider
+        from .ai_providers.kieai import KieAIProvider
 
         AIProviderRegistry.register('gigachat', 'mayan.apps.dam.ai_providers.gigachat.GigaChatProvider')
         AIProviderRegistry.register('openai', 'mayan.apps.dam.ai_providers.openai.OpenAIProvider')
         AIProviderRegistry.register('claude', 'mayan.apps.dam.ai_providers.claude.ClaudeProvider')
         AIProviderRegistry.register('gemini', 'mayan.apps.dam.ai_providers.gemini.GeminiProvider')
         AIProviderRegistry.register('yandexgpt', 'mayan.apps.dam.ai_providers.yandex.YandexGPTProvider')
+        AIProviderRegistry.register('kieai', 'mayan.apps.dam.ai_providers.kieai.KieAIProvider')
 
         available_providers = list(AIProviderRegistry.get_available_providers())
         logger.info(f'🤖 AI providers registered in Celery context: {available_providers}')
@@ -304,11 +326,12 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
     logger.info(f"Starting AI analysis for document_file: {document_file} (mimetype: {document_file.mimetype})")
 
     try:
-        # Use direct file access (should work now with proper volume mapping)
-        logger.info("Reading file data directly...")
-        with document_file.open() as file_obj:
-            image_data = file_obj.read()
-        logger.info(f"✅ Successfully read file data directly, size: {len(image_data)} bytes")
+        logger.info("Reading file data...")
+        image_data = _read_document_file_bytes(document_file=document_file)
+        if not image_data:
+            logger.error("❌ Unable to read document file data from storage or S3.")
+            return get_fallback_analysis(document_file.mimetype or 'application/octet-stream')
+        logger.info(f"✅ Successfully read file data, size: {len(image_data)} bytes")
         storage_key = document_file.file.name
         logger.info(f"📍 Storage key: {storage_key}")
 
@@ -328,36 +351,35 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
         logger.error(f"❌ Could not read file data: {e}")
         raise Exception(f"Failed to read document file: {e}")
 
-        # Validate image data
-        logger.info(f"First 100 bytes (hex): {image_data[:100].hex()}")
-        logger.info(f"First 100 bytes (repr): {repr(image_data[:100])}")
+    # Validate basic properties of the file
+    logger.info(f"First 100 bytes (hex): {image_data[:100].hex()}")
+    logger.info(f"First 100 bytes (repr): {repr(image_data[:100])}")
 
-        # Check file size limit for GigaChat (4MB)
-        file_size_mb = len(image_data) / (1024 * 1024)
-        logger.info(f"📏 File size: {file_size_mb:.2f} MB")
+    file_size_mb = len(image_data) / (1024 * 1024)
+    logger.info(f"📏 File size: {file_size_mb:.2f} MB")
 
-        if file_size_mb > 4:
-            logger.warning(f"⚠️ File is too large ({file_size_mb:.2f} MB) for GigaChat API (limit: 4MB)")
-            # Skip GigaChat for large files
-            providers_to_try.remove('gigachat')
-
-        # Check if this looks like valid image data
-        if image_data.startswith(b'\xff\xd8\xff'):
-            logger.info("✅ File appears to be valid JPEG (starts with JPEG SOI marker)")
-        elif image_data.startswith((b'GIF87a', b'GIF89a')):
-            logger.info("✅ File appears to be valid GIF")
-        elif image_data.startswith(b'\x89PNG'):
-            logger.info("✅ File appears to be valid PNG")
-        else:
-            logger.warning("⚠️ File does NOT appear to be valid image (missing known header)")
-            # Skip all providers for invalid images
-            logger.error("❌ Invalid image format, skipping AI analysis")
-            return get_fallback_analysis(mime_type)
+    if image_data.startswith(b'\xff\xd8\xff'):
+        logger.info("✅ File appears to be valid JPEG (starts with JPEG SOI marker)")
+    elif image_data.startswith((b'GIF87a', b'GIF89a')):
+        logger.info("✅ File appears to be valid GIF")
+    elif image_data.startswith(b'\x89PNG'):
+        logger.info("✅ File appears to be valid PNG")
+    else:
+        logger.warning("⚠️ File does NOT appear to be valid image (missing known header)")
+        # Skip all providers for invalid images
+        logger.error("❌ Invalid image format, skipping AI analysis")
+        return get_fallback_analysis(document_file.mimetype or 'application/octet-stream')
 
     mime_type = document_file.mimetype or 'application/octet-stream'
 
     # Try providers in order of proven availability (GigaChat first)
-    providers_to_try = ['gigachat', 'openai', 'claude', 'gemini', 'yandexgpt']
+    configured_providers = _coerce_list(dam_settings.setting_ai_providers_active.value)
+    providers_to_try = configured_providers or DEFAULT_PROVIDER_SEQUENCE.copy()
+
+    # Skip GigaChat for больших файлов
+    if 'gigachat' in providers_to_try and file_size_mb > 4:
+        logger.warning(f"⚠️ File is too large ({file_size_mb:.2f} MB) for GigaChat API (limit: 4MB)")
+        providers_to_try = [provider for provider in providers_to_try if provider != 'gigachat']
 
     for provider_name in providers_to_try:
         try:
@@ -449,6 +471,36 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
             'model': (model or 'GigaChat').strip()
         }
 
+    if provider_name == 'kieai':
+        api_key = os.environ.get('DAM_KIEAI_API_KEY') or _flatten_setting_value(dam_settings.setting_kieai_api_key.value)
+        if not api_key:
+            return {}
+
+        base_url = os.environ.get('DAM_KIEAI_BASE_URL') or _flatten_setting_value(dam_settings.setting_kieai_base_url.value)
+        upload_url = os.environ.get('DAM_KIEAI_UPLOAD_URL') or _flatten_setting_value(dam_settings.setting_kieai_upload_url.value)
+        ocr_endpoint = os.environ.get('DAM_KIEAI_OCR_ENDPOINT') or _flatten_setting_value(dam_settings.setting_kieai_ocr_endpoint.value)
+        status_endpoint = os.environ.get('DAM_KIEAI_STATUS_ENDPOINT') or _flatten_setting_value(dam_settings.setting_kieai_status_endpoint.value)
+        default_language = os.environ.get('DAM_KIEAI_DEFAULT_LANGUAGE') or _flatten_setting_value(dam_settings.setting_kieai_default_language.value) or 'ru'
+        upload_path = os.environ.get('DAM_KIEAI_UPLOAD_PATH') or _flatten_setting_value(dam_settings.setting_kieai_upload_path.value) or 'prime-edms/dam'
+        timeout = dam_settings.setting_kieai_timeout.value or 45
+        model = os.environ.get('DAM_KIEAI_MODEL') or 'flux-kontext-pro'
+        default_prompt = os.environ.get('DAM_KIEAI_PROMPT') or 'Опиши содержимое изображения максимально подробно.'
+        aspect_ratio = os.environ.get('DAM_KIEAI_ASPECT_RATIO') or '1:1'
+
+        return {
+            'api_key': api_key,
+            'base_url': base_url or 'https://api.kie.ai/api/v1/flux/kontext',
+            'upload_url': upload_url or 'https://kieai.redpandaai.co/api/file-stream-upload',
+            'ocr_endpoint': ocr_endpoint or 'generate',
+            'status_endpoint': status_endpoint or 'record-info',
+            'default_language': default_language,
+            'upload_path': upload_path,
+            'timeout': int(timeout),
+            'model': model,
+            'default_prompt': default_prompt,
+            'aspect_ratio': aspect_ratio
+        }
+
     config_mapping = {
         'openai': {
             'api_key': os.environ.get('DAM_OPENAI_API_KEY'),
@@ -471,6 +523,52 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
 
     config = config_mapping.get(provider_name, {})
     return {k: v for k, v in config.items() if v is not None}
+
+
+def _read_document_file_bytes(document_file: DocumentFile) -> bytes:
+    """
+    Try to read document bytes from the configured storage. If the underlying
+    storage is remote (S3) and the file is not available locally, fall back
+    to downloading via the storage URL.
+    """
+    try:
+        with document_file.open() as file_obj:
+            return file_obj.read()
+    except FileNotFoundError as exc:
+        logger.warning(
+            "Document file %s missing locally (%s). Attempting S3 download via URL.",
+            document_file.pk, exc
+        )
+        return _download_document_file_via_url(document_file=document_file)
+    except Exception as exc:
+        logger.error(f"Unexpected error reading document file {document_file.pk}: {exc}")
+        return _download_document_file_via_url(document_file=document_file)
+
+
+def _download_document_file_via_url(document_file: DocumentFile) -> bytes:
+    """
+    Download the document file using its storage URL (useful for S3-backed storage).
+    """
+    try:
+        file_name = document_file.file.name
+        storage_url = document_file.file.storage.url(file_name)
+    except Exception as exc:
+        logger.error(f"Unable to build storage URL for document file {document_file.pk}: {exc}")
+        return None
+
+    if not storage_url:
+        logger.error(f"Storage URL for document file {document_file.pk} is empty.")
+        return None
+
+    logger.info(f"Downloading document file {document_file.pk} from {storage_url}")
+    try:
+        timeout = getattr(dam_settings.setting_kieai_timeout, 'value', 45) or 45
+        response = requests.get(storage_url, timeout=int(timeout))
+        response.raise_for_status()
+        return response.content
+    except requests.RequestException as exc:
+        logger.error(f"Failed to download document file {document_file.pk} via URL: {exc}")
+        return None
 
 
 def get_fallback_analysis(mime_type: str, image_data: bytes = None) -> Dict[str, Any]:

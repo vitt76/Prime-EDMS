@@ -53,11 +53,11 @@ setting_ai_analysis_retry_delay = namespace.add_setting(
 
 # Настройки провайдеров
 setting_ai_providers_active = namespace.add_setting(
-    default=['gigachat', 'openai', 'claude', 'gemini', 'yandexgpt'],
+    default=['gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai'],
     global_name='DAM_AI_PROVIDERS_ACTIVE',
     help_text=_(
         'List of active AI providers. Only providers in this list will be used for analysis. '
-        'Available providers: gigachat, openai, claude, gemini, yandexgpt'
+        'Available providers: gigachat, openai, claude, gemini, yandexgpt, kieai'
     )
 )
 
@@ -209,6 +209,72 @@ setting_yandexgpt_model = namespace.add_setting(
     global_name='DAM_YANDEXGPT_MODEL',
     help_text=_(
         'YandexGPT model to use. Options: yandexgpt-lite, yandexgpt'
+    )
+)
+
+# Настройки Kie.ai
+setting_kieai_api_key = namespace.add_setting(
+    default='',
+    global_name='DAM_KIEAI_API_KEY',
+    help_text=_(
+        'Kie.ai API key (Bearer token). Получается в личном кабинете Kie.ai.'
+    )
+)
+
+setting_kieai_base_url = namespace.add_setting(
+    default='https://api.kie.ai/api/v1/flux/kontext',
+    global_name='DAM_KIEAI_BASE_URL',
+    help_text=_(
+        'Базовый URL Flux Kontext API (например, https://api.kie.ai/api/v1/flux/kontext).'
+    )
+)
+
+setting_kieai_upload_url = namespace.add_setting(
+    default='https://kieai.redpandaai.co/api/file-stream-upload',
+    global_name='DAM_KIEAI_UPLOAD_URL',
+    help_text=_(
+        'Полный URL upload-эндпоинта Kie.ai (`POST /api/file-stream-upload`). '
+        'Используется для стриминга файлов в Cloudflare R2.'
+    )
+)
+
+setting_kieai_ocr_endpoint = namespace.add_setting(
+    default='generate',
+    global_name='DAM_KIEAI_OCR_ENDPOINT',
+    help_text=_(
+        'Endpoint Flux Kontext для запуска задачи (по умолчанию `POST /generate`).'
+    )
+)
+
+setting_kieai_status_endpoint = namespace.add_setting(
+    default='record-info',
+    global_name='DAM_KIEAI_STATUS_ENDPOINT',
+    help_text=_(
+        'Endpoint Flux Kontext для получения статуса (`GET /record-info?taskId=...`).'
+    )
+)
+
+setting_kieai_upload_path = namespace.add_setting(
+    default='prime-edms/dam',
+    global_name='DAM_KIEAI_UPLOAD_PATH',
+    help_text=_(
+        'Каталог в Kie.ai R2, куда будут загружаться изображения для анализа.'
+    )
+)
+
+setting_kieai_default_language = namespace.add_setting(
+    default='ru',
+    global_name='DAM_KIEAI_DEFAULT_LANGUAGE',
+    help_text=_(
+        'Язык, в котором требуется получить расшифровку (ISO/BCP-47).'
+    )
+)
+
+setting_kieai_timeout = namespace.add_setting(
+    default=45,
+    global_name='DAM_KIEAI_TIMEOUT',
+    help_text=_(
+        'Таймаут HTTP-запросов к Kie.ai в секундах.'
     )
 )
 

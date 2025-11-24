@@ -94,6 +94,7 @@ class DAMApp(MayanAppConfig):
             AIProviderRegistry.register('claude', 'mayan.apps.dam.ai_providers.claude.ClaudeProvider')
             AIProviderRegistry.register('gemini', 'mayan.apps.dam.ai_providers.gemini.GeminiProvider')
             AIProviderRegistry.register('yandexgpt', 'mayan.apps.dam.ai_providers.yandex.YandexGPTProvider')
+            AIProviderRegistry.register('kieai', 'mayan.apps.dam.ai_providers.kieai.KieAIProvider')
 
             print(f'🤖 AI providers registered: {list(AIProviderRegistry.get_available_providers())}')
             print('🤖 AI providers registered successfully!')
