@@ -5,7 +5,7 @@ from django import forms
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.views.forms import DetailForm
-from mayan.apps.views.widgets import DAMWidget
+from mayan.apps.dam.widgets import DAMWidget
 
 from ..models.document_models import Document
 from ..settings import setting_language
