@@ -7,9 +7,11 @@ import requests
 
 from celery import shared_task
 from django.conf import settings
+from django.utils import timezone
 
 from mayan.apps.documents.models import Document, DocumentFile
 from mayan.apps.dam import settings as dam_settings
+from mayan.apps.dynamic_search.tasks import task_index_instance
 
 from .models import DocumentAIAnalysis, DAMMetadataPreset
 from .ai_providers import AIProviderRegistry
@@ -17,7 +19,49 @@ from .ai_providers import AIProviderRegistry
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_PROVIDER_SEQUENCE = ['gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai']
+DEFAULT_PROVIDER_SEQUENCE = ['qwenlocal', 'gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai']
+IMAGE_SIGNATURES = (
+    b'\xff\xd8\xff',  # JPEG
+    b'GIF87a',
+    b'GIF89a',
+    b'\x89PNG'
+)
+
+
+def _is_supported_image(data: bytes) -> bool:
+    if not data:
+        return False
+    return any(data.startswith(signature) for signature in IMAGE_SIGNATURES)
+
+
+def _shrink_image_bytes(image_data: bytes, max_width: int = 1600) -> bytes:
+    """
+    Downscale raw image bytes to a JPEG preview to reduce payload size.
+    """
+    try:
+        from PIL import Image
+        import io
+
+        stream = io.BytesIO(image_data)
+        image = Image.open(stream)
+
+        if image.mode not in ('RGB', 'L'):
+            image = image.convert('RGB')
+
+        if image.width > max_width:
+            aspect_ratio = image.height / image.width
+            new_height = max(1, int(max_width * aspect_ratio))
+            image = image.resize((max_width, new_height), Image.LANCZOS)
+
+        output = io.BytesIO()
+        image.save(output, format='JPEG', quality=90, optimize=True)
+        data = output.getvalue()
+        output.close()
+        stream.close()
+        return data
+    except Exception as exc:
+        logger.warning(f"⚠️ Could not shrink image bytes: {exc}")
+        return None
 
 
 def _flatten_setting_value(value, candidate_keys: List[str] = None):
@@ -184,11 +228,13 @@ def analyze_document_with_ai(self, document_id: int):
         ai_analysis.usage_rights = analysis_results.get('usage_rights')
         ai_analysis.rights_expiry = analysis_results.get('rights_expiry')
         ai_analysis.analysis_status = 'completed'
+        ai_analysis.analysis_completed = timezone.now()
         ai_analysis.ai_provider = analysis_results.get('provider', 'unknown')
         ai_analysis.save()
 
         # Update document metadata if needed
         update_document_metadata_from_ai(document, analysis_results)
+        reindex_document_assets(document=document)
 
         logger.info(f"Successfully completed AI analysis for document {document_id}")
 
@@ -302,6 +348,7 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
             AIProviderRegistry._providers = {}
 
         # Import and register all providers
+        from .ai_providers.qwen_local import LocalQwenVisionProvider
         from .ai_providers.gigachat import GigaChatProvider
         from .ai_providers.openai import OpenAIProvider
         from .ai_providers.claude import ClaudeProvider
@@ -309,6 +356,7 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
         from .ai_providers.yandex import YandexGPTProvider
         from .ai_providers.kieai import KieAIProvider
 
+        AIProviderRegistry.register('qwenlocal', 'mayan.apps.dam.ai_providers.qwen_local.LocalQwenVisionProvider')
         AIProviderRegistry.register('gigachat', 'mayan.apps.dam.ai_providers.gigachat.GigaChatProvider')
         AIProviderRegistry.register('openai', 'mayan.apps.dam.ai_providers.openai.OpenAIProvider')
         AIProviderRegistry.register('claude', 'mayan.apps.dam.ai_providers.claude.ClaudeProvider')
@@ -365,21 +413,59 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
     file_size_mb = len(image_data) / (1024 * 1024)
     logger.info(f"📏 File size: {file_size_mb:.2f} MB")
 
-    if image_data.startswith(b'\xff\xd8\xff'):
-        logger.info("✅ File appears to be valid JPEG (starts with JPEG SOI marker)")
-    elif image_data.startswith((b'GIF87a', b'GIF89a')):
-        logger.info("✅ File appears to be valid GIF")
-    elif image_data.startswith(b'\x89PNG'):
-        logger.info("✅ File appears to be valid PNG")
+    # Downscale oversized assets to avoid overloading providers.
+    max_size = getattr(dam_settings.setting_analysis_image_max_size, 'value', 10 * 1024 * 1024) or (10 * 1024 * 1024)
+    if len(image_data) > max_size:
+        logger.info(
+            "⚠️ Image size %.2f MB exceeds limit %.2f MB; generating preview for AI analysis.",
+            file_size_mb, max_size / (1024 * 1024)
+        )
+        optimized_data = None
+        mimetype = document_file.mimetype or ''
+        if mimetype.startswith('image/'):
+            optimized_data = _shrink_image_bytes(image_data=image_data)
+        if not optimized_data:
+            optimized_data = get_document_image_data(document_file=document_file)
+        if optimized_data and len(optimized_data) < len(image_data):
+            image_data = optimized_data
+            mime_type = 'image/jpeg'
+            file_size_mb = len(image_data) / (1024 * 1024)
+            logger.info("✅ Preview generated: %.2f MB, mime_type=%s", file_size_mb, mime_type)
+        else:
+            logger.warning("⚠️ Failed to optimize image size; continuing with original data.")
+
+    if not _is_supported_image(image_data):
+        logger.info("ℹ️ Source file is not a supported image, attempting conversion via document page preview.")
+        converted_data = get_document_image_data(document_file=document_file)
+        if converted_data:
+            image_data = converted_data
+            mime_type = 'image/jpeg'
+            file_size_mb = len(image_data) / (1024 * 1024)
+            logger.info("✅ Successfully rendered first page to JPEG for analysis (size %.2f MB).", file_size_mb)
+        else:
+            logger.error("❌ Could not render document to image, skipping AI analysis.")
+            return get_fallback_analysis(document_file.mimetype or 'application/octet-stream')
     else:
-        logger.warning("⚠️ File does NOT appear to be valid image (missing known header)")
-        # Skip all providers for invalid images
-        logger.error("❌ Invalid image format, skipping AI analysis")
-        return get_fallback_analysis(document_file.mimetype or 'application/octet-stream')
+        if image_data.startswith(b'\xff\xd8\xff'):
+            logger.info("✅ File appears to be valid JPEG (starts with JPEG SOI marker)")
+        elif image_data.startswith((b'GIF87a', b'GIF89a')):
+            logger.info("✅ File appears to be valid GIF")
+        elif image_data.startswith(b'\x89PNG'):
+            logger.info("✅ File appears to be valid PNG")
 
     # Try providers in order of proven availability (GigaChat first)
     configured_providers = _coerce_list(dam_settings.setting_ai_providers_active.value)
     providers_to_try = configured_providers or DEFAULT_PROVIDER_SEQUENCE.copy()
+
+    # Ensure локальная модель стоит первой, если она настроена
+    qwen_config = get_provider_config('qwenlocal')
+    if qwen_config:
+        if 'qwenlocal' in providers_to_try:
+            providers_to_try = ['qwenlocal'] + [
+                provider for provider in providers_to_try if provider != 'qwenlocal'
+            ]
+        else:
+            providers_to_try.insert(0, 'qwenlocal')
 
     # Skip GigaChat for больших файлов
     if 'gigachat' in providers_to_try and file_size_mb > 4:
@@ -476,6 +562,24 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
             'model': (model or 'GigaChat').strip()
         }
 
+    if provider_name == 'qwenlocal':
+        api_url = os.environ.get('DAM_QWENLOCAL_API_URL') or _flatten_setting_value(dam_settings.setting_qwenlocal_api_url.value)
+        model = os.environ.get('DAM_QWENLOCAL_MODEL') or _flatten_setting_value(dam_settings.setting_qwenlocal_model.value)
+        prompt = os.environ.get('DAM_QWENLOCAL_PROMPT') or _flatten_setting_value(dam_settings.setting_qwenlocal_prompt.value)
+        timeout = os.environ.get('DAM_QWENLOCAL_TIMEOUT') or dam_settings.setting_qwenlocal_timeout.value or 120
+        verify = _coerce_bool(dam_settings.setting_qwenlocal_verify_ssl.value, default=False)
+
+        if not api_url or not model:
+            return {}
+
+        return {
+            'api_url': api_url,
+            'model': model,
+            'prompt': prompt,
+            'timeout': int(timeout),
+            'verify_ssl': verify
+        }
+
     if provider_name == 'kieai':
         api_key = os.environ.get('DAM_KIEAI_API_KEY') or _flatten_setting_value(dam_settings.setting_kieai_api_key.value)
         if not api_key:
@@ -506,28 +610,50 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
             'aspect_ratio': aspect_ratio
         }
 
-    config_mapping = {
-        'openai': {
-            'api_key': os.environ.get('DAM_OPENAI_API_KEY'),
-            'model': os.environ.get('DAM_OPENAI_MODEL', 'gpt-4-vision-preview')
-        },
-        'yandexgpt': {
-            'api_key': os.environ.get('DAM_YANDEXGPT_API_KEY'),
-            'folder_id': os.environ.get('DAM_YANDEXGPT_FOLDER_ID'),
-            'iam_token': os.environ.get('DAM_YANDEXGPT_IAM_TOKEN'),
-            'service_account_key_id': os.environ.get('DAM_YANDEXGPT_KEY_ID'),
-            'service_account_key_secret': os.environ.get('DAM_YANDEXGPT_PRIVATE_KEY')
-        },
-        'claude': {
-            'api_key': os.environ.get('DAM_CLAUDE_API_KEY')
-        },
-        'gemini': {
-            'api_key': os.environ.get('DAM_GEMINI_API_KEY')
+    if provider_name == 'openai':
+        api_key = os.environ.get('DAM_OPENAI_API_KEY')
+        if not api_key:
+            return {}
+        model = os.environ.get('DAM_OPENAI_MODEL', 'gpt-4-vision-preview')
+        return {
+            'api_key': api_key,
+            'model': model
         }
-    }
 
-    config = config_mapping.get(provider_name, {})
-    return {k: v for k, v in config.items() if v is not None}
+    if provider_name == 'claude':
+        api_key = os.environ.get('DAM_CLAUDE_API_KEY')
+        if not api_key:
+            return {}
+        model = os.environ.get('DAM_CLAUDE_MODEL', 'claude-3-sonnet-20240229')
+        return {
+            'api_key': api_key,
+            'model': model
+        }
+
+    if provider_name == 'gemini':
+        api_key = os.environ.get('DAM_GEMINI_API_KEY')
+        if not api_key:
+            return {}
+        model = os.environ.get('DAM_GEMINI_MODEL', 'gemini-pro')
+        return {
+            'api_key': api_key,
+            'model': model
+        }
+
+    if provider_name == 'yandexgpt':
+        folder_id = os.environ.get('DAM_YANDEXGPT_FOLDER_ID')
+        api_key = os.environ.get('DAM_YANDEXGPT_API_KEY')
+        iam_token = os.environ.get('DAM_YANDEXGPT_IAM_TOKEN')
+        if not folder_id or not (api_key or iam_token):
+            return {}
+        return {
+            'api_key': api_key,
+            'iam_token': iam_token,
+            'folder_id': folder_id,
+            'model': os.environ.get('DAM_YANDEXGPT_MODEL', 'yandexgpt-lite')
+        }
+
+    return {}
 
 
 def _read_document_file_bytes(document_file: DocumentFile) -> bytes:
@@ -707,6 +833,32 @@ def update_document_metadata_from_ai(document: Document, analysis_results: Dict[
 
     except Exception as e:
         logger.error(f"Failed to update document metadata: {e}")
+
+
+def reindex_document_assets(document: Document):
+    """
+    Запустить переиндексацию документа и связанных объектов,
+    чтобы новые AI-данные сразу стали доступны в поиске.
+    """
+    try:
+        task_index_instance.apply_async(
+            kwargs={
+                'app_label': 'documents',
+                'model_name': 'document',
+                'object_id': document.pk
+            }
+        )
+
+        for document_file in document.files.only('pk'):
+            task_index_instance.apply_async(
+                kwargs={
+                    'app_label': 'documents',
+                    'model_name': 'documentfile',
+                    'object_id': document_file.pk
+                }
+            )
+    except Exception as exc:
+        logger.warning('Failed to schedule search reindex for document %s: %s', document.pk, exc)
 
 
 @shared_task

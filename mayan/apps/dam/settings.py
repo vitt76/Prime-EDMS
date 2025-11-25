@@ -53,11 +53,11 @@ setting_ai_analysis_retry_delay = namespace.add_setting(
 
 # Настройки провайдеров
 setting_ai_providers_active = namespace.add_setting(
-    default=['gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai'],
+    default=['qwenlocal', 'gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai'],
     global_name='DAM_AI_PROVIDERS_ACTIVE',
     help_text=_(
         'List of active AI providers. Only providers in this list will be used for analysis. '
-        'Available providers: gigachat, openai, claude, gemini, yandexgpt, kieai'
+        'Available providers: qwenlocal, gigachat, openai, claude, gemini, yandexgpt, kieai'
     )
 )
 
@@ -68,6 +68,40 @@ setting_ai_provider_fallback = namespace.add_setting(
         'Enable fallback to alternative providers when primary provider fails. '
         'If disabled, analysis will fail if primary provider is unavailable.'
     )
+)
+
+# Настройки локальной qwen модели
+setting_qwenlocal_api_url = namespace.add_setting(
+    default='http://192.168.1.25:11434/api/generate',
+    global_name='DAM_QWENLOCAL_API_URL',
+    help_text=_('Endpoint of the local Qwen vision service (Ollama-compatible /api/generate).')
+)
+
+setting_qwenlocal_model = namespace.add_setting(
+    default='qwen3-vl:8b-instruct',
+    global_name='DAM_QWENLOCAL_MODEL',
+    help_text=_('Model identifier exposed by the local service (for example, qwen3-vl:8b-instruct).')
+)
+
+setting_qwenlocal_prompt = namespace.add_setting(
+    default='',
+    global_name='DAM_QWENLOCAL_PROMPT',
+    help_text=_(
+        'Custom system prompt for the local Qwen provider. '
+        'Leave blank to use the built-in template that возвращает описание/метки/категории в JSON.'
+    )
+)
+
+setting_qwenlocal_timeout = namespace.add_setting(
+    default=120,
+    global_name='DAM_QWENLOCAL_TIMEOUT',
+    help_text=_('HTTP timeout in seconds for the local Qwen service.')
+)
+
+setting_qwenlocal_verify_ssl = namespace.add_setting(
+    default=False,
+    global_name='DAM_QWENLOCAL_VERIFY_SSL',
+    help_text=_('Verify SSL certificates when calling the local Qwen endpoint (enable only for HTTPS).')
 )
 
 # Настройки GigaChat

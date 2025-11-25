@@ -35,11 +35,6 @@ def trigger_ai_analysis(sender, instance, created, **kwargs):
         logger.debug(f"⏭️ Skipping signal - file not created: {instance.filename}")
         return
 
-    # Check if file is an image
-    if not instance.mimetype or not instance.mimetype.startswith('image/'):
-        logger.info(f"⏭️ Skipping AI analysis for non-image file: {instance.filename} ({instance.mimetype})")
-        return
-
     # Check if AI analysis already exists and is completed
     if hasattr(instance.document, 'ai_analysis'):
         analysis = instance.document.ai_analysis

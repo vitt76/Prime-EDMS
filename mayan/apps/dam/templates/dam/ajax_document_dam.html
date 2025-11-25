@@ -1,7 +1,7 @@
 {% load i18n %}
 {% load static %}
 
-<div id="dam-content" class="dam-analysis-content">
+<div id="dam-content" class="dam-analysis-content" data-analysis-status="{% if ai_analysis %}{{ ai_analysis.analysis_status }}{% else %}not_available{% endif %}">
     {% if ai_analysis %}
         {% if ai_analysis.analysis_status == 'completed' %}
             <!-- AI Analysis Results -->
@@ -76,7 +76,7 @@
             </div>
 
             <div class="mt-3">
-                <button class="btn btn-sm btn-outline-primary" onclick="reanalyzeDAM({{ document.id }})">
+                <button class="btn btn-sm btn-outline-primary" onclick="reanalyzeDAM({{ document.id }}, {{ ai_analysis.id|default:'null' }})">
                     <i class="fas fa-sync mr-1"></i>
                     Повторить анализ
                 </button>
@@ -94,7 +94,7 @@
                 <i class="fas fa-exclamation-triangle mr-2"></i>
                 <strong>Ошибка анализа</strong>
                 <p class="mb-2">Не удалось выполнить AI анализ документа</p>
-                <button class="btn btn-sm btn-danger" onclick="reanalyzeDAM({{ document.id }})">
+                <button class="btn btn-sm btn-danger" onclick="reanalyzeDAM({{ document.id }}, {{ ai_analysis.id|default:'null' }})">
                     <i class="fas fa-sync mr-1"></i>
                     Повторить
                 </button>
@@ -105,7 +105,7 @@
                 <i class="fas fa-brain fa-3x mb-3"></i>
                 <h6>AI анализ не выполнен</h6>
                 <p class="mb-3">Документ еще не анализировался искусственным интеллектом</p>
-                <button class="btn btn-primary" onclick="reanalyzeDAM({{ document.id }})">
+                <button class="btn btn-primary" onclick="reanalyzeDAM({{ document.id }}, {{ ai_analysis.id|default:'null' }})">
                     <i class="fas fa-play mr-1"></i>
                     Запустить анализ
                 </button>
@@ -117,7 +117,7 @@
             <i class="fas fa-info-circle mr-2"></i>
             <strong>AI анализ недоступен</strong>
             <p class="mb-2">Для этого документа не найдена информация об анализе</p>
-            <button class="btn btn-sm btn-primary" onclick="reanalyzeDAM({{ document.id }})">
+            <button class="btn btn-sm btn-primary" onclick="reanalyzeDAM({{ document.id }}, {{ ai_analysis.id|default:'null' }})">
                 <i class="fas fa-play mr-1"></i>
                 Запустить анализ
             </button>
@@ -126,7 +126,9 @@
 </div>
 
 <script>
-function reanalyzeDAM(documentId) {
+var damPollTimer = null;
+
+function reanalyzeDAM(documentId, analysisId) {
     if (confirm('{% trans "Start AI analysis for this document?" %}')) {
         // Show loading
         $('#dam-content').html('<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><p>{% trans "Starting analysis..." %}</p></div>');
@@ -147,22 +149,31 @@ function reanalyzeDAM(documentId) {
             return cookieValue;
         }
 
+        const url = analysisId
+            ? `/digital-assets/api/ai-analysis/${analysisId}/reanalyze/`
+            : '/digital-assets/api/ai-analysis/analyze/';
+
+        const payload = analysisId ? {} : { document_id: documentId };
+
         $.ajax({
-            url: '/digital-assets/api/ai-analysis/analyze/',
+            url: url,
             method: 'POST',
             headers: {
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            data: { document_id: documentId },
+            data: payload,
             success: function(response) {
-                // Reload the DAM content with fresh data
-                setTimeout(function() {
-                    loadDAMContent(documentId);
-                }, 1000); // Wait 1 second for analysis to start
+                if (damPollTimer) {
+                    clearTimeout(damPollTimer);
+                }
+                damPollTimer = setTimeout(function() {
+                    loadDAMContent(documentId, true);
+                }, 1500);
             },
             error: function(xhr) {
-                alert('{% trans "Error starting analysis:" %} ' + xhr.responseJSON.detail);
-                loadDAMContent(documentId); // Reload on error
+                const message = (xhr.responseJSON && xhr.responseJSON.error) || (xhr.responseJSON && xhr.responseJSON.detail) || xhr.statusText;
+                alert('{% trans "Error starting analysis:" %} ' + message);
+                loadDAMContent(documentId, false); // Reload on error
             }
         });
     }
@@ -173,16 +184,27 @@ function editDAMMetadata(analysisId) {
     alert('{% trans "Edit functionality will be implemented in the next step" %}');
 }
 
-function loadDAMContent(documentId) {
+function loadDAMContent(documentId, shouldPoll) {
     // Reload the DAM AJAX template with cache busting
     $.ajax({
         url: '/digital-assets/api/document-detail/' + documentId + '/?_=' + new Date().getTime(),
         cache: false,
         success: function(response) {
             $('#dam-content').html(response.html);
+            if (shouldPoll) {
+                const status = $('#dam-content').data('analysis-status');
+                if (status === 'pending' || status === 'processing') {
+                    damPollTimer = setTimeout(function() {
+                        loadDAMContent(documentId, true);
+                    }, 3000);
+                } else {
+                    damPollTimer = null;
+                }
+            }
         },
         error: function(xhr) {
             $('#dam-content').html('<div class="alert alert-danger">{% trans "Error loading DAM content" %}</div>');
+            damPollTimer = null;
         }
     });
 }
