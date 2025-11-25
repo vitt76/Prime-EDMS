@@ -1,14 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
-import { useUiStore } from '@/stores/uiStore'
+import { useUIStore } from '@/stores/uiStore'
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'home',
-    component: () => import('@/pages/HomePage.vue'),
-    meta: { requiresAuth: false }
+    component: () => import('@/pages/DashboardPage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/dashboard',
+    name: 'dashboard',
+    component: () => import('@/pages/DashboardPage.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/login',
@@ -73,7 +79,7 @@ const router = createRouter({
 // Navigation guards
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
-  const uiStore = useUiStore()
+  const uiStore = useUIStore()
 
   // Check authentication status
   if (!authStore.isAuthenticated) {

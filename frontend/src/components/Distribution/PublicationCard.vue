@@ -1,11 +1,11 @@
 <template>
-  <div class="publication-card">
+  <div class="publication-card" role="article" :aria-label="`Публикация: ${publication.title}`">
     <Card>
       <div class="flex items-start justify-between">
         <div class="flex-1">
           <!-- Header -->
           <div class="flex items-center gap-3 mb-3">
-            <h3 class="text-lg font-semibold text-neutral-900 dark:text-neutral-900">
+            <h3 class="text-lg font-semibold text-neutral-900 dark:text-neutral-900" id="publication-title">
               {{ publication.title }}
             </h3>
             <Badge :variant="statusVariant" size="sm">
@@ -114,9 +114,10 @@
         <!-- Actions -->
         <div class="flex items-center gap-2 ml-4">
           <button
-            class="p-2 text-neutral-600 dark:text-neutral-600 hover:text-primary-500 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-100 transition-colors"
+            type="button"
+            class="p-2 text-neutral-600 dark:text-neutral-600 hover:text-primary-500 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             @click="$emit('preview')"
-            aria-label="Предпросмотр"
+            aria-label="Предпросмотр публикации"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -134,9 +135,10 @@
             </svg>
           </button>
           <button
-            class="p-2 text-neutral-600 dark:text-neutral-600 hover:text-primary-500 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-100 transition-colors"
+            type="button"
+            class="p-2 text-neutral-600 dark:text-neutral-600 hover:text-primary-500 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             @click="$emit('edit')"
-            aria-label="Редактировать"
+            aria-label="Редактировать публикацию"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -148,9 +150,10 @@
             </svg>
           </button>
           <button
-            class="p-2 text-neutral-600 dark:text-neutral-600 hover:text-error rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-100 transition-colors"
+            type="button"
+            class="p-2 text-neutral-600 dark:text-neutral-600 hover:text-error rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             @click="$emit('delete')"
-            aria-label="Удалить"
+            aria-label="Удалить публикацию"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path

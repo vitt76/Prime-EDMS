@@ -3,6 +3,9 @@
     :type="type"
     :disabled="disabled || loading"
     :class="buttonClasses"
+    :aria-label="$attrs['aria-label']"
+    :aria-busy="loading"
+    :aria-disabled="disabled || loading"
     @click="$emit('click', $event)"
   >
     <span v-if="loading" class="mr-2">
@@ -69,9 +72,9 @@ const buttonClasses = computed(() => {
   }
   
   const sizes = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg'
+    sm: 'px-3 py-1.5 text-sm min-h-[44px] min-w-[44px]',
+    md: 'px-4 py-2 text-base min-h-[44px] min-w-[44px]',
+    lg: 'px-6 py-3 text-lg min-h-[48px] min-w-[48px]'
   }
   
   return [

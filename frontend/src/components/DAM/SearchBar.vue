@@ -40,9 +40,10 @@
       </svg>
       <button
         v-if="localQuery"
-        class="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-600 rounded transition-colors"
+        class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-600 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
         @click="clearSearch"
         aria-label="Очистить поиск"
+        type="button"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -114,11 +115,13 @@
             v-for="(recentQuery, index) in searchStore.recentSearches"
             :key="index"
             :class="[
-              'w-full text-left px-3 py-2 text-sm rounded-md transition-colors',
+              'w-full text-left px-3 py-2 text-sm rounded-md transition-colors min-h-[44px]',
               'hover:bg-neutral-100 dark:hover:bg-neutral-100',
               'text-neutral-700 dark:text-neutral-700'
             ]"
             @click="selectRecentSearch(recentQuery)"
+            type="button"
+            :aria-label="`Выбрать поиск: ${recentQuery}`"
           >
             <div class="flex items-center gap-2">
               <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

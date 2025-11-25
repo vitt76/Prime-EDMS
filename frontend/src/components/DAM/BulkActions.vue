@@ -10,6 +10,8 @@
     <div
       v-if="selectedCount > 0"
       class="bulk-actions fixed bottom-0 left-0 right-0 bg-neutral-0 dark:bg-neutral-0 border-t border-neutral-300 dark:border-neutral-300 shadow-lg z-40"
+      role="toolbar"
+      aria-label="Массовые операции с активами"
     >
       <div class="max-w-7xl mx-auto px-4 py-3">
         <div class="flex items-center justify-between">
@@ -19,8 +21,10 @@
               Выбрано: <span class="font-bold">{{ selectedCount }}</span>
             </span>
             <button
-              class="text-sm text-neutral-600 dark:text-neutral-600 hover:text-neutral-900 dark:hover:text-neutral-900 transition-colors"
+              class="text-sm text-neutral-600 dark:text-neutral-600 hover:text-neutral-900 dark:hover:text-neutral-900 transition-colors min-h-[44px] min-w-[120px] px-2"
               @click="$emit('clear-selection')"
+              type="button"
+              aria-label="Снять выделение со всех активов"
             >
               Снять выделение
             </button>
@@ -32,8 +36,9 @@
               variant="outline"
               size="sm"
               @click="$emit('tag')"
+              aria-label="Добавить теги к выбранным активам"
             >
-              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -41,14 +46,15 @@
                   d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
                 />
               </svg>
-              Теги
+              <span class="sr-only sm:not-sr-only">Теги</span>
             </Button>
             <Button
               variant="outline"
               size="sm"
               @click="$emit('move')"
+              aria-label="Переместить выбранные активы"
             >
-              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -56,14 +62,15 @@
                   d="M3 10h18M7 15l1-1m8 0l1-1m-9 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              Переместить
+              <span class="sr-only sm:not-sr-only">Переместить</span>
             </Button>
             <Button
               variant="outline"
               size="sm"
               @click="$emit('download')"
+              aria-label="Скачать выбранные активы"
             >
-              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -71,14 +78,15 @@
                   d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                 />
               </svg>
-              Скачать
+              <span class="sr-only sm:not-sr-only">Скачать</span>
             </Button>
             <Button
               variant="outline"
               size="sm"
               @click="$emit('share')"
+              aria-label="Поделиться выбранными активами"
             >
-              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -86,14 +94,15 @@
                   d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.552 3.546a2 2 0 002.938-2.187l.546-2.59A4.998 4.998 0 0017 12c0-.482-.114-.938-.316-1.342m0 2.684L12.448 8.454a2 2 0 00-2.938-2.187l-.546 2.59A4.998 4.998 0 007 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684"
                 />
               </svg>
-              Поделиться
+              <span class="sr-only sm:not-sr-only">Поделиться</span>
             </Button>
             <Button
               variant="danger"
               size="sm"
               @click="$emit('delete')"
+              aria-label="Удалить выбранные активы"
             >
-              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -101,7 +110,7 @@
                   d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                 />
               </svg>
-              Удалить
+              <span class="sr-only sm:not-sr-only">Удалить</span>
             </Button>
           </div>
         </div>

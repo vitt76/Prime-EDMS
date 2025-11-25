@@ -3,6 +3,12 @@ export default {
   content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
   darkMode: 'class',
   theme: {
+    screens: {
+      sm: '640px',   // Mobile
+      md: '768px',   // Tablet
+      lg: '1024px',  // Desktop
+      xl: '1280px'   // Large desktop
+    },
     extend: {
       colors: {
         // Primary colors (Light mode)

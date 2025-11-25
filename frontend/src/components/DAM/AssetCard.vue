@@ -1,10 +1,15 @@
 <template>
-  <div
+    <div
     :class="cardClasses"
+    role="button"
+    tabindex="0"
+    :aria-label="`Актив: ${asset.label}`"
     @click="handleClick"
     @dblclick="handleDoubleClick"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
+    @keydown.enter="handleClick"
+    @keydown.space.prevent="handleClick"
   >
     <!-- Checkbox (shown on hover or when selected) -->
     <div
@@ -15,9 +20,10 @@
       <input
         type="checkbox"
         :checked="isSelected"
-        class="w-5 h-5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 cursor-pointer"
+        class="w-5 h-5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 cursor-pointer min-w-[44px] min-h-[44px]"
         @click.stop
         @change="handleSelect"
+        :aria-label="`Выбрать актив ${asset.label}`"
       />
     </div>
 
@@ -26,12 +32,14 @@
       ref="thumbnailRef"
       class="relative w-full h-48 bg-neutral-100 dark:bg-neutral-100 rounded-t-lg overflow-hidden"
     >
-      <img
-        v-if="asset.thumbnail_url && !isLoading && shouldLoadImage"
-        :src="asset.thumbnail_url"
-        :alt="asset.label"
+      <!-- Optimized Image with WebP support and lazy loading -->
+      <OptimizedImage
+        v-if="props.asset.thumbnail_url && !props.isLoading && shouldLoadImage"
+        :src="props.asset.thumbnail_url"
+        :alt="props.asset.label"
+        :loading="shouldLoadImage ? 'lazy' : 'eager'"
+        :webp-url="webpThumbnailUrl"
         class="w-full h-full object-cover"
-        @error="handleImageError"
       />
       <div
         v-else-if="isLoading"
@@ -84,9 +92,10 @@
         @click.stop
       >
         <button
-          class="p-2 bg-white rounded-full hover:bg-neutral-100 transition-colors"
+          class="p-2 bg-white rounded-full hover:bg-neutral-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
           @click.stop="handlePreview"
-          aria-label="Preview"
+          aria-label="Предпросмотр актива"
+          type="button"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -104,9 +113,10 @@
           </svg>
         </button>
         <button
-          class="p-2 bg-white rounded-full hover:bg-neutral-100 transition-colors"
+          class="p-2 bg-white rounded-full hover:bg-neutral-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
           @click.stop="handleDownload"
-          aria-label="Download"
+          aria-label="Скачать актив"
+          type="button"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -118,9 +128,10 @@
           </svg>
         </button>
         <button
-          class="p-2 bg-white rounded-full hover:bg-neutral-100 transition-colors"
+          class="p-2 bg-white rounded-full hover:bg-neutral-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
           @click.stop="handleMore"
-          aria-label="More options"
+          aria-label="Дополнительные действия"
+          type="button"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -164,8 +175,10 @@
 import { ref, computed } from 'vue'
 import type { Asset } from '@/types/api'
 import Badge from '@/components/Common/Badge.vue'
+import OptimizedImage from '@/components/Common/OptimizedImage.vue'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import { useIntersectionObserver } from '@/composables/useIntersectionObserver'
+import { getWebPUrl } from '@/utils/imageOptimization'
 import type { BadgeVariant } from '@/types'
 
 interface Props {
@@ -190,7 +203,6 @@ const emit = defineEmits<{
 }>()
 
 const isHovered = ref(false)
-const imageError = ref(false)
 const thumbnailRef = ref<HTMLElement | null>(null)
 
 // Intersection Observer for lazy loading
@@ -200,6 +212,12 @@ const { hasIntersected } = useIntersectionObserver(thumbnailRef, {
 
 const shouldLoadImage = computed(() => {
   return hasIntersected.value || props.isLoading
+})
+
+// Generate WebP URL from thumbnail URL using utility function
+const webpThumbnailUrl = computed(() => {
+  if (!props.asset.thumbnail_url) return undefined
+  return getWebPUrl(props.asset.thumbnail_url)
 })
 
 const cardClasses = computed(() => {
@@ -242,10 +260,6 @@ function handleDownload() {
 
 function handleMore() {
   emit('more', props.asset)
-}
-
-function handleImageError() {
-  imageError.value = true
 }
 
 function getStatusVariant(status: string): BadgeVariant {

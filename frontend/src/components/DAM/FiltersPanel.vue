@@ -1,11 +1,11 @@
 <template>
-  <div class="filters-panel">
+  <div class="filters-panel" role="region" aria-label="Панель фильтров">
     <!-- Type Filter with Facets -->
     <div class="mb-6">
       <label class="block text-sm font-semibold text-neutral-900 dark:text-neutral-900 mb-3">
         Тип файла
       </label>
-      <div class="space-y-2">
+      <div class="space-y-2" role="group" aria-label="Фильтр по типу файла">
         <label
           v-for="type in fileTypes"
           :key="type.value"
@@ -16,7 +16,8 @@
               type="checkbox"
               :value="type.value"
               v-model="selectedTypes"
-              class="w-4 h-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+              class="w-4 h-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 min-w-[44px] min-h-[44px]"
+              :aria-label="`Фильтр: ${type.label}`"
             />
             <span class="text-sm text-neutral-700 dark:text-neutral-700">{{ type.label }}</span>
           </div>
@@ -49,14 +50,16 @@
             v-model.number="sizeMin"
             type="number"
             placeholder="Мин (MB)"
-            class="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-300 rounded-md text-sm bg-neutral-0 dark:bg-neutral-0 text-neutral-900 dark:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            class="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-300 rounded-md text-sm bg-neutral-0 dark:bg-neutral-0 text-neutral-900 dark:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[44px]"
+            aria-label="Минимальный размер файла в мегабайтах"
           />
-          <span class="text-neutral-500">—</span>
+          <span class="text-neutral-500" aria-hidden="true">—</span>
           <input
             v-model.number="sizeMax"
             type="number"
             placeholder="Макс (MB)"
-            class="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-300 rounded-md text-sm bg-neutral-0 dark:bg-neutral-0 text-neutral-900 dark:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            class="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-300 rounded-md text-sm bg-neutral-0 dark:bg-neutral-0 text-neutral-900 dark:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[44px]"
+            aria-label="Максимальный размер файла в мегабайтах"
           />
         </div>
       </div>
@@ -81,12 +84,15 @@
             v-for="(count, tag) in facets.tags"
             :key="tag"
             :class="[
-              'px-2 py-1 text-xs rounded-md transition-colors',
+              'px-2 py-1 text-xs rounded-md transition-colors min-h-[44px]',
               selectedTags.includes(tag)
                 ? 'bg-primary-500 text-white'
                 : 'bg-neutral-100 dark:bg-neutral-100 text-neutral-700 dark:text-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-200'
             ]"
             @click="toggleTag(tag)"
+            type="button"
+            :aria-label="`${selectedTags.includes(tag) ? 'Убрать' : 'Добавить'} тег ${tag}`"
+            :aria-pressed="selectedTags.includes(tag)"
           >
             {{ tag }} ({{ count }})
           </button>

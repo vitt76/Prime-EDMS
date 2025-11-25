@@ -12,12 +12,15 @@
       :required="required"
       :disabled="disabled"
       :class="inputClasses"
+      :aria-label="label || placeholder"
+      :aria-invalid="!!error"
+      :aria-describedby="error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined"
       @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       @blur="$emit('blur', $event)"
       @focus="$emit('focus', $event)"
     />
-    <p v-if="error" class="mt-1 text-sm text-error">{{ error }}</p>
-    <p v-else-if="hint" class="mt-1 text-sm text-neutral-600 dark:text-neutral-600">{{ hint }}</p>
+    <p v-if="error" :id="`${inputId}-error`" class="mt-1 text-sm text-error" role="alert">{{ error }}</p>
+    <p v-else-if="hint" :id="`${inputId}-hint`" class="mt-1 text-sm text-neutral-600 dark:text-neutral-600">{{ hint }}</p>
   </div>
 </template>
 

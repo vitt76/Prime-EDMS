@@ -38,8 +38,10 @@
           {{ assetStore.error }}
         </p>
         <button
-          class="mt-4 px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors"
+          class="mt-4 px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors min-h-[44px] min-w-[120px]"
           @click="handleRetry"
+          type="button"
+          aria-label="Повторить загрузку активов"
         >
           Попробовать снова
         </button>
@@ -87,7 +89,7 @@
               type="checkbox"
               :checked="isAllSelected"
               :indeterminate="isIndeterminate"
-              class="w-4 h-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+              class="w-5 h-5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 min-w-[44px] min-h-[44px]"
               @change="handleSelectAllToggle"
               aria-label="Выбрать все активы"
             />
@@ -115,10 +117,12 @@
         @clear-selection="handleClearSelection"
       />
 
-      <!-- Assets Grid -->
+      <!-- Assets Grid (regular for small lists) -->
       <div
         v-if="assetStore.assets.length < 100"
-        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4"
+        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4"
+        role="grid"
+        aria-label="Галерея активов"
       >
         <AssetCard
           v-for="asset in assetStore.assets"
@@ -134,12 +138,16 @@
         />
       </div>
 
-      <!-- Virtual Scrolling for large lists (1000+ items) -->
+      <!-- Virtual Scrolling for large lists (100+ items) -->
       <div
         v-else
         ref="virtualScrollContainer"
         class="virtual-scroll-container p-4"
         style="height: calc(100vh - 200px); overflow-y: auto;"
+        role="grid"
+        aria-label="Галерея активов (виртуальная прокрутка)"
+        tabindex="0"
+        @scroll="handleScroll"
       >
         <div
           :style="{ height: `${totalHeight}px`, position: 'relative' }"
@@ -147,7 +155,7 @@
           <div
             :style="{ transform: `translateY(${offsetY}px)` }"
           >
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               <AssetCard
                 v-for="asset in visibleAssets"
                 :key="asset.id"
@@ -233,6 +241,7 @@ const scrollTop = ref(0)
 const itemHeight = 280 // Height of each asset card + gap
 const itemsPerRow = ref(4) // Will be calculated based on screen size
 const containerHeight = ref(600)
+const bufferSize = 2 // Number of rows to render outside viewport
 
 // Calculate visible items for virtual scrolling
 const visibleAssets = computed(() => {
@@ -240,10 +249,20 @@ const visibleAssets = computed(() => {
     return assetStore.assets
   }
 
-  const startIndex = Math.floor(scrollTop.value / itemHeight) * itemsPerRow.value
-  const endIndex = startIndex + Math.ceil(containerHeight.value / itemHeight) * itemsPerRow.value + itemsPerRow.value
+  const rowsPerViewport = Math.ceil(containerHeight.value / itemHeight)
+  const startRow = Math.max(0, Math.floor(scrollTop.value / itemHeight) - bufferSize)
+  const endRow = Math.min(
+    Math.ceil(assetStore.assets.length / itemsPerRow.value),
+    startRow + rowsPerViewport + bufferSize * 2
+  )
+  
+  const startIndex = startRow * itemsPerRow.value
+  const endIndex = endRow * itemsPerRow.value
 
-  return assetStore.assets.slice(Math.max(0, startIndex), Math.min(assetStore.assets.length, endIndex))
+  return assetStore.assets.slice(
+    Math.max(0, startIndex),
+    Math.min(assetStore.assets.length, endIndex)
+  )
 })
 
 const totalHeight = computed(() => {
@@ -254,14 +273,23 @@ const totalHeight = computed(() => {
 
 const offsetY = computed(() => {
   if (assetStore.assets.length < 100) return 0
-  const startRow = Math.floor(scrollTop.value / itemHeight)
+  const startRow = Math.max(0, Math.floor(scrollTop.value / itemHeight) - bufferSize)
   return startRow * itemHeight
 })
 
-// Handle scroll for virtual scrolling
+// Handle scroll for virtual scrolling (throttled for performance)
+let scrollTimeout: number | null = null
 function handleScroll(event: Event) {
   const target = event.target as HTMLElement
   scrollTop.value = target.scrollTop
+  
+  // Throttle scroll updates for better performance
+  if (scrollTimeout) {
+    cancelAnimationFrame(scrollTimeout)
+  }
+  scrollTimeout = requestAnimationFrame(() => {
+    // Scroll position already updated above
+  })
 }
 
 // Load assets on mount and setup virtual scrolling
@@ -275,13 +303,13 @@ onMounted(() => {
 
   // Setup virtual scrolling
   if (virtualScrollContainer.value) {
-    virtualScrollContainer.value.addEventListener('scroll', handleScroll, { passive: true })
-    
     // Calculate items per row based on container width
     const updateItemsPerRow = () => {
       if (virtualScrollContainer.value) {
         const width = virtualScrollContainer.value.clientWidth
-        if (width >= 1024) itemsPerRow.value = 4
+        // Responsive breakpoints: xl(1280px), lg(1024px), md(768px), sm(640px)
+        if (width >= 1280) itemsPerRow.value = 5
+        else if (width >= 1024) itemsPerRow.value = 4
         else if (width >= 768) itemsPerRow.value = 3
         else if (width >= 640) itemsPerRow.value = 2
         else itemsPerRow.value = 1
@@ -292,7 +320,14 @@ onMounted(() => {
     }
     
     updateItemsPerRow()
-    resizeHandler = () => updateItemsPerRow()
+    resizeHandler = () => {
+      updateItemsPerRow()
+      // Debounce resize for better performance
+      if (scrollTimeout) {
+        cancelAnimationFrame(scrollTimeout)
+      }
+      scrollTimeout = requestAnimationFrame(updateItemsPerRow)
+    }
     window.addEventListener('resize', resizeHandler, { passive: true })
   }
 })
@@ -303,6 +338,9 @@ onUnmounted(() => {
   }
   if (resizeHandler) {
     window.removeEventListener('resize', resizeHandler)
+  }
+  if (scrollTimeout) {
+    cancelAnimationFrame(scrollTimeout)
   }
 })
 

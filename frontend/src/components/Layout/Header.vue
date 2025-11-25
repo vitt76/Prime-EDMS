@@ -37,9 +37,10 @@
     <div class="flex items-center gap-2 flex-shrink-0">
       <!-- Upload Button -->
       <button
-        class="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors text-sm font-medium hidden sm:flex items-center gap-2"
+        class="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors text-sm font-medium hidden sm:flex items-center gap-2 min-h-[44px] min-w-[44px]"
         @click="handleUpload"
         aria-label="Загрузить файл"
+        type="button"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -54,9 +55,10 @@
 
       <!-- Filters Toggle -->
       <button
-        class="p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors"
+        class="p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
         @click="handleFilterToggle"
         aria-label="Фильтры"
+        type="button"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -70,9 +72,10 @@
 
       <!-- Notifications -->
       <button
-        class="relative p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors"
+        class="relative p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
         @click="handleNotifications"
-        aria-label="Уведомления"
+        :aria-label="`Уведомления${unreadCount > 0 ? ` (${unreadCount} непрочитанных)` : ''}`"
+        type="button"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -92,10 +95,11 @@
       <!-- User Menu -->
       <div class="relative" ref="userMenuRef">
         <button
-          class="flex items-center gap-2 p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors"
+          class="flex items-center gap-2 p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors min-w-[44px] min-h-[44px]"
           @click="toggleUserMenu"
           aria-label="Меню пользователя"
           :aria-expanded="isUserMenuOpen"
+          type="button"
         >
           <div class="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
             {{ userInitials }}
@@ -137,8 +141,10 @@
           </router-link>
           <hr class="my-1 border-neutral-300 dark:border-neutral-300" />
           <button
-            class="block w-full text-left px-4 py-2 text-sm text-error hover:bg-neutral-100 dark:hover:bg-neutral-100"
+            class="block w-full text-left px-4 py-2 text-sm text-error hover:bg-neutral-100 dark:hover:bg-neutral-100 min-h-[44px]"
             @click="handleLogout"
+            type="button"
+            aria-label="Выйти из системы"
           >
             Выйти
           </button>
@@ -147,9 +153,11 @@
 
       <!-- Mobile Menu Toggle -->
       <button
-        class="p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors sm:hidden"
+        class="p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors sm:hidden min-w-[44px] min-h-[44px] flex items-center justify-center"
         @click="handleMobileMenuToggle"
         aria-label="Меню"
+        :aria-expanded="false"
+        type="button"
       >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path

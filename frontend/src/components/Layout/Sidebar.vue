@@ -7,9 +7,11 @@
   >
     <!-- Toggle Button -->
     <button
-      class="absolute top-4 right-2 p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors"
+      class="absolute top-4 right-2 p-2 text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100 rounded-md transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
       @click="toggleSidebar"
-      aria-label="Переключить боковую панель"
+      :aria-label="isExpanded ? 'Свернуть боковую панель' : 'Развернуть боковую панель'"
+      :aria-expanded="isExpanded"
+      type="button"
     >
       <svg
         class="w-5 h-5"
@@ -85,8 +87,10 @@
     <!-- Quick Actions -->
     <div class="mt-auto px-2 pb-4">
       <button
-        class="w-full flex items-center gap-3 px-3 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors"
+        class="w-full flex items-center gap-3 px-3 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors min-h-[44px]"
         @click="handleNewFolder"
+        type="button"
+        aria-label="Создать новую папку"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
