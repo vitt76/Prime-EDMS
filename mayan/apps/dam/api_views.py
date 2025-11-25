@@ -1,10 +1,12 @@
+import logging
+
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 
 from rest_framework import generics, status
 from rest_framework.decorators import action
-from rest_framework.renderers import JSONRenderer
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
@@ -21,7 +23,11 @@ from .serializers import (
     DAMDocumentListSerializer, DAMMetadataPresetSerializer,
     DocumentAIAnalysisSerializer
 )
-from .tasks import analyze_document_with_ai
+from .tasks import analyze_document_with_ai, bulk_analyze_documents
+
+
+logger = logging.getLogger(__name__)
+GENERIC_AI_ERROR_MESSAGE = 'An unexpected error occurred while processing your request. Please try again later.'
 
 
 class DocumentAIAnalysisViewSet(ModelViewSet):
@@ -31,53 +37,61 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
     serializer_class = DocumentAIAnalysisSerializer
     queryset = DocumentAIAnalysis.objects.select_related('document').prefetch_related('document__files')
     renderer_classes = (JSONRenderer,)
+    throttle_scope = 'ai_analysis'
 
     @action(detail=False, methods=['post'])
     def analyze(self, request):
         """
         Start AI analysis for a specific document.
         """
+        serializer = AnalyzeDocumentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        document = serializer.validated_data['document_instance']
+
         try:
-            serializer = AnalyzeDocumentSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-
-            document = serializer.validated_data['document_instance']
-
             AccessControlList.objects.check_access(
                 obj=document,
                 permissions=(permission_document_view,),
                 user=request.user
-            )
-
-            ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
-                document=document,
-                defaults={'analysis_status': 'pending'}
-            )
-
-            # Start analysis
-            analyze_document_with_ai.delay(document.id)
-
-            return Response({
-                'message': f'AI analysis started for document {document.pk}',
-                'analysis_id': ai_analysis.id,
-                'status': 'started'
-            })
-
-        except Document.DoesNotExist:
-            return Response(
-                {'error': 'Document not found'},
-                status=status.HTTP_404_NOT_FOUND
             )
         except PermissionDenied:
             return Response(
                 {'error': 'Access denied'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
+
+        try:
+            ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
+                document=document,
+                defaults={'analysis_status': 'pending'}
             )
+
+            analyze_document_with_ai.delay(document.id)
+        except Document.DoesNotExist:
+            return Response(
+                {'error': 'Document not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as exc:
+            logger.error(
+                'dam_ai_analysis_schedule_failed',
+                exc_info=True,
+                extra={
+                    'document_id': getattr(document, 'pk', None),
+                    'user_id': getattr(request.user, 'pk', None)
+                }
+            )
+            return Response(
+                {'error': GENERIC_AI_ERROR_MESSAGE},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        return Response({
+            'message': f'AI analysis started for document {document.pk}',
+            'analysis_id': ai_analysis.id,
+            'status': 'started'
+        })
 
     @action(detail=True, methods=['post'])
     def reanalyze(self, request, pk=None):
@@ -85,12 +99,39 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
         Trigger re-analysis of a document with AI.
         """
         ai_analysis = self.get_object()
+        document = ai_analysis.document
 
-        # Reset status and trigger analysis
-        ai_analysis.analysis_status = 'pending'
-        ai_analysis.save()
+        try:
+            AccessControlList.objects.check_access(
+                obj=document,
+                permissions=(permission_document_view,),
+                user=request.user
+            )
+        except PermissionDenied:
+            return Response(
+                {'error': 'Access denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-        analyze_document_with_ai.delay(ai_analysis.document.id)
+        try:
+            ai_analysis.analysis_status = 'pending'
+            ai_analysis.save()
+
+            analyze_document_with_ai.delay(document.id)
+        except Exception as exc:
+            logger.error(
+                'dam_ai_reanalysis_schedule_failed',
+                exc_info=True,
+                extra={
+                    'analysis_id': ai_analysis.pk,
+                    'document_id': document.pk,
+                    'user_id': getattr(request.user, 'pk', None)
+                }
+            )
+            return Response(
+                {'error': GENERIC_AI_ERROR_MESSAGE},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         return Response({
             'message': 'AI re-analysis scheduled',
@@ -102,17 +143,66 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
         """
         Trigger AI analysis for multiple documents.
         """
-        from .tasks import bulk_analyze_documents
-
         serializer = BulkAnalyzeDocumentsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         document_ids = serializer.validated_data['document_ids']
 
-        bulk_analyze_documents.delay(document_ids)
+        documents_queryset = Document.objects.filter(pk__in=document_ids)
+        found_ids = set(documents_queryset.values_list('pk', flat=True))
+        requested_ids = set(document_ids)
+
+        missing_ids = requested_ids - found_ids
+        if missing_ids:
+            return Response(
+                {'error': 'Some documents were not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        accessible_documents = AccessControlList.objects.restrict_queryset(
+            permission=permission_document_view,
+            queryset=documents_queryset,
+            user=request.user
+        )
+        accessible_ids = list(accessible_documents.values_list('pk', flat=True))
+        accessible_id_set = set(accessible_ids)
+
+        if not accessible_ids:
+            return Response(
+                {'error': 'No accessible documents were provided.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        inaccessible_ids = found_ids - accessible_id_set
+        if inaccessible_ids:
+            return Response(
+                {'error': 'Access denied for one or more documents.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        scheduled_ids = [
+            document_id for document_id in document_ids
+            if document_id in accessible_id_set
+        ]
+
+        try:
+            bulk_analyze_documents.delay(scheduled_ids)
+        except Exception as exc:
+            logger.error(
+                'dam_ai_bulk_analysis_schedule_failed',
+                exc_info=True,
+                extra={
+                    'document_ids': scheduled_ids,
+                    'user_id': getattr(request.user, 'pk', None)
+                }
+            )
+            return Response(
+                {'error': GENERIC_AI_ERROR_MESSAGE},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         return Response({
-            'message': f'AI analysis scheduled for {len(document_ids)} documents',
-            'document_ids': document_ids
+            'message': f'AI analysis scheduled for {len(scheduled_ids)} documents',
+            'document_ids': scheduled_ids
         })
 
 

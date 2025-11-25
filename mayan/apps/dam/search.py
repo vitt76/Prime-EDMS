@@ -4,6 +4,13 @@ from mayan.apps.dynamic_search.classes import SearchModel
 from mayan.apps.documents.permissions import permission_document_view
 
 
+def invalidate_search_model_cache(*search_models):
+    """Force SearchModel cached properties to refresh."""
+    for search_model in search_models:
+        if hasattr(search_model, '__dict__'):
+            search_model.__dict__.pop('search_fields', None)
+
+
 # Transformation functions for JSON fields
 def transformation_ai_tags_to_string(value):
     """Convert AI tags JSON array to searchable string."""
@@ -307,4 +314,13 @@ def extend_document_search():
     search_model_document_version_page.add_model_field(
         field='document_version__document__ai_analysis__analysis_status',
         label=_('Document AI Analysis Status')
+    )
+
+    # Invalidate cached search field lists so new fields become available
+    invalidate_search_model_cache(
+        search_model_document,
+        search_model_document_file,
+        search_model_document_file_page,
+        search_model_document_version,
+        search_model_document_version_page
     )

@@ -277,7 +277,17 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.BasicAuthentication'
     ),
-    'DEFAULT_PAGINATION_CLASS': 'mayan.apps.rest_api.pagination.MayanPageNumberPagination'
+    'DEFAULT_PAGINATION_CLASS': 'mayan.apps.rest_api.pagination.MayanPageNumberPagination',
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle'
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',
+        'user': '1000/hour',
+        'ai_analysis': '10/minute'
+    }
 }
 
 # --------- Pagination --------
@@ -306,7 +316,21 @@ CELERY_TIMEZONE = 'UTC'
 
 # ------------ CORS ------------
 
-CORS_ORIGIN_ALLOW_ALL = True
+CORS_ORIGIN_ALLOW_ALL = False
+_default_cors_origins = os.environ.get('MAYAN_CORS_ALLOWED_ORIGINS')
+if _default_cors_origins:
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip() for origin in _default_cors_origins.split(',')
+        if origin.strip()
+    ]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        'http://localhost:8000',
+        'http://127.0.0.1:8000'
+    ]
+
+CORS_ALLOW_CREDENTIALS = True
+CORS_PREFLIGHT_MAX_AGE = 60 * 60 * 24
 
 # ------ Timezone --------
 

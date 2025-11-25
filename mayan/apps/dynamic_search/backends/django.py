@@ -22,6 +22,14 @@ SIMPLE_SEARCH_PRIORITY_FIELDS = [
     'files__filename',  # Filename - very common search
     'description',  # Description - common search
     'uuid',  # UUID - sometimes searched
+    # DAM-enhanced fields
+    'ai_analysis__ai_description',
+    'ai_analysis__ai_tags',
+    'ai_analysis__categories',
+    'ai_analysis__people',
+    'ai_analysis__locations',
+    'ai_analysis__alt_text',
+    'ai_analysis__ai_provider'
 ]
 
 

@@ -13,6 +13,13 @@ TEMPLATE_DEBUG = False
 import os
 ALLOWED_HOSTS = os.environ.get('MAYAN_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# Enforce explicit CORS origins via environment variable
+_production_cors_origins = os.environ.get('MAYAN_CORS_ALLOWED_ORIGINS', '')
+CORS_ALLOWED_ORIGINS = [
+    origin.strip() for origin in _production_cors_origins.split(',')
+    if origin.strip()
+]
+
 # HTTPS settings
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
