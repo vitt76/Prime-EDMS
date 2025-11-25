@@ -76,6 +76,34 @@
 
     <!-- Gallery Grid -->
     <div v-else class="gallery-content">
+      <!-- Gallery Toolbar with Select All -->
+      <div
+        v-if="assetStore.assets.length > 0"
+        class="flex items-center justify-between px-4 py-2 border-b border-neutral-300 dark:border-neutral-300 bg-neutral-0 dark:bg-neutral-0 sticky top-0 z-30"
+      >
+        <div class="flex items-center gap-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              :checked="isAllSelected"
+              :indeterminate="isIndeterminate"
+              class="w-4 h-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+              @change="handleSelectAllToggle"
+              aria-label="Выбрать все активы"
+            />
+            <span class="text-sm font-medium text-neutral-900 dark:text-neutral-900">
+              {{ isAllSelected ? 'Снять выделение' : 'Выбрать все' }}
+            </span>
+          </label>
+          <span
+            v-if="assetStore.selectedCount > 0"
+            class="text-sm text-neutral-600 dark:text-neutral-600"
+          >
+            Выбрано: <strong>{{ assetStore.selectedCount }}</strong> из {{ assetStore.assets.length }}
+          </span>
+        </div>
+      </div>
+
       <!-- Bulk Actions Toolbar -->
       <BulkActions
         :selected-count="assetStore.selectedCount"
@@ -288,6 +316,28 @@ watch(
 
 function isAssetSelected(asset: Asset): boolean {
   return assetStore.selectedAssets.some((a) => a.id === asset.id)
+}
+
+const isAllSelected = computed(() => {
+  return (
+    assetStore.assets.length > 0 &&
+    assetStore.selectedAssets.length === assetStore.assets.length
+  )
+})
+
+const isIndeterminate = computed(() => {
+  return (
+    assetStore.selectedAssets.length > 0 &&
+    assetStore.selectedAssets.length < assetStore.assets.length
+  )
+})
+
+function handleSelectAllToggle() {
+  if (isAllSelected.value) {
+    assetStore.clearSelection()
+  } else {
+    assetStore.selectAll()
+  }
 }
 
 function handleAssetSelect(asset: Asset) {

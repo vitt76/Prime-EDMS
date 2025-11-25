@@ -71,9 +71,15 @@ export interface DetectedObject {
 export interface Comment {
   id: number
   author: string
+  author_id?: number
+  author_avatar?: string
   text: string
   created_date: string
+  updated_date?: string
   replies?: Comment[]
+  parent_id?: number
+  mentions?: string[] // Array of mentioned usernames
+  edited?: boolean
 }
 
 export interface Version {
@@ -81,7 +87,11 @@ export interface Version {
   filename: string
   uploaded_date: string
   uploaded_by?: string
+  uploaded_by_id?: number
   size: number
+  is_current?: boolean
+  download_url?: string
+  restore_url?: string
 }
 
 // Search API types
@@ -157,5 +167,93 @@ export interface CacheEntry<T> {
   data: T
   timestamp: number
   ttl: number
+}
+
+// Comment API types
+export interface CreateCommentRequest {
+  text: string
+  parent_id?: number
+  mentions?: string[]
+}
+
+export interface UpdateCommentRequest {
+  text: string
+}
+
+// Publication/Distribution API types
+export interface Publication {
+  id: number
+  title: string
+  description?: string
+  status: 'draft' | 'scheduled' | 'published' | 'archived'
+  created_date: string
+  updated_date: string
+  published_date?: string
+  created_by: string
+  created_by_id: number
+  assets: Asset[]
+  channels: PublicationChannel[]
+  schedule?: PublicationSchedule
+  permissions?: PublicationPermissions
+  analytics?: PublicationAnalytics
+  share_links?: ShareLink[]
+}
+
+export interface PublicationChannel {
+  id: number
+  name: string
+  type: 'website' | 'social' | 'email' | 'api'
+  status: 'active' | 'inactive'
+  icon?: string
+}
+
+export interface PublicationSchedule {
+  start_date?: string
+  end_date?: string
+  timezone?: string
+}
+
+export interface PublicationPermissions {
+  view: string[] // Array of user IDs or roles
+  download: string[]
+  edit: string[]
+}
+
+export interface PublicationAnalytics {
+  views: number
+  downloads: number
+  shares: number
+  last_viewed?: string
+}
+
+export interface ShareLink {
+  id: number
+  url: string
+  expires_at?: string
+  password_protected: boolean
+  permissions: {
+    view: boolean
+    download: boolean
+  }
+  created_date: string
+}
+
+export interface CreatePublicationRequest {
+  title: string
+  description?: string
+  asset_ids: number[]
+  channel_ids: number[]
+  schedule?: PublicationSchedule
+  permissions?: PublicationPermissions
+}
+
+export interface UpdatePublicationRequest {
+  title?: string
+  description?: string
+  asset_ids?: number[]
+  channel_ids?: number[]
+  schedule?: PublicationSchedule
+  permissions?: PublicationPermissions
+  status?: Publication['status']
 }
 

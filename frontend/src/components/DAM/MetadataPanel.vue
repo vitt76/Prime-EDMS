@@ -146,63 +146,26 @@
     </section>
 
     <!-- Version History Section -->
-    <section v-if="versionHistory && versionHistory.length > 0" class="mb-6">
-      <h3 class="text-sm font-semibold text-neutral-900 dark:text-neutral-900 mb-3">
-        История версий
-      </h3>
-      <div class="space-y-2">
-        <button
-          v-for="(version, index) in versionHistory"
-          :key="version.id"
-          :class="[
-            'w-full text-left p-2 rounded-md text-sm transition-colors',
-            'hover:bg-neutral-100 dark:hover:bg-neutral-100',
-            index === 0 ? 'bg-primary-50 dark:bg-primary-50' : ''
-          ]"
-          @click="$emit('version-select', version.id)"
-        >
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="font-medium text-neutral-900 dark:text-neutral-900">
-                {{ version.filename }}
-              </div>
-              <div class="text-xs text-neutral-600 dark:text-neutral-600 mt-1">
-                {{ formatDate(version.uploaded_date) }}
-                <span v-if="version.uploaded_by"> • {{ version.uploaded_by }}</span>
-              </div>
-            </div>
-            <div class="text-xs text-neutral-600 dark:text-neutral-600">
-              {{ formatFileSize(version.size) }}
-            </div>
-          </div>
-        </button>
-      </div>
+    <section class="mb-6">
+      <VersionHistory
+        v-if="asset?.id"
+        :asset-id="asset.id"
+        :initial-versions="versionHistory"
+        @version-download="handleVersionDownload"
+        @version-restore="handleVersionRestore"
+      />
     </section>
 
     <!-- Comments Section -->
-    <section v-if="comments && comments.length > 0" class="mb-6">
-      <h3 class="text-sm font-semibold text-neutral-900 dark:text-neutral-900 mb-3">
-        Комментарии ({{ comments.length }})
-      </h3>
-      <div class="space-y-3 max-h-64 overflow-y-auto">
-        <div
-          v-for="comment in comments"
-          :key="comment.id"
-          class="p-3 bg-neutral-50 dark:bg-neutral-50 rounded-md"
-        >
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-sm font-medium text-neutral-900 dark:text-neutral-900">
-              {{ comment.author }}
-            </span>
-            <span class="text-xs text-neutral-600 dark:text-neutral-600">
-              {{ formatRelativeTime(comment.created_date) }}
-            </span>
-          </div>
-          <p class="text-sm text-neutral-700 dark:text-neutral-700">
-            {{ comment.text }}
-          </p>
-        </div>
-      </div>
+    <section class="mb-6">
+      <CommentsThread
+        v-if="asset?.id"
+        :asset-id="asset.id"
+        :initial-comments="comments"
+        @comment-added="handleCommentAdded"
+        @comment-updated="handleCommentUpdated"
+        @comment-deleted="handleCommentDeleted"
+      />
     </section>
 
     <!-- Actions Section -->
@@ -248,9 +211,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Asset, AssetDetailResponse, FileDetails, AIAnalysis, Comment, Version } from '@/types/api'
-import { formatFileSize, formatDate, formatRelativeTime, truncate } from '@/utils/formatters'
+import { formatFileSize, formatDate, truncate } from '@/utils/formatters'
 import Button from '@/components/Common/Button.vue'
 import Badge from '@/components/Common/Badge.vue'
+import CommentsThread from './CommentsThread.vue'
+import VersionHistory from './VersionHistory.vue'
 
 interface Props {
   asset: Asset | AssetDetailResponse | null
@@ -262,7 +227,33 @@ const emit = defineEmits<{
   download: []
   share: []
   'version-select': [versionId: number]
+  'comment-added': [comment: Comment]
+  'comment-updated': [comment: Comment]
+  'comment-deleted': [commentId: number]
+  'version-download': [version: Version]
+  'version-restore': [version: Version]
 }>()
+
+function handleCommentAdded(comment: Comment) {
+  emit('comment-added', comment)
+}
+
+function handleCommentUpdated(comment: Comment) {
+  emit('comment-updated', comment)
+}
+
+function handleCommentDeleted(commentId: number) {
+  emit('comment-deleted', commentId)
+}
+
+function handleVersionDownload(version: Version) {
+  emit('version-download', version)
+}
+
+function handleVersionRestore(version: Version) {
+  emit('version-restore', version)
+  emit('version-select', version.id)
+}
 
 // Extract data from asset
 const fileDetails = computed<FileDetails | null>(() => {

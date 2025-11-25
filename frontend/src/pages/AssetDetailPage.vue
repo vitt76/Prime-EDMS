@@ -203,12 +203,17 @@
 
         <!-- Metadata Panel (Right 40% on desktop) -->
         <div class="lg:col-span-1">
-          <div class="bg-neutral-0 dark:bg-neutral-0 border border-neutral-300 dark:border-neutral-300 rounded-lg sticky top-4">
+          <div class="bg-neutral-0 dark:bg-neutral-0 border border-neutral-300 dark:border-neutral-300 rounded-lg sticky top-4 max-h-[calc(100vh-8rem)] overflow-y-auto">
             <MetadataPanel
               :asset="assetStore.currentAsset"
               @download="handleDownload"
               @share="handleShare"
               @version-select="handleVersionSelect"
+              @comment-added="handleCommentAdded"
+              @comment-updated="handleCommentUpdated"
+              @comment-deleted="handleCommentDeleted"
+              @version-download="handleVersionDownload"
+              @version-restore="handleVersionRestore"
             />
           </div>
         </div>
@@ -223,7 +228,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAssetStore } from '@/stores/assetStore'
 import MetadataPanel from '@/components/DAM/MetadataPanel.vue'
 import Badge from '@/components/Common/Badge.vue'
-import type { Asset } from '@/types/api'
+import type { Asset, Comment, Version } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -319,6 +324,43 @@ function handleShare() {
 function handleVersionSelect(versionId: number) {
   // TODO: Load specific version
   console.log('Select version:', versionId)
+}
+
+function handleCommentAdded(comment: Comment) {
+  // Refresh asset detail to get updated comments
+  const assetId = parseInt(route.params.id as string, 10)
+  if (assetId) {
+    assetStore.getAssetDetail(assetId)
+  }
+}
+
+function handleCommentUpdated(comment: Comment) {
+  // Refresh asset detail to get updated comments
+  const assetId = parseInt(route.params.id as string, 10)
+  if (assetId) {
+    assetStore.getAssetDetail(assetId)
+  }
+}
+
+function handleCommentDeleted(commentId: number) {
+  // Refresh asset detail to get updated comments
+  const assetId = parseInt(route.params.id as string, 10)
+  if (assetId) {
+    assetStore.getAssetDetail(assetId)
+  }
+}
+
+function handleVersionDownload(version: Version) {
+  // Version download is handled in VersionHistory component
+  console.log('Download version:', version.id)
+}
+
+function handleVersionRestore(version: Version) {
+  // Refresh asset detail after restore
+  const assetId = parseInt(route.params.id as string, 10)
+  if (assetId) {
+    assetStore.getAssetDetail(assetId)
+  }
 }
 
 function handleImageError() {
