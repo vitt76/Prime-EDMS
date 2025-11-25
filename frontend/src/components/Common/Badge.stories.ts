@@ -13,71 +13,34 @@ type Story = StoryObj<typeof Badge>
 export const Success: Story = {
   args: {
     variant: 'success',
-    children: 'Success'
-  },
-  render: (args) => ({
-    components: { Badge },
-    setup() {
-      return { args }
-    },
-    template: '<Badge v-bind="args">Success</Badge>'
-  })
+    default: 'Success'
+  }
 }
 
 export const Warning: Story = {
   args: {
     variant: 'warning',
-    children: 'Warning'
-  },
-  render: (args) => ({
-    components: { Badge },
-    setup() {
-      return { args }
-    },
-    template: '<Badge v-bind="args">Warning</Badge>'
-  })
+    default: 'Warning'
+  }
 }
 
 export const Error: Story = {
   args: {
     variant: 'error',
-    children: 'Error'
-  },
-  render: (args) => ({
-    components: { Badge },
-    setup() {
-      return { args }
-    },
-    template: '<Badge v-bind="args">Error</Badge>'
-  })
+    default: 'Error'
+  }
 }
 
 export const Info: Story = {
   args: {
     variant: 'info',
-    children: 'Info'
-  },
-  render: (args) => ({
-    components: { Badge },
-    setup() {
-      return { args }
-    },
-    template: '<Badge v-bind="args">Info</Badge>'
-  })
+    default: 'Info'
+  }
 }
 
 export const Neutral: Story = {
   args: {
     variant: 'neutral',
-    children: 'Neutral'
-  },
-  render: (args) => ({
-    components: { Badge },
-    setup() {
-      return { args }
-    },
-    template: '<Badge v-bind="args">Neutral</Badge>'
-  })
+    default: 'Neutral'
+  }
 }
-
-

@@ -1,6 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
+export interface Breadcrumb {
+  label: string
+  path: string
+}
+
 export const useUIStore = defineStore(
   'ui',
   () => {
@@ -9,6 +14,8 @@ export const useUIStore = defineStore(
     const theme = ref<'light' | 'dark' | 'auto'>('light')
     const activeModal = ref<string | null>(null)
     const mobileMenuOpen = ref(false)
+    const breadcrumbs = ref<Breadcrumb[]>([])
+    const notifications = ref<any[]>([])
 
     // Getters
     const isDarkMode = computed(() => {
@@ -49,6 +56,28 @@ export const useUIStore = defineStore(
       mobileMenuOpen.value = !mobileMenuOpen.value
     }
 
+    function setBreadcrumbs(crumbs: Breadcrumb[]) {
+      breadcrumbs.value = crumbs
+    }
+
+    function addNotification(notification: any) {
+      notifications.value.unshift(notification)
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        const index = notifications.value.indexOf(notification)
+        if (index !== -1) {
+          notifications.value.splice(index, 1)
+        }
+      }, 5000)
+    }
+
+    function removeNotification(notification: any) {
+      const index = notifications.value.indexOf(notification)
+      if (index !== -1) {
+        notifications.value.splice(index, 1)
+      }
+    }
+
     // Initialize theme on store creation
     applyTheme()
 
@@ -58,6 +87,8 @@ export const useUIStore = defineStore(
       theme,
       activeModal,
       mobileMenuOpen,
+      breadcrumbs,
+      notifications,
       // Getters
       isDarkMode,
       // Actions
@@ -66,7 +97,10 @@ export const useUIStore = defineStore(
       applyTheme,
       openModal,
       closeModal,
-      toggleMobileMenu
+      toggleMobileMenu,
+      setBreadcrumbs,
+      addNotification,
+      removeNotification
     }
   },
   {

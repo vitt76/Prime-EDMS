@@ -11,13 +11,15 @@ export default meta
 type Story = StoryObj<typeof Card>
 
 export const Default: Story = {
-  render: () => ({
+  args: {
+    default: 'Card content goes here'
+  },
+  render: (args) => ({
     components: { Card },
-    template: `
-      <Card>
-        <p>This is a default card with some content.</p>
-      </Card>
-    `
+    setup() {
+      return { args }
+    },
+    template: '<Card>Card content</Card>'
   })
 }
 
@@ -27,26 +29,24 @@ export const WithHeader: Story = {
     template: `
       <Card>
         <template #header>
-          <h3 class="font-semibold">Card Header</h3>
+          <h3>Card Header</h3>
         </template>
-        <p>Card content goes here.</p>
-        <template #footer>
-          <button class="text-primary-500">Action</button>
-        </template>
+        Card body content
       </Card>
     `
   })
 }
 
-export const Elevated: Story = {
+export const WithFooter: Story = {
   render: () => ({
     components: { Card },
     template: `
-      <Card variant="elevated">
-        <p>This card has elevated shadow.</p>
+      <Card>
+        Card body content
+        <template #footer>
+          <button>Action</button>
+        </template>
       </Card>
     `
   })
 }
-
-

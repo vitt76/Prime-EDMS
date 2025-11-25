@@ -28,12 +28,17 @@
           >
             <div
               v-if="isOpen"
+              ref="modalRef"
               :class="modalClasses"
               @click.stop
+              tabindex="-1"
+              role="dialog"
+              aria-modal="true"
+              :aria-labelledby="title ? 'modal-title' : undefined"
             >
               <!-- Header -->
               <div v-if="title || $slots.header" class="flex items-center justify-between px-6 py-4 border-b border-neutral-300 dark:border-neutral-300">
-                <h3 v-if="title" class="text-xl font-semibold text-neutral-900 dark:text-neutral-900">
+                <h3 v-if="title" id="modal-title" class="text-xl font-semibold text-neutral-900 dark:text-neutral-900">
                   {{ title }}
                 </h3>
                 <slot name="header" />
@@ -67,7 +72,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, watch, ref } from 'vue'
+import { useFocusTrap } from '@/composables/useFocusTrap'
 
 interface Props {
   isOpen: boolean
@@ -87,6 +93,12 @@ const emit = defineEmits<{
   'update:isOpen': [value: boolean]
   close: []
 }>()
+
+const modalRef = ref<HTMLElement | null>(null)
+const isActive = ref(false)
+
+// Focus trap
+const { activate, deactivate } = useFocusTrap(modalRef, isActive)
 
 const modalClasses = computed(() => {
   const base = 'relative bg-neutral-0 dark:bg-neutral-0 rounded-lg shadow-xl w-full max-h-[90vh] overflow-hidden flex flex-col'
@@ -113,18 +125,28 @@ function handleBackdropClick() {
   }
 }
 
-// Close on Escape key
+// Close on Escape key and manage focus trap
 watch(() => props.isOpen, (isOpen) => {
+  isActive.value = isOpen
+  
   if (isOpen) {
+    // Activate focus trap
+    activate()
+    
+    // Close on Escape
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && props.closable) {
         handleClose()
       }
     }
     document.addEventListener('keydown', handleEscape)
+    
     return () => {
       document.removeEventListener('keydown', handleEscape)
+      deactivate()
     }
+  } else {
+    deactivate()
   }
 })
 </script>

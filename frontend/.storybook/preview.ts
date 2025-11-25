@@ -1,5 +1,13 @@
 import type { Preview } from '@storybook/vue3'
+import { setup } from '@storybook/vue3'
+import { createPinia } from 'pinia'
 import '../src/styles/index.css'
+
+const pinia = createPinia()
+
+setup((app) => {
+  app.use(pinia)
+})
 
 const preview: Preview = {
   parameters: {
@@ -39,12 +47,18 @@ const preview: Preview = {
   decorators: [
     (story, context) => {
       const theme = context.globals.theme || 'light'
-      document.documentElement.classList.toggle('dark', theme === 'dark')
-      return story()
+      const root = document.documentElement
+      if (theme === 'dark') {
+        root.classList.add('dark')
+      } else {
+        root.classList.remove('dark')
+      }
+      return {
+        components: { story },
+        template: '<story />'
+      }
     }
   ]
 }
 
 export default preview
-
-
