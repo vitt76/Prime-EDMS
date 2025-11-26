@@ -348,7 +348,7 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': 'logs/django.log',
+            'filename': '/opt/mayan-edms/logs/django.log',
             'maxBytes': 1024 * 1024 * 10,
             'backupCount': 5,
             'formatter': 'verbose',
@@ -356,7 +356,7 @@ LOGGING = {
         'api_errors': {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': 'logs/api_errors.log',
+            'filename': '/opt/mayan-edms/logs/api_errors.log',
             'maxBytes': 1024 * 1024 * 10,
             'backupCount': 10,
             'formatter': 'verbose',
@@ -364,7 +364,7 @@ LOGGING = {
         'throttle_log': {
             'level': 'WARNING',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': 'logs/throttle.log',
+            'filename': '/opt/mayan-edms/logs/throttle.log',
             'maxBytes': 1024 * 1024 * 5,
             'backupCount': 5,
             'formatter': 'json',

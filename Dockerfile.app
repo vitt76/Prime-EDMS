@@ -37,31 +37,6 @@ COPY mayan/apps/image_editor /opt/mayan-edms/lib/python3.9/site-packages/mayan/a
 COPY mayan/apps/documents/links/document_file_links.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/links/document_file_links.py
 COPY mayan/apps/documents/icons.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/icons.py
 COPY mayan/apps/documents/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/apps.py
-=======
-        cryptography \
-        django-storages \
-        gigachat \
-        PyJWT \
-        reportlab \
-        "pydantic<2.0" \
-        "typing-extensions<4.6" \
-        yandexgptlite && \
-    rm -rf /var/lib/apt/lists/*
-
-# Кастомные расширения
-COPY mayan/apps/converter_pipeline_extension /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
-COPY mayan/apps/image_editor /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
-
-# Обновлённые модули Mayan EDMS
-COPY mayan/apps/documents/links/document_file_links.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/links/document_file_links.py
-COPY mayan/apps/documents/icons.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/icons.py
-COPY mayan/apps/documents/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/apps.py
-COPY mayan/apps/documents/handlers.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/handlers.py
-COPY mayan/apps/documents/tasks.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/tasks.py
-COPY mayan/apps/documents/queues.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/queues.py
-COPY mayan/apps/documents/literals.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/literals.py
-COPY mayan/apps/documents/settings.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/settings.py
->>>>>>> master
 COPY mayan/apps/documents/handlers.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/handlers.py
 COPY mayan/apps/documents/tasks.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/tasks.py
 COPY mayan/apps/documents/queues.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/queues.py
