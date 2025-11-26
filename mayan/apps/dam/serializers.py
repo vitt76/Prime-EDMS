@@ -186,7 +186,25 @@ class BulkAnalyzeDocumentsSerializer(serializers.Serializer):
     """
     Serializer for triggering analysis of multiple documents.
     """
+    max_documents = 100
+
     document_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
-        allow_empty=False
+        allow_empty=False,
+        max_length=max_documents,
+        help_text=_('Maximum of %(count)d document IDs per request.') % {
+            'count': max_documents
+        }
     )
+
+    def validate_document_ids(self, value):
+        max_documents = getattr(self, 'max_documents', 100)
+
+        if len(value) > max_documents:
+            raise serializers.ValidationError(
+                _('Maximum of %(count)d documents allowed per request.') % {
+                    'count': max_documents
+                }
+            )
+
+        return value

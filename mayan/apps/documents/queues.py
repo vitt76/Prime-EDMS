@@ -46,6 +46,42 @@ queue_documents.add_task_type(
     dotted_path='mayan.apps.documents.tasks.task_document_version_export',
     label=_('Export a document version')
 )
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_coordinate_document_index',
+    label=_('Coordinate document indexing')
+)
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_coordinate_document_deindex',
+    label=_('Coordinate document deindexing')
+)
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_coordinate_document_batch_index',
+    label=_('Coordinate batch document indexing')
+)
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_validate_document_for_indexing',
+    label=_('Validate document for indexing')
+)
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_index_instance_conditional',
+    label=_('Conditional search indexing task')
+)
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_index_instance_document_add_conditional',
+    label=_('Conditional hierarchy indexing task')
+)
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_release_indexing_lock',
+    label=_('Release indexing lock')
+)
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_index_instance_safe',
+    label=_('Safe search indexing fallback')
+)
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_index_instance_document_add_safe',
+    label=_('Safe hierarchy indexing fallback')
+)
 
 queue_documents_periodic.add_task_type(
     dotted_path='mayan.apps.documents.tasks.task_document_type_document_trash_periods_check',
@@ -72,6 +108,12 @@ queue_documents_periodic.add_task_type(
     label=_('Periodic document reindexing'),
     name='task_periodic_reindex_documents',
     schedule=timedelta(seconds=setting_indexing_periodic_reindex_interval.value),
+)
+queue_documents_periodic.add_task_type(
+    dotted_path='mayan.apps.documents.tasks.task_cleanup_stale_indexing_locks',
+    label=_('Cleanup stale indexing locks'),
+    name='task_cleanup_stale_indexing_locks',
+    schedule=timedelta(seconds=300)
 )
 
 queue_uploads.add_task_type(

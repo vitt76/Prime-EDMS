@@ -79,7 +79,7 @@ services:
       - app.env
     environment:
       MAYAN_MEDIA_ROOT: '/var/lib/mayan'
-      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql','PORT':'5432'}}"
+      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'${MAYAN_DATABASE_NAME:-mayan}','PASSWORD':'${MAYAN_DATABASE_PASSWORD}','USER':'${MAYAN_DATABASE_USER:-mayan}','HOST':'postgresql','PORT':'5432'}}"
       MAYAN_CELERY_BROKER_URL: amqp://mayan:mayanrabbitpass@rabbitmq:5672/mayan
       MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
       MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock

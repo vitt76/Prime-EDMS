@@ -19,7 +19,8 @@ from .views import (
     DocumentAIAnalysisEditView,
     DocumentAIAnalysisListView,
     DocumentAIAnalysisReanalyzeView,
-    DocumentDAMMetadataView
+    DocumentDAMMetadataView,
+    YandexDiskSettingsView
 )
 
 # API router
@@ -45,6 +46,11 @@ ui_urlpatterns = [
         'settings/',
         RedirectView.as_view(url='/settings/namespaces/dam/', permanent=False),
         name='settings'
+    ),
+    path(
+        'setup/yandex-disk/',
+        YandexDiskSettingsView.as_view(),
+        name='yandex_settings'
     ),
     path(
         'digital-assets/',

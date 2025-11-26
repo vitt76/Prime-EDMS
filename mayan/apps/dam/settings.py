@@ -53,11 +53,11 @@ setting_ai_analysis_retry_delay = namespace.add_setting(
 
 # Настройки провайдеров
 setting_ai_providers_active = namespace.add_setting(
-    default=['gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai'],
+    default=['qwenlocal', 'gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai'],
     global_name='DAM_AI_PROVIDERS_ACTIVE',
     help_text=_(
         'List of active AI providers. Only providers in this list will be used for analysis. '
-        'Available providers: gigachat, openai, claude, gemini, yandexgpt, kieai'
+        'Available providers: qwenlocal, gigachat, openai, claude, gemini, yandexgpt, kieai'
     )
 )
 
@@ -68,6 +68,40 @@ setting_ai_provider_fallback = namespace.add_setting(
         'Enable fallback to alternative providers when primary provider fails. '
         'If disabled, analysis will fail if primary provider is unavailable.'
     )
+)
+
+# Настройки локальной qwen модели
+setting_qwenlocal_api_url = namespace.add_setting(
+    default='http://192.168.1.25:11434/api/generate',
+    global_name='DAM_QWENLOCAL_API_URL',
+    help_text=_('Endpoint of the local Qwen vision service (Ollama-compatible /api/generate).')
+)
+
+setting_qwenlocal_model = namespace.add_setting(
+    default='qwen3-vl:8b-instruct',
+    global_name='DAM_QWENLOCAL_MODEL',
+    help_text=_('Model identifier exposed by the local service (for example, qwen3-vl:8b-instruct).')
+)
+
+setting_qwenlocal_prompt = namespace.add_setting(
+    default='',
+    global_name='DAM_QWENLOCAL_PROMPT',
+    help_text=_(
+        'Custom system prompt for the local Qwen provider. '
+        'Leave blank to use the built-in template that возвращает описание/метки/категории в JSON.'
+    )
+)
+
+setting_qwenlocal_timeout = namespace.add_setting(
+    default=120,
+    global_name='DAM_QWENLOCAL_TIMEOUT',
+    help_text=_('HTTP timeout in seconds for the local Qwen service.')
+)
+
+setting_qwenlocal_verify_ssl = namespace.add_setting(
+    default=False,
+    global_name='DAM_QWENLOCAL_VERIFY_SSL',
+    help_text=_('Verify SSL certificates when calling the local Qwen endpoint (enable only for HTTPS).')
 )
 
 # Настройки GigaChat
@@ -327,6 +361,79 @@ setting_analysis_concurrent_limit = namespace.add_setting(
     global_name='DAM_ANALYSIS_CONCURRENT_LIMIT',
     help_text=_(
         'Maximum number of concurrent AI analysis tasks per worker.'
+    )
+)
+
+# Yandex Disk integration settings
+setting_yandex_disk_token = namespace.add_setting(
+    default='',
+    global_name='DAM_YANDEX_DISK_TOKEN',
+    help_text=_(
+        'OAuth token generated in Yandex Disk application settings.'
+    )
+)
+
+setting_yandex_disk_base_path = namespace.add_setting(
+    default='/',
+    global_name='DAM_YANDEX_DISK_BASE_PATH',
+    help_text=_(
+        'Base path inside Yandex Disk to import (for example, / or /documents).'
+    )
+)
+
+setting_yandex_disk_cabinet_root_label = namespace.add_setting(
+    default=_('Yandex Disk'),
+    global_name='DAM_YANDEX_DISK_CABINET_ROOT_LABEL',
+    help_text=_(
+        'Root cabinet label where imported folders will be created.'
+    )
+)
+
+setting_yandex_disk_document_type_id = namespace.add_setting(
+    default='',
+    global_name='DAM_YANDEX_DISK_DOCUMENT_TYPE_ID',
+    help_text=_(
+        'ID of the document type that will be assigned to imported files.'
+    )
+)
+
+setting_yandex_disk_max_file_size = namespace.add_setting(
+    default=20 * 1024 * 1024,
+    global_name='DAM_YANDEX_DISK_MAX_FILE_SIZE',
+    help_text=_(
+        'Maximum file size (in bytes) to download from Yandex Disk.'
+    )
+)
+
+setting_yandex_disk_file_limit = namespace.add_setting(
+    default=500,
+    global_name='DAM_YANDEX_DISK_FILE_LIMIT',
+    help_text=_(
+        'Maximum number of files to import per run. Set 0 for unlimited.'
+    )
+)
+
+setting_yandex_disk_client_id = namespace.add_setting(
+    default='',
+    global_name='DAM_YANDEX_DISK_CLIENT_ID',
+    help_text=_(
+        'OAuth application ClientID issued by Yandex.'
+    )
+)
+
+setting_yandex_disk_client_secret = namespace.add_setting(
+    default='',
+    global_name='DAM_YANDEX_DISK_CLIENT_SECRET',
+    help_text=_(
+        'OAuth application Client Secret issued by Yandex.'
+    )
+)
+
+setting_yandex_disk_refresh_token = namespace.add_setting(
+    default='',
+    global_name='DAM_YANDEX_DISK_REFRESH_TOKEN',
+    help_text=_(
+        'Refresh token returned by Yandex OAuth. Used to renew access tokens automatically.'
     )
 )
 

@@ -89,6 +89,7 @@ class DAMApp(MayanAppConfig):
             print(f'🤖 Registering AI providers...')
 
             # Регистрация провайдеров (GigaChat первым как наиболее надежный)
+            AIProviderRegistry.register('qwenlocal', 'mayan.apps.dam.ai_providers.qwen_local.LocalQwenVisionProvider')
             AIProviderRegistry.register('gigachat', 'mayan.apps.dam.ai_providers.gigachat.GigaChatProvider')
             AIProviderRegistry.register('openai', 'mayan.apps.dam.ai_providers.openai.OpenAIProvider')
             AIProviderRegistry.register('claude', 'mayan.apps.dam.ai_providers.claude.ClaudeProvider')

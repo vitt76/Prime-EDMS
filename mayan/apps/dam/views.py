@@ -3,7 +3,9 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
-from django.views.generic import DetailView, ListView, TemplateView, UpdateView
+from django.views.generic import (
+    DetailView, FormView, ListView, TemplateView, UpdateView
+)
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document
@@ -15,14 +17,28 @@ from mayan.apps.views.generics import (
 )
 from mayan.apps.views.mixins import ViewPermissionCheckViewMixin
 
-from .forms import DocumentAIAnalysisForm
+from mayan.apps.smart_settings.classes import Setting
+
+from .forms import DocumentAIAnalysisForm, YandexDiskSettingsForm
 from .icons import icon_dam, icon_ai_analysis_list
 from .models import DocumentAIAnalysis
 from .permissions import (
     permission_ai_analysis_delete, permission_ai_analysis_edit,
     permission_ai_analysis_view
 )
-from .tasks import analyze_document_with_ai
+from .services import exchange_yandex_code_for_token, YandexDiskOAuthError
+from .settings import (
+    setting_yandex_disk_base_path,
+    setting_yandex_disk_cabinet_root_label,
+    setting_yandex_disk_client_id,
+    setting_yandex_disk_client_secret,
+    setting_yandex_disk_document_type_id,
+    setting_yandex_disk_file_limit,
+    setting_yandex_disk_max_file_size,
+    setting_yandex_disk_refresh_token,
+    setting_yandex_disk_token
+)
+from .tasks import analyze_document_with_ai, import_yandex_disk
 
 
 class DocumentAIAnalysisDetailView(SimpleView):
@@ -243,4 +259,90 @@ class DocumentDAMMetadataView(DetailView):
         context['formatted_tags'] = ai_analysis.get_ai_tags_list()
         context['formatted_colors'] = ai_analysis.get_dominant_colors_list()
 
+        return context
+
+
+class YandexDiskSettingsView(ViewPermissionCheckViewMixin, FormView):
+    """
+    Setup screen for Yandex Disk integration and manual import trigger.
+    """
+    form_class = YandexDiskSettingsForm
+    template_name = 'dam/yandex_settings.html'
+    view_permission = permission_ai_analysis_view
+
+    def get_initial(self):
+        max_size_bytes = int(setting_yandex_disk_max_file_size.value or 20 * 1024 * 1024)
+        return {
+            'client_id': setting_yandex_disk_client_id.value,
+            'client_secret': setting_yandex_disk_client_secret.value,
+            'base_path': setting_yandex_disk_base_path.value or 'disk:/',
+            'cabinet_root_label': setting_yandex_disk_cabinet_root_label.value or _('Yandex Disk'),
+            'max_file_size_mb': max(1, int(max_size_bytes / (1024 * 1024))),
+            'file_limit': int(setting_yandex_disk_file_limit.value or 0),
+        }
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['document_type_id'] = setting_yandex_disk_document_type_id.value or None
+        return kwargs
+
+    def form_valid(self, form):
+        cleaned = form.cleaned_data
+        setting_yandex_disk_client_id.value = cleaned['client_id']
+        setting_yandex_disk_client_secret.value = cleaned['client_secret']
+        setting_yandex_disk_base_path.value = cleaned['base_path']
+        setting_yandex_disk_cabinet_root_label.value = cleaned['cabinet_root_label']
+        setting_yandex_disk_document_type_id.value = str(cleaned['document_type'].pk)
+        setting_yandex_disk_max_file_size.value = str(cleaned['max_file_size_mb'])  # Already converted to bytes by form.clean_max_file_size_mb
+        setting_yandex_disk_file_limit.value = str(cleaned.get('file_limit') or 0)
+        Setting.save_configuration()
+
+        auth_code = cleaned.get('authorization_code')
+        if auth_code:
+            try:
+                token_payload = exchange_yandex_code_for_token(
+                    client_id=cleaned['client_id'],
+                    client_secret=cleaned['client_secret'],
+                    code=auth_code
+                )
+            except YandexDiskOAuthError as exc:
+                form.add_error('authorization_code', str(exc))
+                return super().form_invalid(form)
+            else:
+                setting_yandex_disk_token.value = token_payload.get('access_token', '')
+                setting_yandex_disk_refresh_token.value = token_payload.get('refresh_token', '')
+                Setting.save_configuration()
+                messages.success(
+                    self.request,
+                    _('OAuth token refreshed successfully.')
+                )
+
+        action = self.request.POST.get('action', 'save')
+        if action == 'import':
+            import_yandex_disk.delay()
+            messages.success(
+                self.request,
+                _('Import started. Progress will appear in logs once documents are created.')
+            )
+        else:
+            messages.success(self.request, _('Settings saved.'))
+
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('dam:yandex_settings')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        token = setting_yandex_disk_token.value
+        client_id = setting_yandex_disk_client_id.value or ''
+        auth_url = 'https://oauth.yandex.ru/authorize?response_type=code'
+        if client_id:
+            auth_url = f'{auth_url}&client_id={client_id}'
+        context.update({
+            'current_token': token,
+            'has_token': bool(token),
+            'client_id': client_id,
+            'yandex_auth_url': auth_url
+        })
         return context
