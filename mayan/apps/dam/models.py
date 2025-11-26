@@ -231,3 +231,36 @@ class DAMMetadataPreset(models.Model):
 
         mime_type = getattr(document_file, 'mimetype', '')
         return mime_type in self.supported_mime_types
+
+
+class YandexDiskImportRecord(models.Model):
+    """
+    Track imported files from Yandex Disk to avoid duplicates.
+    """
+    path = models.CharField(
+        max_length=1024,
+        unique=True,
+        help_text=_('Full Yandex Disk path of the imported file.'),
+        verbose_name=_('Yandex Disk path')
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name='yandex_disk_records',
+        verbose_name=_('Document')
+    )
+    cabinet = models.ForeignKey(
+        'cabinets.Cabinet',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        verbose_name=_('Cabinet')
+    )
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('Yandex Disk import record')
+        verbose_name_plural = _('Yandex Disk import records')
+
+    def __str__(self):
+        return self.path

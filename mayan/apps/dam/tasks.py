@@ -9,11 +9,14 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
-from mayan.apps.documents.models import Document, DocumentFile
+from mayan.apps.documents.models import Document, DocumentFile, DocumentType
 from mayan.apps.dam import settings as dam_settings
 from mayan.apps.dynamic_search.tasks import task_index_instance
 
 from .models import DocumentAIAnalysis, DAMMetadataPreset
+from .services import (
+    YandexDiskClient, YandexDiskClientError, YandexDiskImporter
+)
 from .ai_providers import AIProviderRegistry
 
 logger = logging.getLogger(__name__)
@@ -258,6 +261,46 @@ def analyze_document_with_ai(self, document_id: int):
             logger.error(f"Max retries exceeded for document {document_id}")
 
 
+@shared_task(bind=True, queue='documents')
+def import_yandex_disk(self):
+    """
+    Trigger one-off import from Yandex Disk into Cabinets/Documents.
+    """
+    token = dam_settings.setting_yandex_disk_token.value
+    if not token:
+        logger.warning('Yandex Disk token is not configured, aborting import.')
+        return
+
+    document_type_id = dam_settings.setting_yandex_disk_document_type_id.value
+    document_type = None
+    if document_type_id:
+        document_type = DocumentType.objects.filter(pk=document_type_id).first()
+    if not document_type:
+        document_type = DocumentType.objects.order_by('label').first()
+    if not document_type:
+        logger.error('No document type available for Yandex Disk import.')
+        return
+
+    base_path = dam_settings.setting_yandex_disk_base_path.value or 'disk:/'
+    cabinet_root_label = dam_settings.setting_yandex_disk_cabinet_root_label.value or 'Yandex Disk'
+    max_file_size = int(dam_settings.setting_yandex_disk_max_file_size.value or (20 * 1024 * 1024))
+    file_limit = int(dam_settings.setting_yandex_disk_file_limit.value or 0)
+
+    client = YandexDiskClient(token=token)
+    importer = YandexDiskImporter(
+        client=client,
+        document_type=document_type,
+        base_path=base_path,
+        cabinet_root_label=cabinet_root_label,
+        max_file_size=max_file_size,
+        file_limit=file_limit
+    )
+
+    try:
+        created = importer.run()
+        logger.info('Yandex Disk import finished, documents created: %s', created)
+    except YandexDiskClientError as exc:
+        logger.error('Yandex Disk import failed: %s', exc)
 def get_document_image_data(document_file: DocumentFile) -> bytes:
     """
     Get document image data. For image files, read directly. For documents, use internal generation.

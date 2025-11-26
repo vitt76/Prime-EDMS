@@ -1,6 +1,8 @@
 from django import forms
 from django.utils.translation import ugettext_lazy as _
 
+from mayan.apps.documents.models import DocumentType
+
 from .models import DocumentAIAnalysis
 
 
@@ -79,23 +81,85 @@ class DocumentAIAnalysisForm(forms.ModelForm):
             return [tag.strip() for tag in data.split(',') if tag.strip()]
         return []
 
-    def clean_categories(self):
-        """Convert comma-separated string back to list."""
-        data = self.cleaned_data.get('categories', '')
-        if data:
-            return [cat.strip() for cat in data.split(',') if cat.strip()]
-        return []
 
-    def clean_people(self):
-        """Convert comma-separated string back to list."""
-        data = self.cleaned_data.get('people', '')
-        if data:
-            return [person.strip() for person in data.split(',') if person.strip()]
-        return []
+class YandexDiskSettingsForm(forms.Form):
+    """Form to edit Yandex Disk integration settings."""
+    client_id = forms.CharField(
+        required=True,
+        label=_('Client ID'),
+        help_text=_('Application identifier from Yandex OAuth cabinet.')
+    )
+    client_secret = forms.CharField(
+        required=True,
+        label=_('Client secret'),
+        widget=forms.PasswordInput(render_value=True),
+        help_text=_('Secret issued together with Client ID.')
+    )
+    authorization_code = forms.CharField(
+        required=False,
+        label=_('Verification code'),
+        help_text=_(
+            'Optional. Paste the one-time code from https://oauth.yandex.ru/verification_code '
+            'to exchange it for an access token automatically.'
+        )
+    )
+    base_path = forms.CharField(
+        required=True,
+        label=_('Base path'),
+        help_text=_('Root folder to import, e.g. disk:/ or disk:/media.')
+    )
+    cabinet_root_label = forms.CharField(
+        required=True,
+        label=_('Root cabinet label'),
+        help_text=_('Top-level cabinet that will mirror Yandex Disk structure.')
+    )
+    document_type = forms.ModelChoiceField(
+        required=False,
+        queryset=DocumentType.objects.none(),
+        label=_('Document type'),
+        help_text=_('Document type assigned to imported files. Defaults to the first available type.')
+    )
+    max_file_size_mb = forms.IntegerField(
+        required=True,
+        min_value=1,
+        label=_('Max file size (MB)'),
+        help_text=_('Files larger than this limit will be skipped.')
+    )
+    file_limit = forms.IntegerField(
+        required=False,
+        min_value=0,
+        label=_('Max files per import'),
+        help_text=_('0 means no limit. Prevents accidental bulk imports.')
+    )
 
-    def clean_locations(self):
-        """Convert comma-separated string back to list."""
-        data = self.cleaned_data.get('locations', '')
-        if data:
-            return [loc.strip() for loc in data.split(',') if loc.strip()]
-        return []
+    def __init__(self, *args, **kwargs):
+        document_type_id = kwargs.pop('document_type_id', None)
+        super().__init__(*args, **kwargs)
+        self.fields['document_type'].queryset = DocumentType.objects.order_by('label')
+        if document_type_id:
+            try:
+                self.fields['document_type'].initial = DocumentType.objects.get(pk=document_type_id)
+            except DocumentType.DoesNotExist:
+                pass
+
+    def clean_document_type(self):
+        document_type = self.cleaned_data.get('document_type')
+        if not document_type:
+            document_type = DocumentType.objects.order_by('label').first()
+        if not document_type:
+            raise forms.ValidationError(_('Create at least one document type before importing.'))
+        return document_type
+
+    def clean_max_file_size_mb(self):
+        value = self.cleaned_data['max_file_size_mb']
+        return value * 1024 * 1024
+
+    def clean(self):
+        cleaned = super().clean()
+        code = cleaned.get('authorization_code')
+        if code and (not cleaned.get('client_id') or not cleaned.get('client_secret')):
+            raise forms.ValidationError(
+                _('Provide both Client ID and Client secret to exchange the verification code.')
+            )
+        return cleaned
+
