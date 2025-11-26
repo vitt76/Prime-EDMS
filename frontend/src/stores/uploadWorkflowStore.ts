@@ -12,7 +12,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { uploadService } from '@/services/uploadService'
 import { assetService } from '@/services/assetService'
-import { collectionService } from '@/services/collectionsService'
+import { collectionsService } from '@/services/collectionsService'
 import { shareService } from '@/services/shareService'
 import { useUIStore } from '@/stores/uiStore'
 

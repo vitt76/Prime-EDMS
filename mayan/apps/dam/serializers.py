@@ -343,6 +343,25 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
 
 
 class AnalyzeDocumentSerializer(serializers.Serializer):
+    """
+    Serializer for single document AI analysis request.
+
+    Validates document instance, AI service and analysis type.
+    """
+    document_instance = serializers.PrimaryKeyRelatedField(
+        queryset=Document.objects.all(),
+        help_text="Document to analyze"
+    )
+    ai_service = serializers.ChoiceField(
+        choices=['openai', 'claude', 'azure', 'local'],
+        default='openai',
+        help_text="AI service to use for analysis"
+    )
+    analysis_type = serializers.ChoiceField(
+        choices=['classification', 'extraction', 'summary', 'tagging'],
+        default='classification',
+        help_text="Type of analysis to perform"
+    )
 
 
 class BulkAnalyzeDocumentsSerializer(serializers.Serializer):

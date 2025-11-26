@@ -49,9 +49,19 @@
           {{ errorMessage }}
         </div>
 
-        <button type="submit" class="auth-form__submit" :disabled="isSubmitting || success">
-          <span v-if="success">Password updated! Redirecting…</span>
-          <span v-else>Save new password</span>
+        <div v-if="success" class="auth-form__success auth-form__success--global">
+          Password reset successfully! Redirecting to login...
+        </div>
+
+        <button
+          type="submit"
+          class="auth-form__submit"
+          :disabled="isSubmitting || success"
+          aria-live="polite"
+        >
+          <span v-if="isSubmitting">Resetting password...</span>
+          <span v-else-if="success">Success!</span>
+          <span v-else>Reset password</span>
         </button>
       </form>
     </main>
@@ -59,76 +69,85 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watchEffect } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authService } from '@/services/authService'
 import { formatApiError } from '@/utils/errors'
-import { useUIStore } from '@/stores/uiStore'
 
 const route = useRoute()
 const router = useRouter()
-const uiStore = useUIStore()
 
 const newPassword = ref('')
 const confirmPassword = ref('')
 const passwordError = ref('')
 const errorMessage = ref('')
+const tokenError = ref('')
 const isSubmitting = ref(false)
 const success = ref(false)
-const tokenError = ref('')
-const token = ref<string | null>(null)
-
-watchEffect(() => {
-  const queryToken = route.query.token
-  token.value = typeof queryToken === 'string' ? queryToken : null
-  if (!token.value) {
-    tokenError.value = 'Reset token is missing. Please request a new link.'
-  } else {
-    tokenError.value = ''
-  }
-})
+let redirectTimer: ReturnType<typeof setTimeout> | null = null
 
 const validatePasswords = (): boolean => {
   passwordError.value = ''
-  if (!newPassword.value || newPassword.value.length < 8) {
-    passwordError.value = 'Password must be at least 8 characters.'
+  errorMessage.value = ''
+
+  if (!newPassword.value) {
+    passwordError.value = 'Password is required'
     return false
   }
+
+  if (newPassword.value.length < 8) {
+    passwordError.value = 'Password must be at least 8 characters long'
+    return false
+  }
+
+  if (!confirmPassword.value) {
+    passwordError.value = 'Please confirm your password'
+    return false
+  }
+
   if (newPassword.value !== confirmPassword.value) {
-    passwordError.value = 'Passwords do not match.'
+    passwordError.value = 'Passwords do not match'
     return false
   }
+
   return true
 }
 
 const handleSubmit = async (): Promise<void> => {
-  if (!token.value || !validatePasswords()) {
+  if (!validatePasswords()) {
     return
   }
+
   isSubmitting.value = true
   errorMessage.value = ''
 
   try {
-    await authService.resetPassword({
-      token: token.value,
-      newPassword: newPassword.value,
-      confirmPassword: confirmPassword.value
-    })
+    const token = route.params.token as string
+    if (!token) {
+      tokenError.value = 'Invalid reset link'
+      return
+    }
+
+    await authService.resetPassword(token, newPassword.value)
     success.value = true
-    uiStore.addNotification({
-      type: 'success',
-      title: 'Password reset',
-      message: 'Your password has been updated. Redirecting to login.'
-    })
-    setTimeout(() => {
-      router.push({ name: 'login', query: { resetSuccess: 'true' } })
-    }, 1200)
+
+    // Redirect to login after success
+    redirectTimer = setTimeout(() => {
+      router.push('/auth/login')
+    }, 3000)
+
   } catch (err) {
     errorMessage.value = formatApiError(err)
   } finally {
     isSubmitting.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  if (redirectTimer) {
+    clearTimeout(redirectTimer)
+  }
+})
 </script>
 
 <style scoped>
@@ -143,7 +162,7 @@ const handleSubmit = async (): Promise<void> => {
 
 .auth-card {
   width: 100%;
-  max-width: 460px;
+  max-width: 420px;
   background: #fff;
   padding: 32px;
   border-radius: 16px;
@@ -157,15 +176,8 @@ const handleSubmit = async (): Promise<void> => {
 }
 
 .auth-card__description {
-  margin: 0 0 20px;
+  margin: 0 0 24px;
   color: #4b5563;
-}
-
-.auth-link {
-  display: inline-block;
-  margin-top: 4px;
-  color: var(--color-primary, #2563eb);
-  text-decoration: underline;
 }
 
 .auth-form {
@@ -193,7 +205,7 @@ const handleSubmit = async (): Promise<void> => {
 .auth-form__helper {
   font-size: 0.875rem;
   color: #6b7280;
-  margin: 2px 0 4px;
+  margin: 4px 0 0;
 }
 
 .auth-form__error {
@@ -202,11 +214,21 @@ const handleSubmit = async (): Promise<void> => {
 }
 
 .auth-form__error--global {
-  margin-bottom: 12px;
+  margin-top: 12px;
+}
+
+.auth-form__success {
+  color: #16a34a;
+  font-weight: 500;
+}
+
+.auth-form__success--global {
+  margin-top: 16px;
+  text-align: center;
 }
 
 .auth-form__submit {
-  margin-top: 12px;
+  margin-top: 16px;
   padding: 12px;
   border: none;
   border-radius: 8px;
@@ -222,482 +244,16 @@ const handleSubmit = async (): Promise<void> => {
   opacity: 0.6;
   cursor: not-allowed;
 }
-</style>
-<template>
-  <div class="auth-page">
-    <div class="auth-page__container">
-      <div class="auth-page__header">
-        <h1 class="auth-page__title">Reset Password</h1>
-        <p v-if="!tokenValid" class="auth-page__subtitle">
-          This reset link is invalid or has expired.
-        </p>
-        <p v-else class="auth-page__subtitle">
-          Enter your new password below
-        </p>
-      </div>
 
-      <div v-if="!tokenValid" class="auth-page__invalid-token">
-        <p class="invalid-token__message">
-          The password reset link is invalid or has expired. Please request a new one.
-        </p>
-        <Button variant="primary" @click="handleRequestNewLink">
-          Request New Link
-        </Button>
-      </div>
-
-      <form v-else @submit.prevent="handleSubmit" class="auth-page__form">
-        <div class="form-group">
-          <Input
-            v-model="password"
-            type="password"
-            label="New Password"
-            placeholder="Enter new password"
-            required
-            :error="errors.password"
-            :disabled="isSubmitting"
-            autocomplete="new-password"
-            @input="checkPasswordStrength"
-          />
-        </div>
-
-        <div v-if="password" class="password-strength">
-          <div class="password-strength__indicator">
-            <div
-              :class="[
-                'password-strength__bar',
-                `password-strength__bar--${passwordStrength}`
-              ]"
-              :style="{ width: `${passwordStrengthPercent}%` }"
-            />
-          </div>
-          <p class="password-strength__label">
-            Strength: {{ passwordStrengthLabel }}
-          </p>
-        </div>
-
-        <div v-if="password" class="password-requirements">
-          <p class="password-requirements__title">Password must contain:</p>
-          <ul class="password-requirements__list">
-            <li
-              :class="[
-                'password-requirements__item',
-                {
-                  'password-requirements__item--met': passwordMeets.length >= 8
-                }
-              ]"
-            >
-              At least 8 characters
-            </li>
-            <li
-              :class="[
-                'password-requirements__item',
-                {
-                  'password-requirements__item--met': passwordMeets.uppercase
-                }
-              ]"
-            >
-              One uppercase letter
-            </li>
-            <li
-              :class="[
-                'password-requirements__item',
-                {
-                  'password-requirements__item--met': passwordMeets.lowercase
-                }
-              ]"
-            >
-              One lowercase letter
-            </li>
-            <li
-              :class="[
-                'password-requirements__item',
-                {
-                  'password-requirements__item--met': passwordMeets.number
-                }
-              ]"
-            >
-              One number
-            </li>
-            <li
-              :class="[
-                'password-requirements__item',
-                {
-                  'password-requirements__item--met': passwordMeets.special
-                }
-              ]"
-            >
-              One special character
-            </li>
-          </ul>
-        </div>
-
-        <div class="form-group">
-          <Input
-            v-model="passwordConfirm"
-            type="password"
-            label="Confirm Password"
-            placeholder="Confirm new password"
-            required
-            :error="errors.password_confirm"
-            :disabled="isSubmitting"
-            autocomplete="new-password"
-          />
-        </div>
-
-        <div v-if="errorMessage" class="alert alert--error">
-          <p>{{ errorMessage }}</p>
-        </div>
-
-        <Button
-          type="submit"
-          variant="primary"
-          :loading="isSubmitting"
-          :disabled="!isFormValid"
-          class="auth-page__submit"
-        >
-          Reset Password
-        </Button>
-      </form>
-
-      <div class="auth-page__footer">
-        <p class="auth-page__footer-text">
-          Remember your password?
-          <router-link to="/login" class="auth-page__link">
-            Back to Login
-          </router-link>
-        </p>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { authService } from '@/services/authService'
-import Input from '@/components/Common/Input.vue'
-import Button from '@/components/Common/Button.vue'
-
-const router = useRouter()
-const route = useRoute()
-
-const token = computed(() => route.params.token as string)
-const password = ref('')
-const passwordConfirm = ref('')
-const isSubmitting = ref(false)
-const tokenValid = ref(false)
-const isValidatingToken = ref(true)
-const errorMessage = ref('')
-const errors = reactive<{ password?: string; password_confirm?: string }>({})
-
-const passwordMeets = reactive({
-  length: false,
-  uppercase: false,
-  lowercase: false,
-  number: false,
-  special: false
-})
-
-const passwordStrength = computed<'weak' | 'medium' | 'strong'>(() => {
-  const metCount = Object.values(passwordMeets).filter(Boolean).length
-  if (metCount < 3) return 'weak'
-  if (metCount < 5) return 'medium'
-  return 'strong'
-})
-
-const passwordStrengthPercent = computed(() => {
-  const metCount = Object.values(passwordMeets).filter(Boolean).length
-  return (metCount / 5) * 100
-})
-
-const passwordStrengthLabel = computed(() => {
-  return passwordStrength.value.charAt(0).toUpperCase() + passwordStrength.value.slice(1)
-})
-
-const isFormValid = computed(() => {
-  return (
-    password.value.length >= 8 &&
-    passwordMeets.uppercase &&
-    passwordMeets.lowercase &&
-    passwordMeets.number &&
-    passwordMeets.special &&
-    password.value === passwordConfirm.value
-  )
-})
-
-const checkPasswordStrength = (): void => {
-  passwordMeets.length = password.value.length >= 8
-  passwordMeets.uppercase = /[A-Z]/.test(password.value)
-  passwordMeets.lowercase = /[a-z]/.test(password.value)
-  passwordMeets.number = /[0-9]/.test(password.value)
-  passwordMeets.special = /[^A-Za-z0-9]/.test(password.value)
-}
-
-const validateToken = async (): Promise<void> => {
-  isValidatingToken.value = true
-  try {
-    await authService.validateResetToken(token.value)
-    tokenValid.value = true
-  } catch (error: any) {
-    tokenValid.value = false
-    if (error.response?.status === 400 || error.response?.status === 404) {
-      errorMessage.value = 'This reset link is invalid or has expired.'
-    }
-  } finally {
-    isValidatingToken.value = false
-  }
-}
-
-const validate = (): boolean => {
-  Object.keys(errors).forEach((key) => delete errors[key as keyof typeof errors])
-  errorMessage.value = ''
-
-  if (!password.value) {
-    errors.password = 'Password is required'
-    return false
-  }
-
-  if (password.value.length < 8) {
-    errors.password = 'Password must be at least 8 characters'
-    return false
-  }
-
-  if (!passwordMeets.uppercase || !passwordMeets.lowercase || !passwordMeets.number || !passwordMeets.special) {
-    errors.password = 'Password does not meet requirements'
-    return false
-  }
-
-  if (!passwordConfirm.value) {
-    errors.password_confirm = 'Please confirm your password'
-    return false
-  }
-
-  if (password.value !== passwordConfirm.value) {
-    errors.password_confirm = 'Passwords do not match'
-    return false
-  }
-
-  return true
-}
-
-const handleSubmit = async (): Promise<void> => {
-  if (!validate()) return
-
-  isSubmitting.value = true
-  errorMessage.value = ''
-
-  try {
-    await authService.resetPassword(token.value, password.value, passwordConfirm.value)
-    // Redirect to login with success message
-    router.push({
-      name: 'login',
-      query: { message: 'Password reset successfully. Please log in with your new password.' }
-    })
-  } catch (error: any) {
-    if (error.response?.status === 400) {
-      errorMessage.value = error.response.data?.message || 'Invalid request. Please check your input.'
-    } else if (error.response?.status === 404) {
-      errorMessage.value = 'This reset link is invalid or has expired.'
-      tokenValid.value = false
-    } else {
-      errorMessage.value = 'An error occurred. Please try again.'
-    }
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-const handleRequestNewLink = (): void => {
-  router.push({ name: 'forgot-password' })
-}
-
-onMounted(async () => {
-  if (token.value) {
-    await validateToken()
-  } else {
-    tokenValid.value = false
-    isValidatingToken.value = false
-  }
-})
-</script>
-
-<style scoped lang="css">
-.auth-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: var(--color-bg-1, #f9fafb);
-}
-
-.auth-page__container {
-  width: 100%;
-  max-width: 400px;
-  background: var(--color-surface, #ffffff);
-  border-radius: var(--radius-lg, 8px);
-  padding: 32px;
-  box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.1));
-}
-
-.auth-page__header {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.auth-page__title {
-  font-size: var(--font-size-2xl, 24px);
-  font-weight: 600;
-  color: var(--color-text, #111827);
-  margin-bottom: 8px;
-}
-
-.auth-page__subtitle {
-  font-size: var(--font-size-base, 14px);
-  color: var(--color-text-secondary, #6b7280);
-  line-height: 1.5;
-}
-
-.auth-page__invalid-token {
-  text-align: center;
-  padding: 24px;
-}
-
-.invalid-token__message {
-  font-size: var(--font-size-base, 14px);
-  color: var(--color-text-secondary, #6b7280);
-  margin-bottom: 16px;
-}
-
-.auth-page__form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.password-strength {
-  margin-top: -8px;
-}
-
-.password-strength__indicator {
-  height: 4px;
-  background: var(--color-border, #e5e7eb);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
-
-.password-strength__bar {
-  height: 100%;
-  transition: width 200ms ease, background-color 200ms ease;
-}
-
-.password-strength__bar--weak {
-  background: var(--color-error, #ef4444);
-}
-
-.password-strength__bar--medium {
-  background: var(--color-warning, #f59e0b);
-}
-
-.password-strength__bar--strong {
-  background: var(--color-success, #10b981);
-}
-
-.password-strength__label {
-  font-size: var(--font-size-xs, 11px);
-  color: var(--color-text-secondary, #6b7280);
-  margin: 0;
-}
-
-.password-requirements {
-  padding: 12px;
-  background: var(--color-bg-1, #f9fafb);
-  border-radius: var(--radius-base, 6px);
-}
-
-.password-requirements__title {
-  font-size: var(--font-size-sm, 12px);
-  font-weight: 500;
-  color: var(--color-text, #111827);
-  margin-bottom: 8px;
-}
-
-.password-requirements__list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.password-requirements__item {
-  font-size: var(--font-size-xs, 11px);
-  color: var(--color-text-secondary, #6b7280);
-  padding-left: 20px;
-  position: relative;
-}
-
-.password-requirements__item::before {
-  content: '✗';
-  position: absolute;
-  left: 0;
-  color: var(--color-error, #ef4444);
-}
-
-.password-requirements__item--met {
-  color: var(--color-success, #10b981);
-}
-
-.password-requirements__item--met::before {
-  content: '✓';
-  color: var(--color-success, #10b981);
-}
-
-.alert {
-  padding: 12px;
-  border-radius: var(--radius-base, 6px);
-  font-size: var(--font-size-sm, 12px);
-}
-
-.alert--error {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--color-error, #ef4444);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.auth-page__submit {
-  width: 100%;
+.auth-link {
+  display: block;
   margin-top: 8px;
-}
-
-.auth-page__footer {
-  margin-top: 24px;
-  text-align: center;
-}
-
-.auth-page__footer-text {
-  font-size: var(--font-size-sm, 12px);
-  color: var(--color-text-secondary, #6b7280);
-}
-
-.auth-page__link {
-  color: var(--color-primary, #3b82f6);
+  color: var(--color-primary, #2563eb);
   text-decoration: none;
-  font-weight: 500;
+  font-size: 0.875rem;
 }
 
-.auth-page__link:hover {
+.auth-link:hover {
   text-decoration: underline;
 }
 </style>
-
-
-

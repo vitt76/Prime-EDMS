@@ -1,0 +1,89 @@
+{% load i18n %}
+{% load static %}
+
+{% load appearance_tags %}
+{% load common_tags %}
+{% load navigation_tags %}
+{% load smart_settings_tags %}
+{% load templating_tags %}
+
+{% spaceless %}
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="csrf-token" content="{{ csrf_token }}" />
+    <title>{% block title %}DAM System - Digital Asset Management{% endblock %}</title>
+
+    <!-- Mayan EDMS styles and scripts -->
+    {% include 'appearance/partials/head.html' %}
+
+    <!-- Vue SPA styles -->
+    <link rel="stylesheet" crossorigin href="{% static 'assets/index-CLeJ6RU3.css' %}">
+
+    <!-- Custom styles for SPA integration -->
+    <style>
+        /* Hide Mayan navigation for SPA pages */
+        .navbar, .sidebar, .breadcrumb {
+            display: none !important;
+        }
+
+        /* Full height layout for SPA */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        #app {
+            min-height: 100vh;
+        }
+
+        /* Override Mayan layout constraints */
+        .container-fluid, .row {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Vue SPA root element -->
+    <div id="app"></div>
+
+    <!-- Mayan EDMS scripts and initialization -->
+    {% include 'appearance/partials/javascript.html' %}
+
+    <!-- Vue SPA scripts -->
+    <script type="module" crossorigin src="{% static 'assets/index-Bkz-5-QE.js' %}"></script>
+    <link rel="modulepreload" crossorigin href="{% static 'assets/vue-vendor-FOQ7SlVG.js' %}">
+    <link rel="modulepreload" crossorigin href="{% static 'assets/utils-vendor-C6ZCcsv1.js' %}">
+
+    <!-- SPA initialization script -->
+    <script>
+        // Initialize SPA with Django context
+        window.DJANGO_CONTEXT = {
+            csrf_token: '{{ csrf_token }}',
+            user: {
+                id: '{{ user.id }}',
+                username: '{{ user.username }}',
+                is_authenticated: {% if user.is_authenticated %}true{% else %}false{% endif %},
+                permissions: {{ user_permissions|default:'[]'|safe }}
+            },
+            urls: {
+                api_base: '/api/v4/',
+                login: '/auth/login/',
+                logout: '/auth/logout/'
+            }
+        };
+
+        // Override navigation for SPA mode
+        if (typeof app !== 'undefined') {
+            app.afterBaseLoad({'djangoMessages': []});
+        }
+    </script>
+</body>
+</html>
+
+{% endspaceless %}

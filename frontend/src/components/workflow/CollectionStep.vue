@@ -211,7 +211,7 @@ import Spinner from '@/components/Common/Spinner.vue'
 import Modal from '@/components/Common/Modal.vue'
 import CollectionTreeNode from '@/components/workflow/CollectionTreeNode.vue'
 import { useUploadWorkflowStore, type Collection } from '@/stores/uploadWorkflowStore'
-import { collectionService } from '@/services/collectionsService'
+import { collectionsService } from '@/services/collectionsService'
 
 // Props
 const props = defineProps<{

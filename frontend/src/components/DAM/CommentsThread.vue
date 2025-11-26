@@ -110,7 +110,6 @@ import { formatRelativeTime } from '@/utils/formatters'
 import Button from '@/components/Common/Button.vue'
 import CommentItem from './CommentItem.vue'
 import { useAuthStore } from '@/stores/authStore'
-import { onMounted, onUnmounted } from 'vue'
 
 interface Props {
   assetId: number

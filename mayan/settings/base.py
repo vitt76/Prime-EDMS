@@ -369,14 +369,14 @@ LOGGING = {
             'backupCount': 5,
             'formatter': 'json',
         },
-        'ai_analysis': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': 'logs/ai_analysis.log',
-            'maxBytes': 1024 * 1024 * 10,
-            'backupCount': 10,
-            'formatter': 'json',
-        },
+        # 'ai_analysis': {
+        #     'level': 'INFO',
+        #     'class': 'logging.handlers.RotatingFileHandler',
+        #     'filename': 'logs/ai_analysis.log',
+        #     'maxBytes': 1024 * 1024 * 10,
+        #     'backupCount': 10,
+        #     'formatter': 'json',
+        # },
         'null': {
             'class': 'logging.NullHandler',
         },
@@ -398,7 +398,7 @@ LOGGING = {
             'propagate': False,
         },
         'mayan.apps.dam': {
-            'handlers': ['console', 'file', 'ai_analysis'],
+            'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
         },

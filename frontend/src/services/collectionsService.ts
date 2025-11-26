@@ -336,4 +336,4 @@ class CollectionsService {
   }
 }
 
-export const collectionService = new CollectionsService()
+export const collectionsService = new CollectionsService()
