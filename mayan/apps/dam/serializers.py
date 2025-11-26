@@ -1,10 +1,27 @@
+import logging
+from typing import Any, Dict, List
+
+from django.conf import settings
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils.translation import ugettext_lazy as _
 
 from rest_framework import serializers
 
+from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document
+from mayan.apps.documents.models.document_version_models import DocumentVersion
+from mayan.apps.documents.permissions import (
+    permission_document_edit, permission_document_file_download,
+    permission_document_trash, permission_document_view
+)
+from mayan.apps.documents.serializers.document_serializers import DocumentSerializer
+from mayan.apps.metadata.permissions import permission_document_metadata_edit
+from mayan.apps.permissions.models import Permission
 
 from .models import DocumentAIAnalysis, DAMMetadataPreset
+from .permissions import permission_ai_analysis_view
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentAIAnalysisSerializer(serializers.ModelSerializer):
@@ -171,6 +188,119 @@ class DAMDocumentListSerializer(serializers.ModelSerializer):
         return categories[:5]
 
 
+class MetadataFieldSerializer(serializers.Serializer):
+    """Serializer for a single metadata entry."""
+
+    key = serializers.CharField()
+    value = serializers.CharField(allow_blank=True, allow_null=True)
+    metadata_type = serializers.CharField()
+    metadata_type_label = serializers.CharField()
+    lookup = serializers.CharField(allow_blank=True, allow_null=True)
+
+
+class DocumentVersionSummarySerializer(serializers.ModelSerializer):
+    """Minimal summary of a document version history entry."""
+
+    class Meta:
+        model = DocumentVersion
+        fields = ('id', 'timestamp', 'comment', 'active')
+        read_only_fields = ('id', 'timestamp', 'comment', 'active')
+
+
+class DAMDocumentDetailSerializer(serializers.Serializer):
+    """
+    Detailed representation of a DAM document replacing the previous HTML blob.
+    """
+
+    document = DocumentSerializer(read_only=True)
+    ai_analysis = DocumentAIAnalysisSerializer(read_only=True)
+    tags = serializers.SerializerMethodField()
+    metadata = serializers.SerializerMethodField()
+    versions = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
+
+    def get_tags(self, obj: Dict[str, Any]) -> List[str]:
+        """Return document tags if available."""
+        document = obj.get('document')
+        if not document:
+            return []
+
+        try:
+            return list(document.tags.values_list('label', flat=True))
+        except AttributeError:
+            return []
+
+    def get_metadata(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Return structured metadata entries for the document."""
+        document = obj.get('document')
+        if not document:
+            return []
+
+        entries = []
+        for metadata in document.metadata.select_related('metadata_type').all():
+            metadata_type = metadata.metadata_type
+            if not metadata_type:
+                continue
+
+            entries.append({
+                'key': metadata_type.name,
+                'metadata_type': metadata_type.name,
+                'metadata_type_label': metadata_type.label,
+                'value': metadata.value,
+                'lookup': metadata_type.lookup or ''
+            })
+
+        return MetadataFieldSerializer(
+            entries, many=True, context=self.context
+        ).data
+
+    def get_versions(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Return the most recent document versions."""
+        document = obj.get('document')
+        if not document:
+            return []
+
+        versions_qs = document.versions.all().order_by('-timestamp')[:5]
+        return DocumentVersionSummarySerializer(
+            versions_qs, many=True, context=self.context
+        ).data
+
+    def get_permissions(self, obj: Dict[str, Any]) -> Dict[str, bool]:
+        """Return actionability flags based on ACLs."""
+        document = obj.get('document')
+        if not document:
+            return {}
+
+        request = self.context.get('request')
+        if not request:
+            return {}
+
+        user = request.user
+        permission_map = {
+            'can_view': permission_document_view,
+            'can_download': permission_document_file_download,
+            'can_edit': permission_document_edit,
+            'can_delete': permission_document_trash,
+            'can_edit_metadata': permission_document_metadata_edit,
+            'can_view_analysis': permission_ai_analysis_view,
+        }
+
+        return {
+            key: self._check_permission(user, document, permission)
+            for key, permission in permission_map.items()
+        }
+
+    @staticmethod
+    def _check_permission(user, document, permission) -> bool:
+        """Check if the user can perform the given permission."""
+        try:
+            return AccessControlList.objects.check_access(
+                obj=document, permissions=(permission,), user=user
+            )
+        except Exception:
+            return False
+
+
 class AnalyzeDocumentSerializer(serializers.Serializer):
     """
     Serializer for triggering single document analysis.
@@ -180,13 +310,157 @@ class AnalyzeDocumentSerializer(serializers.Serializer):
         queryset=Document.objects.all(),
         source='document_instance'
     )
+    ai_service = serializers.CharField(
+        help_text=_('Preferred AI service (openai, claude, etc.).'),
+        default='openai',
+        required=False,
+        allow_blank=False
+    )
+    analysis_type = serializers.CharField(
+        help_text=_('Analysis type (classification, extraction, etc.).'),
+        default='classification',
+        required=False
+    )
 
 
 class BulkAnalyzeDocumentsSerializer(serializers.Serializer):
     """
-    Serializer for triggering analysis of multiple documents.
+    Serializer for bulk AI analysis of multiple documents.
+
+    Validates batch size, permissions, AI service configuration and analysis type.
     """
+
+    MAX_BULK_SIZE = 100
+    ALLOWED_AI_SERVICES = ['openai', 'claude', 'azure', 'local']
+
     document_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
+        help_text=_('List of document IDs to analyze'),
         allow_empty=False
     )
+    ai_service = serializers.ChoiceField(
+        choices=ALLOWED_AI_SERVICES,
+        default='openai',
+        help_text=_('AI service to use for analysis')
+    )
+    analysis_type = serializers.CharField(
+        max_length=50,
+        default='classification',
+        help_text=_('Type of analysis (classification, extraction, etc)')
+    )
+
+    def _get_request_user(self):
+        request = self.context.get('request')
+        if not request or not getattr(request, 'user', None):
+            raise ValidationError(_('User not authenticated'))
+        user = request.user
+        if not user.is_authenticated:
+            raise ValidationError(_('User not authenticated'))
+        return user
+
+    def validate_document_ids(self, value: list) -> list:
+        if not value:
+            raise ValidationError(_('At least one document_id is required'))
+
+        if len(value) > self.MAX_BULK_SIZE:
+            raise ValidationError(
+                _(
+                    'Too many documents. Maximum %(limit)s allowed, got %(count)s. '
+                    'Split into smaller requests.'
+                ),
+                params={'limit': self.MAX_BULK_SIZE, 'count': len(value)}
+            )
+
+        if len(value) != len(set(value)):
+            raise ValidationError(_('Duplicate document IDs provided'))
+
+        documents = Document.objects.filter(pk__in=value)
+        found_ids = set(documents.values_list('id', flat=True))
+        missing_ids = set(value) - found_ids
+
+        if missing_ids:
+            raise ValidationError(
+                _('Documents not found: %(missing)s') % {'missing': sorted(missing_ids)}
+            )
+
+        user = self._get_request_user()
+
+        try:
+            permission_analyze = Permission.objects.get(codename='dam_analyze')
+        except Permission.DoesNotExist:
+            raise ValidationError(_('Permission configuration error: dam_analyze not found'))
+
+        unauthorized_ids = []
+        for document in documents:
+            try:
+                AccessControlList.objects.check_access(
+                    obj=document,
+                    permissions=(permission_analyze,),
+                    user=user
+                )
+            except PermissionDenied:
+                unauthorized_ids.append(document.id)
+
+        if unauthorized_ids:
+            raise ValidationError(
+                _(
+                    'Permission denied for documents %(ids)s. '
+                    'You can only analyze documents you have access to.'
+                ),
+                params={'ids': unauthorized_ids}
+            )
+
+        return value
+
+    def validate_ai_service(self, value: str) -> str:
+        if value not in self.ALLOWED_AI_SERVICES:
+            raise ValidationError(
+                _('Invalid AI service %(value)s. Allowed: %(choices)s') % {
+                    'value': value,
+                    'choices': ', '.join(self.ALLOWED_AI_SERVICES)
+                }
+            )
+
+        ai_config = getattr(settings, 'DAM_AI_SERVICES', {})
+        if value not in ai_config:
+            raise ValidationError(
+                _('AI service %(value)s not configured. Available: %(available)s') % {
+                    'value': value,
+                    'available': ', '.join(ai_config.keys() or [])
+                }
+            )
+
+        service_config = ai_config.get(value, {})
+        if not service_config.get('enabled', False):
+            raise ValidationError(_('AI service %(value)s is disabled') % {'value': value})
+
+        return value
+
+    def validate_analysis_type(self, value: str) -> str:
+        allowed_types = ['classification', 'extraction', 'summarization', 'tagging']
+        if value not in allowed_types:
+            raise ValidationError(
+                _('Invalid analysis_type %(value)s. Allowed: %(choices)s') % {
+                    'value': value,
+                    'choices': ', '.join(allowed_types)
+                }
+            )
+        return value
+
+    def validate(self, data):
+        if 'document_ids' not in data:
+            raise ValidationError(_('document_ids is required'))
+
+        user = self._get_request_user()
+
+        logger.info(
+            'Bulk AI analysis request',
+            extra={
+                'user_id': user.id,
+                'doc_count': len(data['document_ids']),
+                'ai_service': data.get('ai_service'),
+                'analysis_type': data.get('analysis_type')
+            }
+        )
+
+        return data

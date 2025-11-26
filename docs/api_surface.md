@@ -117,7 +117,7 @@
 | Путь | Назначение |
 | --- | --- |
 | `/documents/` | Лента документов с данными AI (`DAMDocumentListSerializer`). Фильтры `q`, `page`. |
-| `/document-detail/<document_id>/` | Возвращает HTML‑фрагмент (`dam/ajax_document_dam.html`) — можно игнорировать в SPA. |
+| `/document-detail/<document_id>/` | Возвращает JSON с `DocumentSerializer`, `DocumentAIAnalysisSerializer`, тегами, метаданными, версиями и правами доступа — HTML больше не отдаётся (см. описание ниже). |
 | `/ai-analysis/` | `ModelViewSet` для `DocumentAIAnalysis`. |
 | `/ai-analysis/analyze/` | Запуск анализа (`{"document_id": ...}`), enqueues `analyze_document_with_ai`. |
 | `/ai-analysis/<pk>/reanalyze/`, `/bulk_analyze/` | Повтор/массовый запуск. |
@@ -129,6 +129,45 @@
 1. `post_save` сигнала `DocumentFile` → `trigger_ai_analysis`.
 2. Celery задача `analyze_document_with_ai(document_id)` (очередь `documents`).
 3. Результаты записываются в `DocumentAIAnalysis`, документ обновляет метаданные/теги.
+
+### DAM document detail response
+
+`GET /digital-assets/api/document-detail/<document_id>/` теперь возвращает JSON (вместо HTML) со следующей структурой:
+
+```json
+{
+  "document": { /* DocumentSerializer */ },
+  "ai_analysis": { /* DocumentAIAnalysisSerializer */ },
+  "tags": ["tag1", "tag2"],
+  "metadata": [
+    {
+      "key": "priority",
+      "metadata_type": "priority",
+      "metadata_type_label": "Priority",
+      "value": "high",
+      "lookup": ""
+    }
+  ],
+  "versions": [
+    {
+      "id": 42,
+      "timestamp": "2025-11-26T08:00:00Z",
+      "comment": "Initial upload",
+      "active": true
+    }
+  ],
+  "permissions": {
+    "can_view": true,
+    "can_download": true,
+    "can_edit": false,
+    "can_delete": false,
+    "can_edit_metadata": true,
+    "can_view_analysis": true
+  }
+}
+```
+
+Поле `metadata` состоит из объектов `{ key, metadata_type, metadata_type_label, value, lookup }`, `versions` содержит до пяти последних версий, `permissions` сообщает, какие действия доступны текущему пользователю. При отсутствии AI-анализа создаётся запись в статусе `pending`.
 
 ### Поддерживаемые AI провайдеры
 - GigaChat, OpenAI, Claude, Gemini, YandexGPT — описаны ранее.

@@ -59,3 +59,5 @@ export function getOptimalImageSize(viewportWidth: number): number {
   return 300 // mobile
 }
 
+
+

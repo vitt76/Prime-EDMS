@@ -4,7 +4,8 @@ import type {
   CreatePublicationRequest,
   UpdatePublicationRequest,
   PaginatedResponse,
-  ShareLink
+  ShareLink,
+  PublicationAnalytics
 } from '@/types/api'
 
 class DistributionService {
@@ -32,11 +33,17 @@ class DistributionService {
       queryParams.search = params.search
     }
 
-    return apiService.get<PaginatedResponse<Publication>>(
-      '/v4/distribution/publications/',
-      { params: queryParams },
-      false // Don't cache publication lists
-    )
+    const searchParams = new URLSearchParams()
+    Object.entries(queryParams).forEach(([key, value]) => {
+      searchParams.append(key, String(value))
+    })
+
+    const endpoint =
+      searchParams.toString().length > 0
+        ? `/v4/distribution/publications/?${searchParams}`
+        : '/v4/distribution/publications/'
+
+    return apiService.get<PaginatedResponse<Publication>>(endpoint, undefined, false)
   }
 
   /**
@@ -141,6 +148,51 @@ class DistributionService {
       '/v4/distribution/channels/'
     )
     return response.results || []
+  }
+
+  /**
+   * Get analytics for a publication
+   */
+  async getPublicationAnalytics(publicationId: number): Promise<PublicationAnalytics> {
+    return apiService.get<PublicationAnalytics>(
+      `/v4/distribution/publications/${publicationId}/analytics/`,
+      undefined,
+      true // Cache analytics for 5 minutes
+    )
+  }
+
+  /**
+   * Get public publication using token (portal access)
+   */
+  async getPublicationByToken(token: string): Promise<Publication> {
+    return apiService.get<Publication>(
+      `/v4/distribution/publications/portal/${token}/`,
+      undefined,
+      false
+    )
+  }
+
+  /**
+   * Track a view for the public publication
+   */
+  async trackPublicView(token: string): Promise<void> {
+    await apiService.post<void>(
+      `/v4/distribution/publications/portal/${token}/events/`,
+      { event: 'view' }
+    )
+  }
+
+  /**
+   * Track a download for a public asset
+   */
+  async trackPublicDownload(token: string, assetId?: number): Promise<void> {
+    await apiService.post<void>(
+      `/v4/distribution/publications/portal/${token}/events/`,
+      {
+        event: 'download',
+        asset_id: assetId
+      }
+    )
   }
 }
 

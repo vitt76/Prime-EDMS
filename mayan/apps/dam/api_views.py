@@ -1,5 +1,11 @@
-from django.core.exceptions import PermissionDenied
+import logging
+from datetime import timedelta
+from uuid import uuid4
+
+from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db.models import Count
+from django.utils import timezone
 
 from rest_framework import generics, status
 from rest_framework.decorators import action
@@ -13,15 +19,18 @@ from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.rest_api import generics as mayan_generics
 from mayan.apps.rest_api.pagination import MayanPageNumberPagination
-from mayan.apps.templating.classes import AJAXTemplate
 
 from .models import DocumentAIAnalysis, DAMMetadataPreset
+from .permissions import permission_ai_analysis_create
 from .serializers import (
     AnalyzeDocumentSerializer, BulkAnalyzeDocumentsSerializer,
-    DAMDocumentListSerializer, DAMMetadataPresetSerializer,
-    DocumentAIAnalysisSerializer
+    DAMDocumentDetailSerializer, DAMDocumentListSerializer,
+    DAMMetadataPresetSerializer, DocumentAIAnalysisSerializer
 )
 from .tasks import analyze_document_with_ai
+from .throttles import AIAnalysisThrottle
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentAIAnalysisViewSet(ModelViewSet):
@@ -31,89 +40,289 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
     serializer_class = DocumentAIAnalysisSerializer
     queryset = DocumentAIAnalysis.objects.select_related('document').prefetch_related('document__files')
     renderer_classes = (JSONRenderer,)
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = (AIAnalysisThrottle,)
+
+    def get_document(self, document_id):
+        try:
+            document = Document.objects.get(pk=document_id)
+        except Document.DoesNotExist:
+            logger.warning(
+                'Document not found during AI analysis operation',
+                extra={'user_id': self.request.user.id, 'document_id': document_id}
+            )
+            raise
+
+        AccessControlList.objects.check_access(
+            obj=document,
+            permissions=(permission_document_view,),
+            user=self.request.user
+        )
+
+        return document
+
+    def _assert_analysis_permission(self, document):
+        AccessControlList.objects.check_access(
+            obj=document,
+            permissions=(permission_ai_analysis_create,),
+            user=self.request.user
+        )
 
     @action(detail=False, methods=['post'])
     def analyze(self, request):
-        """
-        Start AI analysis for a specific document.
-        """
+        serializer = AnalyzeDocumentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        document_instance = serializer.validated_data['document_instance']
+        document_id = document_instance.pk
+        ai_service = serializer.validated_data.get('ai_service', 'openai')
+        analysis_type = serializer.validated_data.get('analysis_type', 'classification')
+
         try:
-            serializer = AnalyzeDocumentSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
+            document = self.get_document(document_id)
+            self._assert_analysis_permission(document)
 
-            document = serializer.validated_data['document_instance']
+            if not self._is_analyzable(document):
+                return Response(
+                    {
+                        'error': 'Document type not supported for AI analysis',
+                        'error_code': 'UNSUPPORTED_DOC_TYPE',
+                        'supported_types': ['pdf', 'image', 'docx', 'doc', 'txt']
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            AccessControlList.objects.check_access(
-                obj=document,
-                permissions=(permission_document_view,),
-                user=request.user
+            result = analyze_document_with_ai.delay(document.id)
+
+            logger.info(
+                'AI analysis requested',
+                extra={
+                    'user_id': request.user.id,
+                    'document_id': document_id,
+                    'task_id': result.id,
+                    'ai_service': ai_service,
+                    'analysis_type': analysis_type
+                }
             )
 
-            ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
-                document=document,
-                defaults={'analysis_status': 'pending'}
+            return Response(
+                {
+                    'success': True,
+                    'analysis_id': result.id,
+                    'status': 'pending',
+                    'document_id': document_id,
+                    'created_at': timezone.now().isoformat()
+                },
+                status=status.HTTP_202_ACCEPTED
             )
-
-            # Start analysis
-            analyze_document_with_ai.delay(document.id)
-
-            return Response({
-                'message': f'AI analysis started for document {document.pk}',
-                'analysis_id': ai_analysis.id,
-                'status': 'started'
-            })
 
         except Document.DoesNotExist:
             return Response(
-                {'error': 'Document not found'},
+                {
+                    'error': 'Document not found',
+                    'error_code': 'NOT_FOUND'
+                },
                 status=status.HTTP_404_NOT_FOUND
             )
         except PermissionDenied:
+            logger.warning(
+                'Permission denied during AI analysis request',
+                extra={'user_id': request.user.id, 'document_id': document_id}
+            )
             return Response(
-                {'error': 'Access denied'},
+                {
+                    'error': 'Permission denied',
+                    'error_code': 'PERMISSION_DENIED'
+                },
                 status=status.HTTP_403_FORBIDDEN
             )
-        except Exception as e:
+        except Exception as exc:
+            logger.exception(
+                'Unhandled error while starting AI analysis',
+                extra={'user_id': request.user.id, 'document_id': document_id, 'error': str(exc)}
+            )
             return Response(
-                {'error': str(e)},
+                {
+                    'error': 'Analysis failed',
+                    'error_code': 'ANALYSIS_ERROR',
+                    'detail': str(exc) if settings.DEBUG else 'An error occurred'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def reanalyze(self, request):
+        analysis_id = request.data.get('analysis_id')
+        force = bool(request.data.get('force', False))
+
+        if not analysis_id:
+            return Response(
+                {
+                    'error': 'analysis_id is required',
+                    'error_code': 'MISSING_PARAMETER'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    @action(detail=True, methods=['post'])
-    def reanalyze(self, request, pk=None):
-        """
-        Trigger re-analysis of a document with AI.
-        """
-        ai_analysis = self.get_object()
+        try:
+            previous_analysis = DocumentAIAnalysis.objects.select_related('document').get(pk=analysis_id)
+            document = self.get_document(previous_analysis.document.pk)
+            self._assert_analysis_permission(document)
 
-        # Reset status and trigger analysis
-        ai_analysis.analysis_status = 'pending'
-        ai_analysis.save()
+            if not force and not self._can_reanalyze(previous_analysis):
+                logger.warning(
+                    'Re-analysis rejected due to rate limit',
+                    extra={'user_id': request.user.id, 'analysis_id': analysis_id}
+                )
+                return Response(
+                    {
+                        'error': 'Re-analysis too soon, please wait',
+                        'error_code': 'RATE_LIMITED',
+                        'retry_after': 3600
+                    },
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
 
-        analyze_document_with_ai.delay(ai_analysis.document.id)
+            result = analyze_document_with_ai.delay(document.id)
 
-        return Response({
-            'message': 'AI re-analysis scheduled',
-            'status': 'pending'
-        })
+            logger.info(
+                'AI re-analysis requested',
+                extra={
+                    'user_id': request.user.id,
+                    'document_id': document.id,
+                    'previous_analysis_id': analysis_id,
+                    'new_task_id': result.id
+                }
+            )
 
-    @action(detail=False, methods=['post'])
+            return Response(
+                {
+                    'success': True,
+                    'new_analysis_id': result.id,
+                    'status': 'pending',
+                    'document_id': document.id,
+                    'created_at': timezone.now().isoformat()
+                },
+                status=status.HTTP_202_ACCEPTED
+            )
+
+        except DocumentAIAnalysis.DoesNotExist:
+            return Response(
+                {
+                    'error': 'Analysis not found',
+                    'error_code': 'NOT_FOUND'
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Document.DoesNotExist:
+            return Response(
+                {
+                    'error': 'Document not found',
+                    'error_code': 'NOT_FOUND'
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except PermissionDenied:
+            logger.warning(
+                'Permission denied during AI reanalysis',
+                extra={'user_id': request.user.id, 'analysis_id': analysis_id}
+            )
+            return Response(
+                {
+                    'error': 'Permission denied',
+                    'error_code': 'PERMISSION_DENIED'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        except Exception as exc:
+            logger.exception(
+                'Unhandled error during AI re-analysis',
+                extra={'user_id': request.user.id, 'analysis_id': analysis_id, 'error': str(exc)}
+            )
+            return Response(
+                {
+                    'error': 'Re-analysis failed',
+                    'error_code': 'ANALYSIS_ERROR',
+                    'detail': str(exc) if settings.DEBUG else 'An error occurred'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'], url_path='bulk-analyze')
     def bulk_analyze(self, request):
         """
-        Trigger AI analysis for multiple documents.
+        Start bulk AI analysis for multiple documents.
         """
-        from .tasks import bulk_analyze_documents
-
-        serializer = BulkAnalyzeDocumentsSerializer(data=request.data)
+        serializer = BulkAnalyzeDocumentsSerializer(
+            data=request.data, context={'request': request}
+        )
         serializer.is_valid(raise_exception=True)
-        document_ids = serializer.validated_data['document_ids']
+        validated_data = serializer.validated_data
 
-        bulk_analyze_documents.delay(document_ids)
+        try:
+            from .tasks import bulk_analyze_documents
 
-        return Response({
-            'message': f'AI analysis scheduled for {len(document_ids)} documents',
-            'document_ids': document_ids
-        })
+            bulk_id = str(uuid4())
+            result = bulk_analyze_documents.delay(
+                document_ids=validated_data['document_ids'],
+                ai_service=validated_data['ai_service'],
+                analysis_type=validated_data['analysis_type'],
+                user_id=request.user.id,
+                bulk_id=bulk_id
+            )
+
+            logger.info(
+                'Bulk AI analysis requested',
+                extra={
+                    'user_id': request.user.id,
+                    'bulk_id': bulk_id,
+                    'task_id': result.id,
+                    'doc_count': len(validated_data['document_ids']),
+                    'ai_service': validated_data['ai_service'],
+                    'analysis_type': validated_data['analysis_type']
+                }
+            )
+
+            return Response(
+                {
+                    'success': True,
+                    'bulk_analysis_id': bulk_id,
+                    'document_count': len(validated_data['document_ids']),
+                    'status': 'pending',
+                    'ai_service': validated_data['ai_service'],
+                    'created_at': timezone.now().isoformat(),
+                    'message': 'Bulk analysis started. Results will be available shortly.'
+                },
+                status=status.HTTP_202_ACCEPTED
+            )
+
+        except Exception as exc:
+            logger.exception(
+                'Error starting bulk analysis',
+                extra={'user_id': request.user.id, 'error': str(exc)}
+            )
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Failed to start bulk analysis',
+                    'error_code': 'BULK_ANALYSIS_ERROR'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @staticmethod
+    def _is_analyzable(document):
+        analyzable_types = ['pdf', 'image', 'docx', 'doc', 'txt']
+        latest_file = document.files.order_by('-timestamp').first()
+        if not latest_file or not latest_file.mimetype:
+            return False
+
+        mime_type = latest_file.mimetype.lower()
+        return any(token in mime_type for token in analyzable_types)
+
+    @staticmethod
+    def _can_reanalyze(analysis):
+        min_interval = timedelta(hours=1)
+        return timezone.now() - analysis.created >= min_interval
 
 
 class DAMMetadataPresetViewSet(ModelViewSet):
@@ -129,21 +338,165 @@ class DAMMetadataPresetViewSet(ModelViewSet):
         """
         Test a metadata preset with a sample document.
         """
-        preset = self.get_object()
-        document_id = request.data.get('document_id')
-
-        if not document_id:
+        try:
+            preset = DAMMetadataPreset.objects.get(pk=pk)
+        except ObjectDoesNotExist:
             return Response(
-                {'error': 'document_id field is required'},
+                {
+                    'error': 'Preset not found',
+                    'error_code': 'NOT_FOUND'
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        document_id = request.data.get('document_id')
+        if document_id is None:
+            return Response(
+                {
+                    'error': 'document_id is required',
+                    'error_code': 'MISSING_PARAMETER'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # TODO: Implement preset testing logic
-        return Response({
-            'message': f'Preset {preset.name} testing not yet implemented',
-            'preset': preset.name,
-            'document_id': document_id
-        })
+        try:
+            document_id = int(document_id)
+            if document_id < 1:
+                raise ValueError()
+        except (TypeError, ValueError):
+            logger.warning(
+                'Invalid document_id supplied to test_preset',
+                extra={'user_id': request.user.id, 'preset_id': pk, 'value': document_id}
+            )
+            return Response(
+                {
+                    'error': 'Invalid document_id. Must be a positive integer.',
+                    'error_code': 'INVALID_PARAMETER',
+                    'received_value': document_id
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            document = Document.objects.get(pk=document_id)
+        except Document.DoesNotExist:
+            logger.warning(
+                f'test_preset called with non-existent document {document_id}',
+                extra={'user_id': request.user.id, 'preset_id': pk}
+            )
+            return Response(
+                {
+                    'error': f'Document {document_id} not found',
+                    'error_code': 'DOCUMENT_NOT_FOUND'
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            AccessControlList.objects.check_access(
+                obj=document,
+                permissions=(permission_document_view,),
+                user=request.user
+            )
+        except PermissionDenied:
+            logger.warning(
+                f'User {request.user.id} tried to test preset on document {document_id} without permission',
+                extra={
+                    'user_id': request.user.id,
+                    'document_id': document_id,
+                    'preset_id': pk
+                }
+            )
+            return Response(
+                {
+                    'error': 'Permission denied for this document',
+                    'error_code': 'PERMISSION_DENIED'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            extracted_metadata = self._apply_preset_to_document(preset, document)
+            logger.info(
+                f'Successfully tested preset {pk} on document {document_id}',
+                extra={
+                    'user_id': request.user.id,
+                    'document_id': document_id,
+                    'preset_id': pk,
+                    'extracted_fields': len(extracted_metadata)
+                }
+            )
+
+            return Response(
+                {
+                    'success': True,
+                    'message': f'Preset {preset.name} applied successfully',
+                    'preset_name': preset.name,
+                    'document_id': document_id,
+                    'metadata_extracted': extracted_metadata,
+                    'field_count': len(extracted_metadata)
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as exc:
+            logger.exception(
+                f'Error testing preset {pk} on document {document_id}',
+                extra={
+                    'user_id': request.user.id,
+                    'document_id': document_id,
+                    'preset_id': pk,
+                    'error': str(exc)
+                }
+            )
+            return Response(
+                {
+                    'error': 'Failed to apply preset',
+                    'error_code': 'PRESET_APPLICATION_ERROR',
+                    'detail': str(exc) if settings.DEBUG else 'An error occurred'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @staticmethod
+    def _apply_preset_to_document(preset, document: Document) -> dict:
+        """
+        Apply a metadata preset to a document and return extracted values.
+        """
+        extracted = {}
+        document_text = ''
+        if hasattr(document, 'get_text') and callable(document.get_text):
+            try:
+                document_text = document.get_text()
+            except Exception as exc:
+                logger.warning(
+                    'Failed to read document text during preset test',
+                    extra={'document_id': document.id, 'error': str(exc)}
+                )
+
+        fields = getattr(preset, 'fields', None)
+        extractor = getattr(preset, 'extract_field_value', None)
+
+        if not fields or not extractor:
+            return extracted
+
+        for field in fields.all():
+            try:
+                value = extractor(field, document_text)
+                if value:
+                    extracted[field.name] = {
+                        'value': value,
+                        'field_type': getattr(field, 'field_type', 'unknown'),
+                        'confidence': getattr(field, 'confidence', 1.0)
+                    }
+            except Exception as exc:
+                logger.warning(
+                    f'Error extracting field {getattr(field, "name", "unknown")}',
+                    extra={'preset_id': preset.id, 'error': str(exc)}
+                )
+                continue
+
+        return extracted
 
 
 class AIAnalysisStatusView(mayan_generics.GenericAPIView):
@@ -207,14 +560,19 @@ class AIAnalysisStatusView(mayan_generics.GenericAPIView):
 
 class DAMDocumentDetailView(mayan_generics.GenericAPIView):
     """
-    Render DAM AJAX template for a specific document.
+    Return structured DAM details for a specific document via JSON.
     """
     permission_classes = (IsAuthenticated,)
     renderer_classes = (JSONRenderer,)
+    serializer_class = DAMDocumentDetailSerializer
 
     def get(self, request, document_id, *args, **kwargs):
+        queryset = Document.objects.prefetch_related(
+            'files', 'metadata__metadata_type', 'tags'
+        )
+
         try:
-            document = Document.objects.get(pk=document_id)
+            document = queryset.get(pk=document_id)
         except Document.DoesNotExist:
             return Response({'error': 'Document not found'}, status=404)
 
@@ -230,31 +588,16 @@ class DAMDocumentDetailView(mayan_generics.GenericAPIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Get or create AI analysis
         ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
             document=document,
             defaults={'analysis_status': 'pending'}
         )
 
-        # Render AJAX template with context
-        template = AJAXTemplate.get('dam_document_detail')
-        context = {
-            'document': document,
-            'ai_analysis': ai_analysis,
-            'request': request
-        }
+        serializer = self.get_serializer(
+            {'document': document, 'ai_analysis': ai_analysis}
+        )
 
-        # Manually render template with custom context
-        from django.template import Context, Engine
-        from django.template.loader import get_template
-
-        django_template = get_template(template.template_name)
-        rendered_content = django_template.render(context, request)
-
-        return Response({
-            'name': template.name,
-            'html': rendered_content
-        })
+        return Response(serializer.data)
 
 
 class DAMDocumentListView(generics.ListAPIView):

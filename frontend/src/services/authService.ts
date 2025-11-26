@@ -16,6 +16,8 @@ interface GetCurrentUserResponse {
   permissions?: string[]
 }
 
+const AUTH_PASSWORD_BASE = '/api/auth/password/'
+
 class AuthService {
   /**
    * Login with email and password
@@ -61,19 +63,24 @@ class AuthService {
   }
 
   /**
-   * Request password reset
+   * Request password reset (forgot password)
    */
   async requestPasswordReset(email: string): Promise<void> {
-    return apiService.post<void>('/v4/auth/password-reset/', { email })
+    return apiService.post<void>(`${AUTH_PASSWORD_BASE}forgot/`, { email })
   }
 
   /**
    * Reset password with token
    */
-  async resetPassword(token: string, newPassword: string): Promise<void> {
-    return apiService.post<void>('/v4/auth/password-reset/confirm/', {
-      token,
-      new_password: newPassword
+  async resetPassword(payload: {
+    token: string
+    newPassword: string
+    confirmPassword: string
+  }): Promise<void> {
+    return apiService.post<void>(`${AUTH_PASSWORD_BASE}reset/`, {
+      token: payload.token,
+      new_password: payload.newPassword,
+      confirm_password: payload.confirmPassword
     })
   }
 }
