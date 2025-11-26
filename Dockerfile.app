@@ -25,10 +25,6 @@ RUN apt-get update && \
         yandexgptlite && \
     rm -rf /var/lib/apt/lists/*
 
-# Создание директории для логов
-RUN mkdir -p /opt/mayan-edms/logs && \
-    chmod 755 /opt/mayan-edms/logs
-
 # Кастомные расширения
 COPY mayan/apps/converter_pipeline_extension /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
 COPY mayan/apps/image_editor /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
