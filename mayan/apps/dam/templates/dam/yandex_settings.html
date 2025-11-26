@@ -1,0 +1,118 @@
+{% extends "appearance/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Yandex Disk Integration" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        {% trans "Подключение к Яндекс.Диску" %}
+                    </h4>
+                    <small class="text-muted">
+                        {% trans "Введите Client ID/Secret вашего приложения. Система сама запросит OAuth‑токен и выполнит импорт структуры и файлов." %}
+                    </small>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        {{ form.non_field_errors }}
+
+                        <h5 class="mt-2">{% trans "OAuth-приложение" %}</h5>
+                        <div class="form-group">
+                            <label for="{{ form.client_id.id_for_label }}">{% trans "Client ID" %}</label>
+                            {{ form.client_id }}
+                            <small class="form-text text-muted">
+                                {% trans "Возьмите из настроек приложения на oauth.yandex.ru." %}
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="{{ form.client_secret.id_for_label }}">{% trans "Client secret" %}</label>
+                            {{ form.client_secret }}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="{{ form.authorization_code.id_for_label }}">{% trans "Код подтверждения" %}</label>
+                            <div class="input-group">
+                                {{ form.authorization_code }}
+                                <div class="input-group-btn">
+                                    <button
+                                        type="button"
+                                        class="btn btn-default"
+                                        onclick="window.open('{{ yandex_auth_url }}', '_blank'); return false;">
+                                        <i class="fas fa-external-link-alt"></i>
+                                        {% trans "Получить код" %}
+                                    </button>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">
+                                {% trans "Кнопка откроет страницу oauth.yandex.ru в новом окне. После подтверждения доступа скопируйте код и вставьте его в поле выше." %}
+                            </small>
+                        </div>
+
+                        <div class="alert {% if has_token %}alert-success{% else %}alert-warning{% endif %}">
+                            {% if has_token %}
+                                <i class="fas fa-check-circle"></i>
+                                {% trans "Токен успешно сохранён. При необходимости вставьте новый код, чтобы обновить доступ." %}
+                            {% else %}
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {% trans "Токен ещё не получен — без него импорт не запустится." %}
+                            {% endif %}
+                        </div>
+
+                        <hr>
+
+                        <div class="form-group">
+                            <label for="{{ form.base_path.id_for_label }}">{% trans "Базовый путь" %}</label>
+                            {{ form.base_path }}
+                            <small class="form-text text-muted">
+                                {% trans "Например disk:/ или disk:/Проекты. Импорт пройдёт по всем вложенным папкам." %}
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="{{ form.cabinet_root_label.id_for_label }}">{% trans "Название корневого кабинета" %}</label>
+                            {{ form.cabinet_root_label }}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="{{ form.document_type.id_for_label }}">{% trans "Тип документа" %}</label>
+                            {{ form.document_type }}
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label for="{{ form.max_file_size_mb.id_for_label }}">{% trans "Макс. размер файла (МБ)" %}</label>
+                                {{ form.max_file_size_mb }}
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="{{ form.file_limit.id_for_label }}">{% trans "Ограничение по файлам" %}</label>
+                                {{ form.file_limit }}
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <button class="btn btn-primary" type="submit" name="action" value="save">
+                                <i class="fas fa-save"></i> {% trans "Сохранить" %}
+                            </button>
+                            <button class="btn btn-success" type="submit" name="action" value="import">
+                                <i class="fas fa-download"></i> {% trans "Запустить импорт" %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="alert alert-info">
+                <strong>{% trans "Подсказка:" %}</strong>
+                {% trans "если импорт уже выполнялся, повторный запуск добавит только новые файлы (отслеживаем путь в Яндекс.Диске)." %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

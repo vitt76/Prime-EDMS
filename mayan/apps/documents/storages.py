@@ -1,59 +1,78 @@
 import os
 
-import boto3
-from botocore.config import Config
 from django.utils.translation import ugettext_lazy as _
-from storages.backends.s3boto3 import S3Boto3Storage
-from storages.utils import ReadBytesWrapper, clean_name, is_seekable
+
+try:
+    import boto3
+    from botocore.config import Config
+    from storages.backends.s3boto3 import S3Boto3Storage
+    from storages.utils import ReadBytesWrapper, clean_name, is_seekable
+except ImportError:  # Optional dependency when S3 support is disabled
+    boto3 = None
+    Config = None
+    S3Boto3Storage = None
+    ReadBytesWrapper = None
+    clean_name = None
+    is_seekable = None
 
 from mayan.apps.storage.classes import DefinedStorage
-from mayan.apps.storage.settings import setting_s3_location
-class BegetS3Boto3Storage(S3Boto3Storage):
-    """
-    Custom storage backend that bypasses boto3's TransferManager to avoid
-    SignatureDoesNotMatch responses from Beget S3 when using upload_fileobj.
-    """
+if S3Boto3Storage:
+    class BegetS3Boto3Storage(S3Boto3Storage):
+        """
+        Custom storage backend that bypasses boto3's TransferManager to avoid
+        SignatureDoesNotMatch responses from Beget S3 when using upload_fileobj.
+        """
 
-    def _save(self, name, content):
-        cleaned_name = clean_name(name)
-        name = self._normalize_name(cleaned_name)
-        params = self._get_write_parameters(name, content)
+        def _save(self, name, content):
+            cleaned_name = clean_name(name)
+            name = self._normalize_name(cleaned_name)
+            params = self._get_write_parameters(name, content)
 
-        if is_seekable(content):
-            content.seek(0, os.SEEK_SET)
+            if is_seekable(content):
+                content.seek(0, os.SEEK_SET)
 
-        upload_content = ReadBytesWrapper(content)
+            upload_content = ReadBytesWrapper(content)
 
-        if (
-            self.gzip
-            and params["ContentType"] in self.gzip_content_types
-            and "ContentEncoding" not in params
-        ):
-            upload_content = self._compress_content(upload_content)
-            params["ContentEncoding"] = "gzip"
+            if (
+                self.gzip
+                and params["ContentType"] in self.gzip_content_types
+                and "ContentEncoding" not in params
+            ):
+                upload_content = self._compress_content(upload_content)
+                params["ContentEncoding"] = "gzip"
 
-        original_close = content.close
-        content.close = lambda: None
-        client = boto3.client(
-            's3',
-            aws_access_key_id=self.access_key,
-            aws_secret_access_key=self.secret_key,
-            aws_session_token=self.security_token,
-            endpoint_url=self.endpoint_url,
-            region_name=self.region_name,
-            use_ssl=self.use_ssl,
-            verify=self.verify,
-            config=self.client_config
-        )
+            original_close = content.close
+            content.close = lambda: None
 
-        try:
-            client.put_object(
-                Bucket=self.bucket_name, Key=name, Body=upload_content, **params
+            client = boto3.client(
+                's3',
+                aws_access_key_id=self.access_key,
+                aws_secret_access_key=self.secret_key,
+                aws_session_token=self.security_token,
+                endpoint_url=self.endpoint_url,
+                region_name=self.region_name,
+                use_ssl=self.use_ssl,
+                verify=self.verify,
+                config=self.client_config
             )
-        finally:
-            content.close = original_close
 
-        return cleaned_name
+            try:
+                client.put_object(
+                    Bucket=self.bucket_name, Key=name, Body=upload_content, **params
+                )
+            finally:
+                content.close = original_close
+
+            return cleaned_name
+else:
+    class BegetS3Boto3Storage(object):
+        """
+        Placeholder used when boto3 is not available. The backend is never
+        instantiated unless S3 support is enabled, but defining the class
+        keeps dotted-path imports working during development.
+        """
+
+        pass
 
 
 from .literals import (
@@ -77,6 +96,8 @@ def get_document_storage_backend():
         print(f"DEBUG: get_document_storage_backend - S3 enabled = {setting_s3_enabled.value}")
         print(f"DEBUG: get_document_storage_backend - S3 raw_value = {getattr(setting_s3_enabled, 'raw_value', 'N/A')}")
         if setting_s3_enabled.value:
+            if not S3Boto3Storage:
+                raise ImportError('boto3 is required for the configured S3 storage backend.')
             print("DEBUG: get_document_storage_backend - Returning S3 backend")
             return 'mayan.apps.documents.storages.BegetS3Boto3Storage'
         else:
@@ -99,6 +120,8 @@ def get_document_storage_kwargs():
         )
         print(f'STORAGE_KWARGS: S3 enabled = {setting_s3_enabled.value}')
         if setting_s3_enabled.value:
+            if not all([boto3, Config, ReadBytesWrapper, clean_name, is_seekable]):
+                raise ImportError('boto3 and django-storages extras are required for S3 support.')
             secret_key_value = setting_s3_secret_key.value
             client_config = Config(
                 s3={
@@ -107,8 +130,6 @@ def get_document_storage_kwargs():
                 signature_version='s3',
                 request_checksum_calculation='when_required'
             )
-
-            location = setting_s3_location.value or ''
 
             kwargs = {
                 'access_key': setting_s3_access_key.value,
@@ -123,8 +144,6 @@ def get_document_storage_kwargs():
                 'addressing_style': 'path',
                 'signature_version': 's3',  # Используем s3 для Beget
             }
-            if location:
-                kwargs['location'] = location
             print(f'STORAGE_KWARGS: Returning S3 kwargs: {list(kwargs.keys())}')
             return kwargs
     except Exception as e:

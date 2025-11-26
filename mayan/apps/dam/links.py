@@ -28,7 +28,7 @@ link_dam_test = Link(
 
 link_dam_settings = Link(
     icon=icon_settings,
-    text=_('AI Analysis Settings'),
-    view='dam:settings',
+    text=_('Yandex Disk Integration'),
+    view='dam:yandex_settings',
     permissions=(permission_ai_analysis_view,)
 )

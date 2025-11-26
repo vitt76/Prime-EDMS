@@ -1,12 +1,27 @@
-from botocore.config import Config
 from django.utils.translation import ugettext_lazy as _
 
+try:
+    from botocore.config import Config
+except ImportError:
+    Config = None
+
 from mayan.apps.storage.classes import DefinedStorage
-from mayan.apps.storage.settings import (
-    setting_s3_access_key, setting_s3_bucket_name, setting_s3_endpoint_url,
-    setting_s3_enabled, setting_s3_region_name, setting_s3_secret_key,
-    setting_s3_use_ssl, setting_s3_verify, setting_s3_distribution_location
-)
+try:
+    from mayan.apps.storage.settings import (
+        setting_s3_access_key, setting_s3_bucket_name, setting_s3_endpoint_url,
+        setting_s3_enabled, setting_s3_region_name, setting_s3_secret_key,
+        setting_s3_use_ssl, setting_s3_verify, setting_s3_distribution_location
+    )
+except ImportError:
+    setting_s3_access_key = None
+    setting_s3_bucket_name = None
+    setting_s3_endpoint_url = None
+    setting_s3_enabled = None
+    setting_s3_region_name = None
+    setting_s3_secret_key = None
+    setting_s3_use_ssl = None
+    setting_s3_verify = None
+    setting_s3_distribution_location = None
 
 from .literals import STORAGE_NAME_DISTRIBUTION_RENDITIONS
 from .settings import setting_distribution_storage
@@ -15,7 +30,7 @@ from .settings import setting_distribution_storage
 def get_distribution_storage_backend():
     if (
         setting_distribution_storage.value == 's3'
-        and setting_s3_enabled.value
+        and setting_s3_enabled and setting_s3_enabled.value
     ):
         return 'mayan.apps.documents.storages.BegetS3Boto3Storage'
 
@@ -26,8 +41,11 @@ def get_distribution_storage_backend():
 def get_distribution_storage_kwargs():
     if (
         setting_distribution_storage.value == 's3'
-        and setting_s3_enabled.value
+        and setting_s3_enabled and setting_s3_enabled.value
     ):
+        if not all([Config, setting_s3_access_key, setting_s3_secret_key]):
+            raise ImportError('S3 support requires botocore and storage S3 settings.')
+
         secret_key_value = setting_s3_secret_key.value
         client_config = Config(
             s3={
