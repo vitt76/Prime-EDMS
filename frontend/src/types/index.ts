@@ -21,6 +21,26 @@ export interface User {
   last_name?: string
   is_active: boolean
   permissions?: string[]
+  role?: string
+  two_factor_enabled?: boolean
+}
+
+// 2FA types
+export interface TwoFactorStatus {
+  enabled: boolean
+  method?: 'totp' | 'backup_code'
+  backup_codes_generated?: boolean
+}
+
+export interface TwoFactorSetup {
+  secret: string
+  qr_code_url: string
+  backup_codes: string[]
+}
+
+export interface TwoFactorVerify {
+  token: string
+  method?: 'totp' | 'backup_code'
 }
 
 // Component prop types

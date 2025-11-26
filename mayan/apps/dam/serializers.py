@@ -188,139 +188,161 @@ class DAMDocumentListSerializer(serializers.ModelSerializer):
         return categories[:5]
 
 
-class MetadataFieldSerializer(serializers.Serializer):
-    """Serializer for a single metadata entry."""
-
-    key = serializers.CharField()
-    value = serializers.CharField(allow_blank=True, allow_null=True)
-    metadata_type = serializers.CharField()
-    metadata_type_label = serializers.CharField()
-    lookup = serializers.CharField(allow_blank=True, allow_null=True)
-
-
-class DocumentVersionSummarySerializer(serializers.ModelSerializer):
-    """Minimal summary of a document version history entry."""
-
-    class Meta:
-        model = DocumentVersion
-        fields = ('id', 'timestamp', 'comment', 'active')
-        read_only_fields = ('id', 'timestamp', 'comment', 'active')
-
-
 class DAMDocumentDetailSerializer(serializers.Serializer):
     """
-    Detailed representation of a DAM document replacing the previous HTML blob.
+    Structured representation of a DAM document detail payload.
     """
 
-    document = DocumentSerializer(read_only=True)
-    ai_analysis = DocumentAIAnalysisSerializer(read_only=True)
-    tags = serializers.SerializerMethodField()
+    id = serializers.IntegerField(source='pk')
+    title = serializers.CharField(source='label')
+    description = serializers.CharField(allow_blank=True)
+    asset_type = serializers.SerializerMethodField()
+    asset_status = serializers.SerializerMethodField()
+
+    file_id = serializers.SerializerMethodField()
+    filename = serializers.SerializerMethodField()
+    file_size = serializers.SerializerMethodField()
+    mime_type = serializers.SerializerMethodField()
+
+    created_at = serializers.SerializerMethodField()
+    updated_at = serializers.SerializerMethodField()
+
     metadata = serializers.SerializerMethodField()
+    versions_count = serializers.IntegerField(source='versions.count')
     versions = serializers.SerializerMethodField()
+
     permissions = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
 
-    def get_tags(self, obj: Dict[str, Any]) -> List[str]:
-        """Return document tags if available."""
-        document = obj.get('document')
-        if not document:
-            return []
+    view_count = serializers.SerializerMethodField()
+    download_count = serializers.SerializerMethodField()
 
-        try:
-            return list(document.tags.values_list('label', flat=True))
-        except AttributeError:
-            return []
+    ai_analysis = serializers.SerializerMethodField()
 
-    def get_metadata(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Return structured metadata entries for the document."""
-        document = obj.get('document')
-        if not document:
-            return []
+    class Meta:
+        fields = (
+            'id', 'title', 'description',
+            'asset_type', 'asset_status',
+            'file_id', 'filename', 'file_size', 'mime_type',
+            'created_at', 'updated_at',
+            'metadata', 'versions_count', 'versions',
+            'permissions', 'tags',
+            'view_count', 'download_count',
+            'ai_analysis'
+        )
 
+    def get_asset_type(self, obj):
+        document_type = getattr(obj, 'document_type', None)
+        if document_type:
+            return document_type.label
+        return getattr(obj, 'asset_type', 'document')
+
+    def get_asset_status(self, obj):
+        return 'archived' if getattr(obj, 'in_trash', False) else 'active'
+
+    def _latest_file(self, document):
+        return document.files.order_by('-timestamp').first()
+
+    def get_file_id(self, obj):
+        file_obj = self._latest_file(obj)
+        return file_obj.pk if file_obj else None
+
+    def get_filename(self, obj):
+        file_obj = self._latest_file(obj)
+        return file_obj.filename if file_obj else None
+
+    def get_file_size(self, obj):
+        file_obj = self._latest_file(obj)
+        return file_obj.size if file_obj else None
+
+    def get_mime_type(self, obj):
+        file_obj = self._latest_file(obj)
+        return file_obj.mimetype if file_obj else None
+
+    def get_created_at(self, obj):
+        return getattr(obj, 'datetime_created', None)
+
+    def get_updated_at(self, obj):
+        return getattr(obj, 'datetime_modified', None) or getattr(obj, 'datetime_created', None)
+
+    def get_metadata(self, obj):
         entries = []
-        for metadata in document.metadata.select_related('metadata_type').all():
-            metadata_type = metadata.metadata_type
-            if not metadata_type:
+        for metadata in obj.metadata.select_related('metadata_type').all():
+            meta_type = metadata.metadata_type
+            if not meta_type:
                 continue
 
             entries.append({
-                'key': metadata_type.name,
-                'metadata_type': metadata_type.name,
-                'metadata_type_label': metadata_type.label,
+                'key': meta_type.name,
                 'value': metadata.value,
-                'lookup': metadata_type.lookup or ''
+                'type': meta_type.name,
+                'lookup': meta_type.lookup or ''
             })
 
-        return MetadataFieldSerializer(
-            entries, many=True, context=self.context
-        ).data
+        return entries
 
-    def get_versions(self, obj: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Return the most recent document versions."""
-        document = obj.get('document')
-        if not document:
-            return []
+    def get_versions(self, obj):
+        versions = obj.versions.all().order_by('-timestamp')[:5]
+        serialized = []
+        for idx, version in enumerate(versions, start=1):
+            file_obj = getattr(version.document, 'file_latest', None)
+            serialized.append({
+                'id': version.pk,
+                'version_number': idx,
+                'timestamp': version.timestamp,
+                'file_size': getattr(file_obj, 'size', None),
+                'filename': getattr(file_obj, 'filename', None)
+            })
+        return serialized
 
-        versions_qs = document.versions.all().order_by('-timestamp')[:5]
-        return DocumentVersionSummarySerializer(
-            versions_qs, many=True, context=self.context
-        ).data
-
-    def get_permissions(self, obj: Dict[str, Any]) -> Dict[str, bool]:
-        """Return actionability flags based on ACLs."""
-        document = obj.get('document')
-        if not document:
-            return {}
-
+    def get_permissions(self, obj):
         request = self.context.get('request')
-        if not request:
+        if not request or not getattr(request, 'user', None):
             return {}
 
         user = request.user
         permission_map = {
             'can_view': permission_document_view,
             'can_download': permission_document_file_download,
-            'can_edit': permission_document_edit,
-            'can_delete': permission_document_trash,
             'can_edit_metadata': permission_document_metadata_edit,
-            'can_view_analysis': permission_ai_analysis_view,
+            'can_delete': permission_document_trash,
+            'can_edit': permission_document_edit,
+            'can_analyze': permission_ai_analysis_view
         }
 
-        return {
-            key: self._check_permission(user, document, permission)
-            for key, permission in permission_map.items()
-        }
+        results = {}
+        for key, permission in permission_map.items():
+            try:
+                results[key] = AccessControlList.objects.check_access(
+                    obj=obj,
+                    permissions=(permission,),
+                    user=user
+                )
+            except PermissionDenied:
+                results[key] = False
+        return results
 
-    @staticmethod
-    def _check_permission(user, document, permission) -> bool:
-        """Check if the user can perform the given permission."""
+    def get_tags(self, obj):
         try:
-            return AccessControlList.objects.check_access(
-                obj=document, permissions=(permission,), user=user
-            )
+            return list(obj.tags.values_list('label', flat=True))
         except Exception:
-            return False
+            return []
+
+    def get_view_count(self, obj):
+        return getattr(obj, 'view_count', 0)
+
+    def get_download_count(self, obj):
+        return getattr(obj, 'download_count', 0)
+
+    def get_ai_analysis(self, obj):
+        analysis = getattr(obj, 'ai_analysis', None)
+        if not analysis:
+            return None
+
+        return DocumentAIAnalysisSerializer(analysis, context=self.context).data
 
 
 class AnalyzeDocumentSerializer(serializers.Serializer):
-    """
-    Serializer for triggering single document analysis.
-    """
-    document_id = serializers.PrimaryKeyRelatedField(
-        help_text=_('ID of the document to analyze.'),
-        queryset=Document.objects.all(),
-        source='document_instance'
-    )
-    ai_service = serializers.CharField(
-        help_text=_('Preferred AI service (openai, claude, etc.).'),
-        default='openai',
-        required=False,
-        allow_blank=False
-    )
-    analysis_type = serializers.CharField(
-        help_text=_('Analysis type (classification, extraction, etc.).'),
-        default='classification',
-        required=False
-    )
 
 
 class BulkAnalyzeDocumentsSerializer(serializers.Serializer):

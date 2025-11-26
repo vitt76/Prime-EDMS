@@ -29,6 +29,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, title: 'Forgot Password' }
   },
   {
+    path: '/auth/2fa',
+    name: 'two-factor-auth',
+    component: () => import('@/pages/Login2FAPage.vue'),
+    meta: { requiresAuth: false, title: 'Two-Factor Authentication' }
+  },
+  {
     path: '/auth/reset-password',
     name: 'reset-password',
     component: () => import('@/pages/auth/ResetPasswordPage.vue'),
@@ -93,6 +99,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/AdminPage.vue'),
     meta: {
       requiresAuth: true,
+      requiresRole: 'admin',
       requiresPermission: 'admin.access',
       breadcrumb: 'Administration'
     },
@@ -129,17 +136,6 @@ const routes: RouteRecordRaw[] = [
           requiresPermission: 'admin.workflow_manage',
           breadcrumb: 'Workflow Designer',
           title: 'Workflow Designer - Admin'
-        }
-      },
-      {
-        path: 'integrations',
-        name: 'admin-integrations',
-        component: () => import('@/pages/admin/AdminIntegrationsPage.vue'),
-        meta: {
-          requiresAuth: true,
-          requiresPermission: 'admin.integrations_manage',
-          breadcrumb: 'Integrations',
-          title: 'Integrations - Admin'
         }
       },
       {
@@ -221,6 +217,19 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
+  // Check 2FA status for authenticated users
+  if (authStore.isAuthenticated && to.name !== 'two-factor-auth') {
+    // Check if 2FA is enabled and not verified
+    if (authStore.requiresTwoFactor && !authStore.isTwoFactorVerified) {
+      // Redirect to 2FA verification
+      next({
+        name: 'two-factor-auth',
+        query: { returnTo: to.fullPath }
+      })
+      return
+    }
+  }
+
   // Check if route requires specific permission
   if (to.meta.requiresPermission) {
     const permission = to.meta.requiresPermission as string
@@ -243,10 +252,37 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
+  // Check role-based access
+  if (to.meta.requiresRole) {
+    const requiredRole = to.meta.requiresRole as string
+    // hasRole is a computed that returns a function
+    const checkRole = (authStore.hasRole as unknown as { value: (r: string) => boolean }).value
+    if (!checkRole(requiredRole)) {
+      console.warn(
+        `Access denied: User ${authStore.user?.id} with role ${authStore.user?.role} attempted ${to.path}, required role: ${requiredRole}`
+      )
+      // Redirect to forbidden page
+      next({
+        name: 'forbidden',
+        query: {
+          returnTo: to.fullPath,
+          requiredRole: requiredRole
+        }
+      })
+      return
+    }
+  }
+
   // Redirect authenticated users away from login page
-  if (to.name === 'login' && authStore.isAuthenticated) {
+  if (to.name === 'login' && authStore.isAuthenticated && authStore.isTwoFactorVerified) {
     const returnTo = (to.query.returnTo as string) || '/'
     next(returnTo)
+    return
+  }
+
+  // Allow access to 2FA page for authenticated users who need it
+  if (to.name === 'two-factor-auth' && authStore.isAuthenticated) {
+    next()
     return
   }
 

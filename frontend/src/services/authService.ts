@@ -1,5 +1,5 @@
 import { apiService } from './apiService'
-import type { User } from '@/types'
+import type { User, TwoFactorStatus, TwoFactorSetup, TwoFactorVerify } from '@/types'
 
 interface LoginResponse {
   token: string
@@ -95,6 +95,42 @@ class AuthService {
       new_password: payload.newPassword,
       confirm_password: payload.confirmPassword
     })
+  }
+
+  /**
+   * Get 2FA status for current user
+   */
+  async getTwoFactorStatus(): Promise<TwoFactorStatus> {
+    return apiService.get<TwoFactorStatus>('/v4/auth/me/2fa/')
+  }
+
+  /**
+   * Enable 2FA for current user
+   */
+  async enableTwoFactor(): Promise<TwoFactorSetup> {
+    return apiService.post<TwoFactorSetup>('/v4/auth/me/2fa/enable/')
+  }
+
+  /**
+   * Verify 2FA token during setup or login
+   */
+  async verifyTwoFactor(token: string, method: 'totp' | 'backup_code' = 'totp'): Promise<{ success: boolean; user?: User }> {
+    const payload: TwoFactorVerify = { token, method }
+    return apiService.post<{ success: boolean; user?: User }>('/v4/auth/me/2fa/verify/', payload)
+  }
+
+  /**
+   * Disable 2FA for current user
+   */
+  async disableTwoFactor(): Promise<{ success: boolean }> {
+    return apiService.post<{ success: boolean }>('/v4/auth/me/2fa/disable/')
+  }
+
+  /**
+   * Regenerate backup codes
+   */
+  async regenerateBackupCodes(): Promise<{ backup_codes: string[] }> {
+    return apiService.post<{ backup_codes: string[] }>('/v4/auth/me/2fa/regenerate-backup/')
   }
 }
 

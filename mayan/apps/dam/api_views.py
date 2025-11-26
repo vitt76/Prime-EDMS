@@ -558,46 +558,37 @@ class AIAnalysisStatusView(mayan_generics.GenericAPIView):
         })
 
 
-class DAMDocumentDetailView(mayan_generics.GenericAPIView):
+class DAMDocumentDetailView(generics.RetrieveAPIView):
     """
-    Return structured DAM details for a specific document via JSON.
+    Retrieve structured DAM document detail as JSON.
     """
+    serializer_class = DAMDocumentDetailSerializer
     permission_classes = (IsAuthenticated,)
     renderer_classes = (JSONRenderer,)
-    serializer_class = DAMDocumentDetailSerializer
+    queryset = Document.objects.all()
 
-    def get(self, request, document_id, *args, **kwargs):
-        queryset = Document.objects.prefetch_related(
-            'files', 'metadata__metadata_type', 'tags'
+    def get_queryset(self):
+        queryset = Document.objects.select_related('document_type').prefetch_related(
+            'files', 'metadata__metadata_type', 'versions', 'tags'
         )
 
-        try:
-            document = queryset.get(pk=document_id)
-        except Document.DoesNotExist:
-            return Response({'error': 'Document not found'}, status=404)
-
-        try:
-            AccessControlList.objects.check_access(
-                obj=document,
-                permissions=(permission_document_view,),
-                user=request.user
-            )
-        except PermissionDenied:
-            return Response(
-                {'error': 'Access denied'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
-            document=document,
-            defaults={'analysis_status': 'pending'}
+        return AccessControlList.objects.restrict_queryset(
+            permission=permission_document_view,
+            queryset=queryset,
+            user=self.request.user
         )
 
-        serializer = self.get_serializer(
-            {'document': document, 'ai_analysis': ai_analysis}
-        )
+    def get_serializer_context(self):
+        return {'request': self.request}
 
-        return Response(serializer.data)
+    def get_object(self):
+        document = super().get_object()
+        AccessControlList.objects.check_access(
+            obj=document,
+            permissions=(permission_document_view,),
+            user=self.request.user
+        )
+        return document
 
 
 class DAMDocumentListView(generics.ListAPIView):
