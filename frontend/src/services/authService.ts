@@ -70,6 +70,19 @@ class AuthService {
   }
 
   /**
+   * Change password for authenticated user
+   */
+  async changePassword(payload: {
+    oldPassword: string
+    newPassword: string
+  }): Promise<void> {
+    return apiService.post<void>(`${AUTH_PASSWORD_BASE}change/`, {
+      old_password: payload.oldPassword,
+      new_password: payload.newPassword
+    })
+  }
+
+  /**
    * Reset password with token
    */
   async resetPassword(payload: {

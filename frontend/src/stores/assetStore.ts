@@ -3,7 +3,12 @@ import { ref, computed } from 'vue'
 import { assetService } from '@/services/assetService'
 import type { Asset, GetAssetsParams, PaginatedResponse } from '@/types/api'
 import { formatApiError } from '@/utils/errors'
+import type { AxiosProgressEvent } from 'axios'
 
+interface UploadOptions {
+  onUploadProgress?: (event: AxiosProgressEvent) => void
+  signal?: AbortSignal
+}
 export const useAssetStore = defineStore(
   'asset',
   () => {
@@ -163,6 +168,16 @@ export const useAssetStore = defineStore(
     // Initialize - fetch first page on store creation (optional)
     // fetchAssets() // Uncomment if you want auto-fetch on store init
 
+    async function uploadAsset(
+      formData: FormData,
+      options?: UploadOptions
+    ): Promise<Asset> {
+      return assetService.uploadAsset(formData, {
+        onUploadProgress: options?.onUploadProgress,
+        signal: options?.signal
+      })
+    }
+
     return {
       // State
       assets,
@@ -196,7 +211,8 @@ export const useAssetStore = defineStore(
       setSortBy,
       applyFilters,
       clearFilters,
-      refresh
+      refresh,
+      uploadAsset
     }
   },
   {

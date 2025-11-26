@@ -9,6 +9,11 @@ import type {
   BulkOperationRequest,
   BulkOperationResponse
 } from '@/types/api'
+import type {
+  AxiosProgressEvent,
+  AxiosRequestHeaders,
+  InternalAxiosRequestConfig
+} from 'axios'
 
 class AssetService {
   /**
@@ -36,9 +41,13 @@ class AssetService {
       queryParams.search = params.search
     }
 
+    const config: InternalAxiosRequestConfig = {
+      params: queryParams,
+      headers: {} as AxiosRequestHeaders
+    }
     return apiService.get<PaginatedResponse<Asset>>(
       '/v4/dam/assets/',
-      { params: queryParams },
+      config,
       false // Don't cache asset lists
     )
   }
@@ -93,19 +102,21 @@ class AssetService {
   /**
    * Upload new asset
    */
-  async uploadAsset(file: File, metadata?: Record<string, unknown>): Promise<Asset> {
-    const formData = new FormData()
-    formData.append('file', file)
-    
-    if (metadata) {
-      formData.append('metadata', JSON.stringify(metadata))
+  async uploadAsset(
+    formData: FormData,
+    config?: {
+      onUploadProgress?: (event: AxiosProgressEvent) => void
+      signal?: AbortSignal
     }
-
-    return apiService.post<Asset>('/v4/dam/assets/upload/', formData, {
+  ): Promise<Asset> {
+    const axiosConfig: InternalAxiosRequestConfig = {
       headers: {
         'Content-Type': 'multipart/form-data'
-      }
-    })
+      } as AxiosRequestHeaders,
+      onUploadProgress: config?.onUploadProgress,
+      signal: config?.signal
+    }
+    return apiService.post<Asset>('/v4/dam/assets/upload/', formData, axiosConfig)
   }
 }
 
