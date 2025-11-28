@@ -151,6 +151,19 @@
             </transition>
           </Menu>
 
+          <!-- Edit / Transform Button -->
+          <button
+            v-if="isImage"
+            class="flex items-center gap-2 px-4 py-2 text-sm font-medium
+                   bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300
+                   hover:bg-purple-200 dark:hover:bg-purple-900/50
+                   rounded-lg transition-colors"
+            @click="showMediaEditor = true"
+          >
+            <PencilSquareIcon class="w-4 h-4" />
+            Редактировать
+          </button>
+
           <button
             class="flex items-center gap-2 px-4 py-2 text-sm font-medium
                    bg-primary-600 text-white
@@ -286,6 +299,15 @@
             <WorkflowWidget 
               :asset-id="assetId" 
               @status-change="handleWorkflowStatusChange"
+            />
+          </div>
+
+          <!-- AI Insights Widget -->
+          <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0 max-h-[400px] overflow-y-auto">
+            <AIInsightsWidget 
+              :asset-id="assetId"
+              @tags-updated="handleTagsUpdated"
+              @analysis-complete="handleAnalysisComplete"
             />
           </div>
 
@@ -586,6 +608,15 @@
           </div>
         </aside>
       </div>
+
+      <!-- Media Editor Modal -->
+      <MediaEditorModal
+        :is-open="showMediaEditor"
+        :asset="asset"
+        @close="showMediaEditor = false"
+        @save-version="handleSaveAsVersion"
+        @save-copy="handleSaveAsCopy"
+      />
     </div>
   </div>
 </template>
@@ -600,15 +631,19 @@ import {
   DocumentIcon,
   DocumentTextIcon,
   PhotoIcon,
-  ShareIcon
+  ShareIcon,
+  PencilSquareIcon
 } from '@heroicons/vue/24/outline'
 import { useAssetStore } from '@/stores/assetStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import MetadataEditor from '@/components/asset/MetadataEditor.vue'
 import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
+import AIInsightsWidget from '@/components/asset/AIInsightsWidget.vue'
+import MediaEditorModal from '@/components/asset/MediaEditorModal.vue'
 import type { Asset, Comment, Version } from '@/types/api'
 import type { ExtendedAsset, UsageStats } from '@/mocks/assets'
 import type { WorkflowState } from '@/mocks/workflows'
+import type { AIAnalysis, AITag } from '@/mocks/ai'
 import { getMockAssetById } from '@/mocks/assets'
 
 const route = useRoute()
@@ -625,6 +660,7 @@ const activeTab = ref<'info' | 'metadata' | 'versions' | 'comments' | 'usage'>('
 const zoom = ref(1)
 const rotation = ref(0)
 const newComment = ref('')
+const showMediaEditor = ref(false)
 
 const tabs = [
   { id: 'info', label: 'Инфо' },
@@ -807,6 +843,39 @@ function handleWorkflowStatusChange(newState: WorkflowState) {
 
 function handleMetadataSave(typeId: number) {
   console.log('Metadata saved for type:', typeId)
+}
+
+function handleTagsUpdated(tags: AITag[]) {
+  console.log('Tags updated:', tags)
+  // Could update the asset's tags here
+  if (asset.value && tags.length > 0) {
+    const newTags = tags.map(t => t.label)
+    asset.value.tags = [...(asset.value.tags || []), ...newTags]
+  }
+}
+
+function handleAnalysisComplete(analysis: AIAnalysis) {
+  console.log('AI Analysis complete:', analysis)
+  notificationStore.addNotification({
+    type: 'success',
+    title: 'AI анализ завершён',
+    message: `Найдено ${analysis.tags.length} тегов`
+  })
+}
+
+function handleSaveAsVersion(assetId: number, versionId: number) {
+  console.log('Saved as new version:', versionId)
+  // Reload asset to show new version
+  loadAsset()
+}
+
+function handleSaveAsCopy(originalId: number, newAssetId: number) {
+  console.log('Saved as copy:', newAssetId)
+  notificationStore.addNotification({
+    type: 'success',
+    title: 'Копия создана',
+    message: `Новый актив добавлен в галерею (ID: ${newAssetId})`
+  })
 }
 
 function handleUploadNewVersion() {
