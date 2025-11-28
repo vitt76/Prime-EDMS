@@ -582,3 +582,5 @@ const getAriaLabel = (): string => {
   @apply ring-2 ring-primary-500 ring-offset-2;
 }
 </style>
+
+

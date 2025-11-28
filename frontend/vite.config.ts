@@ -7,43 +7,39 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'vue': 'vue/dist/vue.esm-bundler.js'
     }
   },
   server: {
     port: 5173,
+    host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8080',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        cookieDomainRewrite: 'localhost'
+      },
+      '/authentication': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        cookieDomainRewrite: 'localhost'
+      },
+      '/static': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
+      },
+      '/media': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
       }
     }
   },
   build: {
     target: 'es2015',
-    outDir: 'dist',
-    sourcemap: true,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vue-vendor': ['vue', 'vue-router', 'pinia'],
-          'ui-vendor': ['@headlessui/vue', '@heroicons/vue'],
-          'utils-vendor': ['axios', '@vueuse/core']
-        }
-      }
-    },
-    chunkSizeWarningLimit: 1000,
-    // Optimize chunk splitting for better code splitting
-    cssCodeSplit: true,
-    // Minify for production
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true
-      }
-    }
+    outDir: 'dist'
   }
 })
 

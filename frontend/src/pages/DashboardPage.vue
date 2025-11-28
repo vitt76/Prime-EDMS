@@ -400,7 +400,7 @@ const userName = computed(() => {
 
 const recentAssets = computed<Asset[]>(() => {
   // Get recent assets from assetStore (first 8)
-  return assetStore.assets.slice(0, 8)
+  return assetStore.assets?.slice(0, 8) || []
 })
 
 function goToAsset(assetId: number) {

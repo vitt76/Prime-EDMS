@@ -34,6 +34,48 @@ export const useDistributionStore = defineStore(
       return Math.ceil(totalCount.value / pageSize.value)
     })
 
+    // Mock data for dev mode
+    const mockPublications: Publication[] = [
+      {
+        id: 1,
+        title: 'Пресс-релиз: Новый продукт 2025',
+        description: 'Официальный пресс-релиз о запуске нового продукта',
+        status: 'published',
+        created_date: new Date(Date.now() - 86400000).toISOString(),
+        updated_date: new Date().toISOString(),
+        published_date: new Date().toISOString(),
+        created_by: 'admin',
+        created_by_id: 1,
+        assets: [],
+        channels: [{ id: 1, name: 'Веб-сайт', type: 'website', status: 'active' }],
+        analytics: { views: 1250, downloads: 87, shares: 23 }
+      },
+      {
+        id: 2,
+        title: 'Маркетинговые материалы Q1',
+        description: 'Набор маркетинговых материалов для первого квартала',
+        status: 'draft',
+        created_date: new Date(Date.now() - 172800000).toISOString(),
+        updated_date: new Date(Date.now() - 86400000).toISOString(),
+        created_by: 'editor',
+        created_by_id: 2,
+        assets: [],
+        channels: []
+      },
+      {
+        id: 3,
+        title: 'Корпоративная презентация',
+        description: 'Обновленная корпоративная презентация компании',
+        status: 'scheduled',
+        created_date: new Date(Date.now() - 259200000).toISOString(),
+        updated_date: new Date(Date.now() - 172800000).toISOString(),
+        created_by: 'manager',
+        created_by_id: 3,
+        assets: [],
+        channels: [{ id: 2, name: 'Email', type: 'email', status: 'active' }]
+      }
+    ] as Publication[]
+
     // Actions
     async function fetchPublications(params?: {
       page?: number
@@ -45,6 +87,14 @@ export const useDistributionStore = defineStore(
       error.value = null
 
       try {
+        // In dev mode, use mock data
+        if (import.meta.env.DEV) {
+          await new Promise(resolve => setTimeout(resolve, 300))
+          publications.value = mockPublications
+          totalCount.value = mockPublications.length
+          return
+        }
+
         const queryParams = {
           page: currentPage.value,
           page_size: pageSize.value,
@@ -63,6 +113,13 @@ export const useDistributionStore = defineStore(
           currentPage.value = params.page
         }
       } catch (err) {
+        // In dev mode, fallback to mock data
+        if (import.meta.env.DEV) {
+          console.warn('[Dev] Using mock publications')
+          publications.value = mockPublications
+          totalCount.value = mockPublications.length
+          return
+        }
         error.value = formatApiError(err)
         publications.value = []
         totalCount.value = 0

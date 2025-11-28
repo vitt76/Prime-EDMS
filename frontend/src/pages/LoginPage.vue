@@ -28,11 +28,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/authStore'
 import Card from '@/components/Common/Card.vue'
 import Input from '@/components/Common/Input.vue'
 import Button from '@/components/Common/Button.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const email = ref('')
 const password = ref('')
 const loading = ref(false)
@@ -40,11 +42,14 @@ const loading = ref(false)
 async function handleLogin() {
   loading.value = true
   try {
-    // TODO: Implement actual login logic
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    router.push('/')
+    await authStore.login(email.value, password.value)
+
+    // Redirect to return URL or dashboard
+    const returnTo = router.currentRoute.value.query.returnTo as string || '/'
+    router.push(returnTo)
   } catch (error) {
     console.error('Login failed:', error)
+    // TODO: Show error message to user
   } finally {
     loading.value = false
   }

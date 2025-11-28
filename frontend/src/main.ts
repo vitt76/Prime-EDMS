@@ -14,6 +14,12 @@ pinia.use(piniaPluginPersistedstate)
 app.use(pinia)
 app.use(router)
 
+// Mount app first
 app.mount('#app')
+
+// Initialize auth store AFTER mount - this is important for proper Pinia initialization
+import { useAuthStore } from './stores/authStore'
+const authStore = useAuthStore()
+authStore.checkAuth()
 
 

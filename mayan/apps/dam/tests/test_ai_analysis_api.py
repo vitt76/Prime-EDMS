@@ -324,3 +324,5 @@ class AIAnalysisAPITestCase(ACLTestCaseMixin, DocumentTestMixin, BaseAPITestCase
         old_analysis = self._create_test_analysis()
         # Fresh analysis should not be reanalyzable immediately
         self.assertFalse(DocumentAIAnalysisViewSet._can_reanalyze(old_analysis))
+
+

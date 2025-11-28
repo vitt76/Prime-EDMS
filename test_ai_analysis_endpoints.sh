@@ -256,3 +256,5 @@ echo "3. Database has test documents and ACL entries"
 echo "4. Logging configuration is correct"
 echo ""
 echo "Run with: TOKEN=your_token NO_PERM_TOKEN=no_perm_token ./test_ai_analysis_endpoints.sh"
+
+

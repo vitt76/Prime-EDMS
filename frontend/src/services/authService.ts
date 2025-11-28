@@ -2,7 +2,6 @@ import { apiService } from './apiService'
 import type { User, TwoFactorStatus, TwoFactorSetup, TwoFactorVerify } from '@/types'
 
 interface LoginResponse {
-  token: string
   user: User
   permissions?: string[]
 }
@@ -20,34 +19,180 @@ const AUTH_PASSWORD_BASE = '/api/auth/password/'
 
 class AuthService {
   /**
-   * Login with email and password
+   * Login with email and password using session authentication
    */
-  async login(email: string, password: string): Promise<LoginResponse> {
-    return apiService.post<LoginResponse>('/v4/auth/login/', {
-      email,
-      password
-    })
+  async login(email: string, password: string): Promise<void> {
+    // In dev mode, use mock login for UI testing
+    if (import.meta.env.DEV) {
+      if (!email || !password) {
+        throw new Error('Email and password are required')
+      }
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Store mock user data
+      localStorage.setItem('dev_authenticated', 'true')
+      localStorage.setItem('dev_user', JSON.stringify({
+        id: 1,
+        username: email.split('@')[0] || 'user',
+        email: email,
+        first_name: 'Test',
+        last_name: 'User',
+        is_active: true,
+        permissions: ['admin.access', 'documents.view', 'documents.edit'],
+        role: 'admin'
+      }))
+      console.log('[Dev] Mock login successful for:', email)
+      return
+    }
+
+    // Production: real Django session authentication
+    try {
+      const formData = new FormData()
+      formData.append('username', email)
+      formData.append('password', password)
+
+      const csrfToken = this.getCsrfToken()
+      if (csrfToken) {
+        formData.append('csrfmiddlewaretoken', csrfToken)
+      }
+
+      const response = await fetch('/authentication/login/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        redirect: 'manual'
+      })
+
+      if (response.status === 302 || response.status === 200 || response.type === 'opaqueredirect') {
+        console.log('Login successful')
+        return
+      } else {
+        throw new Error(`Login failed: ${response.status}`)
+      }
+    } catch (error) {
+      console.error('Login error:', error)
+      throw error
+    }
   }
 
   /**
    * Logout current user
    */
   async logout(): Promise<void> {
-    return apiService.post<void>('/v4/auth/logout/')
+    // In development mode, clear localStorage
+    if (import.meta.env.DEV) {
+      localStorage.removeItem('dev_authenticated')
+      localStorage.removeItem('dev_user')
+      console.log('[Dev] Mock logout successful')
+      return
+    }
+
+    // In production, use real Django logout
+    const response = await fetch('/authentication/logout/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': this.getCsrfToken(),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin'
+    })
+
+    if (!response.ok) {
+      throw new Error(`Logout failed: ${response.status}`)
+    }
   }
 
   /**
-   * Refresh authentication token
-   */
-  async refreshToken(): Promise<RefreshTokenResponse> {
-    return apiService.post<RefreshTokenResponse>('/v4/auth/refresh/')
-  }
-
-  /**
-   * Get current authenticated user
+   * Get current authenticated user from Django context
    */
   async getCurrentUser(): Promise<GetCurrentUserResponse> {
-    return apiService.get<GetCurrentUserResponse>('/v4/auth/me/')
+    // In development mode, return stored mock user data
+    if (import.meta.env.DEV) {
+      const userData = localStorage.getItem('dev_user')
+      if (userData) {
+        const user = JSON.parse(userData)
+        return {
+          user: user,
+          permissions: user.permissions || ['admin.access', 'documents.view']
+        }
+      }
+      // Default mock user if none stored
+      return {
+        user: {
+          id: 1,
+          email: 'admin@example.com',
+          first_name: 'Admin',
+          last_name: 'User',
+          username: 'admin',
+          is_active: true,
+          permissions: ['admin.access', 'documents.view'],
+          role: 'admin'
+        },
+        permissions: ['admin.access', 'documents.view']
+      }
+    }
+
+    // In production, use Django context
+    if (typeof window !== 'undefined' && (window as any).DJANGO_CONTEXT) {
+      const djangoContext = (window as any).DJANGO_CONTEXT
+      return {
+        user: djangoContext.user,
+        permissions: djangoContext.user.permissions || []
+      }
+    }
+
+    throw new Error('Unable to get current user')
+  }
+
+  /**
+   * Check if user is authenticated
+   */
+  isAuthenticated(): boolean {
+    // In development mode (Vite dev server), Django context is not available
+    // We'll use a different approach for auth checking
+    if (import.meta.env.DEV) {
+      // In dev mode, check if we have a session cookie or localStorage flag
+      return localStorage.getItem('dev_authenticated') === 'true'
+    }
+
+    // In production (Django served), use Django context
+    if (typeof window !== 'undefined' && (window as any).DJANGO_CONTEXT) {
+      return (window as any).DJANGO_CONTEXT.user.is_authenticated
+    }
+    return false
+  }
+
+  /**
+   * Get CSRF token from cookies or meta tag
+   */
+  private getCsrfToken(): string {
+    // Try to get from Django context first
+    if (typeof window !== 'undefined' && (window as any).DJANGO_CONTEXT) {
+      return (window as any).DJANGO_CONTEXT.csrf_token
+    }
+
+    // Try to get from cookies
+    const cookies = document.cookie.split(';')
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=')
+      if (name === 'csrftoken') {
+        return decodeURIComponent(value)
+      }
+    }
+
+    // Try to get from meta tag
+    const metaToken = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement
+    if (metaToken) {
+      return metaToken.content
+    }
+
+    // Fallback - this will likely fail, but better than undefined
+    return ''
   }
 
   /**

@@ -480,3 +480,5 @@ export const useGalleryStore = defineStore(
     }
   }
 )
+
+

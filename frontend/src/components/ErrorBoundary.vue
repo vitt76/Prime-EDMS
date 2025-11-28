@@ -113,7 +113,7 @@
  * Supports both development (detailed) and production (safe) modes.
  */
 
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, onErrorCaptured } from 'vue'
 import Card from '@/components/Common/Card.vue'
 import Button from '@/components/Common/Button.vue'
 // Simple error logging - avoid circular dependency
@@ -350,12 +350,12 @@ const resetError = () => {
 
 /**
  * Vue 3 Error Boundary API
- * This will be called when a child component throws an error
+ * Register the error capturing hook
  */
-const errorCaptured = (err: Error, instance: any, info: string) => {
+onErrorCaptured((err: Error, instance: any, info: string) => {
   handleError(err, instance, info)
   return false // Don't propagate the error
-}
+})
 
 // Watch for error changes
 watch(hasError, (newHasError) => {

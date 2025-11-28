@@ -8,7 +8,7 @@ export const useAuthStore = defineStore(
   () => {
     // State
     const user = ref<User | null>(null)
-    const token = ref<string | null>(null)
+    // Note: token removed - using session-based authentication
     const isAuthenticated = ref(false)
     const permissions = ref<string[]>([])
     const lastActivity = ref<Date | null>(null)
@@ -42,28 +42,26 @@ export const useAuthStore = defineStore(
     // Actions
     async function login(email: string, password: string) {
       try {
-        const response = await authService.login(email, password)
-        token.value = response.token
-        user.value = response.user
+        await authService.login(email, password)
+        // After successful login, get current user info
+        const userResponse = await authService.getCurrentUser()
+        user.value = userResponse.user
         isAuthenticated.value = true
-        permissions.value = response.permissions || []
+        permissions.value = userResponse.permissions || []
         lastActivity.value = new Date()
 
-        // Store token in localStorage
-        if (token.value) {
-          localStorage.setItem('auth_token', token.value)
-        }
-
-        // Check 2FA status and set pending if enabled
-        try {
-          const twoFactorStatusResponse = await authService.getTwoFactorStatus()
-          twoFactorStatus.value = twoFactorStatusResponse
-          if (twoFactorStatusResponse.enabled) {
-            twoFactorPending.value = true
+        // Check 2FA status and set pending if enabled (only in production)
+        if (!import.meta.env.DEV) {
+          try {
+            const twoFactorStatusResponse = await authService.getTwoFactorStatus()
+            twoFactorStatus.value = twoFactorStatusResponse
+            if (twoFactorStatusResponse.enabled) {
+              twoFactorPending.value = true
+            }
+          } catch (error) {
+            console.warn('Failed to check 2FA status during login:', error)
+            // Don't fail login if 2FA check fails
           }
-        } catch (error) {
-          console.warn('Failed to check 2FA status during login:', error)
-          // Don't fail login if 2FA check fails
         }
 
         return { success: true }
@@ -80,7 +78,6 @@ export const useAuthStore = defineStore(
         // Continue with logout even if API call fails
         console.error('Logout error:', error)
       } finally {
-        token.value = null
         user.value = null
         isAuthenticated.value = false
         permissions.value = []
@@ -89,55 +86,53 @@ export const useAuthStore = defineStore(
         twoFactorStatus.value = null
         twoFactorPending.value = false
         twoFactorSetup.value = null
-        localStorage.removeItem('auth_token')
       }
     }
 
     async function refreshToken() {
-      try {
-        const response = await authService.refreshToken()
-        token.value = response.token
-        if (token.value) {
-          localStorage.setItem('auth_token', token.value)
-        }
-        return { success: true }
-      } catch (error) {
-        // Token refresh failed, logout user
-        await logout()
-        throw error
-      }
+      // For session authentication, token refresh is not needed
+      // Sessions are managed by Django automatically
+      return { success: true }
     }
 
     async function checkAuth() {
-      const storedToken = localStorage.getItem('auth_token')
-      if (!storedToken) {
+      // In dev mode, check localStorage for mock auth
+      if (import.meta.env.DEV) {
+        const isAuth = localStorage.getItem('dev_authenticated') === 'true'
+        if (isAuth) {
+          const userData = localStorage.getItem('dev_user')
+          if (userData) {
+            try {
+              user.value = JSON.parse(userData)
+              isAuthenticated.value = true
+              permissions.value = user.value?.permissions || []
+              lastActivity.value = new Date()
+              return true
+            } catch (e) {
+              console.error('[Dev] Failed to parse user data:', e)
+            }
+          }
+        }
+        isAuthenticated.value = false
+        return false
+      }
+
+      // Production: check Django session
+      if (!authService.isAuthenticated()) {
         isAuthenticated.value = false
         return false
       }
 
       try {
         const response = await authService.getCurrentUser()
-        token.value = storedToken
         user.value = response.user
         isAuthenticated.value = true
         permissions.value = response.permissions || []
         lastActivity.value = new Date()
 
-        // Check 2FA status
-        try {
-          const twoFactorStatusResponse = await authService.getTwoFactorStatus()
-          twoFactorStatus.value = twoFactorStatusResponse
-          if (twoFactorStatusResponse.enabled) {
-            twoFactorPending.value = true
-          }
-        } catch (error) {
-          console.warn('Failed to check 2FA status during auth check:', error)
-          // Don't fail auth check if 2FA check fails
-        }
-
         return true
       } catch (error) {
-        // Token invalid, clear auth
+        // User not authenticated, clear auth
         await logout()
         return false
       }
@@ -224,7 +219,6 @@ export const useAuthStore = defineStore(
     return {
       // State
       user,
-      token,
       isAuthenticated,
       permissions,
       lastActivity,

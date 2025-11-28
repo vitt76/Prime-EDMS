@@ -196,15 +196,8 @@ router.beforeEach(async (to, _from, next) => {
 
   // Check authentication status
   if (!authStore.isAuthenticated) {
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      // Try to restore session
-      const isAuthenticated = await authStore.checkAuth()
-      if (!isAuthenticated) {
-        // Token invalid, clear it
-        localStorage.removeItem('auth_token')
-      }
-    }
+    // Try to check auth status from Django context/session
+    await authStore.checkAuth()
   }
 
   // Check if route requires authentication
@@ -233,10 +226,8 @@ router.beforeEach(async (to, _from, next) => {
   // Check if route requires specific permission
   if (to.meta.requiresPermission) {
     const permission = to.meta.requiresPermission as string
-    // hasPermission is a computed that returns a function
-    // Type assertion needed because Pinia computed types in router context
-    const checkPermission = (authStore.hasPermission as unknown as { value: (p: string) => boolean }).value
-    if (!checkPermission(permission)) {
+    // hasPermission is a computed that returns a function - call it directly
+    if (!authStore.hasPermission(permission)) {
       console.warn(
         `Access denied: User ${authStore.user?.id} attempted ${to.path}, required: ${permission}`
       )
@@ -255,9 +246,8 @@ router.beforeEach(async (to, _from, next) => {
   // Check role-based access
   if (to.meta.requiresRole) {
     const requiredRole = to.meta.requiresRole as string
-    // hasRole is a computed that returns a function
-    const checkRole = (authStore.hasRole as unknown as { value: (r: string) => boolean }).value
-    if (!checkRole(requiredRole)) {
+    // hasRole is a computed that returns a function - call it directly
+    if (!authStore.hasRole(requiredRole)) {
       console.warn(
         `Access denied: User ${authStore.user?.id} with role ${authStore.user?.role} attempted ${to.path}, required role: ${requiredRole}`
       )

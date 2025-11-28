@@ -50,8 +50,10 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const showLayout = computed(() => {
-  // Don't show layout on login/home pages
-  return route.name !== 'login' && route.name !== 'home'
+  // Show layout for all authenticated pages except auth-related pages
+  const authPages = ['login', 'forgot-password', 'reset-password', 'two-factor-auth']
+  // Check if route.name exists and is not an auth page
+  return route.name && !authPages.includes(route.name as string)
 })
 
 onMounted(async () => {

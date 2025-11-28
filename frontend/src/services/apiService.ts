@@ -6,7 +6,7 @@ import axios, {
 import type { ApiResponse, ApiError } from '@/types/api'
 import { cacheService } from './cacheService'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 const MAX_RETRIES = 3
 const RETRY_DELAY = 1000 // 1 second
 
@@ -77,11 +77,8 @@ class ApiService {
           config.headers['X-CSRFToken'] = csrfToken
         }
 
-        // Add auth token
-        const token = localStorage.getItem('auth_token')
-        if (token && config.headers) {
-          config.headers['Authorization'] = `Bearer ${token}`
-        }
+        // Session-based auth - cookies are sent automatically
+        // JWT tokens removed - using Django session authentication
 
         return config
       },
@@ -107,8 +104,10 @@ class ApiService {
 
         // Handle 401 Unauthorized
         if (error.response?.status === 401) {
-          localStorage.removeItem('auth_token')
-          window.location.href = '/login'
+          // Session expired - redirect to login
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login'
+          }
           return Promise.reject(error)
         }
 
