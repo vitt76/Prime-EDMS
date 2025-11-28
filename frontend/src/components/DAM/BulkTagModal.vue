@@ -1,185 +1,260 @@
 <template>
-  <Modal
-    :is-open="isOpen"
-    size="md"
-    @close="$emit('close')"
-  >
-    <template #header>
-      <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-900">
-        Массовое добавление тегов
-      </h2>
-    </template>
+  <TransitionRoot appear :show="isOpen" as="template">
+    <Dialog as="div" class="relative z-50" @close="handleClose">
+      <TransitionChild
+        as="template"
+        enter="ease-out duration-300"
+        enter-from="opacity-0"
+        enter-to="opacity-100"
+        leave="ease-in duration-200"
+        leave-from="opacity-100"
+        leave-to="opacity-0"
+      >
+        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+      </TransitionChild>
 
-    <template #default>
-      <div class="space-y-4">
-        <!-- Operation Selector -->
-        <div>
-          <label class="block text-sm font-medium text-neutral-900 dark:text-neutral-900 mb-2">
-            Операция
-          </label>
-          <select
-            v-model="operation"
-            class="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-300 rounded-md text-sm bg-neutral-0 dark:bg-neutral-0 text-neutral-900 dark:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+      <div class="fixed inset-0 overflow-y-auto">
+        <div class="flex min-h-full items-center justify-center p-4">
+          <TransitionChild
+            as="template"
+            enter="ease-out duration-300"
+            enter-from="opacity-0 scale-95"
+            enter-to="opacity-100 scale-100"
+            leave="ease-in duration-200"
+            leave-from="opacity-100 scale-100"
+            leave-to="opacity-0 scale-95"
           >
-            <option value="add">Добавить теги</option>
-            <option value="remove">Удалить теги</option>
-            <option value="replace">Заменить все теги</option>
-          </select>
-        </div>
+            <DialogPanel
+              class="w-full max-w-md transform overflow-hidden rounded-2xl 
+                     bg-white dark:bg-neutral-800 shadow-2xl transition-all"
+            >
+              <!-- Header -->
+              <div class="flex items-center justify-between p-5 border-b border-neutral-200 dark:border-neutral-700">
+                <div class="flex items-center gap-3">
+                  <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30">
+                    <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <DialogTitle class="text-lg font-semibold text-neutral-900 dark:text-white">
+                      Добавить теги
+                    </DialogTitle>
+                    <p class="text-sm text-neutral-500 dark:text-neutral-400">
+                      {{ selectedCount }} актив(ов) выбрано
+                    </p>
+                  </div>
+                </div>
+                <button
+                  class="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700 
+                         text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300
+                         transition-colors"
+                  @click="handleClose"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
 
-        <!-- Tag Input -->
-        <div>
-          <label class="block text-sm font-medium text-neutral-900 dark:text-neutral-900 mb-2">
-            Теги
-          </label>
-          <TagInput
-            v-model="tags"
-            :suggestions="tagSuggestions"
-            placeholder="Введите теги..."
-            :allow-custom="true"
-          />
-        </div>
+              <!-- Body -->
+              <div class="p-5 space-y-4">
+                <!-- Tag Input -->
+                <div>
+                  <label class="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    Введите теги
+                  </label>
+                  <div class="relative">
+                    <input
+                      ref="inputRef"
+                      v-model="tagInput"
+                      type="text"
+                      class="w-full px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-600
+                             bg-white dark:bg-neutral-900
+                             text-neutral-900 dark:text-white
+                             placeholder-neutral-400
+                             focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                             transition-all"
+                      placeholder="Введите тег и нажмите Enter..."
+                      @keydown.enter.prevent="addTag"
+                      @keydown.tab.prevent="addTag"
+                    />
+                  </div>
+                  <p class="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                    Нажмите Enter или Tab для добавления тега
+                  </p>
+                </div>
 
-        <!-- Info -->
-        <div class="p-3 bg-neutral-50 dark:bg-neutral-50 rounded-md">
-          <p class="text-sm text-neutral-600 dark:text-neutral-600">
-            Операция будет применена к <strong>{{ selectedCount }}</strong> выбранным активам.
-          </p>
-        </div>
+                <!-- Added Tags -->
+                <div v-if="selectedTags.length > 0" class="flex flex-wrap gap-2">
+                  <span
+                    v-for="(tag, index) in selectedTags"
+                    :key="index"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 
+                           bg-primary-100 dark:bg-primary-900/30 
+                           text-primary-700 dark:text-primary-300 
+                           text-sm font-medium rounded-lg"
+                  >
+                    {{ tag }}
+                    <button
+                      class="hover:bg-primary-200 dark:hover:bg-primary-800 rounded p-0.5 transition-colors"
+                      @click="removeTag(index)"
+                    >
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                </div>
 
-        <!-- Progress (if processing) -->
-        <div v-if="isProcessing" class="space-y-2">
-          <div class="flex items-center justify-between text-sm">
-            <span class="text-neutral-600 dark:text-neutral-600">Обработка...</span>
-            <span class="text-neutral-900 dark:text-neutral-900 font-medium">
-              {{ processedCount }} / {{ selectedCount }}
-            </span>
-          </div>
-          <div class="w-full bg-neutral-200 dark:bg-neutral-200 rounded-full h-2">
-            <div
-              class="bg-primary-500 h-2 rounded-full transition-all duration-300"
-              :style="{ width: `${(processedCount / selectedCount) * 100}%` }"
-            ></div>
-          </div>
-        </div>
+                <!-- Suggested Tags -->
+                <div>
+                  <p class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    Популярные теги
+                  </p>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      v-for="tag in suggestedTags"
+                      :key="tag"
+                      class="px-3 py-1.5 text-sm rounded-lg
+                             bg-neutral-100 dark:bg-neutral-700 
+                             text-neutral-700 dark:text-neutral-300
+                             hover:bg-neutral-200 dark:hover:bg-neutral-600
+                             transition-colors"
+                      :class="{ 'ring-2 ring-primary-500': selectedTags.includes(tag) }"
+                      @click="toggleSuggestedTag(tag)"
+                    >
+                      {{ tag }}
+                    </button>
+                  </div>
+                </div>
+              </div>
 
-        <!-- Error Display -->
-        <div v-if="errors.length > 0" class="p-3 bg-error-50 dark:bg-error-50 rounded-md">
-          <p class="text-sm font-medium text-error mb-2">Ошибки:</p>
-          <ul class="text-sm text-error space-y-1">
-            <li v-for="(error, index) in errors" :key="index">
-              {{ error }}
-            </li>
-          </ul>
+              <!-- Footer -->
+              <div class="flex items-center justify-end gap-3 p-5 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900/50">
+                <button
+                  class="px-4 py-2.5 text-sm font-medium rounded-xl
+                         text-neutral-700 dark:text-neutral-300
+                         hover:bg-neutral-200 dark:hover:bg-neutral-700
+                         transition-colors"
+                  @click="handleClose"
+                >
+                  Отмена
+                </button>
+                <button
+                  class="px-5 py-2.5 text-sm font-medium rounded-xl
+                         bg-primary-600 hover:bg-primary-700
+                         text-white
+                         disabled:opacity-50 disabled:cursor-not-allowed
+                         transition-colors"
+                  :disabled="selectedTags.length === 0 || isSubmitting"
+                  @click="handleSubmit"
+                >
+                  <span v-if="isSubmitting" class="flex items-center gap-2">
+                    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Применение...
+                  </span>
+                  <span v-else>
+                    Применить теги
+                  </span>
+                </button>
+              </div>
+            </DialogPanel>
+          </TransitionChild>
         </div>
       </div>
-    </template>
-
-    <template #footer>
-      <div class="flex justify-end gap-2">
-        <Button
-          variant="outline"
-          size="md"
-          @click="$emit('close')"
-          :disabled="isProcessing"
-        >
-          Отмена
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          @click="handleApply"
-          :disabled="tags.length === 0 || isProcessing"
-        >
-          <span v-if="!isProcessing">Применить</span>
-          <span v-else>Обработка...</span>
-        </Button>
-      </div>
-    </template>
-  </Modal>
+    </Dialog>
+  </TransitionRoot>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import Modal from '@/components/Common/Modal.vue'
-import Button from '@/components/Common/Button.vue'
-import TagInput from '@/components/Common/TagInput.vue'
-import { assetService } from '@/services/assetService'
-import { formatApiError } from '@/utils/errors'
+import { ref, watch, nextTick } from 'vue'
+import {
+  Dialog,
+  DialogPanel,
+  DialogTitle,
+  TransitionRoot,
+  TransitionChild,
+} from '@headlessui/vue'
 
 interface Props {
   isOpen: boolean
+  selectedCount: number
   selectedIds: number[]
-  tagSuggestions?: string[]
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  tagSuggestions: () => []
-})
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   close: []
-  success: [result: { updated: number; failed: number }]
+  success: [tags: string[]]
 }>()
 
-const operation = ref<'add' | 'remove' | 'replace'>('add')
-const tags = ref<string[]>([])
-const isProcessing = ref(false)
-const processedCount = ref(0)
-const errors = ref<string[]>([])
+const inputRef = ref<HTMLInputElement | null>(null)
+const tagInput = ref('')
+const selectedTags = ref<string[]>([])
+const isSubmitting = ref(false)
 
-const selectedCount = computed(() => props.selectedIds.length)
+const suggestedTags = [
+  'Campaign 2025',
+  'Marketing',
+  'Product',
+  'Social Media',
+  'Press Release',
+  'Internal',
+  'Approved',
+  'Archive',
+]
 
-// Reset on open
-watch(
-  () => props.isOpen,
-  (isOpen) => {
-    if (isOpen) {
-      operation.value = 'add'
-      tags.value = []
-      isProcessing.value = false
-      processedCount.value = 0
-      errors.value = []
-    }
+// Focus input when modal opens
+watch(() => props.isOpen, async (isOpen) => {
+  if (isOpen) {
+    selectedTags.value = []
+    tagInput.value = ''
+    await nextTick()
+    inputRef.value?.focus()
   }
-)
+})
 
-async function handleApply() {
-  if (tags.value.length === 0) return
-
-  isProcessing.value = true
-  processedCount.value = 0
-  errors.value = []
-
-  try {
-    const action = operation.value === 'add' ? 'add_tags' : operation.value === 'remove' ? 'remove_tags' : 'add_tags'
-    const data = operation.value === 'replace' ? { tags: tags.value, replace: true } : { tags: tags.value }
-
-    const result = await assetService.bulkOperation({
-      ids: props.selectedIds,
-      action: action as 'add_tags' | 'remove_tags',
-      data
-    })
-
-    if (result.success) {
-      processedCount.value = result.updated
-      if (result.errors && result.errors.length > 0) {
-        errors.value = result.errors.map((e) => `Asset ${e.id}: ${e.error}`)
-      }
-      emit('success', { updated: result.updated, failed: result.failed })
-      // Close modal after short delay to show success
-      setTimeout(() => {
-        emit('close')
-      }, 1000)
-    } else {
-      errors.value = ['Операция не удалась']
-    }
-  } catch (err) {
-    errors.value = [formatApiError(err)]
-  } finally {
-    isProcessing.value = false
+function addTag() {
+  const tag = tagInput.value.trim()
+  if (tag && !selectedTags.value.includes(tag)) {
+    selectedTags.value.push(tag)
+    tagInput.value = ''
   }
 }
+
+function removeTag(index: number) {
+  selectedTags.value.splice(index, 1)
+}
+
+function toggleSuggestedTag(tag: string) {
+  const index = selectedTags.value.indexOf(tag)
+  if (index > -1) {
+    selectedTags.value.splice(index, 1)
+  } else {
+    selectedTags.value.push(tag)
+  }
+}
+
+function handleClose() {
+  if (!isSubmitting.value) {
+    emit('close')
+  }
+}
+
+async function handleSubmit() {
+  if (selectedTags.value.length === 0) return
+  
+  isSubmitting.value = true
+  
+  // Simulate API call
+  await new Promise(resolve => setTimeout(resolve, 800))
+  
+  isSubmitting.value = false
+  emit('success', [...selectedTags.value])
+}
 </script>
-
-

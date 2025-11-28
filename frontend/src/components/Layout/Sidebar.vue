@@ -59,29 +59,37 @@
       </ul>
     </nav>
 
-    <!-- Collections Section -->
+    <!-- Collections Section (Quick Links) -->
     <div v-if="isExpanded" class="mt-6 px-2">
       <div class="flex items-center justify-between px-3 mb-2">
-        <h3 class="text-xs font-semibold text-neutral-500 dark:text-neutral-500 uppercase">
+        <h3 class="text-xs font-semibold text-neutral-500 dark:text-neutral-500 uppercase tracking-wider">
           Коллекции
         </h3>
       </div>
-      <ul class="space-y-1">
+      <ul class="space-y-0.5">
         <li v-for="collection in collections" :key="collection.id">
           <router-link
             :to="collection.path"
             :class="[
-              'flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm',
               isActive(collection.path)
                 ? 'bg-primary-50 dark:bg-primary-50 text-primary-600 dark:text-primary-600'
-                : 'text-neutral-600 dark:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-100'
+                : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'
             ]"
           >
-            <component :is="collection.icon" class="w-5 h-5 flex-shrink-0" />
-            <span class="text-sm">{{ collection.label }}</span>
+            <component :is="collection.icon" class="w-4 h-4 flex-shrink-0" />
+            <span>{{ collection.label }}</span>
           </router-link>
         </li>
       </ul>
+    </div>
+
+    <!-- File Structure Section with FolderTree -->
+    <div v-if="isExpanded" class="mt-6 px-2">
+      <FolderTree 
+        @folder-select="handleFolderSelect"
+        @create-folder="handleNewFolder"
+      />
     </div>
 
     <!-- Quick Actions -->
@@ -132,12 +140,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/uiStore'
+import { useFolderStore } from '@/stores/folderStore'
+import FolderTree from '@/components/FolderTree.vue'
 
 const route = useRoute()
+const router = useRouter()
 const uiStore = useUIStore()
+const folderStore = useFolderStore()
+
+// Initialize folder store on mount
+onMounted(() => {
+  // Folders are already loaded from mock data, no need to refresh
+  // folderStore.refreshFolders()
+})
 
 const isExpanded = computed(() => uiStore.sidebarExpanded)
 
@@ -239,6 +257,14 @@ function handleNewFolder() {
 
 function handleUpload() {
   emit('open-upload')
+}
+
+function handleFolderSelect(folderId: string) {
+  // Navigate to DAM gallery with folder filter
+  router.push({
+    path: '/dam',
+    query: { folder: folderId }
+  })
 }
 
 const emit = defineEmits<{

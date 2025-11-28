@@ -241,6 +241,13 @@
       @close="showBulkShareModal = false"
       @success="handleShareSuccess"
     />
+
+    <!-- Floating Bulk Actions Bar (New Glassmorphism Version) -->
+    <BulkActionsBar
+      @share="handleBulkShare"
+      @download="handleBulkDownload"
+      @move="handleBulkMove"
+    />
   </div>
 </template>
 
@@ -251,6 +258,7 @@ import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
 import AssetCard from './AssetCard.vue'
 import BulkActions from './BulkActions.vue'
+import BulkActionsBar from './BulkActionsBar.vue'
 import BulkTagModal from './BulkTagModal.vue'
 import BulkMoveModal from './BulkMoveModal.vue'
 import BulkDeleteModal from './BulkDeleteModal.vue'

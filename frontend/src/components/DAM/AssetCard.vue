@@ -4,12 +4,15 @@
     role="button"
     tabindex="0"
     :aria-label="`Актив: ${asset.label}`"
+    :draggable="true"
     @click="handleClick"
     @dblclick="handleDoubleClick"
     @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false"
+    @mouseleave="isHovered = false; isDragging = false"
     @keydown.enter="handleClick"
     @keydown.space.prevent="handleClick"
+    @dragstart="handleDragStart"
+    @dragend="handleDragEnd"
   >
     <!-- Checkbox (shown on hover or when selected) -->
     <Transition
@@ -283,6 +286,7 @@ import { ref, computed } from 'vue'
 import type { Asset } from '@/types/api'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import { useIntersectionObserver } from '@/composables/useIntersectionObserver'
+import { useAssetStore } from '@/stores/assetStore'
 
 interface Props {
   asset: Asset
@@ -311,6 +315,7 @@ const emit = defineEmits<{
 const isHovered = ref(false)
 const imageError = ref(false)
 const thumbnailRef = ref<HTMLElement | null>(null)
+const isDragging = ref(false)
 
 // Intersection Observer for lazy loading
 const { hasIntersected } = useIntersectionObserver(thumbnailRef, {
@@ -347,8 +352,12 @@ const cardClasses = computed(() => {
     'ease-out',
   ]
   
+  // Dragging state
+  if (isDragging.value) {
+    base.push('opacity-50', 'scale-95', 'ring-2', 'ring-primary-400', 'ring-dashed')
+  }
   // Hover & selection states
-  if (props.isSelected) {
+  else if (props.isSelected) {
     base.push('ring-2', 'ring-primary-500', 'ring-offset-2', 'shadow-lg')
   } else {
     base.push(
@@ -433,5 +442,57 @@ function handleShare() {
 
 function handleMore() {
   emit('more', props.asset)
+}
+
+// ============================================================================
+// DRAG & DROP HANDLERS
+// ============================================================================
+
+const assetStore = useAssetStore()
+
+function handleDragStart(event: DragEvent) {
+  if (!event.dataTransfer) return
+  
+  isDragging.value = true
+  
+  // Collect IDs - if this asset is selected, drag all selected assets
+  // Otherwise, drag only this asset
+  let assetIds: number[]
+  
+  if (props.isSelected && assetStore.selectedAssets.size > 0) {
+    assetIds = Array.from(assetStore.selectedAssets)
+  } else {
+    assetIds = [props.asset.id]
+  }
+  
+  // Set drag data
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('application/json', JSON.stringify({
+    type: 'asset',
+    assetIds: assetIds,
+    label: assetIds.length > 1 
+      ? `${assetIds.length} файлов` 
+      : props.asset.label
+  }))
+  
+  // Create custom drag image
+  const dragImage = document.createElement('div')
+  dragImage.className = 'px-3 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg shadow-lg'
+  dragImage.textContent = assetIds.length > 1 
+    ? `${assetIds.length} файлов`
+    : props.asset.label
+  dragImage.style.position = 'absolute'
+  dragImage.style.top = '-1000px'
+  document.body.appendChild(dragImage)
+  event.dataTransfer.setDragImage(dragImage, 0, 0)
+  
+  // Remove drag image after a short delay
+  setTimeout(() => {
+    document.body.removeChild(dragImage)
+  }, 0)
+}
+
+function handleDragEnd() {
+  isDragging.value = false
 }
 </script>

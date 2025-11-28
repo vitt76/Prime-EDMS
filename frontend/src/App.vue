@@ -45,10 +45,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { useAssetStore } from '@/stores/assetStore'
 import { setupGlobalErrorHandlers, logError } from '@/composables/useErrorBoundary'
 import Header from '@/components/Layout/Header.vue'
 import Sidebar from '@/components/Layout/Sidebar.vue'
@@ -58,6 +59,7 @@ import UploadWizard from '@/components/DAM/UploadWizard.vue'
 import type { Asset } from '@/types/api'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const notificationStore = useNotificationStore()
 const uiStore = useUIStore()
@@ -96,8 +98,17 @@ onMounted(async () => {
 })
 
 function handleSearch(query: string) {
-  // TODO: Implement search
-  console.log('Search:', query)
+  // Update asset store search query
+  const assetStore = useAssetStore()
+  assetStore.setSearchQuery(query)
+  
+  // Navigate to DAM page if not already there
+  if (!router.currentRoute.value.path.startsWith('/dam')) {
+    router.push('/dam')
+  }
+  
+  // Refetch assets with the new search query
+  assetStore.fetchAssets()
 }
 
 function handleFilterToggle() {

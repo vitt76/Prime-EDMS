@@ -17,7 +17,7 @@
  * - Favorites → User bookmarks (via tags or separate table)
  */
 
-import type { Asset, AIAnalysis, PaginatedResponse } from '@/types/api'
+import type { Asset, AIAnalysis, PaginatedResponse, Comment, Version } from '@/types/api'
 
 // ============================================================================
 // USER TYPES (for uploadedBy, sharedBy)
@@ -87,7 +87,43 @@ const OTHER_USERS: MockUser[] = [
 ]
 
 // ============================================================================
-// EXTENDED ASSET TYPE (with collection fields)
+// PRO FEATURES: EXIF, Usage Stats
+// ============================================================================
+
+export interface ExifData {
+  // Camera Info
+  make?: string        // "Canon", "Nikon", "Sony"
+  model?: string       // "EOS R5", "Z7 II"
+  lens?: string        // "RF 24-70mm f/2.8L"
+  // Shooting Settings
+  focalLength?: string // "50mm"
+  aperture?: string    // "f/2.8"
+  shutterSpeed?: string // "1/250s"
+  iso?: number         // 400
+  // Technical
+  colorSpace?: string  // "sRGB", "Adobe RGB"
+  dpi?: number         // 300
+  bitDepth?: number    // 8, 16
+  // GPS (optional)
+  gpsLatitude?: number
+  gpsLongitude?: number
+  gpsAltitude?: number
+  // Dates
+  dateOriginal?: string // ISO date when photo was taken
+}
+
+export interface UsageStats {
+  views: number
+  downloads: number
+  shares: number
+  usedInLinks: number           // How many shared links include this asset
+  usedInPublications: number    // How many publications include this asset
+  lastViewedAt?: string
+  lastDownloadedAt?: string
+}
+
+// ============================================================================
+// EXTENDED ASSET TYPE (with collection fields + PRO features)
 // ============================================================================
 
 export interface ExtendedAsset extends Asset {
@@ -98,6 +134,10 @@ export interface ExtendedAsset extends Asset {
   sharedWithMe: boolean
   sharedBy?: MockUser  // Who shared this with me (if sharedWithMe)
   sharedAt?: string    // When it was shared
+  
+  // PRO: Detailed metadata (uses base types from api.ts for comments & version_history)
+  exif?: ExifData
+  usage?: UsageStats
 }
 
 // ============================================================================
@@ -166,7 +206,6 @@ const FILE_TYPES = {
 
 // Status options
 const STATUSES = ['approved', 'pending', 'draft', 'rejected'] as const
-type AssetStatus = typeof STATUSES[number]
 
 // AI Providers
 const AI_PROVIDERS = ['YandexGPT', 'GigaChat', 'Qwen'] as const
@@ -319,6 +358,148 @@ function generateThumbnail(type: string, index: number): string {
 }
 
 // ============================================================================
+// PRO FEATURES GENERATORS
+// ============================================================================
+
+const CAMERA_MAKES = ['Canon', 'Nikon', 'Sony', 'Fujifilm', 'Panasonic', 'Leica', 'Hasselblad']
+const CAMERA_MODELS: Record<string, string[]> = {
+  'Canon': ['EOS R5', 'EOS R6 Mark II', 'EOS 5D Mark IV', 'EOS 90D'],
+  'Nikon': ['Z8', 'Z7 II', 'Z6 III', 'D850'],
+  'Sony': ['A7R V', 'A7 IV', 'A1', 'A6700'],
+  'Fujifilm': ['X-T5', 'GFX 100S', 'X-H2S'],
+  'Panasonic': ['Lumix S5 II', 'Lumix GH6'],
+  'Leica': ['M11', 'Q3', 'SL2-S'],
+  'Hasselblad': ['X2D 100C', '907X'],
+}
+const LENSES = [
+  '24-70mm f/2.8', '70-200mm f/2.8', '50mm f/1.4', '35mm f/1.8',
+  '85mm f/1.2', '14-24mm f/2.8', '100mm Macro', '16-35mm f/4',
+]
+const APERTURES = ['f/1.4', 'f/1.8', 'f/2', 'f/2.8', 'f/4', 'f/5.6', 'f/8', 'f/11']
+const SHUTTER_SPEEDS = ['1/8000s', '1/4000s', '1/2000s', '1/1000s', '1/500s', '1/250s', '1/125s', '1/60s', '1/30s']
+const FOCAL_LENGTHS = ['24mm', '35mm', '50mm', '85mm', '100mm', '135mm', '200mm']
+
+function generateExifData(type: string): ExifData | undefined {
+  // Only images have EXIF
+  if (type !== 'image') return undefined
+  
+  // 90% chance of having EXIF
+  if (Math.random() > 0.9) return undefined
+  
+  const make = randomElement(CAMERA_MAKES)
+  const models = CAMERA_MODELS[make] || ['Unknown Model']
+  
+  return {
+    make,
+    model: randomElement(models),
+    lens: randomElement(LENSES),
+    focalLength: randomElement(FOCAL_LENGTHS),
+    aperture: randomElement(APERTURES),
+    shutterSpeed: randomElement(SHUTTER_SPEEDS),
+    iso: randomElement([100, 200, 400, 800, 1600, 3200, 6400]),
+    colorSpace: randomElement(['sRGB', 'Adobe RGB', 'ProPhoto RGB']),
+    dpi: randomElement([72, 150, 300, 600]),
+    bitDepth: randomElement([8, 16]),
+    dateOriginal: randomDate(365),
+    // 30% have GPS
+    ...(Math.random() < 0.3 ? {
+      gpsLatitude: randomInt(-90, 90) + Math.random(),
+      gpsLongitude: randomInt(-180, 180) + Math.random(),
+      gpsAltitude: randomInt(0, 3000),
+    } : {}),
+  }
+}
+
+function generateVersionHistory(id: number, filename: string, uploadedBy: MockUser): Version[] {
+  // 60% of assets have multiple versions
+  if (Math.random() > 0.6) {
+    return [{
+      id: id * 100,
+      filename,
+      size: randomInt(500_000, 15_000_000),
+      uploaded_by: uploadedBy.first_name + ' ' + uploadedBy.last_name,
+      uploaded_by_id: uploadedBy.id,
+      uploaded_date: randomDate(180),
+      is_current: true,
+    }]
+  }
+  
+  const versionCount = randomInt(2, 5)
+  const versions: Version[] = []
+  
+  for (let v = 1; v <= versionCount; v++) {
+    const versionUploader = v === 1 ? uploadedBy : randomElement([...OTHER_USERS, CURRENT_USER])
+    versions.push({
+      id: id * 100 + v,
+      filename: filename.replace(/(\.[^.]+)$/, `_v${v}$1`),
+      size: randomInt(500_000, 15_000_000),
+      uploaded_by: versionUploader.first_name + ' ' + versionUploader.last_name,
+      uploaded_by_id: versionUploader.id,
+      uploaded_date: randomDate(180 - (versionCount - v) * 30), // Earlier versions have older dates
+      is_current: v === versionCount,
+    })
+  }
+  
+  return versions
+}
+
+const COMMENT_TEXTS = [
+  'Отличное качество! 👍',
+  'Нужно подкорректировать цвета',
+  'Можно использовать для баннера на главной',
+  'Утверждено для печати',
+  'Требуется ресайз до 1920x1080',
+  '@ivan.petrov посмотри это изображение',
+  'Идеально подходит для социальных сетей',
+  'Добавить в презентацию для клиента',
+  'Версия 2 лучше, давайте её использовать',
+  'Лицензия подтверждена до 2026 года',
+]
+
+function generateComments(id: number): Comment[] {
+  // 70% of assets have comments
+  if (Math.random() > 0.7) return []
+  
+  const commentCount = randomInt(1, 6)
+  const comments: Comment[] = []
+  
+  for (let i = 0; i < commentCount; i++) {
+    const commenter = randomElement([CURRENT_USER, ...OTHER_USERS])
+    const createdDate = randomDate(60)
+    comments.push({
+      id: id * 1000 + i,
+      author: commenter.first_name + ' ' + commenter.last_name,
+      author_id: commenter.id,
+      author_avatar: commenter.avatar_url,
+      text: randomElement(COMMENT_TEXTS),
+      created_date: createdDate,
+      updated_date: Math.random() < 0.2 ? randomRecentDate(7) : undefined,
+      edited: Math.random() < 0.1,
+      // 20% have mentions
+      mentions: Math.random() < 0.2 ? [randomElement(OTHER_USERS).username] : undefined,
+    })
+  }
+  
+  // Sort by date ascending (oldest first)
+  return comments.sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime())
+}
+
+function generateUsageStats(): UsageStats {
+  const views = randomInt(0, 500)
+  const downloads = randomInt(0, Math.floor(views / 3))
+  
+  return {
+    views,
+    downloads,
+    shares: randomInt(0, Math.floor(downloads / 2)),
+    usedInLinks: randomInt(0, 5),
+    usedInPublications: randomInt(0, 3),
+    lastViewedAt: views > 0 ? randomRecentDate(7) : undefined,
+    lastDownloadedAt: downloads > 0 ? randomRecentDate(14) : undefined,
+  }
+}
+
+// ============================================================================
 // MOCK ASSET GENERATOR (EXTENDED)
 // ============================================================================
 
@@ -394,6 +575,12 @@ function generateMockAsset(id: number): ExtendedAsset {
     sharedWithMe,
     sharedBy,
     sharedAt,
+    
+    // PRO: Detailed metadata (using base Asset types)
+    exif: generateExifData(type),
+    version_history: generateVersionHistory(id, filename, uploadedBy),
+    comments: generateComments(id),
+    usage: generateUsageStats(),
   }
 }
 
