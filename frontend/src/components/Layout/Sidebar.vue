@@ -85,9 +85,34 @@
     </div>
 
     <!-- Quick Actions -->
-    <div class="mt-auto px-2 pb-4">
+    <div class="mt-auto px-2 pb-4 space-y-2">
+      <!-- Upload Button - Primary Action -->
       <button
-        class="w-full flex items-center gap-3 px-3 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors min-h-[44px]"
+        class="w-full flex items-center justify-center gap-3 px-3 py-3 
+               bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-xl 
+               hover:from-primary-700 hover:to-primary-600 
+               transition-all duration-200 min-h-[48px]
+               shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30"
+        @click="handleUpload"
+        type="button"
+        aria-label="Загрузить файлы"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+          />
+        </svg>
+        <span v-if="isExpanded" class="text-sm font-semibold">Загрузить</span>
+      </button>
+      
+      <!-- New Folder Button - Secondary Action -->
+      <button
+        class="w-full flex items-center justify-center gap-3 px-3 py-2.5 
+               bg-neutral-100 text-neutral-700 rounded-lg 
+               hover:bg-neutral-200 transition-colors min-h-[44px]"
         @click="handleNewFolder"
         type="button"
         aria-label="Создать новую папку"
@@ -97,7 +122,7 @@
             stroke-linecap="round"
             stroke-linejoin="round"
             stroke-width="2"
-            d="M12 4v16m8-8H4"
+            d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"
           />
         </svg>
         <span v-if="isExpanded" class="text-sm font-medium">Новая папка</span>
@@ -185,8 +210,8 @@ const ShareIcon = {
 const navigationItems = [
   { path: '/', label: 'Dashboard', icon: DashboardIcon },
   { path: '/dam', label: 'DAM Gallery', icon: DAMIcon },
-  { path: '/distribution', label: 'Distribution', icon: DistributionIcon },
-  { path: '/settings', label: 'Settings', icon: SettingsIcon }
+  { path: '/sharing', label: 'Распространение', icon: DistributionIcon },
+  { path: '/settings', label: 'Настройки', icon: SettingsIcon }
 ]
 
 const collections = [
@@ -212,10 +237,15 @@ function handleNewFolder() {
   emit('new-folder')
 }
 
+function handleUpload() {
+  emit('open-upload')
+}
+
 const emit = defineEmits<{
   navigate: [path: string]
   'sidebar-toggle': []
   'new-folder': []
+  'open-upload': []
 }>()
 </script>
 

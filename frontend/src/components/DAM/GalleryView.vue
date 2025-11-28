@@ -1,14 +1,22 @@
 <template>
   <div class="gallery-view">
-    <!-- Loading State -->
-    <div v-if="assetStore.isLoading && assetStore.assets.length === 0" class="p-8">
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <!-- Loading State - Skeleton Grid -->
+    <div v-if="assetStore.isLoading && assetStore.assets.length === 0" class="p-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
         <div
-          v-for="i in 8"
+          v-for="i in 12"
           :key="i"
-          class="bg-neutral-100 dark:bg-neutral-100 rounded-lg animate-pulse"
-          style="height: 260px"
-        ></div>
+          class="bg-white rounded-xl border border-neutral-200 overflow-hidden animate-pulse"
+        >
+          <div class="aspect-video bg-neutral-200" />
+          <div class="p-3 space-y-2">
+            <div class="h-4 bg-neutral-200 rounded w-3/4" />
+            <div class="flex justify-between">
+              <div class="h-3 bg-neutral-200 rounded w-16" />
+              <div class="h-3 bg-neutral-200 rounded w-20" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -51,28 +59,42 @@
     <!-- Empty State -->
     <div
       v-else-if="assetStore.assets.length === 0 && !assetStore.isLoading"
-      class="p-8 text-center"
+      class="flex items-center justify-center min-h-[60vh] p-8"
     >
-      <div class="max-w-md mx-auto">
-        <svg
-          class="mx-auto h-12 w-12 text-neutral-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
-        <h3 class="mt-4 text-lg font-medium text-neutral-900 dark:text-neutral-900">
-          Нет активов
+      <div class="max-w-md text-center">
+        <div class="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-primary-100 to-primary-50 flex items-center justify-center mb-6">
+          <svg
+            class="w-12 h-12 text-primary-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+        </div>
+        <h3 class="text-xl font-semibold text-neutral-800 mb-2">
+          Библиотека пуста
         </h3>
-        <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-600">
-          Загрузите первый актив, чтобы начать работу
+        <p class="text-neutral-500 mb-6">
+          Начните работу с загрузки первых файлов в вашу DAM-систему
         </p>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-medium rounded-xl
+                 hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
+                 transition-all shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30"
+          @click="$emit('open-upload')"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+          Загрузить файлы
+        </button>
       </div>
     </div>
 
@@ -120,7 +142,7 @@
       <!-- Assets Grid (regular for small lists) -->
       <div
         v-if="assetStore.assets.length < 100"
-        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4"
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-6"
         role="grid"
         aria-label="Галерея активов"
       >
@@ -129,11 +151,13 @@
           :key="asset.id"
           :asset="asset"
           :is-selected="isAssetSelected(asset)"
+          :is-shared="isAssetShared(asset.id)"
           :show-checkbox="true"
           @select="handleAssetSelect"
           @open="handleAssetOpen"
           @preview="handleAssetPreview"
           @download="handleAssetDownload"
+          @share="handleAssetShare"
           @more="handleAssetMore"
         />
       </div>
@@ -155,17 +179,19 @@
           <div
             :style="{ transform: `translateY(${offsetY}px)` }"
           >
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
               <AssetCard
                 v-for="asset in visibleAssets"
                 :key="asset.id"
                 :asset="asset"
                 :is-selected="isAssetSelected(asset)"
+                :is-shared="isAssetShared(asset.id)"
                 :show-checkbox="true"
                 @select="handleAssetSelect"
                 @open="handleAssetOpen"
                 @preview="handleAssetPreview"
                 @download="handleAssetDownload"
+                @share="handleAssetShare"
                 @more="handleAssetMore"
               />
             </div>
@@ -209,11 +235,11 @@
       @close="showBulkDownloadModal = false"
       @success="handleBulkOperationSuccess"
     />
-    <BulkShareModal
+    <ShareModal
       :is-open="showBulkShareModal"
-      :selected-ids="selectedAssetIds"
+      :assets="selectedAssetsList"
       @close="showBulkShareModal = false"
-      @success="handleBulkOperationSuccess"
+      @success="handleShareSuccess"
     />
   </div>
 </template>
@@ -222,18 +248,25 @@
 import { onMounted, onUnmounted, watch, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAssetStore } from '@/stores/assetStore'
+import { useDistributionStore } from '@/stores/distributionStore'
 import AssetCard from './AssetCard.vue'
 import BulkActions from './BulkActions.vue'
 import BulkTagModal from './BulkTagModal.vue'
 import BulkMoveModal from './BulkMoveModal.vue'
 import BulkDeleteModal from './BulkDeleteModal.vue'
 import BulkDownloadModal from './BulkDownloadModal.vue'
-import BulkShareModal from './BulkShareModal.vue'
+import ShareModal from './ShareModal.vue'
 import Pagination from '@/components/Common/Pagination.vue'
 import type { Asset } from '@/types/api'
 
+// Emits
+defineEmits<{
+  'open-upload': []
+}>()
+
 const router = useRouter()
 const assetStore = useAssetStore()
+const distributionStore = useDistributionStore()
 const virtualScrollContainer = ref<HTMLElement | null>(null)
 
 // Virtual scrolling state
@@ -301,6 +334,9 @@ onMounted(() => {
     assetStore.fetchAssets()
   }
 
+  // Load shared links for shared badges
+  distributionStore.fetchSharedLinks()
+
   // Setup virtual scrolling
   if (virtualScrollContainer.value) {
     // Calculate items per row based on container width
@@ -353,20 +389,24 @@ watch(
 )
 
 function isAssetSelected(asset: Asset): boolean {
-  return assetStore.selectedAssets.some((a) => a.id === asset.id)
+  return assetStore.selectedAssets.has(asset.id)
+}
+
+function isAssetShared(assetId: number): boolean {
+  return distributionStore.sharedAssetIds.has(assetId)
 }
 
 const isAllSelected = computed(() => {
   return (
     assetStore.assets.length > 0 &&
-    assetStore.selectedAssets.length === assetStore.assets.length
+    assetStore.selectedAssets.size === assetStore.assets.length
   )
 })
 
 const isIndeterminate = computed(() => {
   return (
-    assetStore.selectedAssets.length > 0 &&
-    assetStore.selectedAssets.length < assetStore.assets.length
+    assetStore.selectedAssets.size > 0 &&
+    assetStore.selectedAssets.size < assetStore.assets.length
   )
 })
 
@@ -396,6 +436,13 @@ function handleAssetDownload(asset: Asset) {
   console.log('Download asset:', asset.id)
 }
 
+function handleAssetShare(asset: Asset) {
+  // Select this asset and open share modal
+  assetStore.clearSelection()
+  assetStore.toggleSelection(asset.id)
+  showBulkShareModal.value = true
+}
+
 function handleAssetMore(asset: Asset) {
   // TODO: Open more actions menu
   console.log('More actions for asset:', asset.id)
@@ -416,7 +463,10 @@ const showBulkDeleteModal = ref(false)
 const showBulkDownloadModal = ref(false)
 const showBulkShareModal = ref(false)
 
-const selectedAssetIds = computed(() => assetStore.selectedAssets.map((a) => a.id))
+const selectedAssetIds = computed(() => Array.from(assetStore.selectedAssets))
+const selectedAssetsList = computed(() => 
+  assetStore.assets.filter(asset => assetStore.selectedAssets.has(asset.id))
+)
 
 function handleBulkTag() {
   showBulkTagModal.value = true
@@ -436,6 +486,13 @@ function handleBulkDownload() {
 
 function handleBulkShare() {
   showBulkShareModal.value = true
+}
+
+function handleShareSuccess() {
+  showBulkShareModal.value = false
+  assetStore.clearSelection()
+  // Refresh assets to update shared badges
+  assetStore.fetchAssets()
 }
 
 function handleClearSelection() {

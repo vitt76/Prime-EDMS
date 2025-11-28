@@ -21,9 +21,10 @@
           @navigate="handleNavigate"
           @sidebar-toggle="handleSidebarToggle"
           @new-folder="handleNewFolder"
+          @open-upload="handleUpload"
         />
         <MainContent>
-          <RouterView />
+          <RouterView @open-upload="handleUpload" />
         </MainContent>
       </template>
 
@@ -32,22 +33,49 @@
         <RouterView />
       </template>
     </ErrorBoundary>
+    
+    <!-- Global Upload Wizard Modal -->
+    <UploadWizard
+      :is-open="showUploadWizard"
+      @close="handleUploadClose"
+      @success="handleUploadSuccess"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useNotificationStore } from '@/stores/notificationStore'
 import { setupGlobalErrorHandlers, logError } from '@/composables/useErrorBoundary'
 import Header from '@/components/Layout/Header.vue'
 import Sidebar from '@/components/Layout/Sidebar.vue'
 import MainContent from '@/components/Layout/MainContent.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
+import UploadWizard from '@/components/DAM/UploadWizard.vue'
+import type { Asset } from '@/types/api'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const notificationStore = useNotificationStore()
+const uiStore = useUIStore()
+
+// Upload Wizard state - sync with uiStore
+const showUploadWizard = ref(false)
+
+// Sync showUploadWizard with uiStore.activeModal
+watch(() => uiStore.activeModal, (modal) => {
+  showUploadWizard.value = modal === 'upload'
+})
+
+// Sync uiStore when showUploadWizard changes (for close events)
+watch(showUploadWizard, (isOpen) => {
+  if (!isOpen && uiStore.activeModal === 'upload') {
+    uiStore.closeModal()
+  }
+})
 
 const showLayout = computed(() => {
   // Show layout for all authenticated pages except auth-related pages
@@ -78,9 +106,17 @@ function handleFilterToggle() {
 }
 
 function handleUpload() {
-  // TODO: Open upload modal
-  const uiStore = useUIStore()
-  uiStore.openModal('upload')
+  showUploadWizard.value = true
+}
+
+function handleUploadClose() {
+  showUploadWizard.value = false
+}
+
+function handleUploadSuccess(assets: Asset[]) {
+  console.log('Upload successful:', assets)
+  // Notification is already handled in UploadWizard
+  showUploadWizard.value = false
 }
 
 function handleNotifications() {

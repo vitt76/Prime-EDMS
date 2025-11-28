@@ -49,6 +49,12 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/dam/gallery',
     name: 'dam-gallery',
+    component: () => import('@/pages/DAMGalleryPage.vue'),
+    meta: { requiresAuth: true, title: 'Галерея активов' }
+  },
+  {
+    path: '/dam/gallery-old',
+    name: 'dam-gallery-old',
     component: () => import('@/pages/DAMPage.vue'),
     meta: { requiresAuth: true }
   },
@@ -76,11 +82,21 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/SettingsPage.vue'),
     meta: { requiresAuth: true }
   },
+  // Unified Sharing Section
+  {
+    path: '/sharing',
+    name: 'sharing',
+    component: () => import('@/pages/SharingPage.vue'),
+    meta: { requiresAuth: true, title: 'Распространение' }
+  },
+  // Legacy redirects (backward compatibility)
   {
     path: '/distribution',
-    name: 'distribution',
-    component: () => import('@/pages/DistributionPage.vue'),
-    meta: { requiresAuth: true }
+    redirect: '/sharing'
+  },
+  {
+    path: '/shared-links',
+    redirect: '/sharing'
   },
   {
     path: '/distribution/publications/:id',

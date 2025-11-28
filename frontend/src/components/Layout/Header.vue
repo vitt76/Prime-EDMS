@@ -25,9 +25,9 @@
       </router-link>
     </div>
 
-    <!-- Center: Search -->
+    <!-- Center: Smart Search -->
     <div class="flex-1 max-w-2xl mx-4">
-      <SearchBar
+      <SmartSearch
         @search="handleSearch"
         @result-selected="handleResultSelected"
       />
@@ -177,7 +177,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
-import SearchBar from '@/components/DAM/SearchBar.vue'
+import SmartSearch from '@/components/SmartSearch.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()

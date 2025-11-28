@@ -175,7 +175,7 @@
                 Недавние активы
               </h2>
               <router-link
-                to="/dam/gallery"
+                to="/dam"
                 class="text-sm text-primary-500 hover:text-primary-600 transition-colors min-h-[44px] flex items-center"
                 aria-label="Перейти к галерее активов"
               >
@@ -350,7 +350,7 @@
             </h2>
             <div class="space-y-2">
               <router-link
-                to="/dam/gallery"
+                to="/dam"
                 class="block w-full px-4 py-3 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors text-center font-medium min-h-[44px] flex items-center justify-center"
                 aria-label="Перейти к галерее активов"
               >
@@ -385,6 +385,7 @@ import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboardStore'
 import { useAssetStore } from '@/stores/assetStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useUIStore } from '@/stores/uiStore'
 import Card from '@/components/Common/Card.vue'
 import type { Asset } from '@/types/api'
 import { formatDate, formatRelativeTime } from '@/utils/formatters'
@@ -393,6 +394,7 @@ const router = useRouter()
 const dashboardStore = useDashboardStore()
 const assetStore = useAssetStore()
 const authStore = useAuthStore()
+const uiStore = useUIStore()
 
 const userName = computed(() => {
   return authStore.user?.first_name || authStore.user?.username || 'Пользователь'
@@ -408,9 +410,8 @@ function goToAsset(assetId: number) {
 }
 
 function handleUpload() {
-  // Emit event to open upload modal (handled by parent layout)
-  // For now, navigate to gallery
-  router.push('/dam/gallery')
+  // Open upload modal via UI store
+  uiStore.openModal('upload')
 }
 
 // formatRelativeTime is imported from utils/formatters

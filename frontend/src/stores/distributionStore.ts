@@ -1,13 +1,28 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { distributionService } from '@/services/distributionService'
-import type { Publication, PaginatedResponse } from '@/types/api'
+import type { Publication, PaginatedResponse, Asset } from '@/types/api'
 import { formatApiError } from '@/utils/errors'
+import {
+  getMockSharedLinks,
+  getMockSharedLinkById,
+  createMockSharedLink,
+  revokeMockSharedLink,
+  updateMockSharedLink,
+  getSharedAssetIds,
+  isAssetShared,
+  type SharedLink,
+  type CreateSharedLinkParams
+} from '@/mocks/publications'
+
+export type { SharedLink, CreateSharedLinkParams }
 
 export const useDistributionStore = defineStore(
   'distribution',
   () => {
-    // State
+    // ==================== State ====================
+    
+    // Publications (existing)
     const publications = ref<Publication[]>([])
     const totalCount = ref(0)
     const currentPage = ref(1)
@@ -20,7 +35,17 @@ export const useDistributionStore = defineStore(
       search?: string
     }>({})
 
-    // Getters
+    // Shared Links (new)
+    const sharedLinks = ref<SharedLink[]>([])
+    const sharedLinksLoading = ref(false)
+    const sharedLinksError = ref<string | null>(null)
+    const sharedLinkFilters = ref<{
+      status?: SharedLink['status']
+      search?: string
+    }>({})
+
+    // ==================== Getters ====================
+
     const hasNextPage = computed(() => {
       const totalPages = Math.ceil(totalCount.value / pageSize.value)
       return currentPage.value < totalPages
@@ -33,6 +58,21 @@ export const useDistributionStore = defineStore(
     const totalPages = computed(() => {
       return Math.ceil(totalCount.value / pageSize.value)
     })
+
+    // Shared links getters
+    const activeSharedLinks = computed(() => 
+      sharedLinks.value.filter(link => link.status === 'active')
+    )
+
+    const expiredSharedLinks = computed(() => 
+      sharedLinks.value.filter(link => link.status === 'expired')
+    )
+
+    const revokedSharedLinks = computed(() => 
+      sharedLinks.value.filter(link => link.status === 'revoked')
+    )
+
+    const sharedAssetIds = computed(() => getSharedAssetIds())
 
     // Mock data for dev mode
     const mockPublications: Publication[] = [
@@ -76,7 +116,8 @@ export const useDistributionStore = defineStore(
       }
     ] as Publication[]
 
-    // Actions
+    // ==================== Publications Actions ====================
+
     async function fetchPublications(params?: {
       page?: number
       page_size?: number
@@ -258,8 +299,159 @@ export const useDistributionStore = defineStore(
       fetchPublications()
     }
 
+    // ==================== Shared Links Actions ====================
+
+    /**
+     * Fetch all shared links
+     */
+    async function fetchSharedLinks(filters?: {
+      status?: SharedLink['status']
+      search?: string
+    }) {
+      sharedLinksLoading.value = true
+      sharedLinksError.value = null
+
+      try {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 300))
+        
+        sharedLinks.value = getMockSharedLinks(filters)
+        sharedLinkFilters.value = filters || {}
+      } catch (err) {
+        sharedLinksError.value = formatApiError(err)
+        sharedLinks.value = []
+      } finally {
+        sharedLinksLoading.value = false
+      }
+    }
+
+    /**
+     * Get a single shared link by ID
+     */
+    function getSharedLink(id: number): SharedLink | undefined {
+      return getMockSharedLinkById(id)
+    }
+
+    /**
+     * Create a new shared link
+     */
+    async function createSharedLink(params: CreateSharedLinkParams): Promise<SharedLink> {
+      sharedLinksLoading.value = true
+      sharedLinksError.value = null
+
+      try {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        const newLink = createMockSharedLink(params)
+        
+        // Add to local state
+        sharedLinks.value.unshift(newLink)
+        
+        return newLink
+      } catch (err) {
+        sharedLinksError.value = formatApiError(err)
+        throw err
+      } finally {
+        sharedLinksLoading.value = false
+      }
+    }
+
+    /**
+     * Revoke (delete) a shared link
+     */
+    async function revokeSharedLink(id: number): Promise<boolean> {
+      sharedLinksLoading.value = true
+      sharedLinksError.value = null
+
+      try {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 300))
+        
+        const success = revokeMockSharedLink(id)
+        
+        if (success) {
+          // Update local state
+          const index = sharedLinks.value.findIndex(link => link.id === id)
+          if (index !== -1) {
+            sharedLinks.value[index].status = 'revoked'
+          }
+        }
+        
+        return success
+      } catch (err) {
+        sharedLinksError.value = formatApiError(err)
+        throw err
+      } finally {
+        sharedLinksLoading.value = false
+      }
+    }
+
+    /**
+     * Update a shared link
+     */
+    async function updateSharedLink(
+      id: number,
+      updates: Partial<Pick<SharedLink, 'name' | 'expires_date' | 'allow_download' | 'allow_comment'>>
+    ): Promise<SharedLink | undefined> {
+      sharedLinksLoading.value = true
+      sharedLinksError.value = null
+
+      try {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 300))
+        
+        const updated = updateMockSharedLink(id, updates)
+        
+        if (updated) {
+          // Update local state
+          const index = sharedLinks.value.findIndex(link => link.id === id)
+          if (index !== -1) {
+            sharedLinks.value[index] = updated
+          }
+        }
+        
+        return updated
+      } catch (err) {
+        sharedLinksError.value = formatApiError(err)
+        throw err
+      } finally {
+        sharedLinksLoading.value = false
+      }
+    }
+
+    /**
+     * Apply filters to shared links
+     */
+    function applySharedLinkFilters(filters: typeof sharedLinkFilters.value) {
+      sharedLinkFilters.value = { ...sharedLinkFilters.value, ...filters }
+      fetchSharedLinks(sharedLinkFilters.value)
+    }
+
+    /**
+     * Clear shared link filters
+     */
+    function clearSharedLinkFilters() {
+      sharedLinkFilters.value = {}
+      fetchSharedLinks()
+    }
+
+    /**
+     * Check if an asset is currently shared
+     */
+    function checkAssetShared(assetId: number): boolean {
+      return isAssetShared(assetId)
+    }
+
+    /**
+     * Refresh shared links
+     */
+    function refreshSharedLinks() {
+      fetchSharedLinks(sharedLinkFilters.value)
+    }
+
     return {
-      // State
+      // Publications State
       publications,
       totalCount,
       currentPage,
@@ -269,12 +461,12 @@ export const useDistributionStore = defineStore(
       currentPublication,
       filters,
 
-      // Getters
+      // Publications Getters
       hasNextPage,
       hasPreviousPage,
       totalPages,
 
-      // Actions
+      // Publications Actions
       fetchPublications,
       getPublication,
       createPublication,
@@ -285,13 +477,35 @@ export const useDistributionStore = defineStore(
       setPageSize,
       applyFilters,
       clearFilters,
-      refresh
+      refresh,
+
+      // Shared Links State
+      sharedLinks,
+      sharedLinksLoading,
+      sharedLinksError,
+      sharedLinkFilters,
+
+      // Shared Links Getters
+      activeSharedLinks,
+      expiredSharedLinks,
+      revokedSharedLinks,
+      sharedAssetIds,
+
+      // Shared Links Actions
+      fetchSharedLinks,
+      getSharedLink,
+      createSharedLink,
+      revokeSharedLink,
+      updateSharedLink,
+      applySharedLinkFilters,
+      clearSharedLinkFilters,
+      checkAssetShared,
+      refreshSharedLinks
     }
   },
   {
     persist: {
-      paths: ['pageSize', 'filters'] // Persist user preferences
+      paths: ['pageSize', 'filters', 'sharedLinkFilters'] // Persist user preferences
     }
   }
 )
-

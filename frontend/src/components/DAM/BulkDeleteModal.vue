@@ -109,7 +109,7 @@
 import { ref, computed, watch } from 'vue'
 import Modal from '@/components/Common/Modal.vue'
 import Button from '@/components/Common/Button.vue'
-import { assetService } from '@/services/assetService'
+import { useAssetStore } from '@/stores/assetStore'
 import { formatApiError } from '@/utils/errors'
 
 interface Props {
@@ -123,6 +123,8 @@ const emit = defineEmits<{
   close: []
   success: [result: { updated: number; failed: number }]
 }>()
+
+const assetStore = useAssetStore()
 
 const confirmed = ref(false)
 const isProcessing = ref(false)
@@ -152,23 +154,22 @@ async function handleDelete() {
   errors.value = []
 
   try {
-    const result = await assetService.bulkOperation({
-      ids: props.selectedIds,
-      action: 'delete'
-    })
-
-    if (result.success) {
-      processedCount.value = result.updated
-      if (result.errors && result.errors.length > 0) {
-        errors.value = result.errors.map((e) => `Asset ${e.id}: ${e.error}`)
-      }
-      emit('success', { updated: result.updated, failed: result.failed })
-      setTimeout(() => {
-        emit('close')
-      }, 1000)
-    } else {
-      errors.value = ['Операция не удалась']
+    // Use assetStore.bulkDelete which properly handles mock mode
+    const deletedCount = await assetStore.bulkDelete(props.selectedIds)
+    
+    processedCount.value = deletedCount
+    
+    const failedCount = props.selectedIds.length - deletedCount
+    if (failedCount > 0) {
+      errors.value = [`Не удалось удалить ${failedCount} активов`]
     }
+    
+    emit('success', { updated: deletedCount, failed: failedCount })
+    
+    // Close modal after short delay to show completion
+    setTimeout(() => {
+      emit('close')
+    }, 500)
   } catch (err) {
     errors.value = [formatApiError(err)]
   } finally {
