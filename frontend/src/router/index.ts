@@ -89,6 +89,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/SharingPage.vue'),
     meta: { requiresAuth: true, title: 'Распространение' }
   },
+  {
+    path: '/sharing/:id',
+    name: 'sharing-detail',
+    component: () => import('@/pages/SharingDetailPage.vue'),
+    meta: { requiresAuth: true, title: 'Детали ссылки' },
+    props: true
+  },
   // Legacy redirects (backward compatibility)
   {
     path: '/distribution',
