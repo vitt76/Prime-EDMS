@@ -61,37 +61,54 @@
       </Transition>
     </div>
     
-    <!-- Quick Actions -->
-    <div class="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+    <!-- Create Folder Button -->
+    <div class="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-700">
       <button
-        class="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400
-               hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-700
-               rounded-lg transition-colors"
-        @click="handleCreateFolder"
+        type="button"
+        class="w-full flex items-center justify-center gap-2 px-3 py-2.5 
+               text-sm font-medium text-neutral-600 dark:text-neutral-300
+               bg-neutral-50 dark:bg-neutral-800
+               hover:bg-neutral-100 dark:hover:bg-neutral-700
+               border border-dashed border-neutral-300 dark:border-neutral-600
+               hover:border-primary-400 dark:hover:border-primary-500
+               hover:text-primary-600 dark:hover:text-primary-400
+               rounded-lg transition-all duration-200"
+        @click.stop.prevent="showCreateModal = true"
       >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
+        <FolderPlusIcon class="w-4 h-4" />
         <span>Создать папку</span>
       </button>
     </div>
+    
+    <!-- Create Folder Modal -->
+    <CreateFolderModal
+      :is-open="showCreateModal"
+      @close="showCreateModal = false"
+      @create="handleCreateFolder"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { FolderIcon, CloudIcon } from '@heroicons/vue/24/solid'
+import { FolderPlusIcon } from '@heroicons/vue/24/outline'
 import { useFolderStore } from '@/stores/folderStore'
 import { useAssetStore } from '@/stores/assetStore'
+import { useNotificationStore } from '@/stores/notificationStore'
 import FolderTreeNode from './FolderTreeNode.vue'
+import CreateFolderModal from './CreateFolderModal.vue'
 import type { FolderNode } from '@/mocks/folders'
 
 const emit = defineEmits<{
   folderSelect: [folderId: string]
-  createFolder: []
 }>()
 
 const folderStore = useFolderStore()
 const assetStore = useAssetStore()
+const notificationStore = useNotificationStore()
+
+const showCreateModal = ref(false)
 
 function countFolders(folders: FolderNode[]): number {
   let count = folders.length
@@ -107,9 +124,9 @@ function handleFolderSelect(folderId: string) {
 }
 
 async function handleDrop(folderId: string, assetIds: number[]) {
-  if (assetIds.length === 1) {
+  if (assetIds.length === 1 && assetIds[0] !== undefined) {
     await folderStore.handleAssetDrop(assetIds[0], folderId)
-  } else {
+  } else if (assetIds.length > 1) {
     await folderStore.handleBulkAssetDrop(assetIds, folderId)
   }
   
@@ -117,8 +134,24 @@ async function handleDrop(folderId: string, assetIds: number[]) {
   assetStore.clearSelection()
 }
 
-function handleCreateFolder() {
-  emit('createFolder')
+async function handleCreateFolder(folderName: string) {
+  // Определяем тип папки (по умолчанию 'local')
+  const section = folderStore.allSections.find(s => s.expanded) || folderStore.allSections[0]
+  const folderType = section?.type || 'local'
+  
+  // Создаем папку в корне выбранной секции
+  const newFolder = await folderStore.createFolder(null, folderName, folderType)
+  
+  // Закрываем модальное окно
+  showCreateModal.value = false
+  
+  if (newFolder) {
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Папка создана',
+      message: `Папка "${folderName}" успешно создана`,
+    })
+  }
 }
 </script>
 

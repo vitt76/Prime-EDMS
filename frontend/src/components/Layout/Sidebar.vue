@@ -88,12 +88,11 @@
     <div v-if="isExpanded" class="mt-6 px-2">
       <FolderTree 
         @folder-select="handleFolderSelect"
-        @create-folder="handleNewFolder"
       />
     </div>
 
     <!-- Quick Actions -->
-    <div class="mt-auto px-2 pb-4 space-y-2">
+    <div class="mt-auto px-2 pb-4">
       <!-- Upload Button - Primary Action -->
       <button
         class="w-full flex items-center justify-center gap-3 px-3 py-3 
@@ -114,26 +113,6 @@
           />
         </svg>
         <span v-if="isExpanded" class="text-sm font-semibold">Загрузить</span>
-      </button>
-      
-      <!-- New Folder Button - Secondary Action -->
-      <button
-        class="w-full flex items-center justify-center gap-3 px-3 py-2.5 
-               bg-neutral-100 text-neutral-700 rounded-lg 
-               hover:bg-neutral-200 transition-colors min-h-[44px]"
-        @click="handleNewFolder"
-        type="button"
-        aria-label="Создать новую папку"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"
-          />
-        </svg>
-        <span v-if="isExpanded" class="text-sm font-medium">Новая папка</span>
       </button>
     </div>
   </aside>
@@ -226,8 +205,8 @@ const ShareIcon = {
 }
 
 const navigationItems = [
-  { path: '/', label: 'Dashboard', icon: DashboardIcon },
-  { path: '/dam', label: 'DAM Gallery', icon: DAMIcon },
+  { path: '/', label: 'Главная', icon: DashboardIcon },
+  { path: '/dam', label: 'Галерея', icon: DAMIcon },
   { path: '/sharing', label: 'Распространение', icon: DistributionIcon },
   { path: '/settings', label: 'Настройки', icon: SettingsIcon }
 ]
@@ -251,10 +230,6 @@ function handleNavigate(path: string) {
   emit('navigate', path)
 }
 
-function handleNewFolder() {
-  emit('new-folder')
-}
-
 function handleUpload() {
   emit('open-upload')
 }
@@ -270,7 +245,6 @@ function handleFolderSelect(folderId: string) {
 const emit = defineEmits<{
   navigate: [path: string]
   'sidebar-toggle': []
-  'new-folder': []
   'open-upload': []
 }>()
 </script>
