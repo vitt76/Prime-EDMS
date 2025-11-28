@@ -55,18 +55,102 @@
           </h1>
         </div>
         <div class="flex items-center gap-2">
-          <button
-            class="flex items-center gap-2 px-4 py-2 text-sm font-medium
-                   bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300
-                   hover:bg-neutral-200 dark:hover:bg-neutral-600
-                   rounded-lg transition-colors"
-            @click="handleDownload"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Скачать
-          </button>
+          <!-- Download As Dropdown -->
+          <Menu as="div" class="relative">
+            <MenuButton
+              class="flex items-center gap-2 px-4 py-2 text-sm font-medium
+                     bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300
+                     hover:bg-neutral-200 dark:hover:bg-neutral-600
+                     rounded-lg transition-colors"
+            >
+              <ArrowDownTrayIcon class="w-4 h-4" />
+              Скачать
+              <ChevronDownIcon class="w-4 h-4" />
+            </MenuButton>
+
+            <transition
+              enter-active-class="transition ease-out duration-100"
+              enter-from-class="transform opacity-0 scale-95"
+              enter-to-class="transform opacity-100 scale-100"
+              leave-active-class="transition ease-in duration-75"
+              leave-from-class="transform opacity-100 scale-100"
+              leave-to-class="transform opacity-0 scale-95"
+            >
+              <MenuItems
+                class="absolute right-0 mt-2 w-56 origin-top-right rounded-lg bg-white dark:bg-neutral-800 
+                       shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20"
+              >
+                <div class="py-1">
+                  <div class="px-3 py-2 border-b border-neutral-100 dark:border-neutral-700">
+                    <p class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
+                      Скачать как
+                    </p>
+                  </div>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      :class="[
+                        active ? 'bg-neutral-100 dark:bg-neutral-700' : '',
+                        'w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 flex items-center justify-between'
+                      ]"
+                      @click="handleDownloadAs('original')"
+                    >
+                      <div class="flex items-center gap-2">
+                        <DocumentIcon class="w-4 h-4 text-neutral-500" />
+                        <span>Оригинал</span>
+                      </div>
+                      <span class="text-xs text-neutral-400">{{ formatFileSize(asset?.size || 0) }}</span>
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      :class="[
+                        active ? 'bg-neutral-100 dark:bg-neutral-700' : '',
+                        'w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 flex items-center justify-between'
+                      ]"
+                      @click="handleDownloadAs('low_res')"
+                    >
+                      <div class="flex items-center gap-2">
+                        <PhotoIcon class="w-4 h-4 text-blue-500" />
+                        <span>Low Res (JPG, 72dpi)</span>
+                      </div>
+                      <span class="text-xs text-neutral-400">~500KB</span>
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      :class="[
+                        active ? 'bg-neutral-100 dark:bg-neutral-700' : '',
+                        'w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 flex items-center justify-between'
+                      ]"
+                      @click="handleDownloadAs('high_res')"
+                    >
+                      <div class="flex items-center gap-2">
+                        <PhotoIcon class="w-4 h-4 text-green-500" />
+                        <span>High Res (PNG, 300dpi)</span>
+                      </div>
+                      <span class="text-xs text-neutral-400">~5MB</span>
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      :class="[
+                        active ? 'bg-neutral-100 dark:bg-neutral-700' : '',
+                        'w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 flex items-center justify-between'
+                      ]"
+                      @click="handleDownloadAs('pdf')"
+                    >
+                      <div class="flex items-center gap-2">
+                        <DocumentTextIcon class="w-4 h-4 text-red-500" />
+                        <span>PDF (конвертированный)</span>
+                      </div>
+                      <span class="text-xs text-neutral-400">~1MB</span>
+                    </button>
+                  </MenuItem>
+                </div>
+              </MenuItems>
+            </transition>
+          </Menu>
+
           <button
             class="flex items-center gap-2 px-4 py-2 text-sm font-medium
                    bg-primary-600 text-white
@@ -74,9 +158,7 @@
                    rounded-lg transition-colors"
             @click="handleShare"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>
+            <ShareIcon class="w-4 h-4" />
             Поделиться
           </button>
         </div>
@@ -199,6 +281,14 @@
 
         <!-- Sidebar (30%) -->
         <aside class="w-[400px] shrink-0 bg-white dark:bg-neutral-800 border-l border-neutral-200 dark:border-neutral-700 flex flex-col overflow-hidden">
+          <!-- Workflow Widget -->
+          <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
+            <WorkflowWidget 
+              :asset-id="assetId" 
+              @status-change="handleWorkflowStatusChange"
+            />
+          </div>
+
           <!-- Tabs -->
           <div class="flex border-b border-neutral-200 dark:border-neutral-700 shrink-0">
             <button
@@ -320,6 +410,15 @@
                   </span>
                 </div>
               </section>
+            </div>
+
+            <!-- Metadata Tab -->
+            <div v-if="activeTab === 'metadata'" class="p-5">
+              <MetadataEditor 
+                :asset-id="assetId"
+                :document-type="documentType"
+                @save="handleMetadataSave"
+              />
             </div>
 
             <!-- Versions Tab -->
@@ -494,10 +593,22 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import {
+  ArrowDownTrayIcon,
+  ChevronDownIcon,
+  DocumentIcon,
+  DocumentTextIcon,
+  PhotoIcon,
+  ShareIcon
+} from '@heroicons/vue/24/outline'
 import { useAssetStore } from '@/stores/assetStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import MetadataEditor from '@/components/asset/MetadataEditor.vue'
+import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
 import type { Asset, Comment, Version } from '@/types/api'
 import type { ExtendedAsset, UsageStats } from '@/mocks/assets'
+import type { WorkflowState } from '@/mocks/workflows'
 import { getMockAssetById } from '@/mocks/assets'
 
 const route = useRoute()
@@ -510,16 +621,17 @@ const isLoading = ref(true)
 const error = ref<string | null>(null)
 const asset = ref<Asset | null>(null)
 const extendedAsset = ref<ExtendedAsset | null>(null)
-const activeTab = ref<'info' | 'versions' | 'comments' | 'usage'>('info')
+const activeTab = ref<'info' | 'metadata' | 'versions' | 'comments' | 'usage'>('info')
 const zoom = ref(1)
 const rotation = ref(0)
 const newComment = ref('')
 
 const tabs = [
   { id: 'info', label: 'Инфо' },
+  { id: 'metadata', label: 'Метаданные' },
   { id: 'versions', label: 'Версии' },
-  { id: 'comments', label: 'Комментарии' },
-  { id: 'usage', label: 'Статистика' },
+  { id: 'comments', label: 'Коммент.' },
+  { id: 'usage', label: 'Стат.' },
 ] as const
 
 // Computed
@@ -533,6 +645,14 @@ const isDocument = computed(() =>
   asset.value?.mime_type?.includes('word')
 )
 const isAudio = computed(() => asset.value?.mime_type?.startsWith('audio/'))
+
+const documentType = computed(() => {
+  if (isImage.value) return 'image'
+  if (isVideo.value) return 'video'
+  if (isDocument.value) return 'document'
+  if (isAudio.value) return 'audio'
+  return 'image' // default
+})
 
 const versions = computed((): Version[] => {
   return asset.value?.version_history || extendedAsset.value?.version_history || []
@@ -641,12 +761,52 @@ function handleDownload() {
   })
 }
 
+type DownloadFormat = 'original' | 'low_res' | 'high_res' | 'pdf'
+
+async function handleDownloadAs(format: DownloadFormat) {
+  const formatLabels: Record<DownloadFormat, string> = {
+    original: 'Оригинал',
+    low_res: 'Low Res (JPG, 72dpi)',
+    high_res: 'High Res (PNG, 300dpi)',
+    pdf: 'PDF'
+  }
+  
+  notificationStore.addNotification({
+    type: 'info',
+    title: 'Генерация файла',
+    message: `Подготовка: ${formatLabels[format]}...`,
+  })
+  
+  // Simulate file generation
+  await new Promise(resolve => setTimeout(resolve, 1500))
+  
+  notificationStore.addNotification({
+    type: 'success',
+    title: 'Загрузка началась',
+    message: `Скачивание ${asset.value?.filename} (${formatLabels[format]})`,
+  })
+}
+
 function handleShare() {
   notificationStore.addNotification({
     type: 'info',
     title: 'Поделиться',
     message: 'Функция поделиться будет добавлена позже',
   })
+}
+
+function handleWorkflowStatusChange(newState: WorkflowState) {
+  console.log('Workflow status changed to:', newState.label)
+  
+  // If status changed to "Approved", show the metadata tab
+  // and maybe highlight the "Approval Data" section
+  if (newState.id === 'approved') {
+    activeTab.value = 'metadata'
+  }
+}
+
+function handleMetadataSave(typeId: number) {
+  console.log('Metadata saved for type:', typeId)
 }
 
 function handleUploadNewVersion() {
