@@ -70,6 +70,31 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/AssetDetailPage.vue'),
     meta: { requiresAuth: true }
   },
+  // Collection Pages (Sidebar navigation)
+  {
+    path: '/dam/favorites',
+    name: 'dam-favorites',
+    component: () => import('@/pages/collections/FavoritesPage.vue'),
+    meta: { requiresAuth: true, title: 'Избранное' }
+  },
+  {
+    path: '/dam/my-uploads',
+    name: 'dam-my-uploads',
+    component: () => import('@/pages/collections/MyUploadsPage.vue'),
+    meta: { requiresAuth: true, title: 'Мои загрузки' }
+  },
+  {
+    path: '/dam/recent',
+    name: 'dam-recent',
+    component: () => import('@/pages/collections/RecentPage.vue'),
+    meta: { requiresAuth: true, title: 'Недавние' }
+  },
+  {
+    path: '/dam/shared',
+    name: 'dam-shared',
+    component: () => import('@/pages/collections/SharedWithMePage.vue'),
+    meta: { requiresAuth: true, title: 'Доступные мне' }
+  },
   {
     path: '/settings',
     name: 'settings',

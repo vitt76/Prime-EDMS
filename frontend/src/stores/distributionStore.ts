@@ -72,7 +72,7 @@ export const useDistributionStore = defineStore(
       sharedLinks.value.filter(link => link.status === 'revoked')
     )
 
-    const sharedAssetIds = computed(() => getSharedAssetIds())
+    const sharedAssetIds = computed(() => new Set(getSharedAssetIds()))
 
     // Mock data for dev mode
     const mockPublications: Publication[] = [
