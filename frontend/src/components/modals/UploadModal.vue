@@ -171,6 +171,8 @@ import { useUIStore } from '@/stores/uiStore'
 import { extractErrorCode } from '@/utils/errorHandling'
 import { formatApiError } from '@/utils/errors'
 import type { FileUploadProgress } from '@/types/upload'
+import { uploadService, type UploadProgress } from '@/services/uploadService'
+import { getToken } from '@/services/authService'
 
 const props = defineProps<{
   isOpen: boolean
@@ -337,9 +339,14 @@ const startUpload = async (): Promise<void> => {
   if (successCount) {
     uiStore.addNotification({
       type: 'success',
-      message: `Uploaded ${successCount} file${successCount === 1 ? '' : 's'}`,
-      duration: 3000
+      message: `✅ Uploaded ${successCount} file${successCount === 1 ? '' : 's'} successfully`,
+      duration: 4000
     })
+    
+    // Refresh gallery to show newly uploaded assets
+    console.log('[UploadModal] Refreshing gallery after successful upload...')
+    assetStore.refresh()
+    
     emit(
       'success',
       files.value.filter((file) => file.status === 'success').map((file) => file.file)
@@ -348,16 +355,54 @@ const startUpload = async (): Promise<void> => {
 }
 
 const uploadFile = async (fileItem: FileUploadProgress): Promise<void> => {
-  const formData = new FormData()
-  formData.append('file', fileItem.file)
-  if (props.collectionId) {
-    formData.append('collection_id', String(props.collectionId))
-  }
+  // Check if we have a token (authenticated)
+  const token = getToken()
+  
+  if (token) {
+    // Use real Mayan EDMS API (2-step upload)
+    console.log('[UploadModal] Using real API upload for:', fileItem.name)
+    
+    await uploadService.uploadAsset(fileItem.file, {
+      signal: fileItem.abortController?.signal,
+      cabinetId: props.collectionId,
+      onProgress: (progress: UploadProgress) => {
+        // Map uploadService progress to fileItem progress
+        fileItem.progress = progress.percent
+        fileItem.uploadedBytes = progress.loaded
+        
+        // Calculate speed in MB/s
+        const speedMb = progress.speed / (1024 * 1024)
+        fileItem.speed = `${speedMb.toFixed(2)} MB/s`
+        
+        // Format ETA
+        fileItem.eta = formatDuration(Math.ceil(progress.eta))
+        
+        // Update step indicator
+        if (progress.step === 'creating') {
+          fileItem.status = 'uploading'
+          fileItem.speed = 'Creating...'
+          fileItem.eta = '--'
+        } else if (progress.step === 'processing') {
+          fileItem.speed = 'Processing...'
+          fileItem.eta = '0s'
+        }
+      }
+    })
+  } else {
+    // Fallback to mock upload (assetStore)
+    console.log('[UploadModal] Using mock upload for:', fileItem.name)
+    
+    const formData = new FormData()
+    formData.append('file', fileItem.file)
+    if (props.collectionId) {
+      formData.append('collection_id', String(props.collectionId))
+    }
 
-  await assetStore.uploadAsset(formData, {
-    signal: fileItem.abortController?.signal,
-    onUploadProgress: (event) => handleProgress(fileItem, event)
-  })
+    await assetStore.uploadAsset(formData, {
+      signal: fileItem.abortController?.signal,
+      onUploadProgress: (event) => handleProgress(fileItem, event)
+    })
+  }
 }
 
 const handleProgress = (

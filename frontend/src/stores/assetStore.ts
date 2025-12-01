@@ -24,6 +24,12 @@ import {
   type MayanPaginatedResponse
 } from '@/services/adapters/documentAdapter'
 import { getToken } from '@/services/authService'
+import {
+  uploadService,
+  updateDocumentMetadata,
+  deleteDocument as deleteDocumentApi,
+  type UploadProgress
+} from '@/services/uploadService'
 
 // Import mock data functions
 import {
@@ -445,12 +451,12 @@ export const useAssetStore = defineStore(
     
     /**
      * Delete an asset
+     * Uses DELETE /api/v4/documents/{id}/ for real API
      */
     async function deleteAsset(id: number): Promise<boolean> {
       try {
-        await simulateDelay()
-        
         if (useMock.value) {
+          await simulateDelay()
           const success = deleteMockAsset(id)
           if (success) {
             // Remove from local state
@@ -464,7 +470,26 @@ export const useAssetStore = defineStore(
           }
           return success
         } else {
-          await assetService.deleteAsset(id)
+          // Use real Mayan EDMS API
+          const token = getToken()
+          
+          if (!token) {
+            // Fallback to mock
+            await simulateDelay()
+            const success = deleteMockAsset(id)
+            if (success) {
+              assets.value = assets.value.filter(a => a.id !== id)
+              totalCount.value = Math.max(0, totalCount.value - 1)
+              selectedAssets.value.delete(id)
+              if (currentAsset.value?.id === id) currentAsset.value = null
+            }
+            return success
+          }
+          
+          console.log('[AssetStore] Deleting document:', id)
+          await deleteDocumentApi(id)
+          
+          // Remove from local state
           assets.value = assets.value.filter(a => a.id !== id)
           totalCount.value = Math.max(0, totalCount.value - 1)
           selectedAssets.value.delete(id)
@@ -472,22 +497,25 @@ export const useAssetStore = defineStore(
           if (currentAsset.value?.id === id) {
             currentAsset.value = null
           }
+          
+          console.log('[AssetStore] Document deleted successfully')
           return true
         }
       } catch (err) {
         error.value = formatApiError(err)
+        console.error('[AssetStore] Delete error:', err)
         return false
       }
     }
     
     /**
-     * Update an asset
+     * Update an asset's metadata
+     * Uses PATCH /api/v4/documents/{id}/ for real API
      */
     async function updateAssetData(id: number, data: Partial<Asset>): Promise<Asset | null> {
       try {
-        await simulateDelay()
-        
         if (useMock.value) {
+          await simulateDelay()
           const updated = updateMockAsset(id, data)
           if (updated) {
             // Update in local state
@@ -501,7 +529,33 @@ export const useAssetStore = defineStore(
           }
           return updated || null
         } else {
-          const updated = await assetService.updateAsset(id, data)
+          // Use real Mayan EDMS API
+          const token = getToken()
+          
+          if (!token) {
+            // Fallback to mock
+            await simulateDelay()
+            const updated = updateMockAsset(id, data)
+            if (updated) {
+              const index = assets.value.findIndex(a => a.id === id)
+              if (index !== -1) assets.value[index] = updated
+              if (currentAsset.value?.id === id) currentAsset.value = updated
+            }
+            return updated || null
+          }
+          
+          console.log('[AssetStore] Updating document metadata:', id, data)
+          
+          // Map Asset fields to Mayan document fields
+          const mayanData: Record<string, any> = {}
+          if (data.label !== undefined) mayanData.label = data.label
+          if (data.description !== undefined) mayanData.description = data.description
+          if (data.language !== undefined) mayanData.language = data.language
+          
+          const response = await updateDocumentMetadata(id, mayanData)
+          const updated = adaptDocument(response as MayanDocument)
+          
+          // Update local state
           const index = assets.value.findIndex(a => a.id === id)
           if (index !== -1) {
             assets.value[index] = updated
@@ -509,10 +563,13 @@ export const useAssetStore = defineStore(
           if (currentAsset.value?.id === id) {
             currentAsset.value = updated
           }
+          
+          console.log('[AssetStore] Document updated successfully')
           return updated
         }
       } catch (err) {
         error.value = formatApiError(err)
+        console.error('[AssetStore] Update error:', err)
         return null
       }
     }
@@ -646,14 +703,62 @@ export const useAssetStore = defineStore(
     // ACTIONS - UPLOAD
     // ========================================================================
 
+    /**
+     * Upload a new asset file
+     * Uses the 2-step Mayan EDMS API for real uploads
+     * 
+     * @deprecated Use uploadFile() for real API uploads with progress
+     */
     async function uploadAsset(
       formData: FormData,
       options?: UploadOptions
     ): Promise<Asset> {
+      // Legacy method - delegate to assetService for mock/form-based uploads
       return assetService.uploadAsset(formData, {
         onUploadProgress: options?.onUploadProgress,
         signal: options?.signal
       })
+    }
+    
+    /**
+     * Upload a file using the real Mayan EDMS API
+     * This is the preferred method for production uploads
+     */
+    async function uploadFile(
+      file: File,
+      options?: {
+        onProgress?: (progress: UploadProgress) => void
+        signal?: AbortSignal
+        documentTypeId?: number
+        description?: string
+        cabinetId?: number
+      }
+    ): Promise<{ documentId: number; fileId: number }> {
+      const token = getToken()
+      
+      if (!token) {
+        throw new Error('Not authenticated. Please login first.')
+      }
+      
+      console.log('[AssetStore] Uploading file:', file.name)
+      
+      const result = await uploadService.uploadAsset(file, {
+        onProgress: options?.onProgress,
+        signal: options?.signal,
+        documentTypeId: options?.documentTypeId,
+        description: options?.description,
+        cabinetId: options?.cabinetId
+      })
+      
+      console.log('[AssetStore] Upload complete:', result)
+      
+      // Refresh assets to include the new upload
+      await fetchAssets()
+      
+      return {
+        documentId: result.documentId,
+        fileId: result.fileId
+      }
     }
     
     /**
@@ -770,6 +875,7 @@ export const useAssetStore = defineStore(
       
       // Actions - Upload
       uploadAsset,
+      uploadFile,
       addAsset,
       addAssets,
     }

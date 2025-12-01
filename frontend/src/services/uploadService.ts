@@ -1,394 +1,486 @@
 /**
  * Upload Service
- *
- * Handles file uploads with progress tracking, chunking support,
- * and error recovery for the DAM system.
+ * ==============
+ * 
+ * Handles file uploads to Mayan EDMS using the 2-step process:
+ * 1. Create Document Container (POST /api/v4/documents/)
+ * 2. Upload File Binary (POST /api/v4/documents/{id}/files/)
+ * 
+ * Features:
+ * - Progress tracking via Axios onUploadProgress
+ * - Automatic cleanup on failure (delete orphan document)
+ * - Cancellation support via AbortSignal
+ * - Non-blocking async operations
  */
 
-import { apiService } from './apiService'
-import { withRetry, ApiError } from '@/utils/retry'
+import axios, { AxiosProgressEvent, CancelTokenSource } from 'axios'
+import { getToken } from './authService'
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export interface UploadProgress {
+  /** Progress percentage (0-100) */
+  percent: number
+  /** Bytes uploaded so far */
+  loaded: number
+  /** Total bytes to upload */
+  total: number
+  /** Current upload speed in bytes/second */
+  speed: number
+  /** Estimated time remaining in seconds */
+  eta: number
+  /** Current step: 'creating' | 'uploading' | 'processing' */
+  step: 'creating' | 'uploading' | 'processing'
+}
 
 export interface UploadOptions {
-  onProgress?: (progress: number) => void
-  onChunkComplete?: (chunkIndex: number, totalChunks: number) => void
+  /** Callback for progress updates */
+  onProgress?: (progress: UploadProgress) => void
+  /** AbortSignal for cancellation */
   signal?: AbortSignal
-  chunkSize?: number
-  retryOptions?: Parameters<typeof withRetry>[1]
+  /** Document type ID (defaults to 1 = "Default" type) */
+  documentTypeId?: number
+  /** Optional description */
+  description?: string
+  /** Optional folder (cabinet) ID to place the document */
+  cabinetId?: number
+  /** Optional language (ISO code) */
+  language?: string
 }
 
 export interface UploadResult {
-  assetId: string
-  filename: string
-  size: number
-  mimeType: string
-  url: string
-  thumbnailUrl?: string
-  checksum: string
+  /** Document ID in Mayan */
+  documentId: number
+  /** File ID in Mayan */
+  fileId: number
+  /** Document label (filename) */
+  label: string
+  /** Full API URL to the document */
+  documentUrl: string
+  /** Download URL for the file */
+  downloadUrl?: string
 }
 
-export interface ChunkUploadResult {
-  chunkIndex: number
-  totalChunks: number
-  uploadedBytes: number
-  checksum: string
+interface MayanDocumentResponse {
+  id: number
+  label: string
+  datetime_created: string
+  document_type: {
+    id: number
+    label: string
+  }
+  url: string
+  file_latest?: {
+    id: number
+    download_url: string
+    filename: string
+  }
 }
+
+interface MayanFileResponse {
+  id: number
+  filename: string
+  mimetype: string
+  size: number
+  download_url: string
+  document_url: string
+}
+
+// ============================================================================
+// UPLOAD SERVICE
+// ============================================================================
 
 class UploadService {
-  private readonly DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024 // 5MB
-  private readonly MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB
-  private readonly MAX_TOTAL_SIZE = 2 * 1024 * 1024 * 1024 // 2GB
-
+  private baseUrl = '/api/v4'
+  
   /**
-   * Upload a single file with progress tracking and retry logic
+   * Main upload method - handles the complete 2-step Mayan upload process
+   * 
+   * @param file - File to upload
+   * @param options - Upload options (progress callback, document type, etc.)
+   * @returns UploadResult with document and file IDs
    */
-  async uploadFile(file: File, options: UploadOptions = {}): Promise<UploadResult> {
-    this.validateFile(file)
-
-    const {
-      onProgress,
-      signal,
-      chunkSize = this.DEFAULT_CHUNK_SIZE,
-      retryOptions
-    } = options
-
-    // For small files, use simple upload
-    if (file.size <= chunkSize) {
-      return this.uploadSimple(file, onProgress, signal, retryOptions)
+  async uploadAsset(file: File, options: UploadOptions = {}): Promise<UploadResult> {
+    const token = getToken()
+    
+    if (!token) {
+      throw new Error('Not authenticated. Please login first.')
     }
-
-    // For large files, use chunked upload
-    return this.uploadChunked(file, chunkSize, onProgress, signal, retryOptions)
-  }
-
-  /**
-   * Upload multiple files concurrently with progress aggregation
-   */
-  async uploadFiles(files: File[], options: UploadOptions & {
-    concurrency?: number
-    onFileProgress?: (fileIndex: number, progress: number) => void
-    onFileComplete?: (fileIndex: number, result: UploadResult) => void
-  } = {}): Promise<UploadResult[]> {
-    const {
-      concurrency = 3,
-      onProgress,
-      onFileProgress,
-      onFileComplete,
-      ...uploadOptions
-    } = options
-
-    const results: UploadResult[] = []
-    const totalSize = files.reduce((sum, file) => sum + file.size, 0)
-
-    if (totalSize > this.MAX_TOTAL_SIZE) {
-      throw new ApiError(
-        `Total upload size (${this.formatBytes(totalSize)}) exceeds limit (${this.formatBytes(this.MAX_TOTAL_SIZE)})`,
-        413
-      )
+    
+    const headers = {
+      'Authorization': `Token ${token}`,
     }
-
-    // Process files in batches to control concurrency
-    for (let i = 0; i < files.length; i += concurrency) {
-      const batch = files.slice(i, i + concurrency)
-
-      const batchPromises = batch.map(async (file, batchIndex) => {
-        const fileIndex = i + batchIndex
-
-        try {
-          const result = await this.uploadFile(file, {
-            ...uploadOptions,
-            onProgress: (progress) => {
-              onFileProgress?.(fileIndex, progress)
-
-              // Calculate overall progress
-              if (onProgress) {
-                const completedFiles = fileIndex
-                const currentFileProgress = progress / 100
-                const overallProgress = ((completedFiles + currentFileProgress) / files.length) * 100
-                onProgress(Math.round(overallProgress))
-              }
-            }
-          })
-
-          onFileComplete?.(fileIndex, result)
-          return result
-
-        } catch (error) {
-          // Mark file as failed but continue with others
-          console.error(`Upload failed for ${file.name}:`, error)
-          throw error
-        }
+    
+    let documentId: number | null = null
+    
+    try {
+      // =======================================================================
+      // STEP 1: Create Document Container
+      // =======================================================================
+      options.onProgress?.({
+        percent: 0,
+        loaded: 0,
+        total: file.size,
+        speed: 0,
+        eta: 0,
+        step: 'creating'
       })
-
-      const batchResults = await Promise.allSettled(batchPromises)
-
-      batchResults.forEach((result) => {
-        if (result.status === 'fulfilled') {
-          results.push(result.value)
-        } else {
-          // Handle failed uploads
-          results.push(null as any) // Will be filtered out by caller
-        }
-      })
-    }
-
-    return results.filter(Boolean)
-  }
-
-  /**
-   * Simple upload for smaller files
-   */
-  private async uploadSimple(
-    file: File,
-    onProgress?: (progress: number) => void,
-    signal?: AbortSignal,
-    retryOptions?: Parameters<typeof withRetry>[1]
-  ): Promise<UploadResult> {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('filename', file.name)
-    formData.append('mime_type', file.type || 'application/octet-stream')
-
-    const operation = async (): Promise<UploadResult> => {
-      const response = await apiService.post<UploadResult>('/v4/assets/upload/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
+      
+      console.log('[UploadService] Step 1: Creating document container...')
+      
+      // Check for cancellation
+      if (options.signal?.aborted) {
+        throw new Error('Upload cancelled')
+      }
+      
+      const documentTypeId = options.documentTypeId || 1 // Default document type
+      
+      const createResponse = await axios.post<MayanDocumentResponse>(
+        `${this.baseUrl}/documents/`,
+        {
+          document_type_id: documentTypeId,
+          label: file.name,
+          description: options.description || '',
+          language: options.language || 'rus', // Russian by default
         },
-        onUploadProgress: (progressEvent) => {
-          if (onProgress && progressEvent.total) {
-            const progress = Math.round((progressEvent.loaded / progressEvent.total) * 100)
-            onProgress(progress)
-          }
-        },
-        signal
-      })
-
-      return response
-    }
-
-    const result = await withRetry(operation, {
-      maxAttempts: 3,
-      initialDelay: 1000,
-      ...retryOptions
-    })
-
-    if (!result.success) {
-      throw result.error
-    }
-
-    return result.data!
-  }
-
-  /**
-   * Chunked upload for larger files
-   */
-  private async uploadChunked(
-    file: File,
-    chunkSize: number,
-    onProgress?: (progress: number) => void,
-    signal?: AbortSignal,
-    retryOptions?: Parameters<typeof withRetry>[1]
-  ): Promise<UploadResult> {
-    const totalChunks = Math.ceil(file.size / chunkSize)
-    const uploadId = crypto.randomUUID()
-
-    // Initialize chunked upload
-    await apiService.post('/v4/assets/upload/init/', {
-      filename: file.name,
-      mime_type: file.type || 'application/octet-stream',
-      total_size: file.size,
-      total_chunks: totalChunks,
-      upload_id: uploadId
-    })
-
-    let uploadedBytes = 0
-
-    // Upload chunks
-    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-      const start = chunkIndex * chunkSize
-      const end = Math.min(start + chunkSize, file.size)
-      const chunk = file.slice(start, end)
-
-      const operation = async (): Promise<ChunkUploadResult> => {
-        const formData = new FormData()
-        formData.append('chunk', chunk)
-        formData.append('chunk_index', chunkIndex.toString())
-        formData.append('upload_id', uploadId)
-
-        return apiService.post<ChunkUploadResult>('/v4/assets/upload/chunk/', formData, {
+        {
           headers: {
-            'Content-Type': 'multipart/form-data'
-          },
-          signal
-        })
-      }
-
-      const result = await withRetry(operation, {
-        maxAttempts: 3,
-        initialDelay: 1000,
-        ...retryOptions
-      })
-
-      if (!result.success) {
-        throw result.error
-      }
-
-      uploadedBytes += chunk.size
-
-      if (onProgress) {
-        const progress = Math.round((uploadedBytes / file.size) * 100)
-        onProgress(progress)
-      }
-
-      options.onChunkComplete?.(chunkIndex + 1, totalChunks)
-    }
-
-    // Finalize upload
-    const finalizeResult = await apiService.post<UploadResult>('/v4/assets/upload/finalize/', {
-      upload_id: uploadId
-    })
-
-    return finalizeResult
-  }
-
-  /**
-   * Validate file before upload
-   */
-  private validateFile(file: File): void {
-    if (file.size > this.MAX_FILE_SIZE) {
-      throw new ApiError(
-        `File size (${this.formatBytes(file.size)}) exceeds maximum allowed size (${this.formatBytes(this.MAX_FILE_SIZE)})`,
-        413
-      )
-    }
-
-    // Check file type (basic validation)
-    const allowedTypes = [
-      'image/',
-      'video/',
-      'audio/',
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'application/zip',
-      'application/x-rar-compressed',
-      'text/'
-    ]
-
-    const isAllowed = allowedTypes.some(type => file.type.startsWith(type) || type.endsWith(file.type.split('/')[1]))
-    if (!isAllowed && file.type !== '') {
-      throw new ApiError(`File type ${file.type} is not allowed`, 415)
-    }
-
-    // Check filename
-    if (!file.name || file.name.trim().length === 0) {
-      throw new ApiError('Filename cannot be empty', 400)
-    }
-
-    // Check for potentially dangerous filenames
-    const dangerousPatterns = [
-      /\.\./,  // Directory traversal
-      /^[.-]/, // Hidden files starting with . or -
-      /[<>:"|?*\x00-\x1f]/, // Invalid characters
-    ]
-
-    if (dangerousPatterns.some(pattern => pattern.test(file.name))) {
-      throw new ApiError('Filename contains invalid characters', 400)
-    }
-  }
-
-  /**
-   * Format bytes to human readable format
-   */
-  private formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B'
-
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-  }
-
-  /**
-   * Resume interrupted chunked upload
-   */
-  async resumeUpload(uploadId: string, file: File, options: UploadOptions = {}): Promise<UploadResult> {
-    // Check upload status
-    const status = await apiService.get(`/v4/assets/upload/status/${uploadId}/`)
-
-    if (status.completed) {
-      // Upload already completed
-      return status.result
-    }
-
-    // Resume from next chunk
-    const nextChunk = status.uploaded_chunks + 1
-    const chunkSize = options.chunkSize || this.DEFAULT_CHUNK_SIZE
-
-    // Continue chunked upload from next chunk
-    return this.uploadChunkedFrom(file, nextChunk, chunkSize, uploadId, options)
-  }
-
-  /**
-   * Upload chunks starting from specific chunk index
-   */
-  private async uploadChunkedFrom(
-    file: File,
-    startChunk: number,
-    chunkSize: number,
-    uploadId: string,
-    options: UploadOptions
-  ): Promise<UploadResult> {
-    const totalChunks = Math.ceil(file.size / chunkSize)
-
-    for (let chunkIndex = startChunk; chunkIndex < totalChunks; chunkIndex++) {
-      const start = chunkIndex * chunkSize
-      const end = Math.min(start + chunkSize, file.size)
-      const chunk = file.slice(start, end)
-
-      const operation = async (): Promise<ChunkUploadResult> => {
-        const formData = new FormData()
-        formData.append('chunk', chunk)
-        formData.append('chunk_index', chunkIndex.toString())
-        formData.append('upload_id', uploadId)
-
-        return apiService.post<ChunkUploadResult>('/v4/assets/upload/chunk/', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
+            ...headers,
+            'Content-Type': 'application/json'
           },
           signal: options.signal
-        })
-      }
-
-      const result = await withRetry(operation, {
-        maxAttempts: 3,
-        initialDelay: 1000,
-        ...options.retryOptions
+        }
+      )
+      
+      documentId = createResponse.data.id
+      console.log('[UploadService] Document created:', documentId)
+      
+      // =======================================================================
+      // STEP 2: Upload File Binary
+      // =======================================================================
+      options.onProgress?.({
+        percent: 5,
+        loaded: 0,
+        total: file.size,
+        speed: 0,
+        eta: 0,
+        step: 'uploading'
       })
-
-      if (!result.success) {
-        throw result.error
+      
+      console.log('[UploadService] Step 2: Uploading file binary...')
+      
+      // Check for cancellation
+      if (options.signal?.aborted) {
+        throw new Error('Upload cancelled')
       }
-
-      options.onChunkComplete?.(chunkIndex + 1, totalChunks)
+      
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('file_new', file)
+      
+      // Track upload progress
+      let lastLoaded = 0
+      let lastTime = Date.now()
+      
+      const fileResponse = await axios.post<MayanFileResponse>(
+        `${this.baseUrl}/documents/${documentId}/files/`,
+        formData,
+        {
+          headers: {
+            ...headers,
+            'Content-Type': 'multipart/form-data'
+          },
+          signal: options.signal,
+          onUploadProgress: (event: AxiosProgressEvent) => {
+            const loaded = event.loaded || 0
+            const total = event.total || file.size
+            
+            // Calculate speed
+            const now = Date.now()
+            const timeDiff = (now - lastTime) / 1000 || 0.1
+            const bytesDiff = loaded - lastLoaded
+            const speed = bytesDiff / timeDiff
+            
+            // Calculate ETA
+            const remaining = total - loaded
+            const eta = speed > 0 ? remaining / speed : 0
+            
+            // Update tracking
+            lastLoaded = loaded
+            lastTime = now
+            
+            // Report progress (5-95% range for file upload)
+            const percent = Math.min(95, 5 + Math.round((loaded / total) * 90))
+            
+            options.onProgress?.({
+              percent,
+              loaded,
+              total,
+              speed,
+              eta,
+              step: 'uploading'
+            })
+          }
+        }
+      )
+      
+      console.log('[UploadService] File uploaded:', fileResponse.data.id)
+      
+      // =======================================================================
+      // STEP 3: Processing Complete
+      // =======================================================================
+      options.onProgress?.({
+        percent: 100,
+        loaded: file.size,
+        total: file.size,
+        speed: 0,
+        eta: 0,
+        step: 'processing'
+      })
+      
+      // If cabinet specified, add document to cabinet
+      if (options.cabinetId) {
+        await this.addToCabinet(documentId, options.cabinetId, token)
+      }
+      
+      return {
+        documentId,
+        fileId: fileResponse.data.id,
+        label: file.name,
+        documentUrl: `${this.baseUrl}/documents/${documentId}/`,
+        downloadUrl: fileResponse.data.download_url
+      }
+      
+    } catch (error: any) {
+      console.error('[UploadService] Upload failed:', error)
+      
+      // =======================================================================
+      // CLEANUP: Delete orphan document if Step 1 succeeded but Step 2 failed
+      // =======================================================================
+      if (documentId && !options.signal?.aborted) {
+        console.log('[UploadService] Cleaning up orphan document:', documentId)
+        try {
+          await axios.delete(`${this.baseUrl}/documents/${documentId}/`, {
+            headers
+          })
+          console.log('[UploadService] Orphan document deleted')
+        } catch (cleanupError) {
+          console.error('[UploadService] Failed to cleanup orphan document:', cleanupError)
+        }
+      }
+      
+      // Re-throw with meaningful message
+      if (error.response?.status === 413) {
+        throw new Error('File too large. Maximum size is 500MB.')
+      } else if (error.response?.status === 415) {
+        throw new Error('Unsupported file type.')
+      } else if (error.response?.status === 401) {
+        throw new Error('Session expired. Please login again.')
+      } else if (error.message === 'Upload cancelled') {
+        throw error
+      } else {
+        throw new Error(error.response?.data?.detail || error.message || 'Upload failed')
+      }
     }
-
-    // Finalize upload
-    const finalizeResult = await apiService.post<UploadResult>('/v4/assets/upload/finalize/', {
-      upload_id: uploadId
-    })
-
-    return finalizeResult
+  }
+  
+  /**
+   * Upload multiple files with batch progress tracking
+   */
+  async uploadMultiple(
+    files: File[],
+    options: Omit<UploadOptions, 'onProgress'> & {
+      onFileProgress?: (fileIndex: number, progress: UploadProgress) => void
+      onFileComplete?: (fileIndex: number, result: UploadResult) => void
+      onFileError?: (fileIndex: number, error: Error) => void
+      onBatchProgress?: (completed: number, total: number) => void
+    } = {}
+  ): Promise<{ results: UploadResult[]; errors: { index: number; error: Error }[] }> {
+    const results: UploadResult[] = []
+    const errors: { index: number; error: Error }[] = []
+    
+    for (let i = 0; i < files.length; i++) {
+      // Check for batch cancellation
+      if (options.signal?.aborted) {
+        errors.push({ index: i, error: new Error('Upload cancelled') })
+        continue
+      }
+      
+      try {
+        const result = await this.uploadAsset(files[i], {
+          ...options,
+          onProgress: (progress) => options.onFileProgress?.(i, progress)
+        })
+        
+        results.push(result)
+        options.onFileComplete?.(i, result)
+        
+      } catch (error: any) {
+        errors.push({ index: i, error })
+        options.onFileError?.(i, error)
+      }
+      
+      options.onBatchProgress?.(i + 1, files.length)
+    }
+    
+    return { results, errors }
+  }
+  
+  /**
+   * Add document to a cabinet (folder)
+   */
+  private async addToCabinet(documentId: number, cabinetId: number, token: string): Promise<void> {
+    try {
+      await axios.post(
+        `${this.baseUrl}/cabinets/${cabinetId}/documents/`,
+        { document: documentId },
+        {
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+      console.log('[UploadService] Document added to cabinet:', cabinetId)
+    } catch (error) {
+      console.warn('[UploadService] Failed to add document to cabinet:', error)
+      // Don't throw - cabinet assignment is optional
+    }
+  }
+  
+  /**
+   * Get available document types for upload
+   */
+  async getDocumentTypes(): Promise<{ id: number; label: string }[]> {
+    const token = getToken()
+    
+    if (!token) {
+      throw new Error('Not authenticated')
+    }
+    
+    const response = await axios.get<{ results: { id: number; label: string }[] }>(
+      `${this.baseUrl}/document_types/`,
+      {
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      }
+    )
+    
+    return response.data.results
   }
 }
 
+// ============================================================================
+// METADATA SERVICE (PATCH operations)
+// ============================================================================
+
+export interface UpdateMetadataOptions {
+  label?: string
+  description?: string
+  language?: string
+}
+
+/**
+ * Update document metadata
+ * 
+ * @param documentId - Document ID
+ * @param data - Fields to update
+ */
+export async function updateDocumentMetadata(
+  documentId: number,
+  data: UpdateMetadataOptions
+): Promise<MayanDocumentResponse> {
+  const token = getToken()
+  
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+  
+  const response = await axios.patch<MayanDocumentResponse>(
+    `/api/v4/documents/${documentId}/`,
+    data,
+    {
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  )
+  
+  return response.data
+}
+
+/**
+ * Delete a document
+ * 
+ * @param documentId - Document ID to delete
+ */
+export async function deleteDocument(documentId: number): Promise<void> {
+  const token = getToken()
+  
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+  
+  await axios.delete(`/api/v4/documents/${documentId}/`, {
+    headers: {
+      'Authorization': `Token ${token}`
+    }
+  })
+}
+
+/**
+ * Add tags to a document
+ */
+export async function addDocumentTags(
+  documentId: number,
+  tagIds: number[]
+): Promise<void> {
+  const token = getToken()
+  
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+  
+  for (const tagId of tagIds) {
+    await axios.post(
+      `/api/v4/documents/${documentId}/tags/`,
+      { tag: tagId },
+      {
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+  }
+}
+
+/**
+ * Remove tag from a document
+ */
+export async function removeDocumentTag(
+  documentId: number,
+  tagId: number
+): Promise<void> {
+  const token = getToken()
+  
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+  
+  await axios.delete(`/api/v4/documents/${documentId}/tags/${tagId}/`, {
+    headers: {
+      'Authorization': `Token ${token}`
+    }
+  })
+}
+
+// ============================================================================
+// EXPORT
+// ============================================================================
+
 export const uploadService = new UploadService()
-
-
-
-
-
