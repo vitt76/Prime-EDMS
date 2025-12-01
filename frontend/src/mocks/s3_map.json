@@ -1,0 +1,264 @@
+{
+  "generated_at": "2025-12-01T14:10:00.000000",
+  "bucket": "cafdf4e9fa32-righteous-rimma",
+  "endpoint": "https://s3.ru1.storage.beget.cloud",
+  "prefix": "PRIME/mock-assets",
+  "total_count": 25,
+  "total_size_bytes": 25000000,
+  "mode": "direct_unsplash",
+  "_note": "Using direct Unsplash URLs for development. In production, these will be S3 URLs.",
+  "assets": {
+    "landscape_01": {
+      "id": "landscape_01",
+      "label": "Горный пейзаж на закате",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba",
+      "size_bytes": 1000000
+    },
+    "landscape_02": {
+      "id": "landscape_02",
+      "label": "Альпийские горы",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_02.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4",
+      "size_bytes": 1000000
+    },
+    "landscape_03": {
+      "id": "landscape_03",
+      "label": "Природа и лес",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_03.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1469474968028-56623f02e42e",
+      "size_bytes": 1000000
+    },
+    "landscape_04": {
+      "id": "landscape_04",
+      "label": "Лесная тропа",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_04.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d",
+      "size_bytes": 1000000
+    },
+    "landscape_05": {
+      "id": "landscape_05",
+      "label": "Водопад в горах",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_05.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1433086966358-54859d0ed716",
+      "size_bytes": 1000000
+    },
+    "landscape_06": {
+      "id": "landscape_06",
+      "label": "Зеленые холмы",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_06.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1501854140801-50d01698950b",
+      "size_bytes": 1000000
+    },
+    "landscape_07": {
+      "id": "landscape_07",
+      "label": "Туманные горы",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_07.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05",
+      "size_bytes": 1000000
+    },
+    "landscape_08": {
+      "id": "landscape_08",
+      "label": "Солнечный лес",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_08.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e",
+      "size_bytes": 1000000
+    },
+    "landscape_09": {
+      "id": "landscape_09",
+      "label": "Облака над горами",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_09.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1518173946687-a4c036bc4f9a?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1518173946687-a4c036bc4f9a",
+      "size_bytes": 1000000
+    },
+    "landscape_10": {
+      "id": "landscape_10",
+      "label": "Морской берег",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/landscape_10.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1",
+      "size_bytes": 1000000
+    },
+    "portrait_01": {
+      "id": "portrait_01",
+      "label": "Бизнес портрет мужчина",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/portrait_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=900&h=1200&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
+      "size_bytes": 1000000
+    },
+    "portrait_02": {
+      "id": "portrait_02",
+      "label": "Бизнес портрет женщина",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/portrait_02.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=900&h=1200&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
+      "size_bytes": 1000000
+    },
+    "portrait_03": {
+      "id": "portrait_03",
+      "label": "Молодая женщина",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/portrait_03.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=900&h=1200&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1517841905240-472988babdf9",
+      "size_bytes": 1000000
+    },
+    "portrait_04": {
+      "id": "portrait_04",
+      "label": "Молодой мужчина",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/portrait_04.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=900&h=1200&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6",
+      "size_bytes": 1000000
+    },
+    "portrait_05": {
+      "id": "portrait_05",
+      "label": "Модель в студии",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/portrait_05.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=900&h=1200&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1",
+      "size_bytes": 1000000
+    },
+    "video_01": {
+      "id": "video_01",
+      "label": "Превью видео кинопроизводство",
+      "type": "video",
+      "s3_key": "PRIME/mock-assets/video_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1536240478700-b869070f9279",
+      "size_bytes": 1000000
+    },
+    "video_02": {
+      "id": "video_02",
+      "label": "Превью видео репортаж",
+      "type": "video",
+      "s3_key": "PRIME/mock-assets/video_02.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4",
+      "size_bytes": 1000000
+    },
+    "video_03": {
+      "id": "video_03",
+      "label": "Превью видео интервью",
+      "type": "video",
+      "s3_key": "PRIME/mock-assets/video_03.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d",
+      "size_bytes": 1000000
+    },
+    "document_01": {
+      "id": "document_01",
+      "label": "Превью документа",
+      "type": "document",
+      "s3_key": "PRIME/mock-assets/document_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1568667256549-094345857637?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1568667256549-094345857637",
+      "size_bytes": 1000000
+    },
+    "architecture_01": {
+      "id": "architecture_01",
+      "label": "Современная архитектура",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/architecture_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1486325212027-8081e485255e?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1486325212027-8081e485255e",
+      "size_bytes": 1000000
+    },
+    "technology_01": {
+      "id": "technology_01",
+      "label": "Технологии и электроника",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/technology_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1518770660439-4636190af475",
+      "size_bytes": 1000000
+    },
+    "food_01": {
+      "id": "food_01",
+      "label": "Гастрономия блюдо",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/food_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
+      "size_bytes": 1000000
+    },
+    "business_01": {
+      "id": "business_01",
+      "label": "Бизнес встреча команда",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/business_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1556761175-4b46a572b786?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1556761175-4b46a572b786",
+      "size_bytes": 1000000
+    },
+    "abstract_01": {
+      "id": "abstract_01",
+      "label": "Абстрактное искусство",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/abstract_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1557672172-298e090bd0f1",
+      "size_bytes": 1000000
+    },
+    "city_01": {
+      "id": "city_01",
+      "label": "Городской пейзаж небоскребы",
+      "type": "image",
+      "s3_key": "PRIME/mock-assets/city_01.jpg",
+      "s3_url": "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=1200&h=900&fit=crop&q=80",
+      "original_url": "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b",
+      "size_bytes": 1000000
+    }
+  },
+  "url_map": {
+    "landscape_01": "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=1200&h=900&fit=crop&q=80",
+    "landscape_02": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=900&fit=crop&q=80",
+    "landscape_03": "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200&h=900&fit=crop&q=80",
+    "landscape_04": "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=1200&h=900&fit=crop&q=80",
+    "landscape_05": "https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=1200&h=900&fit=crop&q=80",
+    "landscape_06": "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=1200&h=900&fit=crop&q=80",
+    "landscape_07": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200&h=900&fit=crop&q=80",
+    "landscape_08": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&h=900&fit=crop&q=80",
+    "landscape_09": "https://images.unsplash.com/photo-1518173946687-a4c036bc4f9a?w=1200&h=900&fit=crop&q=80",
+    "landscape_10": "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=1200&h=900&fit=crop&q=80",
+    "portrait_01": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=900&h=1200&fit=crop&q=80",
+    "portrait_02": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=900&h=1200&fit=crop&q=80",
+    "portrait_03": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=900&h=1200&fit=crop&q=80",
+    "portrait_04": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=900&h=1200&fit=crop&q=80",
+    "portrait_05": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=900&h=1200&fit=crop&q=80",
+    "video_01": "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=1200&h=900&fit=crop&q=80",
+    "video_02": "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=1200&h=900&fit=crop&q=80",
+    "video_03": "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=1200&h=900&fit=crop&q=80",
+    "document_01": "https://images.unsplash.com/photo-1568667256549-094345857637?w=1200&h=900&fit=crop&q=80",
+    "architecture_01": "https://images.unsplash.com/photo-1486325212027-8081e485255e?w=1200&h=900&fit=crop&q=80",
+    "technology_01": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&h=900&fit=crop&q=80",
+    "food_01": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&h=900&fit=crop&q=80",
+    "business_01": "https://images.unsplash.com/photo-1556761175-4b46a572b786?w=1200&h=900&fit=crop&q=80",
+    "abstract_01": "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=1200&h=900&fit=crop&q=80",
+    "city_01": "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=1200&h=900&fit=crop&q=80"
+  }
+}

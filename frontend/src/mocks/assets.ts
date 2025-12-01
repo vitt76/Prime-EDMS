@@ -18,6 +18,7 @@
  */
 
 import type { Asset, AIAnalysis, PaginatedResponse, Comment, Version } from '@/types/api'
+import { getImageUrlByIndex, getRandomImageUrl, isS3Available } from './s3Provider'
 
 // ============================================================================
 // USER TYPES (for uploadedBy, sharedBy)
@@ -144,35 +145,17 @@ export interface ExtendedAsset extends Asset {
 // MOCK DATA GENERATORS
 // ============================================================================
 
-// Unsplash-style placeholder images (free to use)
-const PLACEHOLDER_IMAGES = [
-  'https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1518173946687-a4c036bc4f9a?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=400&h=300&fit=crop',
-  // Vertical images
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=300&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=300&h=400&fit=crop',
-]
+// ============================================================================
+// IMAGE URL PROVIDER (S3 with Unsplash fallback)
+// ============================================================================
+// Note: URLs are now provided by s3Provider.ts which uses S3 when available,
+// falling back to Unsplash URLs. Run `python scripts/migrate_mocks.py` to
+// populate S3 with mock images.
 
-// Video placeholder thumbnails
-const VIDEO_THUMBNAILS = [
-  'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400&h=300&fit=crop',
-]
-
-// Document placeholder
-const DOCUMENT_THUMBNAIL = 'https://images.unsplash.com/photo-1568667256549-094345857637?w=400&h=300&fit=crop'
+// Log S3 availability status on module load
+if (typeof window !== 'undefined') {
+  console.log(`[MockAssets] S3 provider available: ${isS3Available()}`)
+}
 
 // Tags pools
 const AI_TAGS = ['Nature', 'Person', 'Portrait', 'Landscape', 'Architecture', 'Food', 'Travel', 'Business', 'Technology', 'Art', 'Fashion', 'Sports', 'Animals', 'City', 'Abstract']
@@ -347,13 +330,24 @@ function generateAIAnalysis(type: string): AIAnalysis | undefined {
 }
 
 function generateThumbnail(type: string, index: number): string {
+  // Use S3 provider for image URLs (falls back to Unsplash if S3 not populated)
   switch (type) {
     case 'image':
-      return PLACEHOLDER_IMAGES[index % PLACEHOLDER_IMAGES.length]!
+      // Use landscape images for even indices, portraits for odd
+      return index % 2 === 0 
+        ? getImageUrlByIndex(index % 10) // landscape_01 to landscape_10
+        : getImageUrlByIndex(10 + (index % 5)) // portrait_01 to portrait_05
     case 'video':
-      return VIDEO_THUMBNAILS[index % VIDEO_THUMBNAILS.length]!
+      // Video thumbnails: video_01, video_02, video_03
+      return getRandomImageUrl('video')
+    case 'document':
+      // Document thumbnail
+      return getRandomImageUrl('document')
+    case 'audio':
+      // Use abstract for audio
+      return getRandomImageUrl('abstract')
     default:
-      return DOCUMENT_THUMBNAIL
+      return getImageUrlByIndex(index)
   }
 }
 
