@@ -267,7 +267,7 @@ export function useRetryableOperation<T>(
     const result = await withRetry(operation, retryOptions)
 
     // Auto-retry on network errors after delay
-    if (!result.success && autoRetry && retryCondition(result.error!)) {
+    if (!result.success && autoRetry && defaultRetryCondition(result.error!)) {
       if (retryTimeout) clearTimeout(retryTimeout)
       retryTimeout = window.setTimeout(() => {
         execute() // Recursive retry
