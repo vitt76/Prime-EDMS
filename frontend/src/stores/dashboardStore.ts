@@ -1,0 +1,187 @@
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { dashboardService, type DashboardStats, type ActivityItem, type StorageMetrics } from '@/services/dashboardService'
+import { formatApiError } from '@/utils/errors'
+
+export const useDashboardStore = defineStore(
+  'dashboard',
+  () => {
+    // State
+    const stats = ref<DashboardStats | null>(null)
+    const activityFeed = ref<ActivityItem[]>([])
+    const storageMetrics = ref<StorageMetrics | null>(null)
+    const isLoading = ref(false)
+    const error = ref<string | null>(null)
+    const lastUpdated = ref<Date | null>(null)
+
+    // Getters
+    const hasRecentActivity = computed(() => activityFeed.value.length > 0)
+    const storageUsagePercentage = computed(() => {
+      if (!storageMetrics.value) return 0
+      return storageMetrics.value.usage_percentage
+    })
+    const formattedStorageUsed = computed(() => {
+      if (!storageMetrics.value) return '0 B'
+      return formatBytes(storageMetrics.value.used_size)
+    })
+    const formattedStorageTotal = computed(() => {
+      if (!storageMetrics.value) return '0 B'
+      return formatBytes(storageMetrics.value.total_size)
+    })
+
+    // Mock data for dev mode (matches DashboardStats interface)
+    const mockStats: DashboardStats = {
+      documents: {
+        total: 1250,
+        with_analysis: 890,
+        without_analysis: 360
+      },
+      analyses: {
+        completed: 890,
+        processing: 15,
+        pending: 47,
+        failed: 3
+      },
+      providers: [
+        { provider: 'yandexgpt', count: 650 },
+        { provider: 'gigachat', count: 240 }
+      ]
+    }
+
+    const mockActivity: ActivityItem[] = [
+      { id: 1, type: 'upload', user: 'admin', user_id: 1, asset_id: 101, asset_label: 'image_001.jpg', timestamp: new Date().toISOString(), description: 'Загружен файл image_001.jpg' },
+      { id: 2, type: 'tag', user: 'editor', user_id: 2, asset_id: 102, asset_label: 'video_promo.mp4', timestamp: new Date(Date.now() - 3600000).toISOString(), description: 'Добавлены теги к video_promo.mp4' },
+      { id: 3, type: 'download', user: 'manager', user_id: 3, asset_id: 103, asset_label: 'report_2025.pdf', timestamp: new Date(Date.now() - 7200000).toISOString(), description: 'Скачан документ report_2025.pdf' }
+    ]
+
+    const mockStorage: StorageMetrics = {
+      total_size: 107374182400,
+      used_size: 16890000000,
+      available_size: 90484182400,
+      usage_percentage: 15.7,
+      by_type: [
+        { type: 'images', count: 890, size: 10000000000 },
+        { type: 'videos', count: 245, size: 5000000000 },
+        { type: 'documents', count: 115, size: 1890000000 }
+      ]
+    }
+
+    // Actions
+    async function fetchDashboardStats() {
+      isLoading.value = true
+      error.value = null
+
+      try {
+        // In dev mode, use mock data
+        if (import.meta.env.DEV) {
+          await new Promise(resolve => setTimeout(resolve, 300))
+          stats.value = mockStats
+          lastUpdated.value = new Date()
+          return
+        }
+        const data = await dashboardService.getDashboardStats()
+        stats.value = data
+        lastUpdated.value = new Date()
+      } catch (err) {
+        // In dev mode, fallback to mock data
+        if (import.meta.env.DEV) {
+          console.warn('[Dev] Using mock dashboard stats')
+          stats.value = mockStats
+          lastUpdated.value = new Date()
+          return
+        }
+        error.value = formatApiError(err)
+        throw err
+      } finally {
+        isLoading.value = false
+      }
+    }
+
+    async function fetchActivityFeed(limit = 20) {
+      try {
+        // In dev mode, use mock data
+        if (import.meta.env.DEV) {
+          await new Promise(resolve => setTimeout(resolve, 200))
+          activityFeed.value = mockActivity.slice(0, limit)
+          return
+        }
+        const data = await dashboardService.getActivityFeed(limit)
+        activityFeed.value = data
+      } catch (err) {
+        // Activity feed is optional, don't throw
+        console.warn('Failed to fetch activity feed:', err)
+        if (import.meta.env.DEV) {
+          activityFeed.value = mockActivity
+        } else {
+          activityFeed.value = []
+        }
+      }
+    }
+
+    async function fetchStorageMetrics() {
+      try {
+        // In dev mode, use mock data
+        if (import.meta.env.DEV) {
+          await new Promise(resolve => setTimeout(resolve, 250))
+          storageMetrics.value = mockStorage
+          return
+        }
+        const data = await dashboardService.getStorageMetrics()
+        storageMetrics.value = data
+      } catch (err) {
+        // Storage metrics are optional, don't throw
+        console.warn('Failed to fetch storage metrics:', err)
+        if (import.meta.env.DEV) {
+          storageMetrics.value = mockStorage
+        } else {
+          storageMetrics.value = null
+        }
+      }
+    }
+
+    async function refresh() {
+      await Promise.all([
+        fetchDashboardStats(),
+        fetchActivityFeed(),
+        fetchStorageMetrics()
+      ])
+    }
+
+    // Helper function
+    function formatBytes(bytes: number): string {
+      if (bytes === 0) return '0 B'
+      const k = 1024
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+      return `${Math.round((bytes / Math.pow(k, i)) * 100) / 100} ${sizes[i]}`
+    }
+
+    return {
+      // State
+      stats,
+      activityFeed,
+      storageMetrics,
+      isLoading,
+      error,
+      lastUpdated,
+      // Getters
+      hasRecentActivity,
+      storageUsagePercentage,
+      formattedStorageUsed,
+      formattedStorageTotal,
+      // Actions
+      fetchDashboardStats,
+      fetchActivityFeed,
+      fetchStorageMetrics,
+      refresh
+    }
+  },
+  {
+    persist: false // Don't persist dashboard data
+  }
+)
+
+
+
+
+

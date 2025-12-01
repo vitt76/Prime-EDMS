@@ -39,7 +39,9 @@ if 'silk' in settings.INSTALLED_APPS:
 # Specific routes for DAM SPA pages (exclude API)
 from django.views.generic import TemplateView
 urlpatterns += [  # NOQA
-    url(regex=r'^digital-assets/digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='dam-dashboard-spa-route'),
-    url(regex=r'^digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='dam-spa-route'),
-    url(regex=r'^settings/(?!api/).*', view=TemplateView.as_view(template_name='appearance/base.html'), name='settings-spa-route')
+    url(regex=r'^digital-assets/digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/spa.html'), name='dam-dashboard-spa-route'),
+    url(regex=r'^digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/spa.html'), name='dam-spa-route'),
+    url(regex=r'^settings/(?!api/).*', view=TemplateView.as_view(template_name='appearance/spa.html'), name='settings-spa-route'),
+    # Catch-all route for SPA - must be last
+    url(regex=r'^(?!api/|admin/|static/|media/).*', view=TemplateView.as_view(template_name='appearance/spa.html'), name='spa-catch-all')
 ]

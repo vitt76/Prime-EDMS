@@ -273,21 +273,157 @@ TEST_RUNNER = 'mayan.apps.testing.runner.MayanTestRunner'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
-        'rest_framework.authentication.BasicAuthentication'
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_PAGINATION_CLASS': 'mayan.apps.rest_api.pagination.MayanPageNumberPagination',
-    'DEFAULT_THROTTLE_CLASSES': (
+    'PAGE_SIZE': 100,
+    'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
-        'rest_framework.throttling.ScopedRateThrottle'
-    ),
+        'rest_framework.throttling.UserRateThrottle'
+    ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
         'user': '1000/hour',
-        'ai_analysis': '10/minute'
+        'ai_analysis': '10/minute,50/hour,500/day',
+        'ai_analysis_anon': '1/hour',
+        'upload': '50/hour',
+        'download': '100/hour',
+        'bulk_operation': '20/hour',
+    },
+    'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.AcceptHeaderVersioning',
+    'EXCEPTION_HANDLER': 'mayan.apps.api.exception_handlers.exception_handler',
+}
+
+REST_FRAMEWORK_EXTENDED = {
+    'SHOW_THROTTLE_HEADERS': True,
+}
+
+# Caching configuration (used for throttling counters)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'mayan-cache',
+        'TIMEOUT': 300,
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+        }
     }
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {message}',
+            'style': '{',
+        },
+        'json': {
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'format': '%(asctime)s %(name)s %(levelname)s %(message)s',
+        },
+    },
+    'filters': {
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        },
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'api_errors': {
+            'level': 'ERROR',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'throttle_log': {
+            'level': 'WARNING',
+            'class': 'logging.StreamHandler',
+            'formatter': 'json',
+        },
+        # 'ai_analysis': {
+        #     'level': 'INFO',
+        #     'class': 'logging.handlers.RotatingFileHandler',
+        #     'filename': 'logs/ai_analysis.log',
+        #     'maxBytes': 1024 * 1024 * 10,
+        #     'backupCount': 10,
+        #     'formatter': 'json',
+        # },
+        'null': {
+            'class': 'logging.NullHandler',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['api_errors'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'rest_framework': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'mayan.apps.dam': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'dam.throttle': {
+            'handlers': ['throttle_log'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'mayan.apps.dam.throttle': {
+            'handlers': ['throttle_log'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    }
+}
+
+# Security and CSRF for API clients
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://yourdomain.com',
+]
+
+SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_SECURITY_POLICY = {
+    'DEFAULT_SRC': ('"self"',),
+    'SCRIPT_SRC': ('"self"', 'https://cdn.jsdelivr.net'),
+    'STYLE_SRC': ('"self"', 'https://fonts.googleapis.com'),
+    'FONT_SRC': ('"self"', 'https://fonts.gstatic.com'),
+    'CONNECT_SRC': ('"self"', 'https://api.example.com'),
 }
 
 # --------- Pagination --------
@@ -316,21 +452,13 @@ CELERY_TIMEZONE = 'UTC'
 
 # ------------ CORS ------------
 
-CORS_ORIGIN_ALLOW_ALL = False
-_default_cors_origins = os.environ.get('MAYAN_CORS_ALLOWED_ORIGINS')
-if _default_cors_origins:
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip() for origin in _default_cors_origins.split(',')
-        if origin.strip()
-    ]
-else:
-    CORS_ALLOWED_ORIGINS = [
-        'http://localhost:8000',
-        'http://127.0.0.1:8000'
-    ]
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://yourdomain.com',
+]
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_PREFLIGHT_MAX_AGE = 60 * 60 * 24
 
 # ------ Timezone --------
 

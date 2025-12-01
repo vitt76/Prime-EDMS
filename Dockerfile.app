@@ -18,6 +18,7 @@ RUN apt-get update && \
         django-storages \
         gigachat \
         PyJWT \
+        python-json-logger \
         reportlab \
         "pydantic<2.0" \
         "typing-extensions<4.6" \

@@ -1,7 +1,7 @@
 import base64
 import binascii
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 import requests
 
@@ -905,14 +905,33 @@ def reindex_document_assets(document: Document):
 
 
 @shared_task
-def bulk_analyze_documents(document_ids: List[int]):
+def bulk_analyze_documents(
+    document_ids: List[int],
+    ai_service: Optional[str] = None,
+    analysis_type: Optional[str] = None,
+    user_id: Optional[int] = None,
+    bulk_id: Optional[str] = None
+):
     """
     Bulk analyze multiple documents with AI.
 
     Args:
         document_ids: List of document IDs to analyze
+        ai_service: Optional preferred AI service
+        analysis_type: Optional type of analysis
+        user_id: Requesting user for auditing
+        bulk_id: Traceable bulk request ID
     """
-    for document_id in document_ids:
-        analyze_document_with_ai.delay(document_id)
+    logger.info(
+        'Scheduling bulk AI analysis task',
+        extra={
+            'doc_count': len(document_ids),
+            'ai_service': ai_service,
+            'analysis_type': analysis_type,
+            'user_id': user_id,
+            'bulk_id': bulk_id
+        }
+    )
 
-    logger.info(f"Scheduled AI analysis for {len(document_ids)} documents")
+    for document_id in document_ids:
+        analyze_document_with_ai.delay(document_id=document_id)

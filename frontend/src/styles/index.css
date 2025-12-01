@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light mode colors */
+    --color-primary-0: #0052cc;
+    --color-primary-50: #ebf5ff;
+    --color-primary-100: #c7e0ff;
+    --color-primary-500: #0052cc;
+    --color-primary-600: #0042a8;
+
+    --color-neutral-0: #ffffff;
+    --color-neutral-50: #f9fafb;
+    --color-neutral-100: #f3f4f6;
+    --color-neutral-300: #e1e4e8;
+    --color-neutral-600: #4b5563;
+    --color-neutral-900: #111827;
+
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-error: #ef4444;
+    --color-info: #06b6d4;
+
+    --color-accent-primary: #00875a;
+    --color-accent-secondary: #4c8cff;
+  }
+
+  .dark {
+    /* Dark mode colors */
+    --color-primary-0: #4c8cff;
+    --color-primary-50: #1f3a7a;
+    --color-primary-500: #4c8cff;
+    --color-primary-600: #5d96ff;
+
+    --color-neutral-0: #1f2937;
+    --color-neutral-50: #111827;
+    --color-neutral-100: #374151;
+    --color-neutral-300: #6b7280;
+    --color-neutral-600: #e5e7eb;
+    --color-neutral-900: #f9fafb;
+
+    --color-success: #00c853;
+    --color-warning: #ffb81c;
+    --color-error: #ff6b6b;
+    --color-info: #00bfd9;
+
+    --color-accent-primary: #00c853;
+    --color-accent-secondary: #4c8cff;
+  }
+
+  * {
+    @apply border-neutral-300 dark:border-neutral-300;
+  }
+
+  body {
+    @apply bg-neutral-0 text-neutral-900 dark:bg-neutral-0 dark:text-neutral-900;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+}
+
+@layer components {
+  /* Custom component styles */
+}
+
+@layer utilities {
+  /* Custom utility classes */
+}
+
+
