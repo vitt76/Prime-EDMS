@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { authService } from '@/services/authService'
+import { authService, hasToken, clearToken } from '@/services/authService'
 import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
 
 export const useAuthStore = defineStore(
@@ -78,6 +78,8 @@ export const useAuthStore = defineStore(
         // Continue with logout even if API call fails
         console.error('Logout error:', error)
       } finally {
+        // Clear token and local state
+        clearToken()
         user.value = null
         isAuthenticated.value = false
         permissions.value = []
@@ -86,6 +88,8 @@ export const useAuthStore = defineStore(
         twoFactorStatus.value = null
         twoFactorPending.value = false
         twoFactorSetup.value = null
+        
+        console.log('[AuthStore] Logged out')
       }
     }
 
@@ -96,29 +100,21 @@ export const useAuthStore = defineStore(
     }
 
     async function checkAuth() {
-      // In dev mode, check localStorage for mock auth
-      if (import.meta.env.DEV) {
-        const isAuth = localStorage.getItem('dev_authenticated') === 'true'
-        if (isAuth) {
-          const userData = localStorage.getItem('dev_user')
-          if (userData) {
-            try {
-              user.value = JSON.parse(userData)
-              isAuthenticated.value = true
-              permissions.value = user.value?.permissions || []
-              lastActivity.value = new Date()
-              return true
-            } catch (e) {
-              console.error('[Dev] Failed to parse user data:', e)
-            }
-          }
-        }
+      // Check if we have a real auth token
+      const hasRealToken = hasToken()
+      // Check mock auth flag (for dev mode without backend)
+      const hasMockAuth = localStorage.getItem('dev_authenticated') === 'true'
+      
+      // If we have persisted auth state but no real token and no mock flag, clear it
+      if (isAuthenticated.value && !hasRealToken && !hasMockAuth) {
+        console.warn('[AuthStore] Persisted auth but no token/mock flag, clearing state')
         isAuthenticated.value = false
+        user.value = null
+        permissions.value = []
         return false
       }
-
-      // Production: check Django session
-      if (!authService.isAuthenticated()) {
+      
+      if (!hasRealToken && !hasMockAuth) {
         isAuthenticated.value = false
         return false
       }
@@ -129,11 +125,17 @@ export const useAuthStore = defineStore(
         isAuthenticated.value = true
         permissions.value = response.permissions || []
         lastActivity.value = new Date()
-
+        
+        console.log('[AuthStore] Auth check successful:', response.user.username)
         return true
       } catch (error) {
-        // User not authenticated, clear auth
-        await logout()
+        console.warn('[AuthStore] Auth check failed:', error)
+        // Clear auth state on failure
+        isAuthenticated.value = false
+        user.value = null
+        permissions.value = []
+        clearToken()
+        localStorage.removeItem('dev_authenticated')
         return false
       }
     }
