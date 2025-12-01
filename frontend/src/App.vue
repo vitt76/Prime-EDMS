@@ -80,10 +80,14 @@ watch(showUploadWizard, (isOpen) => {
 })
 
 const showLayout = computed(() => {
-  // Show layout for all authenticated pages except auth-related pages
+  // Show layout for all authenticated pages except auth-related pages and admin pages
   const authPages = ['login', 'forgot-password', 'reset-password', 'two-factor-auth']
-  // Check if route.name exists and is not an auth page
-  return route.name && !authPages.includes(route.name as string)
+  
+  // Admin pages use their own AdminLayout
+  const isAdminRoute = route.path.startsWith('/admin')
+  
+  // Check if route.name exists, is not an auth page, and is not an admin route
+  return route.name && !authPages.includes(route.name as string) && !isAdminRoute
 })
 
 onMounted(async () => {

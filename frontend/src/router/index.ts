@@ -141,61 +141,87 @@ const routes: RouteRecordRaw[] = [
     },
     props: true
   },
-  // Admin routes (nested structure)
+  // Admin routes (new Admin Panel with AdminLayout)
   {
     path: '/admin',
-    component: () => import('@/pages/AdminPage.vue'),
+    component: () => import('@/layouts/AdminLayout.vue'),
     meta: {
       requiresAuth: true,
-      requiresRole: 'admin',
-      requiresPermission: 'admin.access',
+      requiresAdmin: true,
       breadcrumb: 'Administration'
     },
-    redirect: '/admin/users',
     children: [
+      {
+        path: '',
+        name: 'admin-dashboard',
+        component: () => import('@/pages/admin/AdminDashboard.vue'),
+        meta: { title: 'Обзор - Admin' }
+      },
       {
         path: 'users',
         name: 'admin-users',
-        component: () => import('@/pages/admin/UserManagementPage.vue'),
-        meta: {
-          requiresAuth: true,
-          requiresPermission: 'admin.user_manage',
-          breadcrumb: 'User Management',
-          title: 'User Management - Admin'
-        }
+        component: () => import('@/pages/admin/AdminUsers.vue'),
+        meta: { title: 'Пользователи - Admin' }
       },
       {
-        path: 'schemas',
-        name: 'admin-metadata-schemas',
-        component: () => import('@/pages/admin/MetadataSchemaPage.vue'),
-        meta: {
-          requiresAuth: true,
-          requiresPermission: 'admin.schema_manage',
-          breadcrumb: 'Metadata Schemas',
-          title: 'Metadata Schemas - Admin'
-        }
+        path: 'users/:id',
+        name: 'admin-user-detail',
+        component: () => import('@/pages/admin/AdminUserDetail.vue'),
+        meta: { title: 'Пользователь - Admin' }
+      },
+      {
+        path: 'roles',
+        name: 'admin-roles',
+        component: () => import('@/pages/admin/AdminRoles.vue'),
+        meta: { title: 'Роли - Admin' }
+      },
+      {
+        path: 'metadata',
+        name: 'admin-metadata',
+        component: () => import('@/pages/admin/AdminMetadata.vue'),
+        meta: { title: 'Метаданные - Admin' }
       },
       {
         path: 'workflows',
         name: 'admin-workflows',
-        component: () => import('@/pages/admin/WorkflowDesignerPage.vue'),
-        meta: {
-          requiresAuth: true,
-          requiresPermission: 'admin.workflow_manage',
-          breadcrumb: 'Workflow Designer',
-          title: 'Workflow Designer - Admin'
-        }
+        component: () => import('@/pages/admin/AdminWorkflows.vue'),
+        meta: { title: 'Рабочие процессы - Admin' }
       },
       {
-        path: 'reports',
-        name: 'admin-reports',
-        component: () => import('@/pages/admin/AdminReportsPage.vue'),
-        meta: {
-          requiresAuth: true,
-          requiresPermission: 'admin.reports_view',
-          breadcrumb: 'Reports',
-          title: 'Admin Reports'
-        }
+        path: 'workflows/:id',
+        name: 'admin-workflow-detail',
+        component: () => import('@/pages/admin/AdminWorkflowDetail.vue'),
+        meta: { title: 'Рабочий процесс - Admin' }
+      },
+      {
+        path: 'sources',
+        name: 'admin-sources',
+        component: () => import('@/pages/admin/AdminSources.vue'),
+        meta: { title: 'Источники - Admin' }
+      },
+      {
+        path: 'ai-logs',
+        name: 'admin-ai-logs',
+        component: () => import('@/pages/admin/AdminAILogs.vue'),
+        meta: { title: 'AI-обработка - Admin' }
+      },
+      {
+        path: 'health',
+        name: 'admin-health',
+        component: () => import('@/pages/admin/AdminHealth.vue'),
+        meta: { title: 'Мониторинг - Admin' }
+      },
+      {
+        path: 'logs',
+        name: 'admin-logs',
+        component: () => import('@/pages/admin/AdminLogs.vue'),
+        meta: { title: 'Логи - Admin' }
+      },
+      {
+        path: 'storage',
+        name: 'admin-storage',
+        component: () => import('@/pages/admin/AdminStorage.vue'),
+        meta: { title: 'Хранилище S3 - Admin' }
       }
     ]
   },

@@ -1,11 +1,15 @@
 <template>
   <div class="dam-page">
-    <GalleryView />
+    <GalleryView @open-upload="$emit('open-upload')" />
   </div>
 </template>
 
 <script setup lang="ts">
 import GalleryView from '@/components/DAM/GalleryView.vue'
+
+defineEmits<{
+  'open-upload': []
+}>()
 </script>
 
 <style scoped>
