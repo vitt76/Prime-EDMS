@@ -30,6 +30,14 @@ export const useUIStore = defineStore(
       sidebarExpanded.value = !sidebarExpanded.value
     }
 
+    function expandSidebar() {
+      sidebarExpanded.value = true
+    }
+
+    function collapseSidebar() {
+      sidebarExpanded.value = false
+    }
+
     function setTheme(newTheme: 'light' | 'dark' | 'auto') {
       theme.value = newTheme
       applyTheme()
@@ -93,6 +101,8 @@ export const useUIStore = defineStore(
       isDarkMode,
       // Actions
       toggleSidebar,
+      expandSidebar,
+      collapseSidebar,
       setTheme,
       applyTheme,
       openModal,

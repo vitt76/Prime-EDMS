@@ -4,16 +4,24 @@
     <div
       v-for="section in folderStore.allSections"
       :key="section.id"
-      class="mb-4"
+      :class="isCollapsed ? 'mb-2' : 'mb-4'"
     >
       <!-- Section Header -->
       <button
-        class="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider
-               text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200
-               hover:bg-neutral-100 dark:hover:bg-neutral-700/50 rounded-lg transition-colors"
-        @click="folderStore.toggleSection(section.id)"
+        :class="[
+          'w-full flex items-center rounded-lg transition-colors',
+          isCollapsed 
+            ? 'justify-center p-2' 
+            : 'gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider',
+          'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200',
+          'hover:bg-neutral-100 dark:hover:bg-neutral-700/50'
+        ]"
+        @click="handleSectionClick(section)"
+        :title="isCollapsed ? `${section.name} (${countFolders(section.folders)})` : undefined"
       >
+        <!-- Chevron (только в развёрнутом режиме) -->
         <svg
+          v-if="!isCollapsed"
           class="w-3 h-3 transition-transform duration-200"
           :class="{ 'rotate-90': section.expanded }"
           fill="none"
@@ -26,20 +34,26 @@
         <!-- Section Icon -->
         <component
           :is="section.icon === 'cloud' ? CloudIcon : FolderIcon"
-          class="w-4 h-4"
-          :class="section.icon === 'cloud' ? 'text-blue-500' : 'text-amber-500'"
+          :class="[
+            isCollapsed ? 'w-5 h-5' : 'w-4 h-4',
+            section.icon === 'cloud' ? 'text-blue-500' : 'text-amber-500'
+          ]"
         />
         
-        <span class="flex-1 text-left">{{ section.name }}</span>
-        
-        <!-- Folder count -->
-        <span class="text-[10px] text-neutral-400 font-normal">
-          {{ countFolders(section.folders) }}
-        </span>
+        <!-- Section Name (только в развёрнутом режиме) -->
+        <template v-if="!isCollapsed">
+          <span class="flex-1 text-left">{{ section.name }}</span>
+          
+          <!-- Folder count -->
+          <span class="text-[10px] text-neutral-400 font-normal">
+            {{ countFolders(section.folders) }}
+          </span>
+        </template>
       </button>
       
-      <!-- Section Content -->
+      <!-- Section Content (только в развёрнутом режиме) -->
       <Transition
+        v-if="!isCollapsed"
         enter-active-class="transition-all duration-200 ease-out"
         enter-from-class="opacity-0 max-h-0"
         enter-to-class="opacity-100 max-h-[2000px]"
@@ -61,8 +75,11 @@
       </Transition>
     </div>
     
-    <!-- Create Folder Button -->
-    <div class="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-700">
+    <!-- Create Folder Button (только в развёрнутом режиме) -->
+    <div 
+      v-if="!isCollapsed" 
+      class="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-700"
+    >
       <button
         type="button"
         class="w-full flex items-center justify-center gap-2 px-3 py-2.5 
@@ -98,10 +115,18 @@ import { useAssetStore } from '@/stores/assetStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import FolderTreeNode from './FolderTreeNode.vue'
 import CreateFolderModal from './CreateFolderModal.vue'
-import type { FolderNode } from '@/mocks/folders'
+import type { FolderNode, FolderTreeSection } from '@/mocks/folders'
+
+// Props
+const props = withDefaults(defineProps<{
+  isCollapsed?: boolean
+}>(), {
+  isCollapsed: false
+})
 
 const emit = defineEmits<{
   folderSelect: [folderId: string]
+  expandSidebar: []
 }>()
 
 const folderStore = useFolderStore()
@@ -118,12 +143,29 @@ function countFolders(folders: FolderNode[]): number {
   return count
 }
 
+function handleSectionClick(section: FolderTreeSection) {
+  if (props.isCollapsed) {
+    // В свёрнутом режиме: разворачиваем sidebar и открываем секцию
+    emit('expandSidebar')
+    // Небольшая задержка для плавности анимации
+    setTimeout(() => {
+      if (!section.expanded) {
+        folderStore.toggleSection(section.id)
+      }
+    }, 150)
+  } else {
+    // В развёрнутом режиме: просто toggle секции
+    folderStore.toggleSection(section.id)
+  }
+}
+
 function handleFolderSelect(folderId: string) {
   folderStore.selectFolder(folderId)
   emit('folderSelect', folderId)
 }
 
-async function handleDrop(folderId: string, assetIds: number[]) {
+async function handleDrop(payload: { folderId: string; assetIds: number[] }) {
+  const { folderId, assetIds } = payload
   if (assetIds.length === 1 && assetIds[0] !== undefined) {
     await folderStore.handleAssetDrop(assetIds[0], folderId)
   } else if (assetIds.length > 1) {

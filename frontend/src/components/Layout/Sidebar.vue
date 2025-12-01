@@ -85,9 +85,11 @@
     </div>
 
     <!-- File Structure Section with FolderTree -->
-    <div v-if="isExpanded" class="mt-6 px-2">
+    <div class="mt-6 px-2">
       <FolderTree 
+        :is-collapsed="!isExpanded"
         @folder-select="handleFolderSelect"
+        @expand-sidebar="uiStore.expandSidebar()"
       />
     </div>
 
@@ -119,22 +121,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/uiStore'
-import { useFolderStore } from '@/stores/folderStore'
 import FolderTree from '@/components/FolderTree.vue'
 
 const route = useRoute()
 const router = useRouter()
 const uiStore = useUIStore()
-const folderStore = useFolderStore()
-
-// Initialize folder store on mount
-onMounted(() => {
-  // Folders are already loaded from mock data, no need to refresh
-  // folderStore.refreshFolders()
-})
 
 const isExpanded = computed(() => uiStore.sidebarExpanded)
 
