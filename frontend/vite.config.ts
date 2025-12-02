@@ -15,22 +15,40 @@ export default defineConfig({
     port: 5173,
     host: '0.0.0.0',
     proxy: {
+      // Main REST API v4
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
         cookieDomainRewrite: 'localhost'
       },
+      // DAM-specific API endpoints
+      '/digital-assets': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        cookieDomainRewrite: 'localhost'
+      },
+      // Distribution API endpoints
+      '/distribution': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        cookieDomainRewrite: 'localhost'
+      },
+      // Django authentication
       '/authentication': {
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
         cookieDomainRewrite: 'localhost'
       },
+      // Static files (CSS, JS from Django)
       '/static': {
         target: 'http://localhost:8080',
         changeOrigin: true
       },
+      // Media files (uploaded documents)
       '/media': {
         target: 'http://localhost:8080',
         changeOrigin: true

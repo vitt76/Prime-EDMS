@@ -5,6 +5,7 @@ import axios, {
 } from 'axios'
 import type { ApiResponse, ApiError } from '@/types/api'
 import { cacheService } from './cacheService'
+import { getToken, clearToken } from './authService'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 const MAX_RETRIES = 3
@@ -69,16 +70,19 @@ class ApiService {
         // Request logging
         logRequest(config)
 
-        // Add CSRF token
+        // Add Authorization Token header (DRF Token authentication)
+        const token = getToken()
+        if (token && config.headers) {
+          config.headers['Authorization'] = `Token ${token}`
+        }
+
+        // Add CSRF token (for session-based fallback)
         const csrfToken = document.querySelector<HTMLMetaElement>(
           'meta[name="csrf-token"]'
         )?.content
         if (csrfToken && config.headers) {
           config.headers['X-CSRFToken'] = csrfToken
         }
-
-        // Session-based auth - cookies are sent automatically
-        // JWT tokens removed - using Django session authentication
 
         return config
       },
@@ -104,7 +108,8 @@ class ApiService {
 
         // Handle 401 Unauthorized
         if (error.response?.status === 401) {
-          // Session expired - redirect to login
+          // Clear token and redirect to login
+          clearToken()
           if (!window.location.pathname.includes('/login')) {
             window.location.href = '/login'
           }

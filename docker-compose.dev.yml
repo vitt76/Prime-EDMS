@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  postgresql:
+    image: postgres:12.10-alpine
+    container_name: prime-edms_postgresql_1
+    environment:
+      POSTGRES_DB: mayan
+      POSTGRES_USER: mayan
+      POSTGRES_PASSWORD: mayandbpass
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  redis:
+    image: redis:6.2-alpine
+    container_name: prime-edms_redis_1
+    command: redis-server --requirepass mayanredispassword
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.10-management-alpine
+    container_name: prime-edms_rabbitmq_1
+    environment:
+      RABBITMQ_DEFAULT_USER: mayan
+      RABBITMQ_DEFAULT_PASS: mayanrabbitpass
+      RABBITMQ_DEFAULT_VHOST: mayan
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: unless-stopped
