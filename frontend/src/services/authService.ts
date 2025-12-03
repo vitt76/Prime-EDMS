@@ -2,29 +2,32 @@
  * Authentication Service
  * ======================
  * 
+ * Phase A1.2: Auth Logic Implementation
+ * 
  * Handles authentication with Mayan EDMS backend.
  * Supports Token-based authentication (DRF Token).
  * 
- * API Endpoints:
+ * API Endpoints (verified against backend):
  * - POST /api/v4/auth/token/obtain/ - Get auth token
- * - GET /api/v4/user_management/users/current/ - Get current user
+ * - GET /api/v4/users/current/ - Get current user info
  */
 
 import axios from 'axios'
-import type { User, TwoFactorStatus, TwoFactorSetup, TwoFactorVerify } from '@/types'
+import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
 /**
- * Use real API authentication instead of mocks.
- * Set to `true` to connect to real Django backend.
+ * Use real API authentication.
+ * Default: true (always try real API first)
+ * Set VITE_USE_MOCK_AUTH=true in .env to force mock mode
  */
-const USE_REAL_API = import.meta.env.VITE_USE_REAL_API === 'true' || !import.meta.env.DEV
+const USE_REAL_API = import.meta.env.VITE_USE_MOCK_AUTH !== 'true'
 
 /**
- * Token storage key
+ * LocalStorage keys
  */
 const TOKEN_KEY = 'auth_token'
 const USER_KEY = 'auth_user'
@@ -160,7 +163,7 @@ class AuthService {
 
       // Step 2: Get current user info
       const userResponse = await authAxios.get<MayanUserResponse>(
-        '/api/v4/user_management/users/current/'
+        '/api/v4/users/current/'
       )
 
       // Store user data
@@ -244,19 +247,20 @@ class AuthService {
   }
 
   /**
-   * Logout current user
+   * Logout current user.
+   * Clears token from localStorage and removes Authorization header.
    */
   async logout(): Promise<void> {
-    if (!USE_REAL_API) {
-      localStorage.removeItem('dev_authenticated')
-      localStorage.removeItem(USER_KEY)
-      console.log('[Auth] Mock logout successful')
-      return
-    }
-
-    // Clear local storage
+    console.log('[Auth] Logging out...')
+    
+    // Clear all auth data from localStorage
     clearToken()
-    console.log('[Auth] Logged out')
+    localStorage.removeItem('dev_authenticated')
+    
+    // Reset axios default headers
+    delete axios.defaults.headers.common['Authorization']
+    
+    console.log('[Auth] ✅ Logged out successfully')
   }
 
   /**
@@ -295,7 +299,7 @@ class AuthService {
 
     try {
       const response = await authAxios.get<MayanUserResponse>(
-        '/api/v4/user_management/users/current/'
+        '/api/v4/users/current/'
       )
       const user = this.mapMayanUser(response.data)
       
@@ -336,7 +340,7 @@ class AuthService {
     }
 
     try {
-      await authAxios.get('/api/v4/user_management/users/current/')
+      await authAxios.get('/api/v4/users/current/')
       return true
     } catch {
       clearToken()
