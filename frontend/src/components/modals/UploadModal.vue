@@ -162,7 +162,6 @@ import {
   watch,
   onBeforeUnmount
 } from 'vue'
-import type { AxiosProgressEvent } from 'axios'
 import { useRouter } from 'vue-router'
 import Modal from '@/components/Common/Modal.vue'
 import Button from '@/components/Common/Button.vue'
@@ -358,73 +357,44 @@ const uploadFile = async (fileItem: FileUploadProgress): Promise<void> => {
   // Check if we have a token (authenticated)
   const token = getToken()
   
-  if (token) {
-    // Use real Mayan EDMS API (2-step upload)
-    console.log('[UploadModal] Using real API upload for:', fileItem.name)
-    
-    await uploadService.uploadAsset(fileItem.file, {
-      signal: fileItem.abortController?.signal,
-      cabinetId: props.collectionId,
-      onProgress: (progress: UploadProgress) => {
-        // Map uploadService progress to fileItem progress
-        fileItem.progress = progress.percent
-        fileItem.uploadedBytes = progress.loaded
-        
-        // Calculate speed in MB/s
-        const speedMb = progress.speed / (1024 * 1024)
-        fileItem.speed = `${speedMb.toFixed(2)} MB/s`
-        
-        // Format ETA
-        fileItem.eta = formatDuration(Math.ceil(progress.eta))
-        
-        // Update step indicator
-        if (progress.step === 'creating') {
-          fileItem.status = 'uploading'
-          fileItem.speed = 'Creating...'
-          fileItem.eta = '--'
-        } else if (progress.step === 'processing') {
-          fileItem.speed = 'Processing...'
-          fileItem.eta = '0s'
-        }
-      }
-    })
-  } else {
-    // Fallback to mock upload (assetStore)
-    console.log('[UploadModal] Using mock upload for:', fileItem.name)
-    
-    const formData = new FormData()
-    formData.append('file', fileItem.file)
-    if (props.collectionId) {
-      formData.append('collection_id', String(props.collectionId))
-    }
-
-    await assetStore.uploadAsset(formData, {
-      signal: fileItem.abortController?.signal,
-      onUploadProgress: (event) => handleProgress(fileItem, event)
-    })
+  if (!token) {
+    throw new Error('Not authenticated. Please login first.')
   }
-}
-
-const handleProgress = (
-  fileItem: FileUploadProgress,
-  event: AxiosProgressEvent
-): void => {
-  const now = Date.now()
-  const total = event.total ?? fileItem.size
-  const deltaTime =
-    (now - (fileItem.lastProgressAt || fileItem.startedAt || now)) / 1000 || 0.1
-  const loaded = event.loaded ?? fileItem.uploadedBytes ?? 0
-  const prevUploaded = fileItem.uploadedBytes || 0
-  const deltaBytes = loaded - prevUploaded
-  fileItem.uploadedBytes = loaded
-  fileItem.progress = Math.min(100, Math.round((loaded / total) * 100))
-  const speedBytes = deltaBytes / deltaTime
-  const speedMb = Math.max(speedBytes / (1024 * 1024), 0.01)
-  fileItem.speed = `${speedMb.toFixed(2)} MB/s`
-  const remainingBytes = total - loaded
-  const etaSeconds = speedBytes > 0 ? Math.ceil(remainingBytes / speedBytes) : 0
-  fileItem.eta = etaSeconds > 0 ? formatDuration(etaSeconds) : '0s'
-  fileItem.lastProgressAt = now
+  
+  // Use real Mayan EDMS API with automatic strategy selection
+  // - Files < 50MB: Simple 2-step upload
+  // - Files >= 50MB: Chunked upload
+  console.log('[UploadModal] Uploading:', fileItem.name, `(${(fileItem.size / 1024 / 1024).toFixed(1)}MB)`)
+  
+  await uploadService.uploadFile(fileItem.file, {
+    signal: fileItem.abortController?.signal,
+    cabinetId: props.collectionId,
+    onProgress: (progress: UploadProgress) => {
+      // Map uploadService progress to fileItem progress
+      fileItem.progress = progress.percent
+      fileItem.uploadedBytes = progress.loaded
+      
+      // Calculate speed in MB/s
+      const speedMb = progress.speed / (1024 * 1024)
+      fileItem.speed = `${speedMb.toFixed(2)} MB/s`
+      
+      // Format ETA
+      fileItem.eta = formatDuration(Math.ceil(progress.eta))
+      
+      // Update step indicator based on upload strategy
+      if (progress.step === 'creating') {
+        fileItem.status = 'uploading'
+        fileItem.speed = 'Initializing...'
+        fileItem.eta = '--'
+      } else if (progress.step === 'chunking' && progress.currentChunk && progress.totalChunks) {
+        // Chunked upload progress
+        fileItem.speed = `Chunk ${progress.currentChunk}/${progress.totalChunks} • ${speedMb.toFixed(1)} MB/s`
+      } else if (progress.step === 'processing') {
+        fileItem.speed = 'Processing...'
+        fileItem.eta = '0s'
+      }
+    }
+  })
 }
 
 const retryFile = async (index: number): Promise<void> => {
@@ -520,6 +490,43 @@ const formatDuration = (seconds: number): string => {
 }
 
 const formatUploadError = (error: unknown): string => {
+  // Handle specific error cases
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    
+    // 413 Payload Too Large
+    if (message.includes('too large') || message.includes('413')) {
+      return 'File exceeds maximum size limit (500MB)'
+    }
+    
+    // 401 Unauthorized
+    if (message.includes('session expired') || message.includes('401') || message.includes('not authenticated')) {
+      // Redirect to login
+      setTimeout(() => {
+        window.location.href = '/login'
+      }, 2000)
+      return 'Session expired. Redirecting to login...'
+    }
+    
+    // 500 Server Error
+    if (message.includes('500') || message.includes('server error')) {
+      return 'Server error. Please try again later.'
+    }
+    
+    // 507 Storage Full
+    if (message.includes('storage full') || message.includes('507')) {
+      return 'Server storage is full. Contact administrator.'
+    }
+    
+    // Network error
+    if (message.includes('network') || message.includes('econnrefused')) {
+      return 'Network error. Check your connection and try again.'
+    }
+    
+    return error.message
+  }
+  
+  // Fallback to generic error formatting
   const message = formatApiError(error)
   const code = extractErrorCode(error)
   return code ? `${code}: ${message}` : message

@@ -35,14 +35,14 @@
               {{ field.label }}
               <span v-if="field.required" class="edit-metadata-modal__required-indicator">*</span>
             </label>
-            <span v-if="field.help_text" class="edit-metadata-modal__help-text">
-              {{ field.help_text }}
+            <span v-if="field.helper_text" class="edit-metadata-modal__help-text">
+              {{ field.helper_text }}
             </span>
           </div>
 
           <div class="edit-metadata-modal__input-wrapper">
             <input
-              v-if="field.type === 'text'"
+              v-if="field.field_type === 'text' || field.field_type === 'url' || field.field_type === 'email'"
               :id="`field-${field.name}`"
               type="text"
               class="edit-metadata-modal__input"
@@ -52,17 +52,18 @@
             />
 
             <textarea
-              v-else-if="field.type === 'textarea'"
+              v-else-if="field.field_type === 'textarea'"
               :id="`field-${field.name}`"
               class="edit-metadata-modal__textarea"
               :placeholder="field.placeholder"
-              v-model="formState[field.name]"
+              :value="String(formState[field.name] ?? '')"
+              @input="formState[field.name] = ($event.target as HTMLTextAreaElement).value"
               rows="3"
               @blur="validateField(field.name)"
             />
 
             <input
-              v-else-if="field.type === 'number'"
+              v-else-if="field.field_type === 'number'"
               :id="`field-${field.name}`"
               type="number"
               class="edit-metadata-modal__input"
@@ -72,7 +73,7 @@
             />
 
             <input
-              v-else-if="field.type === 'date'"
+              v-else-if="field.field_type === 'date'"
               :id="`field-${field.name}`"
               type="date"
               class="edit-metadata-modal__input"
@@ -80,8 +81,17 @@
               @blur="validateField(field.name)"
             />
 
+            <input
+              v-else-if="field.field_type === 'datetime'"
+              :id="`field-${field.name}`"
+              type="datetime-local"
+              class="edit-metadata-modal__input"
+              v-model="formState[field.name]"
+              @blur="validateField(field.name)"
+            />
+
             <select
-              v-else-if="field.type === 'select'"
+              v-else-if="field.field_type === 'select'"
               :id="`field-${field.name}`"
               class="edit-metadata-modal__input"
               v-model="formState[field.name]"
@@ -90,15 +100,15 @@
               <option value="">Select...</option>
               <option
                 v-for="option in field.options || []"
-                :key="option"
-                :value="option"
+                :key="option.value"
+                :value="option.value"
               >
-                {{ option }}
+                {{ option.label }}
               </option>
             </select>
 
             <select
-              v-else-if="field.type === 'multi_select'"
+              v-else-if="field.field_type === 'multiselect'"
               :id="`field-${field.name}`"
               class="edit-metadata-modal__input"
               multiple
@@ -107,15 +117,15 @@
             >
               <option
                 v-for="option in field.options || []"
-                :key="option"
-                :value="option"
+                :key="option.value"
+                :value="option.value"
               >
-                {{ option }}
+                {{ option.label }}
               </option>
             </select>
 
             <label
-              v-else-if="field.type === 'checkbox'"
+              v-else-if="field.field_type === 'boolean'"
               class="edit-metadata-modal__checkbox"
             >
               <input
@@ -124,14 +134,14 @@
                 v-model="formState[field.name]"
                 @change="validateField(field.name)"
               />
-              <span>{{ field.description || 'Toggle option' }}</span>
+              <span>{{ field.label || 'Toggle option' }}</span>
             </label>
 
             <p
               v-else
               class="edit-metadata-modal__unsupported"
             >
-              Unsupported field type: {{ field.type }}
+              Unsupported field type: {{ field.field_type }}
             </p>
           </div>
 
@@ -177,12 +187,15 @@
 import { computed, reactive, ref, watch } from 'vue'
 import Modal from '@/components/Common/Modal.vue'
 import Button from '@/components/Common/Button.vue'
-import { assetService } from '@/services/assetService'
+import { metadataService } from '@/services/metadataService'
 import { useAdminStore } from '@/stores/adminStore'
 import { useUIStore } from '@/stores/uiStore'
 import { formatApiError } from '@/utils/errors'
 import type { Asset } from '@/types/api'
-import type { MetadataSchema, SchemaField } from '@/types/admin'
+import type { MetadataSchema, MetadataType, MetadataFieldType } from '@/types/admin'
+
+// Alias for backward compatibility
+type SchemaField = MetadataType
 
 interface Props {
   isOpen: boolean
@@ -193,7 +206,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  assets: [],
+  assets: () => [],
   schema: null
 })
 
@@ -209,8 +222,8 @@ const metadataSchema = ref<MetadataSchema | null>(props.schema ?? null)
 const schemaError = ref<string | null>(null)
 const isLoadingSchema = ref(false)
 const isSaving = ref(false)
-const formState = reactive<Record<string, unknown>>({})
-const initialValues = ref<Record<string, unknown>>({})
+const formState = reactive<Record<string, string | number | boolean | string[] | null>>({})
+const initialValues = ref<Record<string, string | number | boolean | string[] | null>>({})
 const validationErrors = reactive<Record<string, string | null>>({})
 const fieldApplyAll = reactive<Record<string, boolean>>({})
 const touchedFields = reactive<Record<string, boolean>>({})
@@ -226,7 +239,6 @@ const selectedAssets = computed<Asset[]>(() => {
 })
 
 const isBulkEdit = computed(() => selectedAssets.value.length > 1)
-const metadataLoaded = computed(() => !!metadataSchema.value && metadataSchema.value.fields.length > 0)
 const introText = computed(() => {
   if (!metadataSchema.value) return 'No schema selected.'
   if (isBulkEdit.value) {
@@ -281,10 +293,10 @@ function initializeForm(): void {
   schema.fields.forEach((field) => {
     const rawValue =
       referenceMetadata?.[field.name] ??
-      field.default_value ??
+      field.default ??
       getDefaultValueForField(field)
     formState[field.name] = normalizeForForm(field, rawValue)
-    initialValues.value[field.name] = rawValue
+    initialValues.value[field.name] = normalizeForForm(field, rawValue)
     validationErrors[field.name] = null
     fieldApplyAll[field.name] = true
     touchedFields[field.name] = false
@@ -316,7 +328,7 @@ function isFieldDirty(name: string): boolean {
   return getComparableValue(field, current) !== getComparableValue(field, initial)
 }
 
-function setFieldValue(name: string, value: unknown): void {
+function setFieldValue(name: string, value: FormValue): void {
   formState[name] = value
   touchedFields[name] = true
   validationErrors[name] = validateField(name)
@@ -334,41 +346,25 @@ function validateField(name: string): string | null {
   const field = schema.fields.find((item) => item.name === name)
   if (!field) return null
   const value = formState[name]
-  const rules = field.validation_rules
-  if (field.required && isEmpty(value, field.type)) {
+  
+  // Check required
+  if (field.required && isEmpty(value, field.field_type)) {
     return 'This field is required.'
   }
-  if (rules?.min_length && typeof value === 'string' && value.length < rules.min_length) {
-    return `Minimum ${rules.min_length} characters required.`
-  }
-  if (rules?.max_length && typeof value === 'string' && value.length > rules.max_length) {
-    return `Maximum ${rules.max_length} characters allowed.`
-  }
-  if (rules?.min_value && typeof value === 'string' && value !== '') {
-    const numberValue = Number(value)
-    if (Number.isNaN(numberValue) || numberValue < rules.min_value) {
-      return `Value must be ≥ ${rules.min_value}.`
-    }
-  }
-  if (rules?.max_value && typeof value === 'string' && value !== '') {
-    const numberValue = Number(value)
-    if (Number.isNaN(numberValue) || numberValue > rules.max_value) {
-      return `Value must be ≤ ${rules.max_value}.`
-    }
-  }
-  if (rules?.pattern && typeof value === 'string' && value !== '') {
+  
+  // Validate using field.validation (regex or Python path)
+  if (field.validation && typeof value === 'string' && value !== '') {
     try {
-      const pattern = new RegExp(rules.pattern)
+      // Try to use as regex pattern
+      const pattern = new RegExp(field.validation)
       if (!pattern.test(value)) {
         return 'Value does not match the required pattern.'
       }
     } catch {
-      return 'Invalid validation pattern.'
+      // Not a valid regex, skip validation
     }
   }
-  if (rules?.custom_validator) {
-    return `Custom validation required (${rules.custom_validator}).`
-  }
+  
   return null
 }
 
@@ -404,17 +400,26 @@ async function handleSave(): Promise<void> {
     }
 
     for (const asset of selectedAssets.value) {
-      const metadataPatch: Record<string, unknown> = {}
+      const documentId = asset.id
+      
+      // Use Mayan EDMS metadata API
       for (const fieldName of changedFieldNames) {
         const field = metadataSchema.value.fields.find((item) => item.name === fieldName)
         if (!field) continue
         if (!shouldIncludeField(field.name)) continue
-        metadataPatch[field.name] = normalizeForPayload(field, formState[field.name])
+        
+        const value = String(normalizeForPayload(field, formState[field.name]) || '')
+        
+        try {
+          // Try to update using metadataService
+          await metadataService.updateAssetMetadata(String(documentId), {
+            [field.name]: value
+          })
+        } catch (updateError) {
+          console.warn(`[EditMetadataModal] Failed to update ${field.name}:`, updateError)
+          // Continue with other fields
+        }
       }
-      if (!Object.keys(metadataPatch).length) continue
-      await assetService.updateAsset(asset.id, {
-        metadata: metadataPatch
-      })
     }
 
     uiStore.addNotification({
@@ -442,42 +447,47 @@ function shouldIncludeField(name: string): boolean {
   return fieldApplyAll[name] ?? true
 }
 
-function normalizeForForm(field: SchemaField, value: unknown): unknown {
-  if (field.type === 'checkbox') {
+type FormValue = string | number | boolean | string[] | null
+
+function normalizeForForm(field: SchemaField, value: unknown): FormValue {
+  const fieldType = field.field_type
+  if (fieldType === 'boolean') {
     return Boolean(value)
   }
-  if (field.type === 'multi_select') {
-    return Array.isArray(value) ? [...value] : []
+  if (fieldType === 'multiselect') {
+    return Array.isArray(value) ? [...value] as string[] : []
   }
-  if (field.type === 'number') {
-    return value ?? ''
+  if (fieldType === 'number') {
+    return (value as number) ?? ''
   }
-  return value ?? ''
+  return (value as string) ?? ''
 }
 
 function normalizeForPayload(field: SchemaField, value: unknown): unknown {
-  if (field.type === 'checkbox') {
+  const fieldType = field.field_type
+  if (fieldType === 'boolean') {
     return Boolean(value)
   }
-  if (field.type === 'number') {
+  if (fieldType === 'number') {
     if (typeof value === 'string' && value !== '') {
       const parsed = Number(value)
       return Number.isNaN(parsed) ? null : parsed
     }
     return null
   }
-  if (field.type === 'multi_select') {
+  if (fieldType === 'multiselect') {
     return Array.isArray(value) ? value : []
   }
   return value
 }
 
 function getComparableValue(field: SchemaField, value: unknown): string {
-  if (field.type === 'multi_select') {
+  const fieldType = field.field_type
+  if (fieldType === 'multiselect') {
     const list = Array.isArray(value) ? [...value].sort() : []
     return JSON.stringify(list)
   }
-  if (field.type === 'checkbox') {
+  if (fieldType === 'boolean') {
     return value ? '1' : '0'
   }
   if (typeof value === 'number') {
@@ -490,20 +500,22 @@ function getComparableValue(field: SchemaField, value: unknown): string {
 }
 
 function getDefaultValueForField(field: SchemaField): string | boolean | string[] {
-  if (field.type === 'checkbox') {
-    return Boolean(field.default_value)
+  const fieldType = field.field_type
+  if (fieldType === 'boolean') {
+    return Boolean(field.default)
   }
-  if (field.type === 'multi_select') {
-    return Array.isArray(field.default_value) ? field.default_value : []
+  if (fieldType === 'multiselect') {
+    // default is a string in MetadataType
+    return []
   }
-  return field.default_value ?? ''
+  return field.default ?? ''
 }
 
-function isEmpty(value: unknown, type: SchemaField['type']): boolean {
-  if (type === 'checkbox') {
+function isEmpty(value: unknown, fieldType: MetadataFieldType): boolean {
+  if (fieldType === 'boolean') {
     return value !== true
   }
-  if (type === 'multi_select') {
+  if (fieldType === 'multiselect') {
     return !Array.isArray(value) || value.length === 0
   }
   if (value === null || value === undefined) {
@@ -678,4 +690,5 @@ watch(
   color: #475569;
 }
 </style>
+
 

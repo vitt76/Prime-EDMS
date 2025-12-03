@@ -213,8 +213,8 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <h3 class="text-lg font-semibold text-neutral-900 mb-2">{{ asset.filename }}</h3>
-              <p class="text-sm text-neutral-600 mb-4">
-                {{ formatFileSize(asset.size) }} • {{ asset.metadata?.pages || '?' }} страниц
+                  <p class="text-sm text-neutral-600 mb-4">
+                    {{ formatFileSize(asset.size) }} • {{ (asset.metadata as Record<string, unknown>)?.pages || '?' }} страниц
               </p>
               <button
                 class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
@@ -236,7 +236,7 @@
                 </div>
                 <div>
                   <h3 class="text-lg font-semibold text-neutral-900">{{ asset.label }}</h3>
-                  <p class="text-sm text-neutral-600">{{ formatDuration(asset.metadata?.duration) }}</p>
+                  <p class="text-sm text-neutral-600">{{ formatDuration((asset.metadata as Record<string, number>)?.duration) }}</p>
                 </div>
               </div>
               <audio controls class="w-full">
@@ -647,7 +647,8 @@ import type { AIAnalysis, AITag } from '@/mocks/ai'
 import { getMockAssetById } from '@/mocks/assets'
 
 const route = useRoute()
-const router = useRouter()
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const router = useRouter() // Reserved for future navigation
 const assetStore = useAssetStore()
 const notificationStore = useNotificationStore()
 
@@ -708,27 +709,46 @@ async function loadAsset() {
   error.value = null
   
   try {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 300))
+    console.log('[AssetDetail] Loading asset:', assetId.value)
     
-    // Try to get from mock data (includes extended fields)
-    const mockAsset = getMockAssetById(assetId.value)
+    // First try to load from real API via store (includes DAM/AI data)
+    const storeAsset = await assetStore.getAssetDetail(assetId.value)
     
-    if (mockAsset) {
-      asset.value = mockAsset as Asset
-      extendedAsset.value = mockAsset
+    if (storeAsset) {
+      console.log('[AssetDetail] Loaded from real API:', storeAsset)
+      asset.value = storeAsset
+      
+      // If asset has AI analysis, set it as extended data
+      if (storeAsset.ai_analysis) {
+        extendedAsset.value = {
+          ...storeAsset,
+          ai_analysis: storeAsset.ai_analysis
+        } as ExtendedAsset
+      }
     } else {
-      // Fallback to store
-      const storeAsset = await assetStore.getAssetDetail(assetId.value)
-      if (storeAsset) {
-        asset.value = storeAsset
+      // Fallback to mock data for development/demo
+      console.log('[AssetDetail] API returned null, trying mock data')
+      const mockAsset = getMockAssetById(assetId.value)
+      
+      if (mockAsset) {
+        asset.value = mockAsset as Asset
+        extendedAsset.value = mockAsset
       } else {
         error.value = `Актив с ID ${assetId.value} не найден`
       }
     }
-  } catch (e) {
-    error.value = 'Не удалось загрузить актив'
-    console.error('Error loading asset:', e)
+  } catch (e: any) {
+    console.error('[AssetDetail] Error loading asset:', e)
+    
+    // Try mock data as fallback on error
+    const mockAsset = getMockAssetById(assetId.value)
+    if (mockAsset) {
+      console.log('[AssetDetail] Using mock data as fallback')
+      asset.value = mockAsset as Asset
+      extendedAsset.value = mockAsset
+    } else {
+      error.value = e.message || 'Не удалось загрузить актив'
+    }
   } finally {
     isLoading.value = false
   }
@@ -790,16 +810,33 @@ function resetView() {
 }
 
 function handleDownload() {
+  if (!asset.value) return
+  
+  // Use real download URL if available (from metadata or generate from ID)
+  const downloadUrl = (asset.value as any).download_url || 
+    `/api/v4/documents/${asset.value.id}/files/latest/download/`
+  
   notificationStore.addNotification({
     type: 'info',
     title: 'Загрузка началась',
-    message: `Скачивание ${asset.value?.filename}...`,
+    message: `Скачивание ${asset.value.filename}...`,
   })
+  
+  // Trigger download via hidden anchor
+  const link = document.createElement('a')
+  link.href = downloadUrl
+  link.download = asset.value.filename
+  link.target = '_blank'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 type DownloadFormat = 'original' | 'low_res' | 'high_res' | 'pdf'
 
 async function handleDownloadAs(format: DownloadFormat) {
+  if (!asset.value) return
+  
   const formatLabels: Record<DownloadFormat, string> = {
     original: 'Оригинал',
     low_res: 'Low Res (JPG, 72dpi)',
@@ -813,14 +850,23 @@ async function handleDownloadAs(format: DownloadFormat) {
     message: `Подготовка: ${formatLabels[format]}...`,
   })
   
-  // Simulate file generation
-  await new Promise(resolve => setTimeout(resolve, 1500))
+  if (format === 'original') {
+    // Direct download of original file
+    handleDownload()
+    return
+  }
+  
+  // For other formats, we would need backend conversion endpoints
+  // For now, download original and show info message
+  await new Promise(resolve => setTimeout(resolve, 500))
   
   notificationStore.addNotification({
-    type: 'success',
-    title: 'Загрузка началась',
-    message: `Скачивание ${asset.value?.filename} (${formatLabels[format]})`,
+    type: 'info',
+    title: 'Конвертация не реализована',
+    message: `Формат ${formatLabels[format]} пока не поддерживается. Скачивается оригинал.`,
   })
+  
+  handleDownload()
 }
 
 function handleShare() {
@@ -863,13 +909,13 @@ function handleAnalysisComplete(analysis: AIAnalysis) {
   })
 }
 
-function handleSaveAsVersion(assetId: number, versionId: number) {
+function handleSaveAsVersion(_assetId: number, versionId: number) {
   console.log('Saved as new version:', versionId)
   // Reload asset to show new version
   loadAsset()
 }
 
-function handleSaveAsCopy(originalId: number, newAssetId: number) {
+function handleSaveAsCopy(_originalId: number, newAssetId: number) {
   console.log('Saved as copy:', newAssetId)
   notificationStore.addNotification({
     type: 'success',

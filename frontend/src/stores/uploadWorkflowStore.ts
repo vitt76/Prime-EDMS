@@ -10,8 +10,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { uploadService } from '@/services/uploadService'
-import { assetService } from '@/services/assetService'
+import { uploadService, updateDocumentMetadata } from '@/services/uploadService'
 import { collectionsService } from '@/services/collectionsService'
 import { shareService } from '@/services/shareService'
 import { useUIStore } from '@/stores/uiStore'
@@ -186,12 +185,12 @@ export const useUploadWorkflowStore = defineStore(
           try {
             const result = await uploadService.uploadFile(workflowFile.file, {
               onProgress: (progress) => {
-                workflowFile.uploadProgress = progress
+                workflowFile.uploadProgress = progress.percent
               }
             })
 
             workflowFile.uploadStatus = 'completed'
-            workflowFile.assetId = result.assetId
+            workflowFile.assetId = String(result.documentId)
             workflowFile.uploadProgress = 100
           } catch (uploadError: any) {
             workflowFile.uploadStatus = 'error'
@@ -230,7 +229,13 @@ export const useUploadWorkflowStore = defineStore(
           const workflowFile = uploadedFiles.value.find(f => f.id === fileId)
           if (!workflowFile?.assetId) return
 
-          await assetService.updateAssetMetadata(workflowFile.assetId, metadata)
+          // Update document metadata using uploadService
+          const documentId = parseInt(workflowFile.assetId, 10)
+          await updateDocumentMetadata(documentId, {
+            label: metadata.label || workflowFile.name,
+            description: metadata.description || '',
+            language: metadata.language
+          })
         })
 
         await Promise.all(metadataPromises)
@@ -255,7 +260,7 @@ export const useUploadWorkflowStore = defineStore(
           .map(f => f.assetId)
           .filter(Boolean) as string[]
 
-        await collectionService.addAssetsToCollection(
+        await collectionsService.addAssetsToCollection(
           selectedCollection.value.id,
           assetIds
         )

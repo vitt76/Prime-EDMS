@@ -2,7 +2,7 @@
  * Service Adapters - Transform external API responses to Frontend format
  */
 
-// Document Adapter (Mayan EDMS → Frontend)
+// Document Adapter (Mayan EDMS → Frontend) - Legacy
 export {
   // Main adapter functions
   adaptDocument,
@@ -26,7 +26,7 @@ export {
   toFullUrl,
 } from './documentAdapter'
 
-// Type exports
+// Type exports from documentAdapter
 export type {
   MayanDocument,
   MayanDocumentFile,
@@ -38,4 +38,32 @@ export type {
   MayanPaginatedResponse,
   DocumentAdapterConfig,
 } from './documentAdapter'
+
+// ============================================================================
+// Mayan Adapter (Optimized API) - Phase A2
+// ============================================================================
+
+export {
+  // Main adapter functions
+  adaptBackendAsset,
+  adaptBackendAssets,
+  adaptBackendPaginatedResponse,
+  adaptBackendAIAnalysis,
+  adaptBackendTags,
+  adaptBackendMetadata,
+  
+  // Configuration
+  setBaseUrl,
+} from './mayanAdapter'
+
+// Type exports from mayanAdapter
+export type {
+  BackendOptimizedDocument,
+  BackendDocumentFile,
+  BackendDocumentType,
+  BackendAIAnalysis,
+  BackendTag,
+  BackendMetadata,
+  BackendPaginatedResponse,
+} from './mayanAdapter'
 
