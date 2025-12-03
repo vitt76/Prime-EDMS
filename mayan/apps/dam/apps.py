@@ -70,6 +70,7 @@ class DAMApp(MayanAppConfig):
         try:
             self._register_ai_providers()
             self._register_signals()
+            self._register_celery_tasks()  # Phase B4: Register tasks with queues
             self._extend_search()
             self._register_ajax_templates()
             self._register_menus()
@@ -108,6 +109,20 @@ class DAMApp(MayanAppConfig):
         """Регистрация сигналов для автоматического анализа"""
         from . import signals
         print('📡 DAM signals registered!')
+
+    def _register_celery_tasks(self):
+        """
+        Phase B4: Register DAM Celery tasks with existing queues.
+        Tasks are registered with 'tools' queue processed by worker_d.
+        """
+        try:
+            from .queues import register_dam_tasks
+            if register_dam_tasks():
+                print('📋 DAM Celery tasks registered with tools queue!')
+            else:
+                print('⚠️ DAM Celery tasks registration skipped')
+        except Exception as e:
+            print(f'⚠️ DAM Celery tasks registration failed: {e}')
 
     def _extend_search(self):
         """Extend document search with AI metadata fields."""

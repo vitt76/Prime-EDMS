@@ -166,14 +166,27 @@ def _pick_gigachat_credentials(setting_value, env_value: str) -> str:
     return ''
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')
+def _update_analysis_progress(ai_analysis, progress: int, current_step: str):
+    """Helper to update progress without triggering full save validation."""
+    DocumentAIAnalysis.objects.filter(pk=ai_analysis.pk).update(
+        progress=progress,
+        current_step=current_step
+    )
+    logger.debug(f"📊 Progress: {progress}% - {current_step}")
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='tools')
 def analyze_document_with_ai(self, document_id: int):
     """
     Analyze document with AI and update metadata.
+    
+    Phase B4: Enhanced with progress tracking for frontend polling.
 
     Args:
         document_id: ID of the document to analyze
     """
+    ai_analysis = None
+    
     try:
         from django.conf import settings
 
@@ -199,7 +212,12 @@ def analyze_document_with_ai(self, document_id: int):
         # Get AI analysis record
         ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
             document=document,
-            defaults={'analysis_status': 'processing'}
+            defaults={
+                'analysis_status': 'processing',
+                'task_id': self.request.id,
+                'progress': 0,
+                'current_step': 'Initializing AI analysis'
+            }
         )
 
         logger.info(f"🔍 AI Analysis record: created={created}, status={ai_analysis.analysis_status}")
@@ -208,15 +226,39 @@ def analyze_document_with_ai(self, document_id: int):
             logger.info(f"AI analysis already completed for document {document_id}")
             return
 
-        # Update status
+        # Update status with task ID
         ai_analysis.analysis_status = 'processing'
+        ai_analysis.task_id = self.request.id
+        ai_analysis.progress = 5
+        ai_analysis.current_step = 'Reading document file'
+        ai_analysis.error_message = None
         ai_analysis.save()
+
+        # Progress: 10% - File reading
+        _update_analysis_progress(ai_analysis, 10, 'Reading document file from storage')
 
         # Get AI analysis results
         logger.info(f"🤖 Calling perform_ai_analysis for document {document_id}")
+        
+        # Progress: 20% - Starting AI analysis
+        _update_analysis_progress(ai_analysis, 20, 'Preparing image for AI analysis')
+        
+        # Progress: 30% - Sending to AI provider
+        _update_analysis_progress(ai_analysis, 30, 'Sending to AI provider')
+        
         analysis_results = perform_ai_analysis(document_file)
+        
+        # Progress: 80% - Processing results
+        _update_analysis_progress(ai_analysis, 80, 'Processing AI results')
+        
         logger.info(f"✅ perform_ai_analysis returned: {analysis_results.get('provider', 'unknown')}")
 
+        # Progress: 90% - Saving results
+        _update_analysis_progress(ai_analysis, 90, 'Saving analysis results')
+        
+        # Refresh from database to get latest state
+        ai_analysis.refresh_from_db()
+        
         # Update AI analysis record
         ai_analysis.ai_description = analysis_results.get('description', '')
         ai_analysis.ai_tags = analysis_results.get('tags', [])
@@ -233,7 +275,13 @@ def analyze_document_with_ai(self, document_id: int):
         ai_analysis.analysis_status = 'completed'
         ai_analysis.analysis_completed = timezone.now()
         ai_analysis.ai_provider = analysis_results.get('provider', 'unknown')
+        ai_analysis.progress = 100
+        ai_analysis.current_step = 'Analysis complete'
+        ai_analysis.error_message = None
         ai_analysis.save()
+
+        # Progress: 100% - Complete, now reindexing
+        logger.info(f"📊 Progress: 100% - Analysis complete, reindexing...")
 
         # Update document metadata if needed
         update_document_metadata_from_ai(document, analysis_results)
@@ -246,22 +294,27 @@ def analyze_document_with_ai(self, document_id: int):
     except Exception as exc:
         logger.error(f"AI analysis failed for document {document_id}: {exc}")
 
-        # Update status on failure
+        # Update status on failure with error message
         try:
-            ai_analysis = DocumentAIAnalysis.objects.get(document_id=document_id)
+            if ai_analysis is None:
+                ai_analysis = DocumentAIAnalysis.objects.get(document_id=document_id)
+            
             ai_analysis.analysis_status = 'failed'
+            ai_analysis.error_message = str(exc)[:1000]  # Limit error message length
+            ai_analysis.current_step = 'Analysis failed'
             ai_analysis.save()
         except DocumentAIAnalysis.DoesNotExist:
             pass
 
         # Retry on failure
         if self.request.retries < self.max_retries:
+            logger.info(f"Retrying AI analysis for document {document_id} (attempt {self.request.retries + 1}/{self.max_retries})")
             raise self.retry(exc=exc)
         else:
             logger.error(f"Max retries exceeded for document {document_id}")
 
 
-@shared_task(bind=True, queue='documents')
+@shared_task(bind=True, queue='tools')
 def import_yandex_disk(self):
     """
     Trigger one-off import from Yandex Disk into Cabinets/Documents.
@@ -904,7 +957,7 @@ def reindex_document_assets(document: Document):
         logger.warning('Failed to schedule search reindex for document %s: %s', document.pk, exc)
 
 
-@shared_task
+@shared_task(queue='tools')
 def bulk_analyze_documents(
     document_ids: List[int],
     ai_service: Optional[str] = None,

@@ -40,6 +40,14 @@ from .api_views.document_rich_api_views import (
 from .api_views.bulk_operations_api_views import (
     BulkDocumentActionView, BulkTagActionView, BulkCabinetActionView
 )
+# Phase B2: Optimized document endpoints
+from .api_views.optimized_document_api_views import (
+    OptimizedAPIDocumentListView, OptimizedAPIDocumentDetailView
+)
+# Phase B4: Processing Status API
+from .api_views.processing_status_api_views import (
+    APIDocumentProcessingStatusView
+)
 from .views.document_file_views import (
     DocumentFileDeleteView, DocumentFileDownloadView, DocumentFileEditView,
     DocumentFileListView, DocumentFilePrintFormView, DocumentFilePrintView,
@@ -729,11 +737,16 @@ api_urls_bulk_operations = [
     ),
 ]
 
-# Phase B2: Optimized document endpoints with N+1 query fixes
-from .api_views.optimized_document_api_views import (
-    OptimizedAPIDocumentListView,
-    OptimizedAPIDocumentDetailView
-)
+api_urls_processing_status = [
+    # Processing status endpoint
+    # GET /api/v4/documents/{document_id}/processing_status/
+    # Returns real-time processing status for frontend polling
+    url(
+        regex=r'^documents/(?P<document_id>[0-9]+)/processing_status/$',
+        name='document-processing-status',
+        view=APIDocumentProcessingStatusView.as_view()
+    ),
+]
 
 api_urls_optimized_documents = [
     # Optimized document list endpoint
@@ -764,3 +777,5 @@ api_urls.extend(api_urls_rich_documents)
 api_urls.extend(api_urls_bulk_operations)
 # Phase B2: Add optimized document endpoints
 api_urls.extend(api_urls_optimized_documents)
+# Phase B4: Add processing status endpoint
+api_urls.extend(api_urls_processing_status)

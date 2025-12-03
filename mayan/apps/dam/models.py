@@ -121,6 +121,36 @@ class DocumentAIAnalysis(ExtraDataModelMixin, models.Model):
         help_text=_('Status of AI analysis'),
         verbose_name=_('Analysis Status')
     )
+    
+    # Phase B4: Processing progress tracking
+    current_step = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text=_('Current processing step (e.g., "OCR scanning", "AI analysis")'),
+        verbose_name=_('Current Step')
+    )
+    
+    progress = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=_('Processing progress percentage (0-100)'),
+        verbose_name=_('Progress')
+    )
+    
+    error_message = models.TextField(
+        blank=True,
+        null=True,
+        help_text=_('Error message if analysis failed'),
+        verbose_name=_('Error Message')
+    )
+    
+    task_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text=_('Celery task ID for tracking'),
+        verbose_name=_('Task ID')
+    )
 
     # Timestamps
     created = models.DateTimeField(auto_now_add=True)

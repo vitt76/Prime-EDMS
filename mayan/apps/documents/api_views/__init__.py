@@ -19,3 +19,7 @@ from .optimized_document_api_views import (  # noqa
     OptimizedAPIDocumentDetailView
 )
 
+# Phase B4: Processing Status API
+from .processing_status_api_views import (  # noqa
+    APIDocumentProcessingStatusView
+)

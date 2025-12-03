@@ -615,6 +615,135 @@ class DAMDocumentListView(generics.ListAPIView):
         )
 
 
+class DocumentProcessingStatusView(generics.RetrieveAPIView):
+    """
+    Phase B4: Processing Status API
+    
+    GET /api/v4/documents/{id}/processing_status/
+    
+    Returns the current processing status for a document including:
+    - Overall status (pending, processing, complete, failed)
+    - Progress percentage (0-100)
+    - Current step description
+    - AI analysis readiness flags
+    """
+    permission_classes = (IsAuthenticated,)
+    renderer_classes = (JSONRenderer,)
+    
+    def get(self, request, pk):
+        try:
+            document = Document.objects.get(pk=pk)
+        except Document.DoesNotExist:
+            return Response(
+                {'error': 'Document not found', 'error_code': 'NOT_FOUND'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            AccessControlList.objects.check_access(
+                obj=document,
+                permissions=(permission_document_view,),
+                user=request.user
+            )
+        except PermissionDenied:
+            return Response(
+                {'error': 'Access denied', 'error_code': 'PERMISSION_DENIED'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get AI analysis record if exists
+        try:
+            ai_analysis = document.ai_analysis
+            
+            # Map analysis_status to frontend-friendly status
+            status_mapping = {
+                'pending': 'processing',
+                'processing': 'processing', 
+                'completed': 'complete',
+                'failed': 'failed'
+            }
+            
+            processing_status = status_mapping.get(
+                ai_analysis.analysis_status, 'processing'
+            )
+            
+            return Response({
+                'document_id': pk,
+                'status': processing_status,
+                'progress': ai_analysis.progress,
+                'current_step': ai_analysis.current_step or self._get_default_step(ai_analysis),
+                'ai_tags_ready': bool(ai_analysis.ai_tags),
+                'ai_description_ready': bool(ai_analysis.ai_description),
+                'ai_colors_ready': bool(ai_analysis.dominant_colors),
+                'ocr_ready': self._check_ocr_status(document),
+                'thumbnail_ready': self._check_thumbnail_status(document),
+                'analysis_provider': ai_analysis.ai_provider or None,
+                'error_message': ai_analysis.error_message if ai_analysis.analysis_status == 'failed' else None,
+                'task_id': ai_analysis.task_id,
+                'started_at': ai_analysis.created.isoformat() if ai_analysis.created else None,
+                'completed_at': ai_analysis.analysis_completed.isoformat() if ai_analysis.analysis_completed else None
+            })
+            
+        except DocumentAIAnalysis.DoesNotExist:
+            # No AI analysis exists - check if document has files
+            has_files = document.files.exists()
+            
+            return Response({
+                'document_id': pk,
+                'status': 'pending' if has_files else 'no_files',
+                'progress': 0,
+                'current_step': 'Waiting for AI analysis' if has_files else 'No files uploaded',
+                'ai_tags_ready': False,
+                'ai_description_ready': False,
+                'ai_colors_ready': False,
+                'ocr_ready': self._check_ocr_status(document),
+                'thumbnail_ready': self._check_thumbnail_status(document),
+                'analysis_provider': None,
+                'error_message': None,
+                'task_id': None,
+                'started_at': None,
+                'completed_at': None
+            })
+    
+    def _get_default_step(self, ai_analysis):
+        """Get default step description based on status"""
+        if ai_analysis.analysis_status == 'pending':
+            return 'Queued for AI analysis'
+        elif ai_analysis.analysis_status == 'processing':
+            return 'AI analysis in progress'
+        elif ai_analysis.analysis_status == 'completed':
+            return 'Analysis complete'
+        elif ai_analysis.analysis_status == 'failed':
+            return 'Analysis failed'
+        return 'Unknown status'
+    
+    def _check_ocr_status(self, document):
+        """Check if OCR has been performed on the document"""
+        try:
+            # Check if document has parsed content
+            latest_version = document.versions.order_by('-timestamp').first()
+            if latest_version:
+                # Check for OCR content in pages
+                for page in latest_version.pages.all()[:1]:
+                    if hasattr(page, 'content_object') and page.content_object:
+                        content = getattr(page.content_object, 'content', None)
+                        if content:
+                            return True
+            return False
+        except Exception:
+            return False
+    
+    def _check_thumbnail_status(self, document):
+        """Check if thumbnails have been generated"""
+        try:
+            latest_version = document.versions.order_by('-timestamp').first()
+            if latest_version and latest_version.pages.exists():
+                return True
+            return False
+        except Exception:
+            return False
+
+
 class DAMDashboardStatsView(mayan_generics.GenericAPIView):
     """
     Provide dashboard statistics for DAM analyses.
