@@ -20,7 +20,13 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
-        cookieDomainRewrite: 'localhost'
+        cookieDomainRewrite: 'localhost',
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Log requests in dev
+            console.log(`[Proxy] ${proxyReq.method} ${proxyReq.path}`)
+          })
+        }
       },
       // DAM-specific API endpoints
       '/digital-assets': {
@@ -51,7 +57,15 @@ export default defineConfig({
       // Media files (uploaded documents)
       '/media': {
         target: 'http://localhost:8080',
-        changeOrigin: true
+        changeOrigin: true,
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Log media requests in dev
+            if (import.meta.env.DEV) {
+              console.log(`[Proxy Media] ${proxyReq.method} ${proxyReq.path}`)
+            }
+          })
+        }
       }
     }
   },

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Prime-EDMS Integration Test</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/@vueuse/core@10.7.2/index.iife.js"></script>
+    <script src="https://unpkg.com/axios@1.6.5/dist/axios.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <h1>🎯 Prime-EDMS Integration Test</h1>
+
+        <div class="test-section">
+            <h2>🔑 Admin Credentials Test</h2>
+            <div id="credentials-test">
+                <button onclick="testCredentials()">Test Credentials Loading</button>
+                <div id="credentials-result"></div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔐 Authentication Test</h2>
+            <div id="auth-test">
+                <button onclick="testAuthentication()">Test Authentication</button>
+                <div id="auth-result"></div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Results</h2>
+            <div id="final-result"></div>
+        </div>
+    </div>
+
+    <script>
+        // Simulate Mayan EDMS JavaScript injection
+        window.autoadminCredentials = null;
+
+        async function loadCredentials() {
+            try {
+                const response = await axios.get('http://localhost:8080/admin-credentials-js/');
+                window.autoadminCredentials = response.data;
+                return response.data;
+            } catch (error) {
+                console.error('Cannot load credentials:', error);
+                return null;
+            }
+        }
+
+        // Test credentials loading
+        async function testCredentials() {
+            const resultDiv = document.getElementById('credentials-result');
+            resultDiv.innerHTML = '⏳ Loading credentials...';
+
+            const creds = await loadCredentials();
+            if (creds && creds.is_auto_generated) {
+                resultDiv.innerHTML = `
+                    ✅ Credentials loaded successfully!<br>
+                    Username: ${creds.username}<br>
+                    Email: ${creds.email}<br>
+                    Password: ${'*'.repeat(creds.password.length)}<br>
+                    Auto-generated: ${creds.is_auto_generated}
+                `;
+                return creds;
+            } else {
+                resultDiv.innerHTML = '❌ Cannot load credentials or not auto-generated';
+                return null;
+            }
+        }
+
+        // Test authentication
+        async function testAuthentication() {
+            const resultDiv = document.getElementById('auth-result');
+            resultDiv.innerHTML = '⏳ Testing authentication...';
+
+            const creds = await loadCredentials();
+            if (!creds) {
+                resultDiv.innerHTML = '❌ No credentials available';
+                return;
+            }
+
+            try {
+                const response = await axios.post('http://localhost:5173/api/v4/auth/token/obtain/', {
+                    username: creds.username,
+                    password: creds.password
+                }, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.status === 200 && response.data.token) {
+                    resultDiv.innerHTML = `
+                        ✅ Authentication successful!<br>
+                        Token: ${response.data.token.substring(0, 20)}...<br>
+                        <strong>Vite proxy works correctly!</strong>
+                    `;
+                    updateFinalResult(true);
+                } else {
+                    resultDiv.innerHTML = '❌ No token in response';
+                    updateFinalResult(false);
+                }
+            } catch (error) {
+                console.error('Authentication error:', error);
+                resultDiv.innerHTML = `
+                    ❌ Authentication failed<br>
+                    Status: ${error.response?.status || 'Unknown'}<br>
+                    Message: ${error.message}<br>
+                    <small>Check if Vite proxy is configured correctly</small>
+                `;
+                updateFinalResult(false);
+            }
+        }
+
+        function updateFinalResult(success) {
+            const resultDiv = document.getElementById('final-result');
+            if (success) {
+                resultDiv.innerHTML = `
+                    <div style="color: green; font-weight: bold;">
+                        🎉 INTEGRATION SUCCESSFUL!<br>
+                        Frontend ↔ Backend communication works perfectly!<br>
+                        Vite proxy is functioning correctly.
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div style="color: red; font-weight: bold;">
+                        ⚠️ INTEGRATION ISSUES DETECTED<br>
+                        Check Vite proxy configuration and backend API.
+                    </div>
+                `;
+            }
+        }
+
+        // Auto-run on page load
+        window.addEventListener('load', async () => {
+            console.log('Prime-EDMS Integration Test Page Loaded');
+            const creds = await testCredentials();
+            if (creds) {
+                setTimeout(() => testAuthentication(), 1000);
+            }
+        });
+    </script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+    </style>
+</body>
+</html>

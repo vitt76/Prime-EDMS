@@ -4,10 +4,10 @@
       <h1 class="text-3xl font-semibold mb-6 text-center">Login</h1>
       <form @submit.prevent="handleLogin" class="space-y-4">
         <Input
-          v-model="email"
-          type="email"
-          label="Email"
-          placeholder="Enter your email"
+          v-model="username"
+          type="text"
+          label="Username"
+          placeholder="Enter your username"
           required
         />
         <Input
@@ -35,14 +35,14 @@ import Button from '@/components/Common/Button.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const email = ref('')
+const username = ref('')
 const password = ref('')
 const loading = ref(false)
 
 async function handleLogin() {
   loading.value = true
   try {
-    await authStore.login(email.value, password.value)
+    await authStore.login(username.value, password.value)
 
     // Redirect to return URL or dashboard
     const returnTo = router.currentRoute.value.query.returnTo as string || '/'
