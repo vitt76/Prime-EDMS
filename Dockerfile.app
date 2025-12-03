@@ -54,6 +54,7 @@ COPY mayan/apps/dam /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
 COPY mayan/apps/storage /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/storage
 COPY mayan/apps/smart_settings/classes.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/smart_settings/classes.py
 COPY mayan/apps/lock_manager/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/lock_manager/apps.py
+COPY mayan/apps/task_manager/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/task_manager/apps.py
 COPY mayan/apps/distribution /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
 COPY mayan/settings/base.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
 

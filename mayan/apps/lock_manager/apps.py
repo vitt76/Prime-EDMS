@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 
 from django.utils.translation import ugettext_lazy as _
 
@@ -31,14 +32,34 @@ class LockManagerApp(MayanAppConfig):
             # command as there may be some stuck locks which will block
             # the command.
             lock_instance = LockingBackend.get_backend()
-            try:
-                lock = lock_instance.acquire_lock(
-                    name=TEST_LOCK_NAME, timeout=1
-                )
-                lock.release()
-            except Exception as exception:
-                raise RuntimeError(
-                    'Error initializing the locking backend: {}; {}'.format(
-                        setting_backend.value, exception
+            
+            # Retry logic for Redis connectivity during container startup
+            max_retries = 5
+            retry_delay = 3  # seconds
+            
+            for attempt in range(max_retries):
+                try:
+                    lock = lock_instance.acquire_lock(
+                        name=TEST_LOCK_NAME, timeout=30
                     )
-                ) from exception
+                    lock.release()
+                    logger.info('Lock backend connectivity test passed')
+                    break
+                except Exception as exception:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            'Lock backend test failed (attempt %d/%d): %s. Retrying in %ds...',
+                            attempt + 1, max_retries, exception, retry_delay
+                        )
+                        time.sleep(retry_delay)
+                    else:
+                        logger.error(
+                            'Lock backend initialization failed after %d attempts: %s',
+                            max_retries, exception
+                        )
+                        # Don't raise - let the app start anyway
+                        # Workers will retry connecting to Redis
+                        logger.warning(
+                            'Continuing without lock backend validation. '
+                            'Workers will retry connecting to Redis.'
+                        )

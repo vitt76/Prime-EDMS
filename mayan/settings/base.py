@@ -295,7 +295,8 @@ REST_FRAMEWORK = {
         'bulk_operation': '20/hour',
     },
     'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.AcceptHeaderVersioning',
-    'EXCEPTION_HANDLER': 'mayan.apps.api.exception_handlers.exception_handler',
+    # Use default DRF exception handler
+    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
 }
 
 REST_FRAMEWORK_EXTENDED = {
