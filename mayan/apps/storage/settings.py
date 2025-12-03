@@ -119,3 +119,32 @@ setting_s3_distribution_location = namespace.add_setting(
         'Optional prefix (folder) within the S3 bucket where generated distribution renditions will be stored.'
     )
 )
+
+# Chunked Upload settings (Phase B3.2)
+setting_chunked_upload_expiration_hours = namespace.add_setting(
+    default=24,
+    global_name='STORAGE_CHUNKED_UPLOAD_EXPIRATION_HOURS', help_text=_(
+        'Hours after which incomplete chunked uploads are automatically cleaned up.'
+    )
+)
+
+setting_chunked_upload_min_chunk_size = namespace.add_setting(
+    default=5 * 1024 * 1024,  # 5MB
+    global_name='STORAGE_CHUNKED_UPLOAD_MIN_CHUNK_SIZE', help_text=_(
+        'Minimum chunk size in bytes (S3 minimum is 5MB).'
+    )
+)
+
+setting_chunked_upload_max_chunk_size = namespace.add_setting(
+    default=100 * 1024 * 1024,  # 100MB
+    global_name='STORAGE_CHUNKED_UPLOAD_MAX_CHUNK_SIZE', help_text=_(
+        'Maximum chunk size in bytes.'
+    )
+)
+
+setting_chunked_upload_default_chunk_size = namespace.add_setting(
+    default=10 * 1024 * 1024,  # 10MB
+    global_name='STORAGE_CHUNKED_UPLOAD_DEFAULT_CHUNK_SIZE', help_text=_(
+        'Recommended chunk size in bytes sent to frontend.'
+    )
+)

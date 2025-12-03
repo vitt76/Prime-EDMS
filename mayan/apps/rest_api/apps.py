@@ -45,14 +45,23 @@ class RESTAPIApp(MayanAppConfig):
             )
         )
 
+        # Extend API version URLs with app-specific API URLs
+        loaded_apps = []
         for app in apps.get_app_configs():
             if getattr(app, 'has_rest_api', False):
-                print(f"DEBUG: Processing REST API app: {app.name}")
                 try:
                     app_api_urls = import_string(dotted_path='{}.urls.api_urls'.format(app.name))
-                    print(f"DEBUG: Imported {len(app_api_urls)} URLs for {app.name}")
-                    print(f"DEBUG: First URL pattern: {app_api_urls[0] if app_api_urls else 'None'}")
                     api_version_urls.extend(app_api_urls)
-                    print(f"DEBUG: api_version_urls length after extend: {len(api_version_urls)}")
+                    loaded_apps.append(f"{app.name} ({len(app_api_urls)} URLs)")
+                except ImportError as e:
+                    # Silently skip apps without api_urls
+                    pass
                 except Exception as e:
                     print(f"ERROR: Failed to import API URLs for {app.name}: {e}")
+        
+        if loaded_apps:
+            print(f"✅ REST API: Loaded URLs from {len(loaded_apps)} apps")
+            for app_info in loaded_apps[:5]:
+                print(f"   - {app_info}")
+            if len(loaded_apps) > 5:
+                print(f"   ... and {len(loaded_apps) - 5} more")
