@@ -83,7 +83,9 @@ from .events import (
 from .handlers import (
     handler_create_default_document_type,
     handler_create_document_file_page_image_cache,
-    handler_create_document_version_page_image_cache
+    handler_create_document_version_page_image_cache,
+    handler_invalidate_document_thumbnail_cache,
+    handler_invalidate_version_thumbnail_cache
 )
 from .html_widgets import ThumbnailWidget
 from .links.document_links import (
@@ -1099,3 +1101,18 @@ class DocumentsApp(MayanAppConfig):
             weak=False
         )
         logger.debug('Registered unified document indexing coordination handlers')
+        
+        # Phase B2.3: Register thumbnail cache invalidation handlers
+        # These handlers invalidate cached thumbnail URLs when new files/versions
+        # are uploaded, ensuring users see updated previews immediately.
+        post_save.connect(
+            dispatch_uid='documents_handler_invalidate_thumbnail_cache_file',
+            receiver=handler_invalidate_document_thumbnail_cache,
+            sender=DocumentFile
+        )
+        post_save.connect(
+            dispatch_uid='documents_handler_invalidate_thumbnail_cache_version',
+            receiver=handler_invalidate_version_thumbnail_cache,
+            sender=DocumentVersion
+        )
+        logger.debug('Registered thumbnail cache invalidation handlers (Phase B2.3)')

@@ -1,7 +1,7 @@
 # Backend Analysis — Prime-EDMS / DAM System
 
-**Дата анализа:** 03 декабря 2025  
-**Версия:** 3.0 (Полный технический анализ Legacy-кода)  
+**Дата анализа:** 03 декабря 2025
+**Версия:** 3.0 (Полный технический анализ Legacy-кода)
 **Автор:** Senior System Analyst & Technical Writer (20+ лет опыта DAM систем)
 
 ---
@@ -115,37 +115,37 @@
 
 ### 2.1 Core Dependencies (requirements/base.txt)
 
-| Категория | Пакет | Версия | Назначение |
-|-----------|-------|--------|------------|
-| **Framework** | Django | 3.2.14 | Web framework |
-| **API** | djangorestframework | 3.13.1 | REST API |
-| **API Docs** | drf-yasg | 1.20.0 | Swagger/OpenAPI |
-| **Task Queue** | celery | 5.2.3 | Async tasks |
-| **Scheduler** | django-celery-beat | 2.2.1 | Periodic tasks |
-| **Search** | Whoosh | 2.7.4 | Full-text search (default) |
-| **Search** | elasticsearch | 7.17.1 | Full-text search (optional) |
-| **Search** | elasticsearch-dsl | 7.4.0 | Elasticsearch DSL |
-| **Image** | Pillow | 9.2.0 | Image processing |
-| **PDF** | PyPDF2 | 1.28.4 | PDF processing |
-| **SVG** | CairoSVG | 2.5.2 | SVG rendering |
-| **Auth** | django-auth-ldap | 4.0.0 | LDAP integration |
-| **CORS** | django-cors-headers | 3.10.0 | Cross-origin requests |
-| **OTP** | pyotp | 2.6.0 | Two-factor auth |
-| **QR** | qrcode | 7.3.1 | QR code generation |
-| **HTTP** | requests | 2.27.1 | HTTP client |
-| **Crypto** | pycryptodome | 3.10.4 | Encryption |
-| **GPG** | python_gnupg | 0.4.8 | GPG signatures |
-| **Graphs** | graphviz | 0.17 | Workflow visualization |
-| **Server** | gunicorn | 20.1.0 | WSGI server |
-| **Server** | gevent | 21.12.0 | Async workers |
-| **Static** | whitenoise | 6.0.0 | Static files |
-| **Monitoring** | sentry-sdk | 1.5.8 | Error tracking |
-| **MIME** | python-magic | 0.4.26 | MIME detection |
-| **Email** | flanker | 0.9.11 | Email parsing |
-| **MSG** | extract-msg | 0.34.3 | Outlook MSG files |
-| **Schema** | jsonschema | 4.4.0 | JSON validation |
-| **FUSE** | fusepy | 3.0.1 | File system mirroring |
-| **YAML** | PyYAML | 6.0 | Config parsing |
+| Категория   | Пакет          | Версия | Назначение        |
+| -------------------- | ------------------- | ------------ | --------------------------- |
+| **Framework**  | Django              | 3.2.14       | Web framework               |
+| **API**        | djangorestframework | 3.13.1       | REST API                    |
+| **API Docs**   | drf-yasg            | 1.20.0       | Swagger/OpenAPI             |
+| **Task Queue** | celery              | 5.2.3        | Async tasks                 |
+| **Scheduler**  | django-celery-beat  | 2.2.1        | Periodic tasks              |
+| **Search**     | Whoosh              | 2.7.4        | Full-text search (default)  |
+| **Search**     | elasticsearch       | 7.17.1       | Full-text search (optional) |
+| **Search**     | elasticsearch-dsl   | 7.4.0        | Elasticsearch DSL           |
+| **Image**      | Pillow              | 9.2.0        | Image processing            |
+| **PDF**        | PyPDF2              | 1.28.4       | PDF processing              |
+| **SVG**        | CairoSVG            | 2.5.2        | SVG rendering               |
+| **Auth**       | django-auth-ldap    | 4.0.0        | LDAP integration            |
+| **CORS**       | django-cors-headers | 3.10.0       | Cross-origin requests       |
+| **OTP**        | pyotp               | 2.6.0        | Two-factor auth             |
+| **QR**         | qrcode              | 7.3.1        | QR code generation          |
+| **HTTP**       | requests            | 2.27.1       | HTTP client                 |
+| **Crypto**     | pycryptodome        | 3.10.4       | Encryption                  |
+| **GPG**        | python_gnupg        | 0.4.8        | GPG signatures              |
+| **Graphs**     | graphviz            | 0.17         | Workflow visualization      |
+| **Server**     | gunicorn            | 20.1.0       | WSGI server                 |
+| **Server**     | gevent              | 21.12.0      | Async workers               |
+| **Static**     | whitenoise          | 6.0.0        | Static files                |
+| **Monitoring** | sentry-sdk          | 1.5.8        | Error tracking              |
+| **MIME**       | python-magic        | 0.4.26       | MIME detection              |
+| **Email**      | flanker             | 0.9.11       | Email parsing               |
+| **MSG**        | extract-msg         | 0.34.3       | Outlook MSG files           |
+| **Schema**     | jsonschema          | 4.4.0        | JSON validation             |
+| **FUSE**       | fusepy              | 3.0.1        | File system mirroring       |
+| **YAML**       | PyYAML              | 6.0          | Config parsing              |
 
 ### 2.2 S3 Storage Dependencies (опционально)
 
@@ -264,15 +264,15 @@ mayan/apps/
 
 ### 4.1 AI Провайдеры для анализа изображений
 
-| Провайдер | Endpoint | Capabilities | Настройки |
-|-----------|----------|--------------|-----------|
-| **Qwen Local** | `http://192.168.1.25:11434/api/generate` | Vision, Description, Tags | `DAM_QWENLOCAL_API_URL`, `DAM_QWENLOCAL_MODEL` |
-| **GigaChat** | Sber API | Vision, Description | `DAM_GIGACHAT_CREDENTIALS`, `DAM_GIGACHAT_SCOPE` |
-| **OpenAI** | OpenAI API | GPT-4 Vision | `DAM_OPENAI_API_KEY`, `DAM_OPENAI_MODEL` |
-| **Claude** | Anthropic API | Vision, Analysis | `DAM_CLAUDE_API_KEY`, `DAM_CLAUDE_MODEL` |
-| **Gemini** | Google AI | Vision, Description | `DAM_GEMINI_API_KEY`, `DAM_GEMINI_MODEL` |
-| **YandexGPT** | Yandex Cloud | Text generation | `DAM_YANDEXGPT_API_KEY`, `DAM_YANDEXGPT_FOLDER_ID` |
-| **Kie.ai** | Flux Kontext | OCR, Analysis | `DAM_KIEAI_API_KEY`, `DAM_KIEAI_BASE_URL` |
+| Провайдер   | Endpoint                                   | Capabilities              | Настройки                                     |
+| -------------------- | ------------------------------------------ | ------------------------- | ------------------------------------------------------ |
+| **Qwen Local** | `http://192.168.1.25:11434/api/generate` | Vision, Description, Tags | `DAM_QWENLOCAL_API_URL`, `DAM_QWENLOCAL_MODEL`     |
+| **GigaChat**   | Sber API                                   | Vision, Description       | `DAM_GIGACHAT_CREDENTIALS`, `DAM_GIGACHAT_SCOPE`   |
+| **OpenAI**     | OpenAI API                                 | GPT-4 Vision              | `DAM_OPENAI_API_KEY`, `DAM_OPENAI_MODEL`           |
+| **Claude**     | Anthropic API                              | Vision, Analysis          | `DAM_CLAUDE_API_KEY`, `DAM_CLAUDE_MODEL`           |
+| **Gemini**     | Google AI                                  | Vision, Description       | `DAM_GEMINI_API_KEY`, `DAM_GEMINI_MODEL`           |
+| **YandexGPT**  | Yandex Cloud                               | Text generation           | `DAM_YANDEXGPT_API_KEY`, `DAM_YANDEXGPT_FOLDER_ID` |
+| **Kie.ai**     | Flux Kontext                               | OCR, Analysis             | `DAM_KIEAI_API_KEY`, `DAM_KIEAI_BASE_URL`          |
 
 ### 4.2 Цепочка fallback для AI анализа
 
@@ -328,129 +328,129 @@ AUTH_LDAP_GROUP_SEARCH
 
 ### 5.1 Authentication API (`/api/v4/`)
 
-| Method | Endpoint | View Class | Описание |
-|--------|----------|------------|----------|
-| `POST` | `/auth/token/obtain/` | `BrowseableObtainAuthToken` | Получение токена |
-| `GET` | `/user_management/users/current/` | Core Mayan | Текущий пользователь |
+| Method   | Endpoint                            | View Class                    | Описание                        |
+| -------- | ----------------------------------- | ----------------------------- | --------------------------------------- |
+| `POST` | `/auth/token/obtain/`             | `BrowseableObtainAuthToken` | Получение токена         |
+| `GET`  | `/user_management/users/current/` | Core Mayan                    | Текущий пользователь |
 
 ### 5.2 Documents API (`/api/v4/documents/`)
 
-| Method | Endpoint | View Class | Permission |
-|--------|----------|------------|------------|
-| `GET` | `/documents/` | `APIDocumentListView` | `document_view` |
-| `POST` | `/documents/` | `APIDocumentListView` | `document_create` |
-| `GET` | `/documents/{id}/` | `APIDocumentDetailView` | `document_view` |
-| `PUT/PATCH` | `/documents/{id}/` | `APIDocumentDetailView` | `document_properties_edit` |
-| `DELETE` | `/documents/{id}/` | `APIDocumentDetailView` | `document_trash` |
-| `POST` | `/documents/{id}/type/change/` | `APIDocumentChangeTypeView` | `document_properties_edit` |
-| `POST` | `/documents/upload/` | `APIDocumentUploadView` | `document_create` |
-| `GET` | `/documents/file_actions/` | `APIDocumentFileActionListView` | - |
+| Method        | Endpoint                         | View Class                        | Permission                   |
+| ------------- | -------------------------------- | --------------------------------- | ---------------------------- |
+| `GET`       | `/documents/`                  | `APIDocumentListView`           | `document_view`            |
+| `POST`      | `/documents/`                  | `APIDocumentListView`           | `document_create`          |
+| `GET`       | `/documents/{id}/`             | `APIDocumentDetailView`         | `document_view`            |
+| `PUT/PATCH` | `/documents/{id}/`             | `APIDocumentDetailView`         | `document_properties_edit` |
+| `DELETE`    | `/documents/{id}/`             | `APIDocumentDetailView`         | `document_trash`           |
+| `POST`      | `/documents/{id}/type/change/` | `APIDocumentChangeTypeView`     | `document_properties_edit` |
+| `POST`      | `/documents/upload/`           | `APIDocumentUploadView`         | `document_create`          |
+| `GET`       | `/documents/file_actions/`     | `APIDocumentFileActionListView` | -                            |
 
 ### 5.3 Document Files API (`/api/v4/documents/{id}/files/`)
 
-| Method | Endpoint | View Class | Permission |
-|--------|----------|------------|------------|
-| `GET` | `/documents/{id}/files/` | `APIDocumentFileListView` | `document_file_view` |
-| `POST` | `/documents/{id}/files/` | `APIDocumentFileListView` | `document_file_new` |
-| `GET` | `/documents/{id}/files/{file_id}/` | `APIDocumentFileDetailView` | `document_file_view` |
-| `DELETE` | `/documents/{id}/files/{file_id}/` | `APIDocumentFileDetailView` | `document_file_delete` |
-| `GET` | `/documents/{id}/files/{file_id}/download/` | `APIDocumentFileDownloadView` | `document_file_download` |
-| `GET` | `/documents/{id}/files/{file_id}/pages/` | `APIDocumentFilePageListView` | `document_file_view` |
-| `GET` | `/documents/{id}/files/{file_id}/pages/{page_id}/` | `APIDocumentFilePageDetailView` | `document_file_view` |
-| `GET` | `/documents/{id}/files/{file_id}/pages/{page_id}/image/` | `APIDocumentFilePageImageView` | `document_file_view` |
+| Method     | Endpoint                                                   | View Class                        | Permission                 |
+| ---------- | ---------------------------------------------------------- | --------------------------------- | -------------------------- |
+| `GET`    | `/documents/{id}/files/`                                 | `APIDocumentFileListView`       | `document_file_view`     |
+| `POST`   | `/documents/{id}/files/`                                 | `APIDocumentFileListView`       | `document_file_new`      |
+| `GET`    | `/documents/{id}/files/{file_id}/`                       | `APIDocumentFileDetailView`     | `document_file_view`     |
+| `DELETE` | `/documents/{id}/files/{file_id}/`                       | `APIDocumentFileDetailView`     | `document_file_delete`   |
+| `GET`    | `/documents/{id}/files/{file_id}/download/`              | `APIDocumentFileDownloadView`   | `document_file_download` |
+| `GET`    | `/documents/{id}/files/{file_id}/pages/`                 | `APIDocumentFilePageListView`   | `document_file_view`     |
+| `GET`    | `/documents/{id}/files/{file_id}/pages/{page_id}/`       | `APIDocumentFilePageDetailView` | `document_file_view`     |
+| `GET`    | `/documents/{id}/files/{file_id}/pages/{page_id}/image/` | `APIDocumentFilePageImageView`  | `document_file_view`     |
 
 ### 5.4 Document Versions API (`/api/v4/documents/{id}/versions/`)
 
-| Method | Endpoint | View Class | Permission |
-|--------|----------|------------|------------|
-| `GET` | `/documents/{id}/versions/` | `APIDocumentVersionListView` | `document_version_view` |
-| `POST` | `/documents/{id}/versions/` | `APIDocumentVersionListView` | `document_version_create` |
-| `GET` | `/documents/{id}/versions/{version_id}/` | `APIDocumentVersionDetailView` | `document_version_view` |
-| `DELETE` | `/documents/{id}/versions/{version_id}/` | `APIDocumentVersionDetailView` | `document_version_delete` |
-| `GET` | `/documents/{id}/versions/{version_id}/export/` | `APIDocumentVersionExportView` | `document_version_export` |
-| `GET` | `/documents/{id}/versions/{version_id}/pages/` | `APIDocumentVersionPageListView` | `document_version_view` |
-| `GET` | `/documents/{id}/versions/{version_id}/pages/{page_id}/image/` | `APIDocumentVersionPageImageView` | `document_version_view` |
+| Method     | Endpoint                                                         | View Class                          | Permission                  |
+| ---------- | ---------------------------------------------------------------- | ----------------------------------- | --------------------------- |
+| `GET`    | `/documents/{id}/versions/`                                    | `APIDocumentVersionListView`      | `document_version_view`   |
+| `POST`   | `/documents/{id}/versions/`                                    | `APIDocumentVersionListView`      | `document_version_create` |
+| `GET`    | `/documents/{id}/versions/{version_id}/`                       | `APIDocumentVersionDetailView`    | `document_version_view`   |
+| `DELETE` | `/documents/{id}/versions/{version_id}/`                       | `APIDocumentVersionDetailView`    | `document_version_delete` |
+| `GET`    | `/documents/{id}/versions/{version_id}/export/`                | `APIDocumentVersionExportView`    | `document_version_export` |
+| `GET`    | `/documents/{id}/versions/{version_id}/pages/`                 | `APIDocumentVersionPageListView`  | `document_version_view`   |
+| `GET`    | `/documents/{id}/versions/{version_id}/pages/{page_id}/image/` | `APIDocumentVersionPageImageView` | `document_version_view`   |
 
 ### 5.5 Document Types API (`/api/v4/document_types/`)
 
-| Method | Endpoint | View Class | Permission |
-|--------|----------|------------|------------|
-| `GET` | `/document_types/` | `APIDocumentTypeListView` | `document_type_view` |
-| `POST` | `/document_types/` | `APIDocumentTypeListView` | `document_type_create` |
-| `GET` | `/document_types/{id}/` | `APIDocumentTypeDetailView` | `document_type_view` |
-| `PUT/PATCH` | `/document_types/{id}/` | `APIDocumentTypeDetailView` | `document_type_edit` |
-| `DELETE` | `/document_types/{id}/` | `APIDocumentTypeDetailView` | `document_type_delete` |
+| Method        | Endpoint                  | View Class                    | Permission               |
+| ------------- | ------------------------- | ----------------------------- | ------------------------ |
+| `GET`       | `/document_types/`      | `APIDocumentTypeListView`   | `document_type_view`   |
+| `POST`      | `/document_types/`      | `APIDocumentTypeListView`   | `document_type_create` |
+| `GET`       | `/document_types/{id}/` | `APIDocumentTypeDetailView` | `document_type_view`   |
+| `PUT/PATCH` | `/document_types/{id}/` | `APIDocumentTypeDetailView` | `document_type_edit`   |
+| `DELETE`    | `/document_types/{id}/` | `APIDocumentTypeDetailView` | `document_type_delete` |
 
 ### 5.6 Tags API (`/api/v4/tags/`)
 
-| Method | Endpoint | Permission |
-|--------|----------|------------|
-| `GET` | `/tags/` | `tag_view` |
-| `POST` | `/tags/` | `tag_create` |
-| `GET` | `/tags/{id}/` | `tag_view` |
-| `PUT/PATCH` | `/tags/{id}/` | `tag_edit` |
-| `DELETE` | `/tags/{id}/` | `tag_delete` |
-| `GET` | `/documents/{id}/tags/` | `document_view` |
-| `POST` | `/documents/{id}/tags/` | `tag_attach` |
-| `DELETE` | `/documents/{id}/tags/{tag_id}/` | `tag_remove` |
+| Method        | Endpoint                           | Permission        |
+| ------------- | ---------------------------------- | ----------------- |
+| `GET`       | `/tags/`                         | `tag_view`      |
+| `POST`      | `/tags/`                         | `tag_create`    |
+| `GET`       | `/tags/{id}/`                    | `tag_view`      |
+| `PUT/PATCH` | `/tags/{id}/`                    | `tag_edit`      |
+| `DELETE`    | `/tags/{id}/`                    | `tag_delete`    |
+| `GET`       | `/documents/{id}/tags/`          | `document_view` |
+| `POST`      | `/documents/{id}/tags/`          | `tag_attach`    |
+| `DELETE`    | `/documents/{id}/tags/{tag_id}/` | `tag_remove`    |
 
 ### 5.7 Cabinets API (`/api/v4/cabinets/`)
 
-| Method | Endpoint | Permission |
-|--------|----------|------------|
-| `GET` | `/cabinets/` | `cabinet_view` |
-| `POST` | `/cabinets/` | `cabinet_create` |
-| `GET` | `/cabinets/{id}/` | `cabinet_view` |
-| `PUT/PATCH` | `/cabinets/{id}/` | `cabinet_edit` |
-| `DELETE` | `/cabinets/{id}/` | `cabinet_delete` |
-| `GET` | `/cabinets/{id}/documents/` | `cabinet_view` |
-| `POST` | `/cabinets/{id}/documents/` | `cabinet_add_document` |
-| `DELETE` | `/cabinets/{id}/documents/{doc_id}/` | `cabinet_remove_document` |
+| Method        | Endpoint                               | Permission                  |
+| ------------- | -------------------------------------- | --------------------------- |
+| `GET`       | `/cabinets/`                         | `cabinet_view`            |
+| `POST`      | `/cabinets/`                         | `cabinet_create`          |
+| `GET`       | `/cabinets/{id}/`                    | `cabinet_view`            |
+| `PUT/PATCH` | `/cabinets/{id}/`                    | `cabinet_edit`            |
+| `DELETE`    | `/cabinets/{id}/`                    | `cabinet_delete`          |
+| `GET`       | `/cabinets/{id}/documents/`          | `cabinet_view`            |
+| `POST`      | `/cabinets/{id}/documents/`          | `cabinet_add_document`    |
+| `DELETE`    | `/cabinets/{id}/documents/{doc_id}/` | `cabinet_remove_document` |
 
 ### 5.8 Metadata API (`/api/v4/metadata_types/`)
 
-| Method | Endpoint | Permission |
-|--------|----------|------------|
-| `GET` | `/metadata_types/` | `metadata_type_view` |
-| `POST` | `/metadata_types/` | `metadata_type_create` |
-| `GET` | `/documents/{id}/metadata/` | `document_metadata_view` |
-| `POST` | `/documents/{id}/metadata/` | `document_metadata_add` |
-| `PUT/PATCH` | `/documents/{id}/metadata/{metadata_id}/` | `document_metadata_edit` |
-| `DELETE` | `/documents/{id}/metadata/{metadata_id}/` | `document_metadata_remove` |
+| Method        | Endpoint                                    | Permission                   |
+| ------------- | ------------------------------------------- | ---------------------------- |
+| `GET`       | `/metadata_types/`                        | `metadata_type_view`       |
+| `POST`      | `/metadata_types/`                        | `metadata_type_create`     |
+| `GET`       | `/documents/{id}/metadata/`               | `document_metadata_view`   |
+| `POST`      | `/documents/{id}/metadata/`               | `document_metadata_add`    |
+| `PUT/PATCH` | `/documents/{id}/metadata/{metadata_id}/` | `document_metadata_edit`   |
+| `DELETE`    | `/documents/{id}/metadata/{metadata_id}/` | `document_metadata_remove` |
 
 ### 5.9 Search API (`/api/v4/search/`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/search/` | Полнотекстовый поиск |
-| `GET` | `/search/advanced/` | Расширенный поиск |
-| `GET` | `/search/{model}/` | Поиск по модели |
+| Method  | Endpoint              | Description                             |
+| ------- | --------------------- | --------------------------------------- |
+| `GET` | `/search/`          | Полнотекстовый поиск |
+| `GET` | `/search/advanced/` | Расширенный поиск       |
+| `GET` | `/search/{model}/`  | Поиск по модели            |
 
 ### 5.10 DAM Custom API (`/api/dam/`)
 
-| Method | Endpoint | View Class | Description |
-|--------|----------|------------|-------------|
-| `GET` | `/documents/` | `DAMDocumentListView` | Список с AI-метаданными |
-| `GET` | `/document-detail/{id}/` | `DAMDocumentDetailView` | Детали + AI анализ |
-| `GET` | `/dashboard-stats/` | `DAMDashboardStatsView` | Статистика дашборда |
-| `GET` | `/analysis-status/` | `AIAnalysisStatusView` | Статус AI анализа |
-| `GET` | `/ai-analysis/` | `DocumentAIAnalysisViewSet` | Список анализов |
-| `POST` | `/ai-analysis/analyze/` | `DocumentAIAnalysisViewSet` | Запуск анализа |
-| `POST` | `/ai-analysis/reanalyze/` | `DocumentAIAnalysisViewSet` | Повторный анализ |
-| `POST` | `/ai-analysis/bulk-analyze/` | `DocumentAIAnalysisViewSet` | Массовый анализ |
-| `GET` | `/metadata-presets/` | `DAMMetadataPresetViewSet` | Пресеты метаданных |
+| Method   | Endpoint                       | View Class                    | Description                               |
+| -------- | ------------------------------ | ----------------------------- | ----------------------------------------- |
+| `GET`  | `/documents/`                | `DAMDocumentListView`       | Список с AI-метаданными |
+| `GET`  | `/document-detail/{id}/`     | `DAMDocumentDetailView`     | Детали + AI анализ            |
+| `GET`  | `/dashboard-stats/`          | `DAMDashboardStatsView`     | Статистика дашборда     |
+| `GET`  | `/analysis-status/`          | `AIAnalysisStatusView`      | Статус AI анализа            |
+| `GET`  | `/ai-analysis/`              | `DocumentAIAnalysisViewSet` | Список анализов             |
+| `POST` | `/ai-analysis/analyze/`      | `DocumentAIAnalysisViewSet` | Запуск анализа               |
+| `POST` | `/ai-analysis/reanalyze/`    | `DocumentAIAnalysisViewSet` | Повторный анализ           |
+| `POST` | `/ai-analysis/bulk-analyze/` | `DocumentAIAnalysisViewSet` | Массовый анализ             |
+| `GET`  | `/metadata-presets/`         | `DAMMetadataPresetViewSet`  | Пресеты метаданных       |
 
 ### 5.11 Supporting APIs
 
-| Endpoint | Description |
-|----------|-------------|
-| `/api/v4/sources/` | Sources management |
-| `/api/v4/workflows/` | Workflow management |
-| `/api/v4/users/` | User management |
-| `/api/v4/groups/` | Group management |
+| Endpoint                 | Description           |
+| ------------------------ | --------------------- |
+| `/api/v4/sources/`     | Sources management    |
+| `/api/v4/workflows/`   | Workflow management   |
+| `/api/v4/users/`       | User management       |
+| `/api/v4/groups/`      | Group management      |
 | `/api/v4/permissions/` | Permission management |
-| `/api/v4/events/` | Event log |
-| `/api/v4/statistics/` | System statistics |
+| `/api/v4/events/`      | Event log             |
+| `/api/v4/statistics/`  | System statistics     |
 
 ---
 
@@ -471,7 +471,7 @@ class Document(models.Model):
     language = models.CharField(max_length=8, default='en')
     in_trash = models.BooleanField(default=False, db_index=True)
     is_stub = models.BooleanField(default=True)
-    
+  
     class Meta:
         ordering = ('label',)
         verbose_name = _('Document')
@@ -517,24 +517,24 @@ class DocumentAIAnalysis(ExtraDataModelMixin, models.Model):
         Document, on_delete=models.CASCADE, 
         related_name='ai_analysis'
     )
-    
+  
     # AI-генерируемые поля
     ai_description = models.TextField(blank=True, null=True)
     ai_tags = models.JSONField(blank=True, null=True)  # ["tag1", "tag2"]
     dominant_colors = models.JSONField(blank=True, null=True)  # [{"hex": "#fff", "name": "White"}]
     alt_text = models.CharField(max_length=500, blank=True, null=True)
-    
+  
     # Расширенные поля
     categories = models.JSONField(blank=True, null=True)  # ["Category1", "Category2"]
     language = models.CharField(max_length=20, blank=True, null=True)
     people = models.JSONField(blank=True, null=True)  # ["Person Name"]
     locations = models.JSONField(blank=True, null=True)  # ["Location Name"]
-    
+  
     # Права и governance
     copyright_notice = models.TextField(blank=True, null=True)
     usage_rights = models.TextField(blank=True, null=True)
     rights_expiry = models.DateField(blank=True, null=True)
-    
+  
     # Метаданные обработки
     ai_provider = models.CharField(max_length=50, blank=True, null=True)
     analysis_status = models.CharField(
@@ -601,7 +601,7 @@ class YandexDiskImportRecord(models.Model):
                          │  - page_number │
                          │  - content     │
                          └────────────────┘
-                                 
+                               
      ┌─────────────────────────────────────────────────────────────────────┐
      │                     DAM Extension Layer                             │
      │                                                                     │
@@ -623,12 +623,12 @@ class YandexDiskImportRecord(models.Model):
 
 ### 7.1 Поддерживаемые Storage Backends
 
-| Backend | Class | Use Case |
-|---------|-------|----------|
-| **Local File System** | `django.core.files.storage.FileSystemStorage` | Default, development |
-| **S3 Compatible** | `mayan.apps.documents.storages.BegetS3Boto3Storage` | Production (Beget, AWS) |
-| **Compressed** | `mayan.apps.storage.backends.compressedstorage.ZipCompressedPassthroughStorage` | Space optimization |
-| **Encrypted** | `mayan.apps.storage.backends.encryptedstorage.EncryptedPassthroughStorage` | Security |
+| Backend                     | Class                                                                             | Use Case                |
+| --------------------------- | --------------------------------------------------------------------------------- | ----------------------- |
+| **Local File System** | `django.core.files.storage.FileSystemStorage`                                   | Default, development    |
+| **S3 Compatible**     | `mayan.apps.documents.storages.BegetS3Boto3Storage`                             | Production (Beget, AWS) |
+| **Compressed**        | `mayan.apps.storage.backends.compressedstorage.ZipCompressedPassthroughStorage` | Space optimization      |
+| **Encrypted**         | `mayan.apps.storage.backends.encryptedstorage.EncryptedPassthroughStorage`      | Security                |
 
 ### 7.2 S3 Storage Configuration
 
@@ -677,34 +677,34 @@ class BegetS3Boto3Storage(S3Boto3Storage):
 
 class BaseAIProvider(metaclass=abc.ABCMeta):
     """Базовый класс для всех AI провайдеров"""
-    
+  
     # Метаданные провайдера
     name = None
     display_name = None
     description = None
-    
+  
     # Capabilities
     supports_vision = False
     supports_text = True
     supports_image_description = False
     supports_tag_extraction = False
     supports_color_analysis = False
-    
+  
     @abc.abstractmethod
     def analyze_image(self, image_data: bytes, mime_type: str) -> Dict[str, Any]:
         """Анализ изображения и извлечение метаданных"""
         pass
-    
+  
     @abc.abstractmethod
     def describe_image(self, image_data: bytes, mime_type: str) -> str:
         """Генерация текстового описания"""
         pass
-    
+  
     @abc.abstractmethod
     def extract_tags(self, image_data: bytes, mime_type: str) -> List[str]:
         """Извлечение тегов"""
         pass
-    
+  
     @abc.abstractmethod
     def extract_colors(self, image_data: bytes, mime_type: str) -> List[Dict]:
         """Извлечение доминантных цветов"""
@@ -750,25 +750,25 @@ AIProviderRegistry.register('kieai', 'mayan.apps.dam.ai_providers.kieai.KieAIPro
 
 ### 9.1 DAM Tasks (`mayan/apps/dam/tasks.py`)
 
-| Task | Queue | Max Retries | Description |
-|------|-------|-------------|-------------|
-| `analyze_document_with_ai` | `documents` | 3 | Анализ документа через AI |
-| `import_yandex_disk` | `documents` | 0 | Импорт из Yandex Disk |
-| `bulk_analyze_documents` | `documents` | 0 | Массовый AI анализ |
+| Task                         | Queue         | Max Retries | Description                                   |
+| ---------------------------- | ------------- | ----------- | --------------------------------------------- |
+| `analyze_document_with_ai` | `documents` | 3           | Анализ документа через AI |
+| `import_yandex_disk`       | `documents` | 0           | Импорт из Yandex Disk                 |
+| `bulk_analyze_documents`   | `documents` | 0           | Массовый AI анализ              |
 
 ### 9.2 Core Mayan Tasks
 
-| Task | Queue | Description |
-|------|-------|-------------|
-| `task_process_document_upload` | `uploads` | Обработка загрузки |
-| `task_document_file_content_process` | `documents` | Извлечение контента |
-| `task_document_file_page_image_generate` | `converter` | Генерация превью |
-| `task_document_version_page_image_generate` | `converter` | Генерация страниц |
-| `task_document_type_periodic_processing` | `tools` | Периодическая обработка |
-| `task_index_instance` | `indexing` | Индексация для поиска |
-| `task_ocr_document_version` | `ocr` | OCR обработка |
-| `task_check_expired_checkouts` | `checkouts` | Проверка checkouts |
-| `task_send_email` | `mailing` | Отправка email |
+| Task                                          | Queue         | Description                                   |
+| --------------------------------------------- | ------------- | --------------------------------------------- |
+| `task_process_document_upload`              | `uploads`   | Обработка загрузки           |
+| `task_document_file_content_process`        | `documents` | Извлечение контента         |
+| `task_document_file_page_image_generate`    | `converter` | Генерация превью               |
+| `task_document_version_page_image_generate` | `converter` | Генерация страниц             |
+| `task_document_type_periodic_processing`    | `tools`     | Периодическая обработка |
+| `task_index_instance`                       | `indexing`  | Индексация для поиска      |
+| `task_ocr_document_version`                 | `ocr`       | OCR обработка                        |
+| `task_check_expired_checkouts`              | `checkouts` | Проверка checkouts                    |
+| `task_send_email`                           | `mailing`   | Отправка email                        |
 
 ### 9.3 Celery Queues
 
@@ -797,7 +797,7 @@ CELERY_QUEUES = {
 class Permission(models.Model):
     codename = models.CharField(max_length=255, unique=True)
     name = models.CharField(max_length=255)
-    
+  
 
 # mayan/apps/acls/models.py
 class AccessControlList(models.Model):
@@ -863,14 +863,14 @@ queryset = AccessControlList.objects.restrict_queryset(
 
 ### 11.1 Текущий маппинг сервисов
 
-| Frontend Service | Backend Endpoint | Статус |
-|------------------|------------------|--------|
-| `authService.login()` | `POST /api/v4/auth/token/obtain/` | ✅ Работает |
-| `authService.getCurrentUser()` | `GET /api/v4/user_management/users/current/` | ✅ Работает |
-| `uploadService.uploadAsset()` | `POST /api/v4/documents/` + `POST .../files/` | ✅ Работает |
-| `assetStore.fetchAssets()` | `GET /api/v4/documents/` | ✅ Работает |
-| **`assetService.getAssets()`** | **`GET /v4/dam/assets/`** | ❌ **НЕ СУЩЕСТВУЕТ** |
-| **`assetService.searchAssets()`** | **`POST /v4/dam/assets/search/`** | ❌ **НЕ СУЩЕСТВУЕТ** |
+| Frontend Service                          | Backend Endpoint                                  | Статус                          |
+| ----------------------------------------- | ------------------------------------------------- | ------------------------------------- |
+| `authService.login()`                   | `POST /api/v4/auth/token/obtain/`               | ✅ Работает                   |
+| `authService.getCurrentUser()`          | `GET /api/v4/user_management/users/current/`    | ✅ Работает                   |
+| `uploadService.uploadAsset()`           | `POST /api/v4/documents/` + `POST .../files/` | ✅ Работает                   |
+| `assetStore.fetchAssets()`              | `GET /api/v4/documents/`                        | ✅ Работает                   |
+| **`assetService.getAssets()`**    | **`GET /v4/dam/assets/`**                 | ❌**НЕ СУЩЕСТВУЕТ** |
+| **`assetService.searchAssets()`** | **`POST /v4/dam/assets/search/`**         | ❌**НЕ СУЩЕСТВУЕТ** |
 
 ### 11.2 Правильные endpoints для интеграции
 
@@ -1047,21 +1047,64 @@ MAYAN_DAM_GIGACHAT_CREDENTIALS=base64(client_id:client_secret)
 
 ## 📊 Сводная таблица API
 
-| Категория | Endpoint Pattern | Методы |
-|-----------|-----------------|--------|
-| **Auth** | `/api/v4/auth/` | POST token |
-| **Documents** | `/api/v4/documents/` | GET, POST, PATCH, DELETE |
-| **Files** | `/api/v4/documents/{id}/files/` | GET, POST, DELETE |
-| **Versions** | `/api/v4/documents/{id}/versions/` | GET, POST, DELETE |
-| **Pages** | `.../pages/{id}/image/` | GET |
-| **Tags** | `/api/v4/tags/` | GET, POST, PATCH, DELETE |
-| **Cabinets** | `/api/v4/cabinets/` | GET, POST, PATCH, DELETE |
-| **Metadata** | `/api/v4/metadata_types/` | GET, POST |
-| **Search** | `/api/v4/search/` | GET |
-| **DAM** | `/api/dam/` | GET, POST |
-| **AI Analysis** | `/api/dam/ai-analysis/` | GET, POST |
+| Категория    | Endpoint Pattern                     | Методы             |
+| --------------------- | ------------------------------------ | ------------------------ |
+| **Auth**        | `/api/v4/auth/`                    | POST token               |
+| **Documents**   | `/api/v4/documents/`               | GET, POST, PATCH, DELETE |
+| **Files**       | `/api/v4/documents/{id}/files/`    | GET, POST, DELETE        |
+| **Versions**    | `/api/v4/documents/{id}/versions/` | GET, POST, DELETE        |
+| **Pages**       | `.../pages/{id}/image/`            | GET                      |
+| **Tags**        | `/api/v4/tags/`                    | GET, POST, PATCH, DELETE |
+| **Cabinets**    | `/api/v4/cabinets/`                | GET, POST, PATCH, DELETE |
+| **Metadata**    | `/api/v4/metadata_types/`          | GET, POST                |
+| **Search**      | `/api/v4/search/`                  | GET                      |
+| **DAM**         | `/api/dam/`                        | GET, POST                |
+| **AI Analysis** | `/api/dam/ai-analysis/`            | GET, POST                |
 
----
+**Логика автоматических учетных данных Mayan EDMS зашита в несколько компонентов:
+**![🔍](https://web.telegram.org/k/assets/img/emoji/1f50d.png) Основная логика создания учетных данных
 
-**Документ обновлён:** 03 декабря 2025  
+1. Команда установки системы:
+   python [manage.py](https://manage.py/) initialsetup
+   В файле mayan/apps/common/management/[base.py](https://base.py/) (строка 81):
+   management.call_command(command_name='autoadmin_create')
+2. Команда создания autoadmin:
+   mayan/apps/autoadmin/management/commands/autoadmin_[create.py](https://create.py/):
+   AutoAdminSingleton.objects.create_autoadmin()
+3. Метод создания учетных данных:
+   mayan/apps/autoadmin/[managers.py](https://managers.py/) - метод create_autoadmin():
+   Создает суперпользователя с данными из настроек
+   По умолчанию: username='admin', email='[autoadmin@example.com](mailto:autoadmin@example.com)'
+   Пароль: случайный (если AUTOADMIN_PASSWORD = None) или из настроек
+   Сохраняет данные в модель AutoAdminSingleton
+   ![📋](https://web.telegram.org/k/assets/img/emoji/1f4cb.png) Настройки учетных данных
+   Файл mayan/apps/autoadmin/[settings.py](https://settings.py/):
+   DEFAULT_EMAIL = '[autoadmin@example.com](mailto:autoadmin@example.com)'      # AUTOADMIN_EMAILDEFAULT_PASSWORD = None                      # AUTOADMIN_PASSWORD (None = случайный)DEFAULT_USERNAME = 'admin'                   # AUTOADMIN_USERNAME
+   ![🎨](https://web.telegram.org/k/assets/img/emoji/1f3a8.png) Отображение на странице логина
+4. Базовый шаблон логина:
+   mayan/apps/authentication/templates/authentication/login.html (строка 15):
+   {% appearance_app_templates template_name='login_content' %}
+5. Тег Mayan EDMS:
+   mayan/apps/appearance/templatetags/appearance_[tags.py](https://tags.py/) - ищет шаблоны {app}/app/{template_name}.html во всех приложениях
+6. Переопределение шаблона autoadmin:
+   mayan/apps/autoadmin/templates/autoadmin/app/login_content.html:
+   {% autoadmin_partial %}
+7. Inclusion tag:
+   mayan/apps/autoadmin/templatetags/autoadmin_[tags.py](https://tags.py/):
+   [@register](https://t.me/register).inclusion_tag('autoadmin/credentials.html')def autoadmin_partial():    return {'autoadmin_properties': AutoAdminSingleton.objects.get()}
+8. Шаблон отображения данных:
+   mayan/apps/autoadmin/templates/autoadmin/credentials.html - тот самый HTML, который вы показали в сообщении.
+   ![📊](https://web.telegram.org/k/assets/img/emoji/1f4ca.png) Модель хранения данных
+   mayan/apps/autoadmin/[models.py](https://models.py/):
+   class AutoAdminSingleton(SingletonModel):    account = models.ForeignKey(User, ...)    password = models.CharField(...)      # В открытом виде для отображения    password_hash = models.CharField(...) # Хэш для проверки изменений
+   ![🔄](https://web.telegram.org/k/assets/img/emoji/1f504.png) Логика скрытия сообщения
+   При изменении пароля autoadmin аккаунта данные автоматически очищаются:
+   mayan/apps/autoadmin/[handlers.py](https://handlers.py/) - сигнал post_save на модели User.
+   ![🎯](https://web.telegram.org/k/assets/img/emoji/1f3af.png) Итог
+   Логика полностью зашита в приложение mayan.apps.autoadmin. При установке системы автоматически создается аккаунт администратора, данные отображаются на странице логина, а при первом входе и смене пароля - сообщение исчезает.
+
+**Файл mayan/apps/autoadmin/**[settings.py](https://settings.py/):
+DEFAULT_EMAIL = '[autoadmin@example.com](mailto:autoadmin@example.com)'      # AUTOADMIN_EMAILDEFAULT_PASSWORD = None                      # AUTOADMIN_PASSWORD (None = случайный)DEFAULT_USERNAME = 'admin'                   # AUTOADMIN_USERNAME
+
+**Документ обновлён:** 03 декабря 2025
 **Следующий ревью:** После интеграции нового фронтенда

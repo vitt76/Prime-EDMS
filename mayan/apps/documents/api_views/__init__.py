@@ -13,3 +13,9 @@ from .bulk_operations_api_views import (  # noqa
     BulkCabinetActionView
 )
 
+# Phase B2: Optimized document API views
+from .optimized_document_api_views import (  # noqa
+    OptimizedAPIDocumentListView,
+    OptimizedAPIDocumentDetailView
+)
+

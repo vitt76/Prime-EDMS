@@ -13,3 +13,11 @@ from .document_rich_serializers import (  # noqa
     DocumentRichListSerializer
 )
 
+# Phase B2: Optimized document serializers
+from .optimized_document_serializers import (  # noqa
+    OptimizedDocumentSerializer,
+    OptimizedDocumentListSerializer,
+    OptimizedDocumentFileSerializer,
+    CachedThumbnailMixin
+)
+

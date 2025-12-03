@@ -729,6 +729,30 @@ api_urls_bulk_operations = [
     ),
 ]
 
+# Phase B2: Optimized document endpoints with N+1 query fixes
+from .api_views.optimized_document_api_views import (
+    OptimizedAPIDocumentListView,
+    OptimizedAPIDocumentDetailView
+)
+
+api_urls_optimized_documents = [
+    # Optimized document list endpoint
+    # GET /api/v4/documents/optimized/
+    # Uses select_related and prefetch_related to reduce queries
+    url(
+        regex=r'^documents/optimized/$',
+        name='document-optimized-list',
+        view=OptimizedAPIDocumentListView.as_view()
+    ),
+    # Optimized document detail endpoint
+    # GET /api/v4/documents/{document_id}/optimized/
+    url(
+        regex=r'^documents/(?P<document_id>[0-9]+)/optimized/$',
+        name='document-optimized-detail',
+        view=OptimizedAPIDocumentDetailView.as_view()
+    ),
+]
+
 api_urls = []
 api_urls.extend(api_urls_documents)
 api_urls.extend(api_urls_document_files)
@@ -738,3 +762,5 @@ api_urls.extend(api_urls_trashed_documents)
 # Phase B1: Add rich document and bulk operation endpoints
 api_urls.extend(api_urls_rich_documents)
 api_urls.extend(api_urls_bulk_operations)
+# Phase B2: Add optimized document endpoints
+api_urls.extend(api_urls_optimized_documents)

@@ -120,6 +120,7 @@ services:
       - ./mayan/apps/dam:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
       - ./mayan/apps/dynamic_search:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dynamic_search
       - ./mayan/apps/documents:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents
+      - ./mayan/apps/api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/api
     ports:
       - "8080:8000"
     depends_on:

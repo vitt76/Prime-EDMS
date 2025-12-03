@@ -140,3 +140,91 @@ def handler_coordinate_document_deindex(sender, instance, **kwargs):
         kwargs={'document_id': instance.pk},
         queue='indexing'  # Use unified queue
     )
+
+
+# Phase B2.3: Thumbnail Cache Invalidation Handlers
+
+def handler_invalidate_document_thumbnail_cache(sender, instance, **kwargs):
+    """
+    Invalidate thumbnail cache when a new DocumentFile is uploaded.
+    
+    Phase B2.3: Cache Invalidation on New Version Upload.
+    
+    This handler is triggered by post_save signal on DocumentFile model.
+    When a user uploads a new version of a document, the cached thumbnail
+    URLs must be invalidated to ensure the frontend displays the new image.
+    
+    Called on:
+    - New file upload (created=True)
+    - File edit (created=False) - less common but should also invalidate
+    
+    Args:
+        sender: DocumentFile model class
+        instance: DocumentFile instance
+        kwargs: Signal kwargs (includes 'created' flag)
+    """
+    try:
+        from .services.thumbnail_cache_service import invalidate_document_cache
+        
+        # Get document ID from the file instance
+        document_id = instance.document_id
+        
+        # Invalidate all cached URLs for this document
+        keys_deleted = invalidate_document_cache(document_id)
+        
+        logger.info(
+            'Thumbnail cache invalidated for document %s (file %s): %d keys deleted',
+            document_id,
+            instance.pk,
+            keys_deleted
+        )
+    except ImportError:
+        logger.warning(
+            'ThumbnailCacheService not available, skipping cache invalidation'
+        )
+    except Exception as e:
+        logger.error(
+            'Error invalidating thumbnail cache for document %s: %s',
+            getattr(instance, 'document_id', 'unknown'),
+            str(e)
+        )
+
+
+def handler_invalidate_version_thumbnail_cache(sender, instance, **kwargs):
+    """
+    Invalidate thumbnail cache when a new DocumentVersion is created/activated.
+    
+    Phase B2.3: Cache Invalidation on Version Change.
+    
+    This handler is triggered by post_save signal on DocumentVersion model.
+    When a new version is created or the active version changes, cached
+    thumbnail URLs should be invalidated.
+    
+    Args:
+        sender: DocumentVersion model class
+        instance: DocumentVersion instance
+        kwargs: Signal kwargs
+    """
+    try:
+        from .services.thumbnail_cache_service import invalidate_document_cache
+        
+        document_id = instance.document_id
+        
+        keys_deleted = invalidate_document_cache(document_id)
+        
+        logger.info(
+            'Thumbnail cache invalidated for document %s (version %s): %d keys deleted',
+            document_id,
+            instance.pk,
+            keys_deleted
+        )
+    except ImportError:
+        logger.warning(
+            'ThumbnailCacheService not available, skipping cache invalidation'
+        )
+    except Exception as e:
+        logger.error(
+            'Error invalidating thumbnail cache for document %s: %s',
+            getattr(instance, 'document_id', 'unknown'),
+            str(e)
+        )
