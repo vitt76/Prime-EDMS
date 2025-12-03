@@ -1,4 +1,5 @@
 import logging
+import time
 
 from celery.backends.base import DisabledBackend
 
@@ -19,6 +20,11 @@ from .literals import TEST_CELERY_RESULT_KEY, TEST_CELERY_RESULT_VALUE
 
 logger = logging.getLogger(name=__name__)
 
+# Retry settings for broker connectivity during container startup
+BROKER_CONNECT_MAX_RETRIES = 10
+BROKER_CONNECT_RETRY_DELAY = 5  # seconds
+BROKER_CONNECT_TIMEOUT = 5  # seconds per attempt
+
 
 class TaskManagerApp(MayanAppConfig):
     app_namespace = 'task_manager'
@@ -28,22 +34,59 @@ class TaskManagerApp(MayanAppConfig):
     verbose_name = _('Task manager')
 
     def check_broker_connectivity(self):
+        """
+        Check Celery broker (RabbitMQ) connectivity with retry logic.
+        This is critical during container startup when RabbitMQ may still
+        be initializing its vhosts and users.
+        """
         connection = celery_app.connection()
+        broker_uri = connection.as_uri()
 
         logger.debug('Starting Celery broker connectivity test')
-        try:
-            connection.ensure_connection(
-                interval_step=0, interval_max=0, interval_start=0, timeout=0.1
-            )
-        except Exception as exception:
-            print(
-                'Failed to connect to the Celery broker at {}; {}'.format(
-                    connection.as_uri(), exception
+        
+        for attempt in range(BROKER_CONNECT_MAX_RETRIES):
+            try:
+                connection.ensure_connection(
+                    interval_step=1, 
+                    interval_max=3, 
+                    interval_start=0, 
+                    timeout=BROKER_CONNECT_TIMEOUT
                 )
-            )
-            raise
-        else:
-            connection.release()
+                connection.release()
+                logger.info(
+                    'Celery broker connectivity test passed (attempt %d/%d)',
+                    attempt + 1, BROKER_CONNECT_MAX_RETRIES
+                )
+                return  # Success!
+            except Exception as exception:
+                if attempt < BROKER_CONNECT_MAX_RETRIES - 1:
+                    logger.warning(
+                        'Failed to connect to Celery broker at %s (attempt %d/%d): %s. '
+                        'Retrying in %ds...',
+                        broker_uri, attempt + 1, BROKER_CONNECT_MAX_RETRIES,
+                        exception, BROKER_CONNECT_RETRY_DELAY
+                    )
+                    print(
+                        'Failed to connect to the Celery broker at {}; {}. '
+                        'Retrying in {}s... (attempt {}/{})'.format(
+                            broker_uri, exception, BROKER_CONNECT_RETRY_DELAY,
+                            attempt + 1, BROKER_CONNECT_MAX_RETRIES
+                        )
+                    )
+                    time.sleep(BROKER_CONNECT_RETRY_DELAY)
+                    # Recreate connection for retry
+                    connection = celery_app.connection()
+                else:
+                    logger.error(
+                        'Failed to connect to Celery broker after %d attempts: %s',
+                        BROKER_CONNECT_MAX_RETRIES, exception
+                    )
+                    print(
+                        'Failed to connect to the Celery broker at {}; {}'.format(
+                            broker_uri, exception
+                        )
+                    )
+                    raise
 
     def check_results_backend_connectivity(self):
         backend = celery_app.backend
