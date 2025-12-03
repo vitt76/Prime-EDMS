@@ -33,6 +33,13 @@ from .api_views.trashed_document_api_views import (
     APITrashedDocumentDetailView, APITrashedDocumentListView,
     APITrashedDocumentRestoreView, APITrashedDocumentImageView
 )
+# Phase B1: Rich document and bulk operations API views
+from .api_views.document_rich_api_views import (
+    APIDocumentRichDetailView, APIDocumentRichListView
+)
+from .api_views.bulk_operations_api_views import (
+    BulkDocumentActionView, BulkTagActionView, BulkCabinetActionView
+)
 from .views.document_file_views import (
     DocumentFileDeleteView, DocumentFileDownloadView, DocumentFileEditView,
     DocumentFileListView, DocumentFilePrintFormView, DocumentFilePrintView,
@@ -680,9 +687,54 @@ api_urls_trashed_documents = [
     )
 ]
 
+# Phase B1: Rich document detail and bulk operations endpoints
+api_urls_rich_documents = [
+    # Rich document detail endpoint
+    # GET /api/v4/documents/{document_id}/rich_details/
+    url(
+        regex=r'^documents/(?P<document_id>[0-9]+)/rich_details/$',
+        name='document-rich-detail',
+        view=APIDocumentRichDetailView.as_view()
+    ),
+    # Rich document list endpoint
+    # GET /api/v4/documents/rich_list/
+    url(
+        regex=r'^documents/rich_list/$',
+        name='document-rich-list',
+        view=APIDocumentRichListView.as_view()
+    ),
+]
+
+api_urls_bulk_operations = [
+    # Bulk document operations endpoint
+    # POST /api/v4/documents/bulk/
+    url(
+        regex=r'^documents/bulk/$',
+        name='document-bulk-action',
+        view=BulkDocumentActionView.as_view()
+    ),
+    # Bulk tag operations endpoint
+    # POST /api/v4/documents/bulk/tags/
+    url(
+        regex=r'^documents/bulk/tags/$',
+        name='document-bulk-tags',
+        view=BulkTagActionView.as_view()
+    ),
+    # Bulk cabinet operations endpoint
+    # POST /api/v4/documents/bulk/cabinets/
+    url(
+        regex=r'^documents/bulk/cabinets/$',
+        name='document-bulk-cabinets',
+        view=BulkCabinetActionView.as_view()
+    ),
+]
+
 api_urls = []
 api_urls.extend(api_urls_documents)
 api_urls.extend(api_urls_document_files)
 api_urls.extend(api_urls_document_versions)
 api_urls.extend(api_urls_document_types)
 api_urls.extend(api_urls_trashed_documents)
+# Phase B1: Add rich document and bulk operation endpoints
+api_urls.extend(api_urls_rich_documents)
+api_urls.extend(api_urls_bulk_operations)
