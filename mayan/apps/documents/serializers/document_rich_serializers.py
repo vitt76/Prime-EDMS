@@ -470,3 +470,4 @@ class DocumentRichListSerializer(serializers.Serializer):
             return 'not_analyzed'
 
 
+

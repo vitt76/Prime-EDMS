@@ -242,3 +242,4 @@ class OptimizedAPIDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
         return {'_event_actor': self.request.user}
 
 
+

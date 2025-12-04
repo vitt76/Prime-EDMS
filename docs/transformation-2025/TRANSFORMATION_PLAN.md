@@ -2,10 +2,12 @@
 
 ## Vue 3 Frontend ↔ Django Backend Integration Plan
 
-**Дата создания:** 03 декабря 2025  
-**Версия:** 1.0  
-**Статус:** Active Development  
+**Дата создания:** 03 декабря 2025
+**Дата обновления:** 03 декабря 2025
+**Версия:** 1.3 (Added B-Hotfix Phase - Critical Auth Blocker)
+**Статус:** 🚨 BLOCKED by Backend Crash - Critical Auth Issue
 **Команда:** Виталий (Frontend), Дмитрий (Backend)
+**Blocker:** GET /api/v4/users/current/ returns 500 Internal Server Error
 
 ---
 
@@ -18,6 +20,23 @@
 5. [Risk Management](#5-risk-management)
 6. [Timeline & Milestones](#6-timeline--milestones)
 7. [Definition of Done](#7-definition-of-done)
+
+---
+
+## 🚨 CRITICAL BLOCKER ALERT
+
+**Status:** 🚨 **PROJECT BLOCKED** — Cannot proceed with Phase A-Fix
+
+**Issue:** GET `/api/v4/users/current/` returns **500 Internal Server Error** due to S3/Serializer crashes
+
+**Impact:** Frontend authentication flow completely broken. Login impossible.
+
+**Solution:** **Phase B-Hotfix** must be completed first (Week 8-9).
+
+**Next Steps:**
+1. Backend team (Дмитрий): Implement B-Hotfix.1-3 this week
+2. Test GET `/api/v4/users/current/` returns 200 OK
+3. Resume Phase A-Fix (Week 10-11)
 
 ---
 
@@ -171,6 +190,20 @@ export class AssetService {
 │                     │                           │                            │
 │                     ▼                           ▼                            │
 │              ✅ CHECKPOINT #4: Admin Panel Fully Functional                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             WEEK 9-10                                       │
+│  ┌────────────────────────────┐    ┌────────────────────────────┐           │
+│  │   A-Fix: Integration       │◄──►│   B-Fix: Backend Stubs     │           │
+│  │   Polish & Correction      │    │   - Missing Endpoints      │           │
+│  │   - Upload Flow Fix        │    │   - Special Collections    │           │
+│  │   - Mock Cleanup           │    │   - Activity Feed          │           │
+│  │   - Download Layer         │    │   - Performance Tuning     │           │
+│  └────────────────────────────┘    └────────────────────────────┘           │
+│                     │                           │                            │
+│                     ▼                           ▼                            │
+│              🎯 CHECKPOINT #5: 100% Integration (No Mocks)                  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -931,6 +964,525 @@ export const tagService = new TagService()
 
 ---
 
+#### Phase A-Fix: Integration Polish & Correction (Week 9-10)
+
+**Goal:** Achieve 100% integration by fixing critical gaps and removing mock dependencies.
+
+##### A-Fix.1: Critical Corrections (Priority 1)
+
+**Fix Upload Architecture:**
+
+**Technical Specification:**
+"Refactor uploadWorkflowStore to use ChunkedUploadService. Ensure File.slice() is used for chunks. Handle 413 Payload Too Large gracefully."
+
+```typescript
+// frontend/src/stores/uploadWorkflowStore.ts — CRITICAL FIX
+// REMOVE: Mock setTimeout logic
+// REPLACE: Real ChunkedUploadService integration
+
+class UploadWorkflowStore {
+  async uploadFiles(files: File[]) {
+    for (const file of files) {
+      try {
+        // ✅ Use ChunkedUploadService with File.slice() for chunks
+        const uploadId = await this.initializeChunkedUpload(file)
+
+        // Slice file into chunks using File.slice()
+        const chunks = this.sliceFileIntoChunks(file)
+        for (let i = 0; i < chunks.length; i++) {
+          await this.uploadChunk(uploadId, chunks[i], i + 1, file.size)
+          this.updateProgress(file.id, ((i + 1) / chunks.length) * 100)
+        }
+
+        // Complete upload and create document
+        const asset = await this.completeChunkedUpload(uploadId, file.name)
+        this.addUploadedAsset(asset)
+
+      } catch (error) {
+        // ✅ Handle 413 Payload Too Large gracefully
+        if (error.response?.status === 413) {
+          this.handlePayloadTooLarge(file, error)
+        } else {
+          this.handleUploadError(file, error)
+        }
+      }
+    }
+  }
+
+  private sliceFileIntoChunks(file: File): Blob[] {
+    const chunkSize = 5 * 1024 * 1024 // 5MB chunks
+    const chunks: Blob[] = []
+    for (let offset = 0; offset < file.size; offset += chunkSize) {
+      const chunk = file.slice(offset, offset + chunkSize)
+      chunks.push(chunk)
+    }
+    return chunks
+  }
+
+  // ✅ Ensure real progress bars work
+  private updateProgress(fileId: string, progress: number) {
+    const file = this.files.find(f => f.id === fileId)
+    if (file) {
+      file.uploadProgress = progress
+      file.uploadStatus = progress === 100 ? 'completed' : 'uploading'
+    }
+  }
+}
+```
+
+**Validation Criteria:**
+"Upload a 200MB video file. Verify network tab shows multiple POST /append/ requests. Verify file appears in S3 bucket."
+
+**Checklist:**
+- [ ] Refactor `uploadWorkflowStore.ts` to use `ChunkedUploadService`
+- [ ] Implement `File.slice()` for chunking logic
+- [ ] Add 413 "Payload Too Large" error handling with user feedback
+- [ ] Remove all `setTimeout` mock logic
+- [ ] Test chunked upload with 200MB+ files
+- [ ] Verify network requests: `POST /api/v4/uploads/init/`, multiple `POST /api/v4/uploads/append/`, `POST /api/v4/uploads/complete/`
+- [ ] Confirm uploaded files appear in S3 bucket with correct paths
+
+**Fix Data Persistence:**
+
+```typescript
+// frontend/src/stores/assetStore.ts — CRITICAL FIX
+// REMOVE: useMock from persist paths
+
+export const useAssetStore = defineStore('asset', () => {
+  // ... state ...
+
+  return {
+    // ... actions ...
+  }
+}, {
+  persist: {
+    paths: ['filters', 'viewMode', 'sortBy']  // ❌ REMOVE 'useMock'
+  }
+})
+```
+
+**Checklist:**
+- [ ] Remove `'useMock'` from all Pinia persist paths
+- [ ] Audit all stores for mock-related persistence
+- [ ] Ensure `VITE_USE_MOCK_DATA` env var is only source of truth
+- [ ] Clear localStorage for all stores in dev environment
+- [ ] Test that users cannot get stuck in mock mode
+
+**Implement Download Layer:**
+
+**Technical Specification:**
+"Implement DownloadService.download(asset). Logic: Fetch document.file_latest.download_url. Create a hidden <a> tag with href=url and download attribute. If URL is not presigned, fallback to window.open()."
+
+```typescript
+// frontend/src/services/downloadService.ts — NEW FILE
+
+class DownloadService {
+  /**
+   * Download single asset using presigned S3 URL
+   */
+  async downloadAsset(asset: Asset): Promise<void> {
+    if (!asset.download_url) {
+      // Fallback: Try to get download URL from asset metadata
+      const downloadUrl = await this.getDownloadUrl(asset)
+      if (!downloadUrl) {
+        throw new Error('Asset has no download URL available')
+      }
+      asset.download_url = downloadUrl
+    }
+
+    try {
+      // ✅ Primary: Use hidden <a> tag for direct download
+      const link = document.createElement('a')
+      link.href = asset.download_url
+      link.download = asset.filename || asset.label
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      // ✅ Fallback: window.open() for non-presigned URLs
+      console.warn('Direct download failed, using fallback:', error)
+      window.open(asset.download_url, '_blank')
+    }
+  }
+
+  /**
+   * Get download URL from asset metadata or API
+   */
+  private async getDownloadUrl(asset: Asset): Promise<string | null> {
+    // Try asset metadata first
+    if (asset.file_details?.download_url) {
+      return asset.file_details.download_url
+    }
+
+    // Fallback: Construct Mayan download URL
+    // Note: This requires auth headers, handled by apiService
+    return `/api/v4/documents/${asset.id}/files/latest/download/`
+  }
+
+  async downloadAssets(assets: Asset[]): Promise<void> {
+    // Sequential download to prevent browser blocking
+    for (const asset of assets) {
+      await this.downloadAsset(asset)
+      // Add delay to prevent overwhelming the browser
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+  }
+}
+
+export const downloadService = new DownloadService()
+```
+
+**Validation Criteria:**
+"Click 'Download' on an image. Browser starts downloading (not opening in new tab). Filename matches the asset label."
+
+**Checklist:**
+- [ ] Create `downloadService.ts` with `<a>` tag download logic
+- [ ] Implement fallback to `window.open()` for non-presigned URLs
+- [ ] Add download URL resolution from asset metadata
+- [ ] Wire up "Download" buttons in `GalleryView.vue`
+- [ ] Wire up "Download" buttons in `AssetDetailPage.vue`
+- [ ] Implement bulk download with sequential processing
+- [ ] Test download filename matches `asset.filename`
+- [ ] Verify browser download prompt (not new tab)
+- [ ] Test with expired presigned URLs (fallback works)
+- [ ] Handle download errors with user feedback
+
+##### A-Fix.2: Missing Integrations (Priority 2)
+
+**Special Collections Integration:**
+
+**Technical Specification:**
+"If backend endpoints are missing, implement a temporary frontend filter (e.g., Favorites = LocalStore IDs). Mark as 'Temporary Tech Debt' until Stream B adds the endpoint."
+
+```typescript
+// frontend/src/pages/collections/FavoritesPage.vue — UPDATE
+// TEMPORARY TECH DEBT: Frontend filter until backend endpoints ready
+
+import { useLocalFavoritesStore } from '@/stores/localFavoritesStore'
+
+async function fetchFavorites(page: number = 1, append: boolean = false) {
+  isLoading.value = true
+
+  try {
+    // ✅ TEMPORARY: Use localStorage favorites until backend endpoint
+    const favoriteIds = useLocalFavoritesStore().favoriteIds
+
+    if (favoriteIds.length === 0) {
+      assets.value = []
+      totalCount.value = 0
+      hasMore.value = false
+      return
+    }
+
+    // Fetch assets by IDs (temporary solution)
+    const response = await assetService.getAssetsByIds(favoriteIds, {
+      page,
+      page_size: pageSize.value
+    })
+
+    if (append) {
+      assets.value = [...assets.value, ...response.results]
+    } else {
+      assets.value = response.results
+    }
+
+    totalCount.value = response.count
+    hasMore.value = !!response.next
+
+    // TODO: Replace with real backend endpoint
+    // const response = await collectionsService.getFavorites({ page, page_size: pageSize.value })
+
+  } catch (error) {
+    console.error('Failed to fetch favorites:', error)
+    // Fallback to empty state
+    assets.value = []
+    totalCount.value = 0
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// frontend/src/stores/localFavoritesStore.ts — TEMPORARY
+export const useLocalFavoritesStore = defineStore('localFavorites', () => {
+  const favoriteIds = ref<string[]>([])
+
+  const addFavorite = (assetId: string) => {
+    if (!favoriteIds.value.includes(assetId)) {
+      favoriteIds.value.push(assetId)
+    }
+  }
+
+  const removeFavorite = (assetId: string) => {
+    favoriteIds.value = favoriteIds.value.filter(id => id !== assetId)
+  }
+
+  const isFavorite = (assetId: string): boolean => {
+    return favoriteIds.value.includes(assetId)
+  }
+
+  return {
+    favoriteIds,
+    addFavorite,
+    removeFavorite,
+    isFavorite
+  }
+}, {
+  persist: {
+    paths: ['favoriteIds']
+  }
+})
+```
+
+**Checklist:**
+- [ ] Implement temporary `localFavoritesStore` for favorites persistence
+- [ ] Create `assetService.getAssetsByIds()` for bulk ID fetching
+- [ ] Connect Favorites page to local favorites store
+- [ ] Connect Recent page to local recent access tracking
+- [ ] Connect MyUploads to user-specific filtering
+- [ ] Connect SharedWithMe to shared document filtering
+- [ ] **Mark as TEMPORARY TECH DEBT** with TODO comments
+- [ ] Coordinate with Backend team for real endpoint implementation
+- [ ] Test all special collection views with temporary solutions
+
+**Dashboard Widgets Integration:**
+
+**Activity Feed Technical Specification:**
+"If no real endpoint exists, implement a ActivityLogService that records local user actions (Upload, Edit) to sessionStorage for the session demo. Do NOT leave hardcoded mocks."
+
+```typescript
+// frontend/src/services/activityLogService.ts — NEW FILE
+
+interface ActivityLogEntry {
+  id: string
+  type: 'upload' | 'download' | 'edit' | 'delete' | 'share'
+  asset_id?: number
+  asset_label?: string
+  timestamp: number
+  details?: string
+}
+
+class ActivityLogService {
+  private readonly STORAGE_KEY = 'activity_log'
+  private readonly MAX_ENTRIES = 50
+
+  /**
+   * Log user activity for this session
+   */
+  logActivity(entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>): void {
+    const activities = this.getActivities()
+    const newEntry: ActivityLogEntry = {
+      ...entry,
+      id: crypto.randomUUID(),
+      timestamp: Date.now()
+    }
+
+    activities.unshift(newEntry) // Add to beginning
+
+    // Keep only recent entries
+    if (activities.length > this.MAX_ENTRIES) {
+      activities.splice(this.MAX_ENTRIES)
+    }
+
+    sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(activities))
+  }
+
+  /**
+   * Get recent activities for this session
+   */
+  getActivities(limit: number = 20): ActivityLogEntry[] {
+    try {
+      const stored = sessionStorage.getItem(this.STORAGE_KEY)
+      if (!stored) return []
+
+      const activities: ActivityLogEntry[] = JSON.parse(stored)
+      return activities.slice(0, limit)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Clear all activities (for testing)
+   */
+  clearActivities(): void {
+    sessionStorage.removeItem(this.STORAGE_KEY)
+  }
+}
+
+export const activityLogService = new ActivityLogService()
+
+// frontend/src/services/dashboardService.ts — UPDATE
+// REMOVE: Mock activity data
+// REPLACE: ActivityLogService for session-based logging
+
+async getActivityFeed(): Promise<ActivityItem[]> {
+  // ✅ TEMPORARY: Use session activity log until backend endpoint
+  const activities = activityLogService.getActivities()
+
+  return activities.map(activity => ({
+    id: activity.id,
+    type: activity.type,
+    user: 'Current User', // TODO: Get from auth store
+    user_id: 1, // TODO: Get from auth store
+    asset_id: activity.asset_id,
+    asset_label: activity.asset_label,
+    timestamp: new Date(activity.timestamp).toISOString(),
+    description: this.formatActivityDescription(activity)
+  }))
+
+  // TODO: Replace with real backend endpoint
+  // return apiService.get('/api/v4/dam/activity/')
+}
+
+private formatActivityDescription(activity: ActivityLogEntry): string {
+  const asset = activity.asset_label ? `"${activity.asset_label}"` : 'asset'
+
+  switch (activity.type) {
+    case 'upload': return `Uploaded ${asset}`
+    case 'download': return `Downloaded ${asset}`
+    case 'edit': return `Edited metadata for ${asset}`
+    case 'delete': return `Deleted ${asset}`
+    case 'share': return `Shared ${asset}`
+    default: return `Performed action on ${asset}`
+  }
+}
+
+async getStorageMetrics(): Promise<StorageMetrics> {
+  // ✅ Use real storage endpoint (from B-Fix phase)
+  return apiService.get('/api/dam/storage-metrics/')
+}
+```
+
+**Checklist:**
+- [ ] Create `ActivityLogService` for session-based activity logging
+- [ ] Implement activity logging hooks in upload, edit, delete actions
+- [ ] Connect Activity Feed to `activityLogService.getActivities()`
+- [ ] Connect Storage Metrics to real backend endpoint
+- [ ] Update DashboardPage to use activity log data
+- [ ] Add activity logging to all major user actions
+- [ ] **Mark as TEMPORARY until real backend endpoint**
+- [ ] Test activity feed shows recent user actions
+- [ ] Clear activities on logout for privacy
+
+**Settings & Profile Forms:**
+
+```typescript
+// frontend/src/pages/SettingsPage.vue — UPDATE
+// REMOVE: Mock profile update
+// REPLACE: Real API calls
+
+async function updateProfile(profileData: UserProfile) {
+  try {
+    // ✅ Use real profile update endpoint
+    await authService.updateProfile(profileData)
+    uiStore.addNotification({
+      type: 'success',
+      title: 'Success',
+      message: 'Profile updated successfully'
+    })
+  } catch (error) {
+    uiStore.addNotification({
+      type: 'error',
+      title: 'Error',
+      message: 'Failed to update profile'
+    })
+  }
+}
+
+async function changePassword(passwordData: ChangePasswordRequest) {
+  try {
+    // ✅ Use real password change endpoint
+    await authService.changePassword(passwordData)
+    uiStore.addNotification({
+      type: 'success',
+      title: 'Success',
+      message: 'Password changed successfully'
+    })
+  } catch (error) {
+    uiStore.addNotification({
+      type: 'error',
+      title: 'Error',
+      message: 'Failed to change password'
+    })
+  }
+}
+```
+
+**Checklist:**
+- [ ] Implement profile update form with real API
+- [ ] Implement password change form with real API
+- [ ] Add proper validation and error handling
+- [ ] Test all settings forms
+- [ ] Update backend endpoints if needed
+
+##### A-Fix.3: Final Polish (Priority 3)
+
+**Delete Mocks:**
+
+```bash
+# frontend/ — CLEANUP
+# REMOVE: /src/mocks/ directory (keep only for dev/test if needed)
+# KEEP: S3 fallback maps for development thumbnails
+
+# Checklist:
+- [ ] Remove /src/mocks/assets.ts
+- [ ] Remove /src/mocks/folders.ts
+- [ ] Remove /src/mocks/publications.ts
+- [ ] Remove /src/mocks/workflows.ts
+- [ ] Remove /src/mocks/metadata.ts
+- [ ] Remove /src/mocks/ai.ts
+- [ ] Remove /src/mocks/search.ts
+- [ ] Keep /src/mocks/s3Provider.ts (for dev thumbnails)
+- [ ] Keep /src/mocks/s3_map.json (for dev thumbnails)
+```
+
+**Lint & Cleanup:**
+
+```typescript
+// REMOVE: TODO comments related to mock data
+// Examples to clean up:
+
+// ❌ REMOVE THIS:
+// frontend/src/stores/assetStore.ts
+// TODO: Replace with real API when backend ready
+
+// ✅ KEEP THIS (if still relevant):
+// frontend/src/components/GalleryView.vue
+// TODO: Implement virtual scrolling for 1000+ items
+```
+
+**Checklist:**
+- [ ] Remove mock-related TODO comments
+- [ ] Clean up console.log statements from development
+- [ ] Remove unused mock imports
+- [ ] Run full lint check
+- [ ] Fix any TypeScript errors from cleanup
+
+**Environment Verification:**
+
+```typescript
+// frontend/src/config/env.ts — VERIFY
+export const ENV = {
+  API_URL: import.meta.env.VITE_API_URL || '',
+  USE_REAL_API: import.meta.env.VITE_USE_REAL_API === 'true',
+  ENABLE_AI: import.meta.env.VITE_ENABLE_AI === 'true',
+  ENABLE_2FA: import.meta.env.VITE_ENABLE_2FA === 'true',
+}
+
+// VERIFY: All services use ENV.API_URL consistently
+// VERIFY: No hardcoded 'http://localhost:8080' in production code
+```
+
+**Checklist:**
+- [ ] Verify all services use `ENV.API_URL`
+- [ ] Check for hardcoded URLs in production code
+- [ ] Test with different environment configurations
+- [ ] Ensure proper fallback for missing env vars
+- [ ] Document environment setup in README
+
+---
+
 ### 2.3 Stream B: Backend Adaptation (Дмитрий)
 
 #### Phase B1: API Gap Fill (Week 1-2)
@@ -1444,6 +1996,337 @@ def analyze_document_with_ai(self, document_id: int):
 
 ---
 
+#### Phase B-Hotfix: Stability & Crash Recovery (Week 8-9)
+
+**Goal:** Resolve critical backend crash blocking frontend integration.
+
+**Status:** 🚨 **CRITICAL BLOCKER** — Frontend cannot complete auth flow due to 500 error on GET /api/v4/users/current/
+
+**Impact:** Phase A-Fix cannot proceed until this is resolved. Stream A is completely blocked.
+
+##### B-Hotfix.1: Patch UserSerializer S3 Access Errors
+
+**Problem:** UserSerializer crashes when trying to access S3 for user avatars, causing 500 error.
+
+**Solution:** Add try/except block to safely handle S3 connection failures.
+
+```python
+# mayan/apps/user_management/serializers.py — PATCH REQUIRED
+
+class UserSerializer(serializers.ModelSerializer):
+    """User serializer with safe S3 avatar handling."""
+
+    avatar_url = serializers.SerializerMethodField()
+
+    def get_avatar_url(self, obj):
+        """Safely get avatar URL with S3 error handling."""
+        try:
+            # Existing S3 avatar logic
+            if hasattr(obj, 'avatar') and obj.avatar:
+                return obj.avatar.url
+            return None
+        except Exception as e:
+            # Log error but don't crash the API
+            logger.warning(f"Failed to get avatar URL for user {obj.id}: {e}")
+            return None  # Return None instead of crashing
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name',
+                 'is_active', 'date_joined', 'avatar_url']
+```
+
+**Checklist:**
+- [ ] Locate `UserSerializer` in `mayan/apps/user_management/serializers.py`
+- [ ] Add try/except block around avatar URL generation
+- [ ] Add proper logging for S3 access failures
+- [ ] Test GET `/api/v4/users/current/` returns 200 OK
+- [ ] Verify no 500 errors when S3 is unreachable
+
+##### B-Hotfix.2: Validate S3 Connection on Startup
+
+**Problem:** Backend starts successfully even when S3 is misconfigured, causing runtime crashes.
+
+**Solution:** Add S3 connectivity check in app ready() method.
+
+```python
+# mayan/apps/user_management/apps.py — ADD CHECK
+
+from django.apps import AppConfig
+from django.core.checks import Error, register
+
+class UserManagementAppConfig(AppConfig):
+    name = 'mayan.apps.user_management'
+    verbose_name = _('User management')
+
+    def ready(self):
+        """Validate S3 connection on startup."""
+        super().ready()
+
+        # Check S3 connectivity
+        self._check_s3_connectivity()
+
+    def _check_s3_connectivity(self):
+        """Validate S3 storage backend is accessible."""
+        try:
+            from django.core.files.storage import default_storage
+
+            # Try to access S3 (simple HEAD request to bucket)
+            if hasattr(default_storage, 'bucket'):
+                # This will fail if S3 credentials are wrong
+                default_storage.bucket.head()
+
+            logger.info("S3 connectivity check passed")
+        except Exception as e:
+            logger.error(f"S3 connectivity check failed: {e}")
+            # Don't crash startup, just log warning
+            # Consider: raise Error(f'S3 connection failed: {e}') for strict mode
+```
+
+**Checklist:**
+- [ ] Add S3 connectivity check to `apps.py`
+- [ ] Test with valid S3 credentials (should pass)
+- [ ] Test with invalid S3 credentials (should warn but not crash)
+- [ ] Verify check runs on `python manage.py check`
+- [ ] Add to CI/CD pipeline for deployment validation
+
+##### B-Hotfix.3: Verify User API Endpoint
+
+**Problem:** GET /api/v4/users/current/ returns 500 instead of user data.
+
+**Solution:** Comprehensive testing and validation.
+
+```bash
+# Test commands for verification
+
+# 1. Test with authenticated user
+curl -H "Authorization: Token YOUR_TOKEN" \
+     http://localhost:8080/api/v4/user_management/users/current/
+
+# Should return:
+# {
+#   "id": 1,
+#   "username": "admin",
+#   "email": "admin@localhost",
+#   "first_name": "",
+#   "last_name": "",
+#   "is_active": true,
+#   "date_joined": "2025-12-03T...",
+#   "avatar_url": null
+# }
+
+# 2. Test error handling when S3 is down
+# (Simulate S3 outage and verify 200 response with avatar_url: null)
+
+# 3. Test with unauthenticated request
+curl http://localhost:8080/api/v4/user_management/users/current/
+# Should return 401 Unauthorized (not 500)
+```
+
+**Checklist:**
+- [ ] Test GET `/api/v4/users/current/` with valid token → 200 OK
+- [ ] Test with invalid token → 401 Unauthorized
+- [ ] Test with S3 outage → 200 OK (avatar_url: null)
+- [ ] Test with no avatar set → 200 OK (avatar_url: null)
+- [ ] Verify no 500 errors in any scenario
+- [ ] Add to automated API tests
+
+---
+
+#### Phase A-Fix: Integration Polish & Correction (Week 9-10) 🚫 **DEPENDENT ON B-HOTFIX**
+
+**Status:** ⏸️ **BLOCKED** — Cannot proceed until GET /api/v4/users/current/ is stable.
+
+**Dependency:** Phase A-Fix requires working authentication flow. Frontend login depends on this endpoint.
+
+**Next Steps:** Complete B-Hotfix first, then resume A-Fix.
+
+---
+
+#### Phase B-Fix: Backend Stubs & Tuning (Week 9-10)
+
+**Goal:** Provide missing backend endpoints and optimize performance for 100% integration.
+
+##### B-Fix.1: Missing Endpoints Implementation
+
+**Special Collections API:**
+
+```python
+# mayan/apps/documents/api_views/document_api_views.py — NEW
+
+class APIDocumentFavoritesView(generics.ListAPIView):
+    """
+    Get user's favorite documents.
+    Requires a favorites relationship (Tag or custom model).
+    """
+    serializer_class = APIDocumentListSerializer
+
+    def get_queryset(self):
+        # Implementation depends on how favorites are stored
+        # Option 1: Special tag
+        favorite_tag = Tag.objects.get(label='favorite')
+        return favorite_tag.documents.all()
+
+        # Option 2: Custom Favorite model
+        # return self.request.user.favorite_documents.all()
+
+class APIDocumentRecentView(generics.ListAPIView):
+    """
+    Get recently accessed documents for current user.
+    """
+    serializer_class = APIDocumentListSerializer
+
+    def get_queryset(self):
+        # Implementation depends on access logging
+        return Document.objects.filter(
+            documentaccesslog__user=self.request.user
+        ).order_by('-documentaccesslog__timestamp').distinct()[:50]
+
+class APIDocumentMyUploadsView(generics.ListAPIView):
+    """
+    Get documents uploaded by current user.
+    """
+    serializer_class = APIDocumentListSerializer
+
+    def get_queryset(self):
+        return Document.objects.filter(
+            files__user=self.request.user
+        ).distinct()
+```
+
+**Checklist:**
+- [ ] Implement `/api/v4/documents/favorites/` endpoint
+- [ ] Implement `/api/v4/documents/recent/` endpoint
+- [ ] Implement `/api/v4/documents/my-uploads/` endpoint
+- [ ] Implement `/api/v4/documents/shared/` endpoint
+- [ ] Add proper permissions and ACL checks
+
+**Activity Feed API:**
+
+```python
+# mayan/apps/events/api_views.py — NEW
+
+class APIEventActivityView(generics.ListAPIView):
+    """
+    Get activity feed for dashboard.
+    Shows recent document operations, user actions, etc.
+    """
+    serializer_class = EventSerializer
+
+    def get_queryset(self):
+        # Get recent events from Event model
+        return Event.objects.filter(
+            # Filter relevant event types
+            event_type__in=['document_created', 'document_edited', 'document_downloaded']
+        ).order_by('-timestamp')[:50]
+```
+
+**Checklist:**
+- [ ] Implement `/api/v4/events/activity/` endpoint
+- [ ] Define relevant event types for activity feed
+- [ ] Add pagination support
+- [ ] Ensure proper event logging is enabled
+
+**Storage Metrics API:**
+
+```python
+# mayan/apps/dam/api_views.py — NEW
+
+class APIStorageMetricsView(generics.RetrieveAPIView):
+    """
+    Get storage usage metrics for dashboard.
+    """
+
+    def get(self, request):
+        # Calculate storage metrics
+        total_size = DocumentFile.objects.aggregate(
+            total=Sum('size')
+        )['total'] or 0
+
+        by_type = DocumentFile.objects.values('mimetype').annotate(
+            count=Count('id'),
+            size=Sum('size')
+        )
+
+        return Response({
+            'total_size': total_size,
+            'used_size': total_size,  # For now, assume all used
+            'available_size': 100 * 1024 * 1024 * 1024,  # 100GB placeholder
+            'usage_percentage': (total_size / (100 * 1024 * 1024 * 1024)) * 100,
+            'by_type': list(by_type)
+        })
+```
+
+**Checklist:**
+- [ ] Implement `/api/dam/storage-metrics/` endpoint
+- [ ] Add proper caching for performance
+- [ ] Handle large file counts efficiently
+
+##### B-Fix.2: Performance Tuning
+
+**Query Optimization Verification:**
+
+```python
+# Verify all list endpoints use select_related/prefetch_related
+# Check Django Debug Toolbar output
+# Target: < 5 queries per list request
+
+# Example optimization check:
+def test_document_list_performance():
+    # Simulate document list request
+    queryset = Document.objects.select_related('document_type').prefetch_related(
+        Prefetch('files', queryset=DocumentFile.objects.order_by('-timestamp')[:1]),
+        'tags', 'ai_analysis'
+    )
+    # Assert: queryset.query.count == expected low number
+```
+
+**Checklist:**
+- [ ] Run performance tests with Django Debug Toolbar
+- [ ] Verify N+1 query elimination
+- [ ] Add database indexes if needed
+- [ ] Optimize thumbnail generation
+- [ ] Implement caching for frequently accessed data
+
+##### B-Fix.3: Error Handling & Monitoring
+
+**API Error Standardization:**
+
+```python
+# mayan/settings/base.py — UPDATE
+
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'mayan.apps.rest_api.handlers.custom_exception_handler',
+    # ... other settings
+}
+
+# mayan/apps/rest_api/handlers.py — ENSURE
+def custom_exception_handler(exc, context):
+    """
+    Standardized error responses with error_code field.
+    """
+    response = exception_handler(exc, context)
+
+    if response is not None:
+        # Add error_code for frontend handling
+        if isinstance(exc, ValidationError):
+            response.data['error_code'] = 'VALIDATION_ERROR'
+        elif isinstance(exc, PermissionDenied):
+            response.data['error_code'] = 'PERMISSION_DENIED'
+        # ... other error types
+
+    return response
+```
+
+**Checklist:**
+- [ ] Standardize error response format
+- [ ] Add error codes for frontend handling
+- [ ] Implement proper logging
+- [ ] Set up error monitoring (Sentry)
+- [ ] Add health check endpoints
+
+---
+
 ## 3. Integration Points
 
 ### 3.1 Checkpoint Schedule
@@ -1454,6 +2337,8 @@ def analyze_document_with_ai(self, document_id: int):
 | **#2** | 4 | Both | Gallery Works | Real documents displayed in Gallery |
 | **#3** | 6 | Both | Full CRUD | Upload, Edit, Delete all functional |
 | **#4** | 8 | Both | Admin Panel | All admin features work |
+| **#4.5** | 9 | Backend (Дмитрий) | Auth Stability | GET /api/v4/users/current/ returns 200 OK |
+| **#5** | 11 | Both | 100% Integration | No mock data, all features real |
 
 ### 3.2 Contract Interface (OpenAPI)
 
@@ -1632,11 +2517,15 @@ Closes #123
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
+| **Auth API crashes (500 errors)** | High | Critical | **B-Hotfix Phase** - Patch UserSerializer S3 handling |
 | **API contract mismatch** | Medium | High | Weekly sync, shared Swagger |
 | **S3 upload issues** | Medium | High | Early testing, fallback to local |
 | **Performance degradation** | Low | Medium | Load testing at checkpoints |
 | **Auth token conflicts** | Low | Medium | Clear session strategy |
 | **AI service unavailable** | Medium | Low | Graceful degradation |
+| **useMock persistence bug** | High | High | Remove from persist paths immediately |
+| **Upload system broken** | High | Critical | Fix uploadWorkflowStore in A-Fix phase |
+| **Missing backend endpoints** | Medium | High | Implement stubs in B-Fix phase |
 
 ### 5.2 Contingency Plans
 
@@ -1666,8 +2555,14 @@ Week 6  │████████████████│                  
 Week 7  │████████████████│ A4: Admin UI       │ B4: Async
 Week 8  │████████████████│                     │
         │       ▼        │ CHECKPOINT #4: Admin │
-Week 9  │████████████████│ Testing & Polish   │
-Week 10 │████████████████│ Production Deploy  │
+Week 8  │████████████████│ B-Hotfix: Stability│ A-Fix: BLOCKED
+Week 9  │████████████████│ & Crash Recovery   │ (Waiting for B-Hotfix)
+        │       ▼        │ CHECKPOINT #4.5: Auth│ Stable
+Week 10 │████████████████│ A-Fix: Integration │ B-Fix: Backend
+Week 11 │████████████████│ Polish & Correction│ Stubs & Tuning
+        │       ▼        │ CHECKPOINT #5: 100% │
+Week 12 │████████████████│ Testing & Polish   │ Integration
+Week 13 │████████████████│ Production Deploy  │
 ```
 
 ### 6.2 Milestones
@@ -1678,7 +2573,9 @@ Week 10 │████████████████│ Production Deploy
 | **M2: Gallery Live** | Week 4 | Gallery shows real documents |
 | **M3: Full CRUD** | Week 6 | Upload, edit, delete functional |
 | **M4: Admin Ready** | Week 8 | Admin panel fully functional |
-| **M5: Production** | Week 10 | Deployed to production |
+| **M4.5: Auth Stable** | Week 9 | GET /api/v4/users/current/ returns 200 OK |
+| **M5: 100% Integration** | Week 11 | No mock data, all features work |
+| **M6: Production** | Week 13 | Deployed to production |
 
 ---
 
@@ -1706,6 +2603,17 @@ A checkpoint is considered "Complete" when:
 - [ ] Performance is acceptable (<2s page load)
 - [ ] No critical bugs
 - [ ] Both developers have signed off
+
+### 7.2.5 B-Hotfix Checkpoint DoD
+
+**Checkpoint #4.5 (Auth Stability)** is considered "Complete" when:
+
+- [ ] GET `/api/v4/users/current/` returns 200 OK for authenticated users
+- [ ] No 500 Internal Server Errors when S3 is unreachable
+- [ ] UserSerializer handles S3 avatar access gracefully
+- [ ] S3 connectivity check passes on application startup
+- [ ] Frontend login flow completes successfully
+- [ ] Backend developer (Дмитрий) has signed off
 
 ### 7.3 Production DoD
 
@@ -1768,15 +2676,33 @@ MAYAN_LOCK_MANAGER_BACKEND=mayan.apps.lock_manager.backends.redis_lock.RedisLock
 
 #### Upload
 - [ ] Upload small file (<5MB)
-- [ ] Upload large file (>50MB)
-- [ ] Upload multiple files
-- [ ] Progress bar updates
+- [ ] Upload large file (>50MB) with chunked upload
+- [ ] Upload multiple files with progress tracking
+- [ ] Real progress bars (not mock setTimeout)
 - [ ] Error handling for failed upload
+- [ ] Resume interrupted uploads (if implemented)
+
+#### Download
+- [ ] Download single asset
+- [ ] Download multiple assets
+- [ ] Download from S3 presigned URLs
+- [ ] Error handling for expired URLs
+
+#### Special Collections
+- [ ] Favorites collection shows real data
+- [ ] Recent documents loads correctly
+- [ ] My Uploads filters by user
+- [ ] Shared documents displays properly
+
+#### Dashboard & Analytics
+- [ ] Activity feed loads real events
+- [ ] Storage metrics display correctly
+- [ ] Dashboard loads without mock data
 
 ---
 
-**Document Version:** 1.0  
-**Created:** 03 December 2025  
-**Last Updated:** 03 December 2025  
+**Document Version:** 1.3 (Added B-Hotfix Phase - Critical Auth Blocker)
+**Created:** 03 December 2025
+**Last Updated:** 03 December 2025
 **Authors:** Technical Project Manager & Solutions Architect
 

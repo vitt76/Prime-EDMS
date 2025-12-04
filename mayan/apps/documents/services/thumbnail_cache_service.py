@@ -340,3 +340,4 @@ def invalidate_document_cache(document_id: int) -> int:
     return thumbnail_cache_service.invalidate_document_cache(document_id)
 
 
+
