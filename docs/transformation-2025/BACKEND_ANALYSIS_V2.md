@@ -20,8 +20,10 @@
 9. [Celery Tasks](#9-celery-tasks)
 10. [Система прав доступа (ACL)](#10-система-прав-доступа-acl)
 11. [Frontend ↔ Backend соответствие](#11-frontend--backend-соответствие)
-12. [Критические проблемы](#12-критические-проблемы)
-13. [Рекомендации по интеграции](#13-рекомендации-по-интеграции)
+12. [Resolved Improvements (Celebration Section) ✅](#12-resolved-improvements-celebration-section-)
+13. [Remaining Issues (Updated Status)](#13-remaining-issues-updated-status)
+14. [Рекомендации по интеграции](#14-рекомендации-по-интеграции)
+15. [TRANSFORMATION Impact Summary](#-transformation-impact-summary)
 
 ---
 
@@ -378,6 +380,8 @@ AUTH_LDAP_GROUP_SEARCH
 | `POST` | `/uploads/init/` | `ChunkedUploadInitView` | Initialize multipart upload | ✅ **NEW** |
 | `POST` | `/uploads/append/` | `ChunkedUploadAppendView` | Append chunk to upload | ✅ **NEW** |
 | `POST` | `/uploads/complete/` | `ChunkedUploadCompleteView` | Complete upload and create Document | ✅ **NEW** |
+| `GET` | `/uploads/status/{upload_id}/` | `ChunkedUploadStatusView` | Get upload session status | ✅ **NEW** |
+| `POST` | `/uploads/abort/` | `ChunkedUploadAbortView` | Abort upload session | ✅ **NEW** |
 
 ### 5.3 Document Files API (`/api/v4/documents/{id}/files/`)
 
@@ -1273,10 +1277,7 @@ GET /api/v4/documents/{id}/processing_status/  # DocumentProcessingStatusView
 ```
 
 ## 13. Remaining Issues (Updated Status)
-
----
-
-## 13. Рекомендации по интеграции
+## 14. Рекомендации по интеграции
 
 ### 13.1 Создание Document Adapter
 
@@ -1389,7 +1390,7 @@ MAYAN_DAM_GIGACHAT_CREDENTIALS=base64(client_id:client_secret)
 | **Optimized Documents** | `/api/v4/documents/optimized/` | GET, POST | ✅ **NEW** (Phase B2) |
 | **Rich Details** | `/api/v4/documents/{id}/rich_details/` | GET | ✅ **NEW** (Phase B1) |
 | **Processing Status** | `/api/v4/documents/{id}/processing_status/` | GET | ✅ **NEW** (Phase B4) |
-| **Chunked Upload** | `/api/v4/uploads/` | POST | ✅ **NEW** (Phase B3) |
+| **Chunked Upload** | `/api/v4/uploads/` | POST, GET | ✅ **NEW** (Phase B3) |
 | **Files** | `/api/v4/documents/{id}/files/` | GET, POST, DELETE | ✅ Active |
 | **Versions** | `/api/v4/documents/{id}/versions/` | GET, POST, DELETE | ✅ Active |
 | **Pages** | `.../pages/{id}/image/` | GET | ✅ Active |
@@ -1399,8 +1400,6 @@ MAYAN_DAM_GIGACHAT_CREDENTIALS=base64(client_id:client_secret)
 | **Search** | `/api/v4/search/` | GET | ✅ Enhanced (Phase B2.4) |
 | **DAM** | `/api/dam/` | GET, POST | ✅ Active |
 | **AI Analysis** | `/api/dam/ai-analysis/` | GET, POST | ✅ Enhanced (Phase B4) |
-
----
 
 ---
 
