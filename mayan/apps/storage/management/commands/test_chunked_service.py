@@ -69,3 +69,4 @@ class Command(BaseCommand):
             raise CommandError(f'Test failed: {e}')
 
 
+
