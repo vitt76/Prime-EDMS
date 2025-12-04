@@ -99,8 +99,15 @@ export const useAuthStore = defineStore(
       return { success: true }
     }
 
-    async function checkAuth() {
-      // Check if we have a real auth token
+    /**
+     * Initialize auth state on app startup.
+     * Checks localStorage for token and restores session if valid.
+     * This is the primary entry point for auth initialization.
+     */
+    async function initialize(): Promise<boolean> {
+      console.log('[AuthStore] Initializing auth state...')
+      
+      // Check if we have a real auth token in localStorage
       const hasRealToken = hasToken()
       // Check mock auth flag (for dev mode without backend)
       const hasMockAuth = localStorage.getItem('dev_authenticated') === 'true'
@@ -114,22 +121,26 @@ export const useAuthStore = defineStore(
         return false
       }
       
+      // No token found - user is not authenticated
       if (!hasRealToken && !hasMockAuth) {
+        console.log('[AuthStore] No token found, user not authenticated')
         isAuthenticated.value = false
         return false
       }
 
+      // Token found - validate it by fetching current user
       try {
+        console.log('[AuthStore] Token found, validating...')
         const response = await authService.getCurrentUser()
         user.value = response.user
         isAuthenticated.value = true
         permissions.value = response.permissions || []
         lastActivity.value = new Date()
         
-        console.log('[AuthStore] Auth check successful:', response.user.username)
+        console.log('[AuthStore] ✅ Session restored for:', response.user.username)
         return true
       } catch (error) {
-        console.warn('[AuthStore] Auth check failed:', error)
+        console.warn('[AuthStore] ❌ Token validation failed:', error)
         // Clear auth state on failure
         isAuthenticated.value = false
         user.value = null
@@ -138,6 +149,13 @@ export const useAuthStore = defineStore(
         localStorage.removeItem('dev_authenticated')
         return false
       }
+    }
+
+    /**
+     * @deprecated Use initialize() instead
+     */
+    async function checkAuth(): Promise<boolean> {
+      return initialize()
     }
 
     function updateActivity() {
@@ -236,7 +254,8 @@ export const useAuthStore = defineStore(
       login,
       logout,
       refreshToken,
-      checkAuth,
+      initialize,  // Primary auth initialization method
+      checkAuth,   // @deprecated - use initialize()
       updateActivity,
       // 2FA Actions
       checkTwoFactorStatus,

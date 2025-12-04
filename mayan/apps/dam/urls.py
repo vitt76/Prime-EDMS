@@ -10,7 +10,8 @@ from .api_views import (
     AIAnalysisStatusView,
     DAMDocumentDetailView,
     DAMDocumentListView,
-    DAMDashboardStatsView
+    DAMDashboardStatsView,
+    DocumentProcessingStatusView
 )
 from .views import (
     DAMDashboardView,
@@ -35,6 +36,8 @@ api_urlpatterns = [
     path('document-detail/<int:document_id>/', DAMDocumentDetailView.as_view(), name='document-detail'),
     path('documents/', DAMDocumentListView.as_view(), name='document-list'),
     path('dashboard-stats/', DAMDashboardStatsView.as_view(), name='dashboard-stats'),
+    # Phase B4: Processing Status API
+    path('documents/<int:pk>/processing_status/', DocumentProcessingStatusView.as_view(), name='processing-status'),
 ]
 
 # Alias for REST API auto-discovery

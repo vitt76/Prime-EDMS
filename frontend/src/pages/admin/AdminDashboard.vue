@@ -522,9 +522,9 @@ watch(recentEvents, (events) => {
       timestamp: latestEvent.timestamp
     }
     // Add to beginning and keep max 20 items
-    recentActivity.value.unshift(newActivity)
-    if (recentActivity.value.length > 20) {
-      recentActivity.value.pop()
+    stats.value.recent_activity.unshift(newActivity)
+    if (stats.value.recent_activity.length > 20) {
+      stats.value.recent_activity.pop()
     }
   }
 }, { deep: true })

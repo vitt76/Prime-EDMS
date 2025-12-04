@@ -1,5 +1,0 @@
-{
-  "summary": "Created `docs/api_surface.md`, capturing all DAM and distribution REST endpoints plus the related Celery tasks, signals, and hook points required for the frontend rewrite; documented auth conventions, pagination, and integration guidelines.",
-  "current_status": "API surface documentation now lives in docs/api_surface.md; ready for frontend team to reference while rebuilding the SPA."
-}
-

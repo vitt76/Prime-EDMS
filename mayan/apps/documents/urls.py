@@ -33,6 +33,21 @@ from .api_views.trashed_document_api_views import (
     APITrashedDocumentDetailView, APITrashedDocumentListView,
     APITrashedDocumentRestoreView, APITrashedDocumentImageView
 )
+# Phase B1: Rich document and bulk operations API views
+from .api_views.document_rich_api_views import (
+    APIDocumentRichDetailView, APIDocumentRichListView
+)
+from .api_views.bulk_operations_api_views import (
+    BulkDocumentActionView, BulkTagActionView, BulkCabinetActionView
+)
+# Phase B2: Optimized document endpoints
+from .api_views.optimized_document_api_views import (
+    OptimizedAPIDocumentListView, OptimizedAPIDocumentDetailView
+)
+# Phase B4: Processing Status API
+from .api_views.processing_status_api_views import (
+    APIDocumentProcessingStatusView
+)
 from .views.document_file_views import (
     DocumentFileDeleteView, DocumentFileDownloadView, DocumentFileEditView,
     DocumentFileListView, DocumentFilePrintFormView, DocumentFilePrintView,
@@ -680,9 +695,87 @@ api_urls_trashed_documents = [
     )
 ]
 
+# Phase B1: Rich document detail and bulk operations endpoints
+api_urls_rich_documents = [
+    # Rich document detail endpoint
+    # GET /api/v4/documents/{document_id}/rich_details/
+    url(
+        regex=r'^documents/(?P<document_id>[0-9]+)/rich_details/$',
+        name='document-rich-detail',
+        view=APIDocumentRichDetailView.as_view()
+    ),
+    # Rich document list endpoint
+    # GET /api/v4/documents/rich_list/
+    url(
+        regex=r'^documents/rich_list/$',
+        name='document-rich-list',
+        view=APIDocumentRichListView.as_view()
+    ),
+]
+
+api_urls_bulk_operations = [
+    # Bulk document operations endpoint
+    # POST /api/v4/documents/bulk/
+    url(
+        regex=r'^documents/bulk/$',
+        name='document-bulk-action',
+        view=BulkDocumentActionView.as_view()
+    ),
+    # Bulk tag operations endpoint
+    # POST /api/v4/documents/bulk/tags/
+    url(
+        regex=r'^documents/bulk/tags/$',
+        name='document-bulk-tags',
+        view=BulkTagActionView.as_view()
+    ),
+    # Bulk cabinet operations endpoint
+    # POST /api/v4/documents/bulk/cabinets/
+    url(
+        regex=r'^documents/bulk/cabinets/$',
+        name='document-bulk-cabinets',
+        view=BulkCabinetActionView.as_view()
+    ),
+]
+
+api_urls_processing_status = [
+    # Processing status endpoint
+    # GET /api/v4/documents/{document_id}/processing_status/
+    # Returns real-time processing status for frontend polling
+    url(
+        regex=r'^documents/(?P<document_id>[0-9]+)/processing_status/$',
+        name='document-processing-status',
+        view=APIDocumentProcessingStatusView.as_view()
+    ),
+]
+
+api_urls_optimized_documents = [
+    # Optimized document list endpoint
+    # GET /api/v4/documents/optimized/
+    # Uses select_related and prefetch_related to reduce queries
+    url(
+        regex=r'^documents/optimized/$',
+        name='document-optimized-list',
+        view=OptimizedAPIDocumentListView.as_view()
+    ),
+    # Optimized document detail endpoint
+    # GET /api/v4/documents/{document_id}/optimized/
+    url(
+        regex=r'^documents/(?P<document_id>[0-9]+)/optimized/$',
+        name='document-optimized-detail',
+        view=OptimizedAPIDocumentDetailView.as_view()
+    ),
+]
+
 api_urls = []
 api_urls.extend(api_urls_documents)
 api_urls.extend(api_urls_document_files)
 api_urls.extend(api_urls_document_versions)
 api_urls.extend(api_urls_document_types)
 api_urls.extend(api_urls_trashed_documents)
+# Phase B1: Add rich document and bulk operation endpoints
+api_urls.extend(api_urls_rich_documents)
+api_urls.extend(api_urls_bulk_operations)
+# Phase B2: Add optimized document endpoints
+api_urls.extend(api_urls_optimized_documents)
+# Phase B4: Add processing status endpoint
+api_urls.extend(api_urls_processing_status)

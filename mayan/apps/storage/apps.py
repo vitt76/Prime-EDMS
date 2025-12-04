@@ -1,3 +1,5 @@
+import logging
+
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.acls.classes import ModelPermission
@@ -14,10 +16,13 @@ from .links import (
     link_download_file_list, link_storage_settings
 )
 
+logger = logging.getLogger(__name__)
+
 
 class StorageApp(MayanAppConfig):
     app_namespace = 'storage'
     app_url = 'storage'
+    has_rest_api = True
     has_tests = True
     name = 'mayan.apps.storage'
     verbose_name = _('Storage')
@@ -27,6 +32,13 @@ class StorageApp(MayanAppConfig):
         DefinedStorage.load_modules()
 
         DownloadFile = self.get_model(model_name='DownloadFile')
+        
+        # Register ChunkedUpload model (Phase B3.2)
+        try:
+            from .models_chunked_upload import ChunkedUpload
+            logger.debug('ChunkedUpload model loaded successfully')
+        except ImportError as e:
+            logger.warning(f'Could not import ChunkedUpload model: {e}')
 
         EventModelRegistry.register(model=DownloadFile)
 

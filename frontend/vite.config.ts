@@ -3,6 +3,9 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
 // https://vitejs.dev/config/
+// Backend URL - Docker exposes port 8080 which is accessible via localhost from Windows
+const BACKEND_URL = 'http://localhost:8080'
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -15,42 +18,47 @@ export default defineConfig({
     port: 5173,
     host: '0.0.0.0',
     proxy: {
-      // Main REST API v4
+      // Main REST API v4 → Django backend
       '/api': {
-        target: 'http://localhost:8080',
+        target: BACKEND_URL,
         changeOrigin: true,
         secure: false,
-        cookieDomainRewrite: 'localhost'
+        cookieDomainRewrite: 'localhost',
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log(`[Vite Proxy] ${req.method} ${req.url} → ${BACKEND_URL}${req.url}`)
+          })
+        }
       },
       // DAM-specific API endpoints
       '/digital-assets': {
-        target: 'http://localhost:8080',
+        target: BACKEND_URL,
         changeOrigin: true,
         secure: false,
         cookieDomainRewrite: 'localhost'
       },
       // Distribution API endpoints
       '/distribution': {
-        target: 'http://localhost:8080',
+        target: BACKEND_URL,
         changeOrigin: true,
         secure: false,
         cookieDomainRewrite: 'localhost'
       },
       // Django authentication
       '/authentication': {
-        target: 'http://localhost:8080',
+        target: BACKEND_URL,
         changeOrigin: true,
         secure: false,
         cookieDomainRewrite: 'localhost'
       },
       // Static files (CSS, JS from Django)
       '/static': {
-        target: 'http://localhost:8080',
+        target: BACKEND_URL,
         changeOrigin: true
       },
       // Media files (uploaded documents)
       '/media': {
-        target: 'http://localhost:8080',
+        target: BACKEND_URL,
         changeOrigin: true
       }
     }

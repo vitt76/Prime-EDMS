@@ -1,12 +1,62 @@
 /**
  * Metadata Service
  *
- * Handles metadata schema operations, field management,
- * and dynamic form generation for assets.
+ * Handles metadata CRUD operations for Mayan EDMS documents.
+ * 
+ * API Endpoints (from BACKEND_ANALYSIS_V2.md):
+ * - GET  /api/v4/metadata_types/                    - List metadata types
+ * - POST /api/v4/metadata_types/                    - Create metadata type
+ * - GET  /api/v4/documents/{id}/metadata/           - Get document metadata
+ * - POST /api/v4/documents/{id}/metadata/           - Add metadata to document
+ * - PATCH /api/v4/documents/{id}/metadata/{mid}/    - Update metadata
+ * - DELETE /api/v4/documents/{id}/metadata/{mid}/   - Remove metadata
  */
 
 import { apiService } from './apiService'
 import { withRetry } from '@/utils/retry'
+import { getToken } from './authService'
+import axios from 'axios'
+
+// ============================================================================
+// MAYAN EDMS API TYPES
+// ============================================================================
+
+/** Mayan EDMS Metadata Type */
+export interface MayanMetadataType {
+  id: number
+  name: string
+  label: string
+  default: string
+  lookup: string
+  parser: string
+  url: string
+  validation: string
+  validation_arguments: string
+}
+
+/** Mayan Document Metadata entry */
+export interface MayanDocumentMetadata {
+  id: number
+  document: {
+    id: number
+    label: string
+  }
+  metadata_type: MayanMetadataType
+  value: string
+  url: string
+}
+
+/** Mayan paginated response */
+interface MayanPaginatedResponse<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
+
+// ============================================================================
+// FRONTEND TYPES
+// ============================================================================
 
 export interface MetadataField {
   name: string
@@ -136,26 +186,168 @@ class MetadataService {
     if (!result.success) throw result.error
   }
 
-  /**
-   * Get metadata for specific asset
-   */
-  async getAssetMetadata(assetId: string): Promise<AssetMetadata> {
-    const operation = () => apiService.get<AssetMetadata>(`/v4/assets/${assetId}/metadata/`)
-    const result = await withRetry(operation)
+  // ============================================================================
+  // MAYAN EDMS DOCUMENT METADATA API (Real Backend)
+  // ============================================================================
 
-    if (!result.success) throw result.error
-    return result.data!
+  /**
+   * Get all metadata types from Mayan EDMS
+   * GET /api/v4/metadata_types/
+   */
+  async getMetadataTypes(): Promise<MayanMetadataType[]> {
+    const token = getToken()
+    if (!token) throw new Error('Not authenticated')
+
+    const response = await axios.get<MayanPaginatedResponse<MayanMetadataType>>(
+      '/api/v4/metadata_types/',
+      { headers: { 'Authorization': `Token ${token}` } }
+    )
+    return response.data.results
   }
 
   /**
-   * Update metadata for specific asset
+   * Get metadata for a specific document
+   * GET /api/v4/documents/{id}/metadata/
+   */
+  async getDocumentMetadata(documentId: number): Promise<MayanDocumentMetadata[]> {
+    const token = getToken()
+    if (!token) throw new Error('Not authenticated')
+
+    const response = await axios.get<MayanPaginatedResponse<MayanDocumentMetadata>>(
+      `/api/v4/documents/${documentId}/metadata/`,
+      { headers: { 'Authorization': `Token ${token}` } }
+    )
+    return response.data.results
+  }
+
+  /**
+   * Add metadata to a document
+   * POST /api/v4/documents/{id}/metadata/
+   * 
+   * @param documentId - Document ID
+   * @param metadataTypeId - Metadata type ID
+   * @param value - Metadata value
+   */
+  async addDocumentMetadata(
+    documentId: number,
+    metadataTypeId: number,
+    value: string
+  ): Promise<MayanDocumentMetadata> {
+    const token = getToken()
+    if (!token) throw new Error('Not authenticated')
+
+    const response = await axios.post<MayanDocumentMetadata>(
+      `/api/v4/documents/${documentId}/metadata/`,
+      { metadata_type_id: metadataTypeId, value },
+      { headers: { 
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      }}
+    )
+    return response.data
+  }
+
+  /**
+   * Update document metadata
+   * PATCH /api/v4/documents/{id}/metadata/{metadata_id}/
+   */
+  async updateDocumentMetadata(
+    documentId: number,
+    metadataId: number,
+    value: string
+  ): Promise<MayanDocumentMetadata> {
+    const token = getToken()
+    if (!token) throw new Error('Not authenticated')
+
+    const response = await axios.patch<MayanDocumentMetadata>(
+      `/api/v4/documents/${documentId}/metadata/${metadataId}/`,
+      { value },
+      { headers: { 
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      }}
+    )
+    return response.data
+  }
+
+  /**
+   * Remove metadata from document
+   * DELETE /api/v4/documents/{id}/metadata/{metadata_id}/
+   */
+  async removeDocumentMetadata(documentId: number, metadataId: number): Promise<void> {
+    const token = getToken()
+    if (!token) throw new Error('Not authenticated')
+
+    await axios.delete(
+      `/api/v4/documents/${documentId}/metadata/${metadataId}/`,
+      { headers: { 'Authorization': `Token ${token}` } }
+    )
+  }
+
+  // ============================================================================
+  // LEGACY/MOCK API METHODS (for backward compatibility)
+  // ============================================================================
+
+  /**
+   * Get metadata for specific asset (legacy wrapper)
+   * @deprecated Use getDocumentMetadata instead
+   */
+  async getAssetMetadata(assetId: string): Promise<AssetMetadata> {
+    try {
+      const documentId = parseInt(assetId, 10)
+      const metadata = await this.getDocumentMetadata(documentId)
+      
+      // Convert Mayan format to frontend format
+      const result: AssetMetadata = {}
+      metadata.forEach(m => {
+        result[m.metadata_type.name] = m.value
+      })
+      return result
+    } catch (error) {
+      console.warn('[MetadataService] Using mock fallback for getAssetMetadata')
+      const operation = () => apiService.get<AssetMetadata>(`/v4/assets/${assetId}/metadata/`)
+      const result = await withRetry(operation)
+      if (!result.success) throw result.error
+      return result.data!
+    }
+  }
+
+  /**
+   * Update metadata for specific asset (legacy wrapper)
+   * @deprecated Use addDocumentMetadata/updateDocumentMetadata instead
    */
   async updateAssetMetadata(assetId: string, metadata: AssetMetadata): Promise<AssetMetadata> {
-    const operation = () => apiService.patch<AssetMetadata>(`/v4/assets/${assetId}/metadata/`, metadata)
-    const result = await withRetry(operation)
-
-    if (!result.success) throw result.error
-    return result.data!
+    try {
+      const documentId = parseInt(assetId, 10)
+      const existingMetadata = await this.getDocumentMetadata(documentId)
+      const metadataTypes = await this.getMetadataTypes()
+      
+      // Update each field
+      for (const [fieldName, value] of Object.entries(metadata)) {
+        // Find metadata type by name
+        const metadataType = metadataTypes.find(mt => mt.name === fieldName)
+        if (!metadataType) continue
+        
+        // Find existing metadata entry
+        const existing = existingMetadata.find(m => m.metadata_type.id === metadataType.id)
+        
+        if (existing) {
+          // Update existing
+          await this.updateDocumentMetadata(documentId, existing.id, String(value))
+        } else if (value) {
+          // Add new
+          await this.addDocumentMetadata(documentId, metadataType.id, String(value))
+        }
+      }
+      
+      return metadata
+    } catch (error) {
+      console.warn('[MetadataService] Using mock fallback for updateAssetMetadata')
+      const operation = () => apiService.patch<AssetMetadata>(`/v4/assets/${assetId}/metadata/`, metadata)
+      const result = await withRetry(operation)
+      if (!result.success) throw result.error
+      return result.data!
+    }
   }
 
   /**

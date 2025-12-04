@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Optional
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -9,12 +9,10 @@ from rest_framework import serializers
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document
-from mayan.apps.documents.models.document_version_models import DocumentVersion
 from mayan.apps.documents.permissions import (
     permission_document_edit, permission_document_file_download,
     permission_document_trash, permission_document_view
 )
-from mayan.apps.documents.serializers.document_serializers import DocumentSerializer
 from mayan.apps.metadata.permissions import permission_document_metadata_edit
 from mayan.apps.permissions.models import Permission
 
@@ -191,6 +189,9 @@ class DAMDocumentListSerializer(serializers.ModelSerializer):
 class DAMDocumentDetailSerializer(serializers.Serializer):
     """
     Structured representation of a DAM document detail payload.
+    
+    Phase B1: Added thumbnail_url, preview_url, download_url fields.
+    Returns pure JSON (no HTML rendering).
     """
 
     id = serializers.IntegerField(source='pk')
@@ -203,6 +204,11 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
     filename = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
     mime_type = serializers.SerializerMethodField()
+    
+    # Phase B1: URL fields for frontend integration
+    thumbnail_url = serializers.SerializerMethodField()
+    preview_url = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
 
     created_at = serializers.SerializerMethodField()
     updated_at = serializers.SerializerMethodField()
@@ -224,6 +230,8 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
             'id', 'title', 'description',
             'asset_type', 'asset_status',
             'file_id', 'filename', 'file_size', 'mime_type',
+            # Phase B1: URL fields
+            'thumbnail_url', 'preview_url', 'download_url',
             'created_at', 'updated_at',
             'metadata', 'versions_count', 'versions',
             'permissions', 'tags',
@@ -258,6 +266,55 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
     def get_mime_type(self, obj):
         file_obj = self._latest_file(obj)
         return file_obj.mimetype if file_obj else None
+
+    # Phase B1: URL generation methods for frontend integration
+    def get_thumbnail_url(self, obj):
+        """
+        Get thumbnail URL (150x150).
+        Uses document version page image endpoint.
+        """
+        version = getattr(obj, 'version_active', None)
+        if version:
+            try:
+                first_page = version.pages.first()
+                if first_page:
+                    return (
+                        f'/api/v4/documents/{obj.pk}/versions/{version.pk}'
+                        f'/pages/{first_page.pk}/image/'
+                        f'?width=150&height=150'
+                    )
+            except Exception:
+                pass
+        return None
+
+    def get_preview_url(self, obj):
+        """
+        Get preview URL (800px width).
+        Uses document version page image endpoint.
+        """
+        version = getattr(obj, 'version_active', None)
+        if version:
+            try:
+                first_page = version.pages.first()
+                if first_page:
+                    return (
+                        f'/api/v4/documents/{obj.pk}/versions/{version.pk}'
+                        f'/pages/{first_page.pk}/image/'
+                        f'?width=800'
+                    )
+            except Exception:
+                pass
+        return None
+
+    def get_download_url(self, obj):
+        """
+        Get download URL for latest file.
+        Returns API endpoint for file download.
+        """
+        file_obj = self._latest_file(obj)
+        if file_obj:
+            return f'/api/v4/documents/{obj.pk}/files/{file_obj.pk}/download/'
+        return None
 
     def get_created_at(self, obj):
         return getattr(obj, 'datetime_created', None)

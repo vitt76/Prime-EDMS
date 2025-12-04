@@ -41,3 +41,27 @@ def task_shared_upload_stale_delete():
         expired_upload.delete()
 
     logger.debug('Finished')
+
+
+@app.task(ignore_result=True)
+def task_chunked_upload_cleanup():
+    """
+    Cleanup expired chunked uploads.
+    Phase B3.2 - Cleans up incomplete multipart uploads.
+    """
+    logger.debug('Executing chunked upload cleanup')
+
+    try:
+        from .models_chunked_upload import ChunkedUpload
+        from .settings import setting_chunked_upload_expiration_hours
+
+        expiration_hours = setting_chunked_upload_expiration_hours.value
+        count = ChunkedUpload.objects.cleanup_expired(hours=expiration_hours)
+
+        logger.info(f'Cleaned up {count} expired chunked uploads')
+    except ImportError as e:
+        logger.warning(f'ChunkedUpload model not available: {e}')
+    except Exception as e:
+        logger.error(f'Error during chunked upload cleanup: {e}')
+
+    logger.debug('Finished chunked upload cleanup')
