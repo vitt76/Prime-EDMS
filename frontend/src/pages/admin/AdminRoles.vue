@@ -296,7 +296,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
+import { adminService } from '@/services/adminService'
 
 interface Permission {
   id: number
@@ -323,6 +324,8 @@ const showModal = ref(false)
 const showDeleteModal = ref(false)
 const editingRole = ref<Role | null>(null)
 const deletingRole = ref<Role | null>(null)
+const isLoading = ref(false)
+const error = ref<string | null>(null)
 
 const toast = reactive({
   show: false,
@@ -338,7 +341,7 @@ const roleForm = ref({
 
 const roleColors = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899']
 
-// Mock permissions
+// Permissions (static list - Mayan permissions are managed separately)
 const permissions = ref<Permission[]>([
   { id: 1, namespace: 'Документы', name: 'documents.view', label: 'Просмотр документов' },
   { id: 2, namespace: 'Документы', name: 'documents.create', label: 'Создание документов' },
@@ -357,45 +360,43 @@ const permissions = ref<Permission[]>([
   { id: 15, namespace: 'Система', name: 'system.logs', label: 'Просмотр логов' }
 ])
 
-// Mock roles
-const roles = ref<Role[]>([
-  {
-    id: 1,
-    label: 'Администратор',
-    description: 'Полный доступ ко всем функциям системы',
-    permissions: permissions.value.map(p => p.name),
-    users_count: 2,
-    is_system: true,
-    created_at: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: 2,
-    label: 'Редактор',
-    description: 'Создание и редактирование контента',
-    permissions: ['documents.view', 'documents.create', 'documents.edit', 'metadata.view', 'metadata.edit', 'sharing.create'],
-    users_count: 5,
-    is_system: false,
-    created_at: '2024-02-15T00:00:00Z'
-  },
-  {
-    id: 3,
-    label: 'Просмотр',
-    description: 'Только просмотр документов',
-    permissions: ['documents.view', 'metadata.view'],
-    users_count: 12,
-    is_system: false,
-    created_at: '2024-03-01T00:00:00Z'
-  },
-  {
-    id: 4,
-    label: 'Загрузчик',
-    description: 'Загрузка и базовое редактирование',
-    permissions: ['documents.view', 'documents.create', 'documents.download', 'metadata.view'],
-    users_count: 8,
-    is_system: false,
-    created_at: '2024-04-10T00:00:00Z'
+// Roles (groups) from real API
+const roles = ref<Role[]>([])
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Data Loading
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadGroups() {
+  isLoading.value = true
+  error.value = null
+  
+  try {
+    const response = await adminService.getGroups({ page_size: 100 })
+    
+    // Map Mayan groups to Role interface
+    roles.value = response.results.map(group => ({
+      id: group.id,
+      label: group.name,
+      description: '',
+      permissions: [], // Mayan manages permissions separately
+      users_count: 0,
+      is_system: false
+    }))
+    
+    console.log('[AdminRoles] Loaded groups:', roles.value.length)
+  } catch (err: unknown) {
+    error.value = err instanceof Error ? err.message : 'Ошибка загрузки групп'
+    showToast(error.value, 'error')
+    console.error('[AdminRoles] Failed to load groups:', err)
+  } finally {
+    isLoading.value = false
   }
-])
+}
+
+// Initial load
+onMounted(() => {
+  loadGroups()
+})
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Computed
@@ -492,34 +493,28 @@ function toggleNamespace(namespace: string): void {
   }
 }
 
-function saveRole(): void {
-  if (editingRole.value) {
-    // Update existing
-    const idx = roles.value.findIndex(r => r.id === editingRole.value!.id)
-    if (idx > -1) {
-      roles.value[idx] = {
-        ...roles.value[idx],
-        label: roleForm.value.label,
-        description: roleForm.value.description,
-        permissions: [...roleForm.value.permissions]
-      }
+async function saveRole(): Promise<void> {
+  try {
+    if (editingRole.value) {
+      // Update existing group
+      await adminService.updateGroup(editingRole.value.id, {
+        name: roleForm.value.label
+      })
+      showToast('Группа успешно обновлена')
+    } else {
+      // Create new group
+      await adminService.createGroup({
+        name: roleForm.value.label
+      })
+      showToast('Группа успешно создана')
     }
-    showToast('Роль успешно обновлена')
-  } else {
-    // Create new
-    const newRole: Role = {
-      id: Date.now(),
-      label: roleForm.value.label,
-      description: roleForm.value.description,
-      permissions: [...roleForm.value.permissions],
-      users_count: 0,
-      is_system: false,
-      created_at: new Date().toISOString()
-    }
-    roles.value.push(newRole)
-    showToast('Роль успешно создана')
+    
+    closeModal()
+    await loadGroups() // Reload list
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Ошибка сохранения группы'
+    showToast(errorMsg, 'error')
   }
-  closeModal()
 }
 
 function confirmDelete(role: Role): void {
@@ -527,17 +522,21 @@ function confirmDelete(role: Role): void {
   showDeleteModal.value = true
 }
 
-function deleteRole(): void {
+async function deleteRole(): Promise<void> {
   if (!deletingRole.value) return
   
-  const idx = roles.value.findIndex(r => r.id === deletingRole.value!.id)
-  if (idx > -1) {
-    roles.value.splice(idx, 1)
+  try {
+    await adminService.deleteGroup(deletingRole.value.id)
+    
+    showDeleteModal.value = false
+    deletingRole.value = null
+    showToast('Группа удалена')
+    
+    await loadGroups() // Reload list
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Ошибка удаления группы'
+    showToast(errorMsg, 'error')
   }
-  
-  showDeleteModal.value = false
-  deletingRole.value = null
-  showToast('Роль удалена')
 }
 </script>
 

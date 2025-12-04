@@ -323,8 +323,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import type { MetadataSchema, MetadataType, MetadataFieldType } from '@/types/admin'
+import { adminService } from '@/services/adminService'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // State
@@ -332,6 +333,8 @@ import type { MetadataSchema, MetadataType, MetadataFieldType } from '@/types/ad
 const schemaSearch = ref('')
 const selectedSchema = ref<MetadataSchema | null>(null)
 const selectedField = ref<MetadataType | null>(null)
+const isLoading = ref(false)
+const error = ref<string | null>(null)
 
 const fieldTypeStyles: Record<MetadataFieldType, string> = {
   text: 'bg-blue-100 text-blue-700',
@@ -359,51 +362,53 @@ const fieldTypeLabels: Record<MetadataFieldType, string> = {
   email: 'Email'
 }
 
-// Mock schemas
-const schemas = ref<MetadataSchema[]>([
-  {
-    id: '1',
-    name: 'Маркетинговые материалы',
-    description: 'Схема для маркетинговых активов',
-    document_types: [1, 2],
-    fields: [
-      { id: 1, name: 'campaign_name', label: 'Название кампании', default: '', lookup: '', validation: '', parser: '', field_type: 'text', required: true },
-      { id: 2, name: 'target_audience', label: 'Целевая аудитория', default: '', lookup: '', validation: '', parser: '', field_type: 'select', options: [{ value: 'b2b', label: 'B2B' }, { value: 'b2c', label: 'B2C' }] },
-      { id: 3, name: 'launch_date', label: 'Дата запуска', default: '', lookup: '', validation: '', parser: '', field_type: 'date' },
-      { id: 4, name: 'budget', label: 'Бюджет', default: '', lookup: '', validation: '', parser: '', field_type: 'number' }
-    ],
-    created_at: '2024-01-15T10:00:00Z',
-    updated_at: '2024-11-28T14:30:00Z'
-  },
-  {
-    id: '2',
-    name: 'Юридические документы',
-    description: 'Схема для юридических документов и договоров',
-    document_types: [3],
-    fields: [
-      { id: 5, name: 'contract_number', label: 'Номер договора', default: '', lookup: '', validation: '', parser: '', field_type: 'text', required: true },
-      { id: 6, name: 'counterparty', label: 'Контрагент', default: '', lookup: '', validation: '', parser: '', field_type: 'text', required: true },
-      { id: 7, name: 'expiration_date', label: 'Срок действия', default: '', lookup: '', validation: '', parser: '', field_type: 'date' },
-      { id: 8, name: 'confidential', label: 'Конфиденциально', default: '', lookup: '', validation: '', parser: '', field_type: 'boolean' }
-    ],
-    created_at: '2024-02-20T11:00:00Z',
-    updated_at: '2024-10-15T09:00:00Z'
-  },
-  {
-    id: '3',
-    name: 'Фотоконтент',
-    description: 'Схема для фотографий и изображений',
-    document_types: [4],
-    fields: [
-      { id: 9, name: 'photographer', label: 'Фотограф', default: '', lookup: '', validation: '', parser: '', field_type: 'text' },
-      { id: 10, name: 'location', label: 'Место съёмки', default: '', lookup: '', validation: '', parser: '', field_type: 'text' },
-      { id: 11, name: 'shoot_date', label: 'Дата съёмки', default: '', lookup: '', validation: '', parser: '', field_type: 'date' },
-      { id: 12, name: 'usage_rights', label: 'Права использования', default: '', lookup: '', validation: '', parser: '', field_type: 'textarea' }
-    ],
-    created_at: '2024-03-10T15:00:00Z',
-    updated_at: '2024-11-01T12:00:00Z'
+// Schemas from real API
+const schemas = ref<MetadataSchema[]>([])
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Data Loading
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadMetadataTypes() {
+  isLoading.value = true
+  error.value = null
+  
+  try {
+    const response = await adminService.getSchemas({ page_size: 100 })
+    
+    // Map Mayan metadata types to MetadataSchema interface
+    schemas.value = response.results.map(mt => ({
+      id: String(mt.id),
+      name: mt.name,
+      description: mt.default || '',
+      document_types: [],
+      fields: [{
+        id: mt.id,
+        name: mt.name.toLowerCase().replace(/\s+/g, '_'),
+        label: mt.label || mt.name,
+        default: mt.default || '',
+        lookup: mt.lookup || '',
+        validation: mt.validation || '',
+        parser: mt.parser || '',
+        field_type: 'text' as MetadataFieldType,
+        required: false
+      }],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }))
+    
+    console.log('[AdminMetadata] Loaded metadata types:', schemas.value.length)
+  } catch (err: unknown) {
+    error.value = err instanceof Error ? err.message : 'Ошибка загрузки типов метаданных'
+    console.error('[AdminMetadata] Failed to load metadata types:', err)
+  } finally {
+    isLoading.value = false
   }
-])
+}
+
+// Initial load
+onMounted(() => {
+  loadMetadataTypes()
+})
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Computed
@@ -426,18 +431,26 @@ function selectField(field: MetadataType) {
   selectedField.value = { ...field }
 }
 
-function createSchema() {
-  const newSchema: MetadataSchema = {
-    id: Date.now().toString(),
-    name: 'Новая схема',
-    description: '',
-    document_types: [],
-    fields: [],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+async function createSchema() {
+  try {
+    // Create new metadata type in Mayan
+    const response = await adminService.createSchema({
+      name: 'Новый тип',
+      label: 'Новый тип метаданных'
+    })
+    
+    // Reload list
+    await loadMetadataTypes()
+    
+    // Select the new schema
+    const newSchema = schemas.value.find(s => s.id === String(response.id))
+    if (newSchema) {
+      selectedSchema.value = newSchema
+    }
+  } catch (err: unknown) {
+    error.value = err instanceof Error ? err.message : 'Ошибка создания типа метаданных'
+    console.error('[AdminMetadata] Failed to create metadata type:', err)
   }
-  schemas.value.push(newSchema)
-  selectedSchema.value = newSchema
 }
 
 function addField() {

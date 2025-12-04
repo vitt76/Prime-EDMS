@@ -68,3 +68,4 @@ class Command(BaseCommand):
         except Exception as e:
             raise CommandError(f'Test failed: {e}')
 
+

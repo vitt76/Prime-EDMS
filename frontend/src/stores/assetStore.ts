@@ -353,7 +353,7 @@ export const useAssetStore = defineStore(
     
     /**
      * Get single asset details
-     * First tries DAM-enriched endpoint (/api/dam/document-detail/) for AI analysis
+     * First tries enriched endpoint (/api/v4/document-detail/) for full document details
      * Falls back to standard endpoint if DAM endpoint unavailable
      */
     async function getAssetDetail(id: number): Promise<Asset | null> {
@@ -366,7 +366,7 @@ export const useAssetStore = defineStore(
         
         try {
           response = await axios.get<BackendOptimizedDocument>(
-            `/api/dam/document-detail/${id}/`,
+            `/api/v4/document-detail/${id}/`,
             { headers: getAuthHeaders() }
           )
           if (debugMode.value) {

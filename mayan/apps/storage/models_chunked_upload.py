@@ -255,3 +255,4 @@ class ChunkedUpload(models.Model):
         self.status = CHUNKED_UPLOAD_STATUS_ABORTED
         self.save()
 
+

@@ -557,8 +557,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import type { Workflow, DocumentType, WorkflowState } from '@/types/admin'
+import { adminService } from '@/services/adminService'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // State
@@ -569,6 +570,8 @@ const isEditing = ref(false)
 const editingState = ref<WorkflowState | null>(null)
 const dragOverIndex = ref<number | null>(null)
 let draggedIndex: number | null = null
+const isLoading = ref(false)
+const error = ref<string | null>(null)
 
 const toast = reactive({
   show: false,
@@ -587,78 +590,47 @@ const stateForm = ref({
   completion: false
 })
 
-// Mock document types
-const documentTypes: DocumentType[] = [
-  { id: 1, label: 'Изображения', delete_time_period: null, delete_time_unit: null, trash_time_period: 30, trash_time_unit: 'days', documents_count: 5420, filename_templates: [], metadata_types: [] },
-  { id: 2, label: 'Документы', delete_time_period: null, delete_time_unit: null, trash_time_period: 30, trash_time_unit: 'days', documents_count: 1230, filename_templates: [], metadata_types: [] },
-  { id: 3, label: 'Видео', delete_time_period: null, delete_time_unit: null, trash_time_period: 30, trash_time_unit: 'days', documents_count: 340, filename_templates: [], metadata_types: [] }
-]
+// Document types (will be loaded from API)
+const documentTypes = ref<DocumentType[]>([])
 
-// Mock workflows
-const workflows = ref<Workflow[]>([
-  {
-    id: 1,
-    label: 'Согласование маркетинговых материалов',
-    internal_name: 'marketing_approval',
-    auto_launch: true,
-    document_types: [documentTypes[0], documentTypes[1]],
-    states: [
-      { id: 1, workflow_id: 1, label: 'Черновик', initial: true, completion: false, actions: [], order: 0 },
-      { id: 2, workflow_id: 1, label: 'На проверке', initial: false, completion: false, actions: [
-        { id: 1, state_id: 2, label: 'Уведомить редактора', enabled: true, when: 'on_entry', condition: '', action_path: 'send_email', action_data: {} }
-      ], order: 1 },
-      { id: 3, workflow_id: 1, label: 'Согласовано', initial: false, completion: false, actions: [
-        { id: 2, state_id: 3, label: 'Добавить тег "Approved"', enabled: true, when: 'on_entry', condition: '', action_path: 'add_tag', action_data: {} }
-      ], order: 2 },
-      { id: 4, workflow_id: 1, label: 'Опубликовано', initial: false, completion: true, actions: [], order: 3 }
-    ],
-    transitions: [
-      { id: 1, workflow_id: 1, label: 'Отправить на проверку', origin_state_id: 1, destination_state_id: 2, condition: '', triggers: [] },
-      { id: 2, workflow_id: 1, label: 'Согласовать', origin_state_id: 2, destination_state_id: 3, condition: '', triggers: [] },
-      { id: 3, workflow_id: 1, label: 'Вернуть на доработку', origin_state_id: 2, destination_state_id: 1, condition: '', triggers: [] },
-      { id: 4, workflow_id: 1, label: 'Опубликовать', origin_state_id: 3, destination_state_id: 4, condition: '', triggers: [] }
-    ],
-    instances_count: 23
-  },
-  {
-    id: 2,
-    label: 'Обработка юридических документов',
-    internal_name: 'legal_processing',
-    auto_launch: false,
-    document_types: [documentTypes[1]],
-    states: [
-      { id: 5, workflow_id: 2, label: 'Получен', initial: true, completion: false, actions: [
-        { id: 3, state_id: 5, label: 'Запустить OCR', enabled: true, when: 'on_entry', condition: '', action_path: 'trigger_ai_analysis', action_data: {} }
-      ], order: 0 },
-      { id: 6, workflow_id: 2, label: 'Юр. проверка', initial: false, completion: false, actions: [], order: 1 },
-      { id: 7, workflow_id: 2, label: 'Архивирован', initial: false, completion: true, actions: [
-        { id: 4, state_id: 7, label: 'Переместить в архивный шкаф', enabled: true, when: 'on_entry', condition: '', action_path: 'move_to_cabinet', action_data: {} }
-      ], order: 2 }
-    ],
-    transitions: [
-      { id: 5, workflow_id: 2, label: 'Начать проверку', origin_state_id: 5, destination_state_id: 6, condition: '', triggers: [] },
-      { id: 6, workflow_id: 2, label: 'Архивировать', origin_state_id: 6, destination_state_id: 7, condition: '', triggers: [] }
-    ],
-    instances_count: 8
-  },
-  {
-    id: 3,
-    label: 'AI-обогащение медиа',
-    internal_name: 'ai_enrichment',
-    auto_launch: true,
-    document_types: [documentTypes[0], documentTypes[2]],
-    states: [
-      { id: 8, workflow_id: 3, label: 'Загружен', initial: true, completion: false, actions: [
-        { id: 5, state_id: 8, label: 'Анализ AI', enabled: true, when: 'on_entry', condition: '', action_path: 'trigger_ai_analysis', action_data: {} }
-      ], order: 0 },
-      { id: 9, workflow_id: 3, label: 'Обработан', initial: false, completion: true, actions: [], order: 1 }
-    ],
-    transitions: [
-      { id: 7, workflow_id: 3, label: 'Анализ завершён', origin_state_id: 8, destination_state_id: 9, condition: '', triggers: [] }
-    ],
-    instances_count: 156
+// Workflows from real API
+const workflows = ref<Workflow[]>([])
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Data Loading
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadWorkflows() {
+  isLoading.value = true
+  error.value = null
+  
+  try {
+    const response = await adminService.getWorkflows({ page_size: 100 })
+    
+    // Map Mayan workflows to frontend Workflow interface
+    workflows.value = response.results.map(wf => ({
+      id: wf.id,
+      label: wf.label,
+      internal_name: wf.internal_name || wf.label.toLowerCase().replace(/\s+/g, '_'),
+      auto_launch: false, // Mayan doesn't have this concept directly
+      document_types: wf.document_types || [],
+      states: wf.states || [],
+      transitions: wf.transitions || [],
+      instances_count: 0
+    }))
+    
+    console.log('[AdminWorkflows] Loaded workflows:', workflows.value.length)
+  } catch (err: unknown) {
+    error.value = err instanceof Error ? err.message : 'Ошибка загрузки рабочих процессов'
+    console.error('[AdminWorkflows] Failed to load workflows:', err)
+  } finally {
+    isLoading.value = false
   }
-])
+}
+
+// Initial load
+onMounted(() => {
+  loadWorkflows()
+})
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Methods
@@ -674,26 +646,28 @@ function selectWorkflow(workflow: Workflow): void {
   isEditing.value = false
 }
 
-function createNewWorkflow(): void {
-  const newWorkflow: Workflow = {
-    id: Date.now(),
-    label: newWorkflowForm.value.label,
-    internal_name: newWorkflowForm.value.internal_name,
-    auto_launch: newWorkflowForm.value.auto_launch,
-    document_types: [],
-    states: [
-      { id: Date.now(), workflow_id: Date.now(), label: 'Начало', initial: true, completion: false, actions: [], order: 0 },
-      { id: Date.now() + 1, workflow_id: Date.now(), label: 'Завершён', initial: false, completion: true, actions: [], order: 1 }
-    ],
-    transitions: [
-      { id: Date.now(), workflow_id: Date.now(), label: 'Завершить', origin_state_id: Date.now(), destination_state_id: Date.now() + 1, condition: '', triggers: [] }
-    ],
-    instances_count: 0
+async function createNewWorkflow(): Promise<void> {
+  try {
+    const response = await adminService.createWorkflow({
+      label: newWorkflowForm.value.label,
+      internal_name: newWorkflowForm.value.internal_name || newWorkflowForm.value.label.toLowerCase().replace(/\s+/g, '_')
+    })
+    
+    showCreateModal.value = false
+    newWorkflowForm.value = { label: '', internal_name: '', auto_launch: false }
+    showToast('Рабочий процесс создан')
+    
+    // Reload and select the new workflow
+    await loadWorkflows()
+    const newWorkflow = workflows.value.find(w => w.id === response.id)
+    if (newWorkflow) {
+      selectWorkflow(newWorkflow)
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Ошибка создания процесса'
+    showToast(errorMsg)
+    console.error('[AdminWorkflows] Failed to create workflow:', err)
   }
-  workflows.value.push(newWorkflow)
-  showCreateModal.value = false
-  newWorkflowForm.value = { label: '', internal_name: '', auto_launch: false }
-  showToast('Рабочий процесс создан')
 }
 
 function getStateName(stateId: number): string {

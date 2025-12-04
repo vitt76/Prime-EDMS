@@ -214,6 +214,7 @@
     <BulkTagModal
       :is-open="showBulkTagModal"
       :selected-ids="selectedAssetIds"
+      :selected-count="selectedAssetIds.length"
       @close="showBulkTagModal = false"
       @success="handleBulkOperationSuccess"
     />

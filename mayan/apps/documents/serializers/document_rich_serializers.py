@@ -469,3 +469,4 @@ class DocumentRichListSerializer(serializers.Serializer):
         except Exception:
             return 'not_analyzed'
 
+

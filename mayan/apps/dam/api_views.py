@@ -566,6 +566,7 @@ class DAMDocumentDetailView(generics.RetrieveAPIView):
     permission_classes = (IsAuthenticated,)
     renderer_classes = (JSONRenderer,)
     queryset = Document.objects.all()
+    lookup_url_kwarg = 'document_id'  # URL uses document_id, not pk
 
     def get_queryset(self):
         queryset = Document.objects.select_related('document_type').prefetch_related(

@@ -20,3 +20,4 @@ class Path(type(OriginalPath())):
         else:
             return True
 
+

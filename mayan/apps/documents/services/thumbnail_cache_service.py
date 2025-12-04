@@ -339,3 +339,4 @@ def invalidate_document_cache(document_id: int) -> int:
     """Invalidate all cached URLs for a document."""
     return thumbnail_cache_service.invalidate_document_cache(document_id)
 
+

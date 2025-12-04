@@ -76,6 +76,103 @@ export interface InviteUserPayload {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Request/Response Types for Admin Service
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface User extends AdminUser {}
+
+export interface CreateUserRequest {
+  username: string
+  email: string
+  password: string
+  first_name?: string
+  last_name?: string
+  is_active?: boolean
+  is_staff?: boolean
+  is_superuser?: boolean
+  groups_pk_list?: number[]
+}
+
+export interface UpdateUserRequest {
+  username?: string
+  email?: string
+  password?: string
+  first_name?: string
+  last_name?: string
+  is_active?: boolean
+  is_staff?: boolean
+  is_superuser?: boolean
+  groups_pk_list?: number[]
+}
+
+export interface GetUsersParams {
+  page?: number
+  page_size?: number
+  search?: string
+  role?: string
+  status?: string
+}
+
+export interface BulkUserOperationRequest {
+  ids: number[]
+  action: 'activate' | 'deactivate' | 'delete' | 'add_to_group' | 'remove_from_group'
+  data?: {
+    group_ids?: number[]
+  }
+}
+
+export interface BulkUserOperationResponse {
+  success: number
+  failed: number
+  errors: Array<{ id: number; error: string }>
+}
+
+export interface CreateMetadataSchemaRequest {
+  name: string
+  label: string
+  default?: string
+  lookup?: string
+  validation?: string
+  parser?: string
+}
+
+export interface UpdateMetadataSchemaRequest {
+  name?: string
+  label?: string
+  default?: string
+  lookup?: string
+  validation?: string
+  parser?: string
+}
+
+export interface GetSchemasParams {
+  page?: number
+  page_size?: number
+  search?: string
+  applies_to?: string
+  is_active?: boolean
+}
+
+export interface CreateWorkflowRequest {
+  label: string
+  internal_name: string
+  auto_launch?: boolean
+}
+
+export interface UpdateWorkflowRequest {
+  label?: string
+  internal_name?: string
+  auto_launch?: boolean
+}
+
+export interface GetWorkflowsParams {
+  page?: number
+  page_size?: number
+  search?: string
+  is_active?: boolean
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Documents & Types
 // ═══════════════════════════════════════════════════════════════════════════════
 
