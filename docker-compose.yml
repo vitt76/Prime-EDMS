@@ -85,8 +85,14 @@ services:
       MAYAN_WORKER_A_QUEUES: converter,sources_fast,distribution
       # Override the hardcoded supervisor config
       COMMAND_WORKER_A: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker %(ENV_MAYAN_WORKER_A_CONCURRENCY)s --hostname=mayan-edms-worker_a.%%h --loglevel=ERROR -Ofair --queues=converter,sources_fast,distribution %(ENV_MAYAN_WORKER_A_MAX_MEMORY_PER_CHILD)s %(ENV_MAYAN_WORKER_A_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
+      # Phase B4: Dedicated AI Analysis Worker (heavy tasks - separate from main workers)
+      MAYAN_WORKER_D_QUEUES: ai_analysis
+      MAYAN_WORKER_D_CONCURRENCY: "--concurrency=2"
+      MAYAN_WORKER_D_MAX_MEMORY_PER_CHILD: "--max-memory-per-child=500000"
+      MAYAN_WORKER_D_MAX_TASKS_PER_CHILD: "--max-tasks-per-child=10"
+      COMMAND_WORKER_D: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker %(ENV_MAYAN_WORKER_D_CONCURRENCY)s --hostname=mayan-edms-worker_d.%%h --loglevel=INFO -Ofair --queues=ai_analysis %(ENV_MAYAN_WORKER_D_MAX_MEMORY_PER_CHILD)s %(ENV_MAYAN_WORKER_D_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
       # Force add our extensions via environment
-      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor', 'mayan.apps.dam.apps.DAMApp']"
+      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor', 'mayan.apps.dam.apps.DAMApp', 'mayan.apps.headless_api']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
       PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
       # AI Provider configurations
@@ -120,6 +126,10 @@ services:
       - ./mayan/apps/dam:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
       - ./mayan/apps/dynamic_search:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dynamic_search
       - ./mayan/apps/documents:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents
+      - ./mayan/apps/api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/api
+      - ./mayan/apps/storage:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/storage
+      - ./mayan/apps/rest_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api
+      - ./mayan/apps/headless_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
     ports:
       - "8080:8000"
     depends_on:

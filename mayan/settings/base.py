@@ -98,6 +98,7 @@ INSTALLED_APPS = (
     'mayan.apps.platform',
     'mayan.apps.quotas',
     'mayan.apps.rest_api',
+    'mayan.apps.headless_api',  # SPA-friendly API endpoints
     'mayan.apps.smart_settings',
     'mayan.apps.storage',
     'mayan.apps.templating',

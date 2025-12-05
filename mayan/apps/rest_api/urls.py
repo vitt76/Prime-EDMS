@@ -4,6 +4,9 @@ from .api_views import (
     APIRoot, APIVersionRoot, BatchRequestAPIView, BrowseableObtainAuthToken,
     ProjectInformationAPIView, schema_view
 )
+from mayan.apps.headless_api.views.config_views import HeadlessDocumentTypeConfigView
+from mayan.apps.headless_api.views.activity_views import HeadlessActivityFeedView
+from mayan.apps.headless_api.views.password_views import HeadlessPasswordChangeView
 from .literals import API_VERSION
 
 api_version_urls = [
@@ -19,6 +22,27 @@ api_version_urls = [
     url(
         regex=r'^batch_requests/$', name='batchrequest-create',
         view=BatchRequestAPIView.as_view()
+    ),
+    # Headless API endpoints
+    url(
+        regex=r'^headless/config/document_types/$',
+        view=HeadlessDocumentTypeConfigView.as_view(),
+        name='headless-config-document-types-list'
+    ),
+    url(
+        regex=r'^headless/config/document_types/(?P<document_type_id>\d+)/$',
+        view=HeadlessDocumentTypeConfigView.as_view(),
+        name='headless-config-document-type-detail'
+    ),
+    url(
+        regex=r'^headless/activity/feed/$',
+        view=HeadlessActivityFeedView.as_view(),
+        name='headless-activity-feed'
+    ),
+    url(
+        regex=r'^headless/password/change/$',
+        view=HeadlessPasswordChangeView.as_view(),
+        name='headless-password-change'
     )
 ]
 
