@@ -327,12 +327,73 @@
         </div>
       </div>
 
+      <!-- Loading State -->
+      <div v-if="isLoading" class="px-5 py-12 text-center">
+        <svg class="animate-spin mx-auto w-8 h-8 text-violet-600" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="mt-4 text-sm text-gray-500">Загрузка пользователей...</p>
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="error" class="px-5 py-12 text-center">
+        <svg class="mx-auto w-12 h-12 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <p class="mt-4 text-sm text-red-500">{{ error }}</p>
+        <button
+          type="button"
+          class="mt-4 px-4 py-2 bg-violet-600 text-white text-sm rounded-lg hover:bg-violet-700 transition-colors"
+          @click="loadUsers(currentPage)"
+        >
+          Повторить
+        </button>
+      </div>
+
       <!-- Empty State -->
-      <div v-if="filteredUsers.length === 0" class="px-5 py-12 text-center">
+      <div v-else-if="filteredUsers.length === 0" class="px-5 py-12 text-center">
         <svg class="mx-auto w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
         <p class="mt-4 text-sm text-gray-500">Пользователи не найдены</p>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="!isLoading && filteredUsers.length > 0" class="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+        <div class="text-sm text-gray-500">
+          Показано {{ filteredUsers.length }} из {{ adminStore.totalUsersCount }} пользователей
+          <span v-if="currentPage > 1">(страница {{ currentPage }})</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            :disabled="!hasPrevPage"
+            :class="[
+              'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+              hasPrevPage
+                ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            ]"
+            @click="goToPrevPage"
+          >
+            ← Назад
+          </button>
+          <span class="px-3 py-1.5 text-sm text-gray-600">{{ currentPage }}</span>
+          <button
+            type="button"
+            :disabled="!hasNextPage"
+            :class="[
+              'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+              hasNextPage
+                ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            ]"
+            @click="goToNextPage"
+          >
+            Вперёд →
+          </button>
+        </div>
       </div>
     </div>
 
@@ -433,7 +494,18 @@
           
           <form @submit.prevent="inviteUser" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Имя пользователя *</label>
+              <input
+                v-model="inviteForm.username"
+                type="text"
+                required
+                placeholder="username"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Email *</label>
               <input
                 v-model="inviteForm.email"
                 type="email"
@@ -444,13 +516,25 @@
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Роль</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Пароль *</label>
+              <input
+                v-model="inviteForm.password"
+                type="password"
+                required
+                placeholder="••••••••"
+                minlength="8"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              />
+              <p class="mt-1 text-xs text-gray-500">Минимум 8 символов</p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Группа (роль)</label>
               <select
                 v-model="inviteForm.roleId"
-                required
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               >
-                <option value="">Выберите роль</option>
+                <option value="">Без группы</option>
                 <option v-for="role in roles" :key="role.id" :value="role.id">
                   {{ role.label }}
                 </option>
@@ -465,7 +549,7 @@
                 class="w-4 h-4 text-violet-600 border-gray-300 rounded focus:ring-violet-500"
               />
               <label for="send-email" class="text-sm text-gray-600">
-                Отправить приглашение на email
+                Отправить приглашение на email (не реализовано)
               </label>
             </div>
 
@@ -479,9 +563,10 @@
               </button>
               <button
                 type="submit"
-                class="flex-1 px-4 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
+                :disabled="isLoading"
+                class="flex-1 px-4 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors disabled:opacity-50"
               >
-                Пригласить
+                {{ isLoading ? 'Создание...' : 'Создать' }}
               </button>
             </div>
           </form>
@@ -704,12 +789,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import type { AdminUser, AdminRole, StoredPermission } from '@/types/admin'
+import { useAdminStore } from '@/stores/adminStore'
+import { adminService } from '@/services/adminService'
+import { debounce } from '@/utils/debounce'
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// State
+// Store & State
 // ═══════════════════════════════════════════════════════════════════════════════
+const adminStore = useAdminStore()
+
 const activeTab = ref<'users' | 'roles'>('users')
 const searchQuery = ref('')
 const statusFilter = ref('')
@@ -720,6 +810,12 @@ const showDeleteModal = ref(false)
 const editingUser = ref<AdminUser | null>(null)
 const deletingUser = ref<AdminUser | null>(null)
 
+// Pagination state
+const currentPage = ref(1)
+const pageSize = ref(20)
+const hasNextPage = ref(false)
+const hasPrevPage = ref(false)
+
 const toast = reactive({
   show: false,
   message: '',
@@ -728,6 +824,8 @@ const toast = reactive({
 
 const inviteForm = ref({
   email: '',
+  username: '',
+  password: '',
   roleId: '',
   sendEmail: true
 })
@@ -740,13 +838,14 @@ const editForm = ref({
   status: 'active' as string,
   roleIds: [] as number[],
   is_staff: false,
-  is_superuser: false
+  is_superuser: false,
+  is_active: true
 })
 
-const tabs = [
-  { id: 'users' as const, label: 'Пользователи', count: 24 },
+const tabs = computed(() => [
+  { id: 'users' as const, label: 'Пользователи', count: adminStore.totalUsersCount },
   { id: 'roles' as const, label: 'Роли и права' }
-]
+])
 
 const statusStyles: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-700',
@@ -762,13 +861,9 @@ const statusLabels: Record<string, string> = {
   inactive: 'Неактивен'
 }
 
-// Mock data
-const roles = ref<AdminRole[]>([
-  { id: 1, label: 'Администратор', permissions: [], groups: [] },
-  { id: 2, label: 'Редактор', permissions: [], groups: [] },
-  { id: 3, label: 'Просмотр', permissions: [], groups: [] },
-  { id: 4, label: 'Загрузчик', permissions: [], groups: [] }
-])
+// Groups (roles in Mayan context)
+const roles = ref<AdminRole[]>([])
+const isLoadingGroups = ref(false)
 
 const permissions = ref<StoredPermission[]>([
   { id: 1, namespace: 'documents', name: 'documents.view', label: 'Просмотр документов' },
@@ -790,89 +885,29 @@ const permissionMatrix = ref<Record<number, Set<string>>>({
   4: new Set(['documents.view', 'documents.create', 'metadata.view'])
 })
 
-const users = ref<AdminUser[]>([
-  {
-    id: 1,
-    username: 'admin',
-    email: 'admin@maddam.ru',
-    first_name: 'Алексей',
-    last_name: 'Иванов',
-    is_active: true,
-    is_staff: true,
-    is_superuser: true,
-    date_joined: '2024-01-15T10:00:00Z',
-    last_login: '2024-12-01T08:30:00Z',
-    status: 'active',
-    groups: [],
-    roles: [{ id: 1, label: 'Администратор', permissions: [], groups: [] }],
-    two_factor_enabled: true
-  },
-  {
-    id: 2,
-    username: 'editor',
-    email: 'maria@company.ru',
-    first_name: 'Мария',
-    last_name: 'Петрова',
-    is_active: true,
-    is_staff: false,
-    is_superuser: false,
-    date_joined: '2024-03-20T14:00:00Z',
-    last_login: '2024-11-30T16:45:00Z',
-    status: 'active',
-    groups: [],
-    roles: [{ id: 2, label: 'Редактор', permissions: [], groups: [] }],
-    two_factor_enabled: false
-  },
-  {
-    id: 3,
-    username: 'newuser',
-    email: 'sergey@company.ru',
-    first_name: 'Сергей',
-    last_name: 'Козлов',
-    is_active: false,
-    is_staff: false,
-    is_superuser: false,
-    date_joined: '2024-11-28T09:00:00Z',
-    last_login: null,
-    status: 'invited',
-    groups: [],
-    roles: [{ id: 3, label: 'Просмотр', permissions: [], groups: [] }],
-    two_factor_enabled: false
-  },
-  {
-    id: 4,
-    username: 'blocked',
-    email: 'blocked@company.ru',
-    first_name: 'Иван',
-    last_name: 'Сидоров',
-    is_active: false,
-    is_staff: false,
-    is_superuser: false,
-    date_joined: '2024-02-10T11:00:00Z',
-    last_login: '2024-10-15T12:00:00Z',
-    status: 'suspended',
-    groups: [],
-    roles: [{ id: 4, label: 'Загрузчик', permissions: [], groups: [] }],
-    two_factor_enabled: false
-  }
-])
+// Use store users instead of local mock
+const users = computed(() => adminStore.users as AdminUser[])
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Computed
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// Use store data directly - filtering is done server-side
 const filteredUsers = computed(() => {
-  return users.value.filter(user => {
-    const matchesSearch = searchQuery.value === '' ||
-      user.email.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchQuery.value.toLowerCase())
-    
-    const matchesStatus = statusFilter.value === '' || user.status === statusFilter.value
-    
-    const matchesRole = roleFilter.value === '' || user.roles.some(r => r.id === Number(roleFilter.value))
-    
-    return matchesSearch && matchesStatus && matchesRole
-  })
+  let result = users.value || []
+  
+  // Client-side role filter (if needed)
+  if (roleFilter.value) {
+    result = result.filter(user => 
+      user.roles?.some(r => r.id === Number(roleFilter.value))
+    )
+  }
+  
+  return result
 })
+
+const isLoading = computed(() => adminStore.isLoading)
+const error = computed(() => adminStore.error)
 
 const groupedPermissions = computed(() => {
   const groups: Record<string, StoredPermission[]> = {}
@@ -883,6 +918,70 @@ const groupedPermissions = computed(() => {
     groups[perm.namespace].push(perm)
   })
   return groups
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Data Fetching
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function loadUsers(page = 1) {
+  currentPage.value = page
+  
+  try {
+    await adminStore.fetchUsers({
+      page,
+      page_size: pageSize.value,
+      search: searchQuery.value || undefined,
+      status: statusFilter.value || undefined
+    })
+    
+    // Update pagination state
+    hasNextPage.value = adminStore.totalUsersCount > page * pageSize.value
+    hasPrevPage.value = page > 1
+  } catch (err) {
+    console.error('[AdminUsers] Failed to load users:', err)
+    showToast('Ошибка загрузки пользователей', 'error')
+  }
+}
+
+async function loadGroups() {
+  isLoadingGroups.value = true
+  try {
+    const response = await adminService.getGroups({ page_size: 100 })
+    roles.value = response.results.map(g => ({
+      id: g.id,
+      label: g.name,
+      permissions: [],
+      groups: []
+    }))
+  } catch (err) {
+    console.error('[AdminUsers] Failed to load groups:', err)
+  } finally {
+    isLoadingGroups.value = false
+  }
+}
+
+// Debounced search
+const debouncedSearch = debounce(() => {
+  loadUsers(1)
+}, 300)
+
+// Watch for search query changes
+watch(searchQuery, () => {
+  debouncedSearch()
+})
+
+// Watch for filter changes
+watch(statusFilter, () => {
+  loadUsers(1)
+})
+
+// Initial load
+onMounted(async () => {
+  await Promise.all([
+    loadUsers(1),
+    loadGroups()
+  ])
 })
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -939,28 +1038,35 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
   }, 3000)
 }
 
-function inviteUser(): void {
-  // Mock: Add new user to the list
-  const newUser: AdminUser = {
-    id: Date.now(),
-    username: inviteForm.value.email.split('@')[0],
-    email: inviteForm.value.email,
-    first_name: '',
-    last_name: '',
-    is_active: false,
-    is_staff: false,
-    is_superuser: false,
-    date_joined: new Date().toISOString(),
-    last_login: null,
-    status: 'invited',
-    groups: [],
-    roles: [roles.value.find(r => r.id === Number(inviteForm.value.roleId))!].filter(Boolean),
-    two_factor_enabled: false
+async function inviteUser(): Promise<void> {
+  try {
+    // Create user via API
+    const userData = {
+      username: inviteForm.value.username || inviteForm.value.email.split('@')[0],
+      email: inviteForm.value.email,
+      password: inviteForm.value.password || generateTempPassword(),
+      first_name: '',
+      last_name: '',
+      is_active: true,
+      groups_pk_list: inviteForm.value.roleId ? [Number(inviteForm.value.roleId)] : []
+    }
+    
+    await adminStore.createUser(userData)
+    
+    showInviteModal.value = false
+    inviteForm.value = { email: '', username: '', password: '', roleId: '', sendEmail: true }
+    showToast('Пользователь создан: ' + userData.email)
+    
+    // Reload users list
+    await loadUsers(currentPage.value)
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Ошибка создания пользователя'
+    showToast(errorMsg, 'error')
   }
-  users.value.push(newUser)
-  showInviteModal.value = false
-  inviteForm.value = { email: '', roleId: '', sendEmail: true }
-  showToast('Приглашение отправлено на ' + newUser.email)
+}
+
+function generateTempPassword(): string {
+  return 'Temp' + Math.random().toString(36).slice(2, 10) + '!'
 }
 
 function editUser(user: AdminUser): void {
@@ -971,9 +1077,10 @@ function editUser(user: AdminUser): void {
     email: user.email,
     username: user.username,
     status: user.status,
-    roleIds: user.roles.map(r => r.id),
+    roleIds: user.roles?.map(r => r.id) || [],
     is_staff: user.is_staff,
-    is_superuser: user.is_superuser
+    is_superuser: user.is_superuser,
+    is_active: user.is_active
   }
   showEditModal.value = true
 }
@@ -992,26 +1099,33 @@ function toggleRole(roleId: number): void {
   }
 }
 
-function saveUser(): void {
+async function saveUser(): Promise<void> {
   if (!editingUser.value) return
   
-  const userIndex = users.value.findIndex(u => u.id === editingUser.value!.id)
-  if (userIndex > -1) {
-    users.value[userIndex] = {
-      ...users.value[userIndex],
+  try {
+    // Determine is_active based on status
+    const is_active = editForm.value.status === 'active'
+    
+    await adminStore.updateUser(editingUser.value.id, {
       first_name: editForm.value.first_name,
       last_name: editForm.value.last_name,
       email: editForm.value.email,
       username: editForm.value.username,
-      status: editForm.value.status as 'active' | 'invited' | 'suspended' | 'inactive',
-      roles: editForm.value.roleIds.map(id => roles.value.find(r => r.id === id)!).filter(Boolean),
+      is_active,
       is_staff: editForm.value.is_staff,
-      is_superuser: editForm.value.is_superuser
-    }
+      is_superuser: editForm.value.is_superuser,
+      groups_pk_list: editForm.value.roleIds
+    })
+    
+    closeEditModal()
+    showToast('Пользователь успешно обновлён')
+    
+    // Reload users list
+    await loadUsers(currentPage.value)
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Ошибка обновления пользователя'
+    showToast(errorMsg, 'error')
   }
-  
-  closeEditModal()
-  showToast('Пользователь успешно обновлён')
 }
 
 function deleteUser(user: AdminUser): void {
@@ -1019,21 +1133,39 @@ function deleteUser(user: AdminUser): void {
   showDeleteModal.value = true
 }
 
-function confirmDeleteUser(): void {
+async function confirmDeleteUser(): Promise<void> {
   if (!deletingUser.value) return
   
-  const userIndex = users.value.findIndex(u => u.id === deletingUser.value!.id)
-  if (userIndex > -1) {
-    users.value.splice(userIndex, 1)
+  try {
+    await adminStore.deleteUser(deletingUser.value.id)
+    
+    showDeleteModal.value = false
+    deletingUser.value = null
+    showToast('Пользователь удалён')
+    
+    // Reload users list
+    await loadUsers(currentPage.value)
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Ошибка удаления пользователя'
+    showToast(errorMsg, 'error')
   }
-  
-  showDeleteModal.value = false
-  deletingUser.value = null
-  showToast('Пользователь удалён')
 }
 
 function impersonateUser(user: AdminUser): void {
-  showToast(`Вход от имени ${user.first_name} ${user.last_name}...`)
+  showToast(`Вход от имени ${user.first_name} ${user.last_name}... (не реализовано)`)
+}
+
+// Pagination handlers
+function goToNextPage() {
+  if (hasNextPage.value) {
+    loadUsers(currentPage.value + 1)
+  }
+}
+
+function goToPrevPage() {
+  if (hasPrevPage.value) {
+    loadUsers(currentPage.value - 1)
+  }
 }
 </script>
 

@@ -1,4 +1,0 @@
-{
-  "summary": "Investigated missing celery command inside container; highlighted that celery lives under /opt/mayan-edms/bin within the container, so commands should be invoked via docker exec in WSL using that path.",
-  "current_status": "WSL stack is up; S3 integration debugging continues and celery commands must be run with the virtualenv binary."
-}

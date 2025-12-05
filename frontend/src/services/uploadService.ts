@@ -2,19 +2,41 @@
  * Upload Service
  * ==============
  * 
- * Handles file uploads to Mayan EDMS using the 2-step process:
- * 1. Create Document Container (POST /api/v4/documents/)
- * 2. Upload File Binary (POST /api/v4/documents/{id}/files/)
+ * Handles file uploads to Mayan EDMS using two strategies:
+ * 
+ * 1. SIMPLE UPLOAD (files < 50MB):
+ *    - Create Document Container (POST /api/v4/documents/)
+ *    - Upload File Binary (POST /api/v4/documents/{id}/files/)
+ * 
+ * 2. CHUNKED UPLOAD (files >= 50MB):
+ *    - Initialize upload session (POST /api/v4/uploads/init/)
+ *    - Upload chunks sequentially (POST /api/v4/uploads/append/)
+ *    - Complete upload and create document (POST /api/v4/uploads/complete/)
  * 
  * Features:
+ * - Automatic strategy selection based on file size
  * - Progress tracking via Axios onUploadProgress
  * - Automatic cleanup on failure (delete orphan document)
  * - Cancellation support via AbortSignal
  * - Non-blocking async operations
+ * - Retry logic for failed chunks
  */
 
-import axios, { AxiosProgressEvent, CancelTokenSource } from 'axios'
+import axios, { AxiosProgressEvent } from 'axios'
 import { getToken } from './authService'
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Files smaller than this use simple upload, larger use chunked */
+const CHUNKED_UPLOAD_THRESHOLD = 50 * 1024 * 1024 // 50MB
+
+/** Size of each chunk for chunked upload */
+const CHUNK_SIZE = 5 * 1024 * 1024 // 5MB
+
+/** Max retries for failed chunk uploads */
+const MAX_CHUNK_RETRIES = 3
 
 // ============================================================================
 // TYPES
@@ -31,8 +53,12 @@ export interface UploadProgress {
   speed: number
   /** Estimated time remaining in seconds */
   eta: number
-  /** Current step: 'creating' | 'uploading' | 'processing' */
-  step: 'creating' | 'uploading' | 'processing'
+  /** Current step: 'creating' | 'uploading' | 'processing' | 'chunking' */
+  step: 'creating' | 'uploading' | 'processing' | 'chunking'
+  /** Current chunk number (for chunked uploads) */
+  currentChunk?: number
+  /** Total chunks (for chunked uploads) */
+  totalChunks?: number
 }
 
 export interface UploadOptions {
@@ -88,6 +114,25 @@ interface MayanFileResponse {
   document_url: string
 }
 
+// Chunked Upload API Responses
+interface ChunkedUploadInitResponse {
+  upload_id: string
+  s3_key: string
+  parts: any[]
+}
+
+interface ChunkedUploadAppendResponse {
+  part_number: number
+  etag: string
+}
+
+interface ChunkedUploadCompleteResponse {
+  document_id: number
+  file_id: number
+  label: string
+  download_url?: string
+}
+
 // ============================================================================
 // UPLOAD SERVICE
 // ============================================================================
@@ -96,7 +141,27 @@ class UploadService {
   private baseUrl = '/api/v4'
   
   /**
-   * Main upload method - handles the complete 2-step Mayan upload process
+   * Main upload method - automatically selects strategy based on file size
+   * 
+   * - Files < 50MB: Simple 2-step upload
+   * - Files >= 50MB: Chunked upload for reliability
+   * 
+   * @param file - File to upload
+   * @param options - Upload options (progress callback, document type, etc.)
+   * @returns UploadResult with document and file IDs
+   */
+  async uploadFile(file: File, options: UploadOptions = {}): Promise<UploadResult> {
+    if (file.size >= CHUNKED_UPLOAD_THRESHOLD) {
+      console.log(`[UploadService] File ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) - using chunked upload`)
+      return this.uploadChunked(file, options)
+    } else {
+      console.log(`[UploadService] File ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) - using simple upload`)
+      return this.uploadAsset(file, options)
+    }
+  }
+  
+  /**
+   * Simple 2-step upload for smaller files (< 50MB)
    * 
    * @param file - File to upload
    * @param options - Upload options (progress callback, document type, etc.)
@@ -308,8 +373,11 @@ class UploadService {
         continue
       }
       
+      const file = files[i]
+      if (!file) continue
+      
       try {
-        const result = await this.uploadAsset(files[i], {
+        const result = await this.uploadAsset(file, {
           ...options,
           onProgress: (progress) => options.onFileProgress?.(i, progress)
         })
@@ -326,6 +394,241 @@ class UploadService {
     }
     
     return { results, errors }
+  }
+  
+  /**
+   * Chunked upload for large files (>= 50MB)
+   * 
+   * Uses the backend's chunked upload API (Phase B3):
+   * 1. POST /api/v4/uploads/init/ - Initialize upload session
+   * 2. POST /api/v4/uploads/append/ - Upload each chunk
+   * 3. POST /api/v4/uploads/complete/ - Finalize and create document
+   * 
+   * @param file - File to upload
+   * @param options - Upload options
+   * @returns UploadResult with document and file IDs
+   */
+  async uploadChunked(file: File, options: UploadOptions = {}): Promise<UploadResult> {
+    const token = getToken()
+    
+    if (!token) {
+      throw new Error('Not authenticated. Please login first.')
+    }
+    
+    const headers = {
+      'Authorization': `Token ${token}`,
+    }
+    
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+    let uploadId: string | null = null
+    
+    // Track progress
+    let uploadedBytes = 0
+    let lastTime = Date.now()
+    let lastBytes = 0
+    
+    const reportProgress = (loaded: number, step: UploadProgress['step'], currentChunk?: number) => {
+      const now = Date.now()
+      const timeDiff = (now - lastTime) / 1000 || 0.1
+      const bytesDiff = loaded - lastBytes
+      const speed = bytesDiff / timeDiff
+      const remaining = file.size - loaded
+      const eta = speed > 0 ? remaining / speed : 0
+      
+      lastTime = now
+      lastBytes = loaded
+      
+      options.onProgress?.({
+        percent: Math.min(95, Math.round((loaded / file.size) * 95)),
+        loaded,
+        total: file.size,
+        speed,
+        eta,
+        step,
+        currentChunk,
+        totalChunks
+      })
+    }
+    
+    try {
+      // =======================================================================
+      // STEP 1: Initialize Chunked Upload
+      // =======================================================================
+      options.onProgress?.({
+        percent: 0,
+        loaded: 0,
+        total: file.size,
+        speed: 0,
+        eta: 0,
+        step: 'creating',
+        currentChunk: 0,
+        totalChunks
+      })
+      
+      console.log('[UploadService] Chunked: Initializing upload session...')
+      
+      if (options.signal?.aborted) {
+        throw new Error('Upload cancelled')
+      }
+      
+      const initResponse = await axios.post<ChunkedUploadInitResponse>(
+        `${this.baseUrl}/uploads/init/`,
+        {
+          filename: file.name,
+          total_size: file.size,
+          content_type: file.type || 'application/octet-stream'
+        },
+        {
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json'
+          },
+          signal: options.signal
+        }
+      )
+      
+      uploadId = initResponse.data.upload_id
+      console.log('[UploadService] Chunked: Upload session initialized:', uploadId)
+      
+      // =======================================================================
+      // STEP 2: Upload Chunks
+      // =======================================================================
+      const parts: { part_number: number; etag: string }[] = []
+      
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        if (options.signal?.aborted) {
+          throw new Error('Upload cancelled')
+        }
+        
+        const start = chunkIndex * CHUNK_SIZE
+        const end = Math.min(start + CHUNK_SIZE, file.size)
+        const chunk = file.slice(start, end)
+        const partNumber = chunkIndex + 1
+        
+        console.log(`[UploadService] Chunked: Uploading part ${partNumber}/${totalChunks} (${start}-${end})`)
+        
+        // Retry logic for chunks
+        let lastError: Error | null = null
+        for (let retry = 0; retry < MAX_CHUNK_RETRIES; retry++) {
+          try {
+            const chunkFormData = new FormData()
+            chunkFormData.append('upload_id', uploadId)
+            chunkFormData.append('part_number', String(partNumber))
+            chunkFormData.append('chunk', chunk, file.name)
+            
+            const appendResponse = await axios.post<ChunkedUploadAppendResponse>(
+              `${this.baseUrl}/uploads/append/`,
+              chunkFormData,
+              {
+                headers: {
+                  ...headers,
+                  'Content-Type': 'multipart/form-data'
+                },
+                signal: options.signal,
+                onUploadProgress: (event: AxiosProgressEvent) => {
+                  const chunkLoaded = event.loaded || 0
+                  const totalLoaded = uploadedBytes + chunkLoaded
+                  reportProgress(totalLoaded, 'chunking', partNumber)
+                }
+              }
+            )
+            
+            parts.push({
+              part_number: partNumber,
+              etag: appendResponse.data.etag
+            })
+            
+            uploadedBytes = end
+            lastError = null
+            break // Success - exit retry loop
+            
+          } catch (error: any) {
+            lastError = error
+            console.warn(`[UploadService] Chunk ${partNumber} failed, retry ${retry + 1}/${MAX_CHUNK_RETRIES}:`, error.message)
+            
+            if (retry < MAX_CHUNK_RETRIES - 1) {
+              // Wait before retry (exponential backoff)
+              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retry)))
+            }
+          }
+        }
+        
+        if (lastError) {
+          throw new Error(`Chunk ${partNumber} failed after ${MAX_CHUNK_RETRIES} retries: ${lastError.message}`)
+        }
+      }
+      
+      // =======================================================================
+      // STEP 3: Complete Upload
+      // =======================================================================
+      reportProgress(file.size, 'processing')
+      
+      console.log('[UploadService] Chunked: Completing upload...')
+      
+      const documentTypeId = options.documentTypeId || 1
+      
+      const completeResponse = await axios.post<ChunkedUploadCompleteResponse>(
+        `${this.baseUrl}/uploads/complete/`,
+        {
+          upload_id: uploadId,
+          label: file.name,
+          description: options.description || '',
+          document_type_id: documentTypeId,
+          parts
+        },
+        {
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json'
+          },
+          signal: options.signal
+        }
+      )
+      
+      console.log('[UploadService] Chunked: Upload completed, document ID:', completeResponse.data.document_id)
+      
+      // Final progress
+      options.onProgress?.({
+        percent: 100,
+        loaded: file.size,
+        total: file.size,
+        speed: 0,
+        eta: 0,
+        step: 'processing'
+      })
+      
+      // Add to cabinet if specified
+      if (options.cabinetId) {
+        await this.addToCabinet(completeResponse.data.document_id, options.cabinetId, token)
+      }
+      
+      return {
+        documentId: completeResponse.data.document_id,
+        fileId: completeResponse.data.file_id,
+        label: file.name,
+        documentUrl: `${this.baseUrl}/documents/${completeResponse.data.document_id}/`,
+        downloadUrl: completeResponse.data.download_url
+      }
+      
+    } catch (error: any) {
+      console.error('[UploadService] Chunked upload failed:', error)
+      
+      // TODO: Could call abort endpoint to cleanup partial upload on server
+      // if (uploadId) { await this.abortChunkedUpload(uploadId, token) }
+      
+      // Re-throw with meaningful message
+      if (error.response?.status === 413) {
+        throw new Error('File too large. Maximum size exceeded.')
+      } else if (error.response?.status === 401) {
+        throw new Error('Session expired. Please login again.')
+      } else if (error.response?.status === 507) {
+        throw new Error('Server storage full. Contact administrator.')
+      } else if (error.message === 'Upload cancelled') {
+        throw error
+      } else {
+        throw new Error(error.response?.data?.detail || error.message || 'Chunked upload failed')
+      }
+    }
   }
   
   /**

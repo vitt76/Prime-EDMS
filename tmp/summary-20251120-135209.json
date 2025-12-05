@@ -1,4 +1,0 @@
-{
-  "summary": "Investigated missing celery command inside container; noted that celery executable lives in the Mayan virtualenv under /opt/mayan-edms/bin and should be invoked from there or via docker exec in WSL.",
-  "current_status": "Mayan stack is running under WSL; S3 work ongoing and celery commands must be called via the virtualenv path."
-}

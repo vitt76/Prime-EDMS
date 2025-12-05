@@ -2,29 +2,32 @@
  * Authentication Service
  * ======================
  * 
+ * Phase A1.2: Auth Logic Implementation
+ * 
  * Handles authentication with Mayan EDMS backend.
  * Supports Token-based authentication (DRF Token).
  * 
- * API Endpoints:
+ * API Endpoints (verified against backend):
  * - POST /api/v4/auth/token/obtain/ - Get auth token
- * - GET /api/v4/user_management/users/current/ - Get current user
+ * - GET /api/v4/users/current/ - Get current user info
  */
 
-import { apiService } from './apiService'
-import type { User } from '@/types'
+import axios from 'axios'
+import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
 /**
- * Use real API authentication instead of mocks.
- * Set to `true` to connect to real Django backend.
+ * Use real API authentication.
+ * Default: true (always try real API first)
+ * Set VITE_USE_MOCK_AUTH=true in .env to force mock mode
  */
-const USE_REAL_API = import.meta.env.VITE_USE_REAL_API === 'true'
+const USE_REAL_API = import.meta.env.VITE_USE_MOCK_AUTH !== 'true'
 
 /**
- * Token storage key
+ * LocalStorage keys
  */
 const TOKEN_KEY = 'auth_token'
 const USER_KEY = 'auth_user'
@@ -78,22 +81,48 @@ class AuthService {
    */
   async obtainToken(username: string, password: string): Promise<{ token: string }> {
     if (!USE_REAL_API) {
-      // Mock mode - simulate async operation and return fake token
-      console.log('[Auth] Using mock token for:', username)
+      console.log('[Auth] Using mock login (DEV mode)')
+      return this.mockLogin(username, password)
+    }
 
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 500))
+    // PRODUCTION: Real Django Token authentication
+    console.log('[Auth] Attempting real login for:', username)
 
-      // Create mock user data
-      const mockUser: User = {
-        id: 1,
-        username: username || 'admin',
-        email: `${username || 'admin'}@example.com`,
-        first_name: 'Test',
-        last_name: 'User',
-        is_active: true,
-        permissions: ['admin.access', 'documents.view', 'documents.edit'],
-        role: 'admin'
+    try {
+      // Step 1: Obtain token
+      const tokenResponse = await axios.post<TokenObtainResponse>(
+        '/api/v4/auth/token/obtain/',
+        { username, password },
+        {
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+
+      const token = tokenResponse.data.token
+      if (!token) {
+        throw new Error('Token not received from server')
+      }
+
+      // Store token
+      setToken(token)
+      console.log('[Auth] Token obtained successfully')
+
+      // Step 2: Get current user info
+      const userResponse = await authAxios.get<MayanUserResponse>(
+        '/api/v4/users/current/'
+      )
+
+      // Store user data
+      const userData = this.mapMayanUser(userResponse.data)
+      localStorage.setItem(USER_KEY, JSON.stringify(userData))
+
+      console.log('[Auth] Login successful for:', userData.username)
+    } catch (error: any) {
+      clearToken()
+      
+      // Handle specific error cases
+      if (error.response?.status === 400) {
+        throw new Error('Неверное имя пользователя или пароль')
       }
 
       // Save user data
@@ -111,26 +140,70 @@ class AuthService {
   }
 
   /**
-   * Get current user info or return mock user
+   * Logout current user.
+   * Clears token from localStorage and removes Authorization header.
    */
-  async getCurrentUser(): Promise<User> {
+  async logout(): Promise<void> {
+    console.log('[Auth] Logging out...')
+    
+    // Clear all auth data from localStorage
+    clearToken()
+    localStorage.removeItem('dev_authenticated')
+    
+    // Reset axios default headers
+    delete axios.defaults.headers.common['Authorization']
+    
+    console.log('[Auth] ✅ Logged out successfully')
+  }
+
+  /**
+   * Get current authenticated user
+   */
+  async getCurrentUser(): Promise<GetCurrentUserResponse> {
+    // DEV MODE: Return stored mock user
     if (!USE_REAL_API) {
-      // Mock mode - return mock user
-      const storedUser = localStorage.getItem(USER_KEY)
-      if (storedUser) {
-        return JSON.parse(storedUser)
+      const userData = localStorage.getItem(USER_KEY)
+      if (userData) {
+        const user = JSON.parse(userData)
+        return { user, permissions: user.permissions || [] }
       }
 
       // Default mock user
       return {
-        id: 1,
-        username: 'admin',
-        email: 'admin@example.com',
-        first_name: 'Admin',
-        last_name: 'User',
-        is_active: true,
-        permissions: ['admin.access', 'documents.view', 'documents.edit'],
-        role: 'admin'
+        user: {
+          id: 1,
+          email: 'admin@example.com',
+          first_name: 'Admin',
+          last_name: 'User',
+          username: 'admin',
+          is_active: true,
+          permissions: ['admin.access', 'documents.view'],
+          role: 'admin'
+        },
+        permissions: ['admin.access', 'documents.view']
+      }
+    }
+
+    // PRODUCTION: Fetch from API
+    const token = getToken()
+    if (!token) {
+      throw new Error('Not authenticated')
+    }
+
+    try {
+      const response = await authAxios.get<MayanUserResponse>(
+        '/api/v4/users/current/'
+      )
+      const user = this.mapMayanUser(response.data)
+      
+      // Update stored user data
+      localStorage.setItem(USER_KEY, JSON.stringify(user))
+
+      return { user, permissions: user.permissions || [] }
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        clearToken()
+        throw new Error('Session expired')
       }
     }
 
@@ -153,9 +226,39 @@ class AuthService {
    */
   async logout(): Promise<void> {
     if (!USE_REAL_API) {
-      // Mock mode - just clear local storage
-      console.log('[Auth] Mock logout')
-      return
+      return this.isAuthenticated()
+    }
+
+    if (!hasToken()) {
+      return false
+    }
+
+    try {
+      await authAxios.get('/api/v4/users/current/')
+      return true
+    } catch {
+      clearToken()
+      return false
+    }
+  }
+
+  /**
+   * Get CSRF token from cookies or meta tag
+   */
+  private getCsrfToken(): string {
+    // Try to get from cookies
+    const cookies = document.cookie.split(';')
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=')
+      if (name === 'csrftoken') {
+        return decodeURIComponent(value)
+      }
+    }
+
+    // Try to get from meta tag
+    const metaToken = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement
+    if (metaToken) {
+      return metaToken.content
     }
 
     // Real API mode

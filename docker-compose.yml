@@ -129,7 +129,6 @@ services:
       - ./mayan/apps/api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/api
       - ./mayan/apps/storage:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/storage
       - ./mayan/apps/rest_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api
-      - ./mayan/apps/headless_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
     ports:
       - "8080:8000"
     depends_on:

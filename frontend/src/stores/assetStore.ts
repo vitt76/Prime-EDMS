@@ -1,29 +1,33 @@
 /**
- * Asset Store
+ * Asset Store - Phase A2 Implementation
  * 
- * Manages DAM assets state with support for:
- * - Real API (Mayan EDMS /api/v4/documents/)
- * - Mock data (for frontend-first development)
+ * Manages DAM assets state connected to real Mayan EDMS backend.
+ * Uses optimized API endpoint: GET /api/v4/documents/optimized/
  * 
- * Handles pagination, filtering, sorting, selection, and CRUD operations.
+ * Features:
+ * - Real API integration (no more mock mode)
+ * - Pagination, filtering, sorting
+ * - Selection management
+ * - CRUD operations
+ * - Upload support via 2-step Mayan API
  */
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
-import { assetService } from '@/services/assetService'
 import type { Asset, GetAssetsParams, PaginatedResponse } from '@/types/api'
 import { formatApiError } from '@/utils/errors'
 import type { AxiosProgressEvent } from 'axios'
 
-// Import document adapter for Mayan API transformation
+// Import optimized adapter for Mayan API transformation
 import {
-  adaptPaginatedResponse,
-  adaptDocument,
-  type MayanDocument,
-  type MayanPaginatedResponse
-} from '@/services/adapters/documentAdapter'
-import { getToken } from '@/services/authService'
+  adaptBackendPaginatedResponse,
+  adaptBackendAsset,
+  type BackendOptimizedDocument,
+  type BackendPaginatedResponse,
+} from '@/services/adapters/mayanAdapter'
+
+import { getToken, clearToken } from '@/services/authService'
 import {
   uploadService,
   updateDocumentMetadata,
@@ -31,19 +35,8 @@ import {
   type UploadProgress
 } from '@/services/uploadService'
 
-// Import mock data functions
-import {
-  getMockAssets,
-  getMockAssetById,
-  deleteMockAsset,
-  updateMockAsset,
-  addMockAsset,
-  getMockTags,
-  getMockTypeCounts,
-  getMockStatusCounts,
-  type MockAssetFilters,
-  type MockAssetSort,
-} from '@/mocks/assets'
+// Import auth store for logout on 401
+import { useAuthStore } from '@/stores/authStore'
 
 // ============================================================================
 // TYPES
@@ -71,35 +64,27 @@ interface AssetSort {
 }
 
 // ============================================================================
+// API CONFIGURATION
+// ============================================================================
+
+/** 
+ * Optimized Documents API endpoint
+ * Phase B2: Returns high-performance JSON with N+1 query fixes
+ */
+const OPTIMIZED_DOCUMENTS_API = '/api/v4/documents/optimized/'
+
+/**
+ * Fallback to standard Documents API if optimized not available
+ */
+const STANDARD_DOCUMENTS_API = '/api/v4/documents/'
+
+// ============================================================================
 // STORE DEFINITION
 // ============================================================================
 
 export const useAssetStore = defineStore(
   'asset',
   () => {
-    // ========================================================================
-    // CONFIGURATION
-    // ========================================================================
-    
-    /**
-     * Enable mock data mode.
-     * When true, uses local mock data instead of API calls.
-     * Set to false to connect to real Mayan EDMS backend.
-     */
-    const useMock = ref(import.meta.env.VITE_USE_MOCK_DATA === 'true')
-    
-    /**
-     * Simulated network delay in milliseconds.
-     * Only applies when useMock is true.
-     */
-    const mockDelay = ref(300)
-    
-    /**
-     * Debug mode - stores raw API response for debugging
-     */
-    const debugMode = ref(import.meta.env.DEV)
-    const lastRawResponse = ref<any>(null)
-    
     // ========================================================================
     // STATE
     // ========================================================================
@@ -124,6 +109,13 @@ export const useAssetStore = defineStore(
     const availableTags = ref<string[]>([])
     const typeCounts = ref<Record<string, number>>({})
     const statusCounts = ref<Record<string, number>>({})
+    
+    // Debug mode
+    const debugMode = ref(import.meta.env.DEV)
+    const lastRawResponse = ref<any>(null)
+    
+    // API endpoint preference
+    const useOptimizedApi = ref(true)
     
     // ========================================================================
     // GETTERS
@@ -160,38 +152,87 @@ export const useAssetStore = defineStore(
     // ========================================================================
     
     /**
-     * Simulate network delay for mock mode
+     * Build query parameters for API request
      */
-    async function simulateDelay(): Promise<void> {
-      if (useMock.value && mockDelay.value > 0) {
-        await new Promise(resolve => setTimeout(resolve, mockDelay.value))
+    function buildQueryParams(params?: GetAssetsParams): URLSearchParams {
+      const queryParams = new URLSearchParams()
+      
+      // Pagination
+      queryParams.set('page', String(params?.page || currentPage.value))
+      queryParams.set('page_size', String(params?.page_size || pageSize.value))
+      
+      // Sorting - map frontend field names to backend
+      const sortField = sort.value.field === 'date_added' ? 'datetime_created' 
+                      : sort.value.field === 'name' ? 'label' 
+                      : sort.value.field
+      const sortDirection = sort.value.direction === 'desc' ? '-' : ''
+      queryParams.set('ordering', `${sortDirection}${sortField}`)
+      
+      // Search
+      if (searchQuery.value.trim()) {
+        queryParams.set('q', searchQuery.value.trim())
+      }
+      
+      // Type filter
+      if (filters.value.type?.length) {
+        // Mayan uses document_type__label for filtering
+        filters.value.type.forEach(type => {
+          queryParams.append('document_type__label', type)
+        })
+      }
+      
+      // Date range
+      if (filters.value.dateFrom) {
+        queryParams.set('datetime_created__gte', filters.value.dateFrom)
+      }
+      if (filters.value.dateTo) {
+        queryParams.set('datetime_created__lte', filters.value.dateTo)
+      }
+      
+      return queryParams
+    }
+    
+    /**
+     * Get authorization headers
+     */
+    function getAuthHeaders(): Record<string, string> {
+      const token = getToken()
+      if (!token) {
+        throw new Error('Not authenticated')
+      }
+      return {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       }
     }
     
     /**
-     * Convert store filters to mock filter format
+     * Handle API errors with proper logout on 401
      */
-    function toMockFilters(): MockAssetFilters {
-      return {
-        type: filters.value.type,
-        tags: filters.value.tags,
-        status: filters.value.status,
-        dateFrom: filters.value.dateFrom,
-        dateTo: filters.value.dateTo,
-        sizeMin: filters.value.sizeMin,
-        sizeMax: filters.value.sizeMax,
-        search: searchQuery.value,
+    async function handleApiError(err: any): Promise<void> {
+      console.error('[AssetStore] API error:', err)
+      
+      if (err.response?.status === 401) {
+        // Token expired or invalid - logout user
+        console.warn('[AssetStore] 401 Unauthorized - logging out')
+        const authStore = useAuthStore()
+        await authStore.logout()
+        error.value = 'Сессия истекла. Войдите снова.'
+        return
       }
-    }
-    
-    /**
-     * Convert store sort to mock sort format
-     */
-    function toMockSort(): MockAssetSort {
-      return {
-        field: sort.value.field,
-        direction: sort.value.direction,
+      
+      if (err.response?.status === 403) {
+        error.value = 'Нет доступа к документам.'
+        return
       }
+      
+      if (err.code === 'ERR_NETWORK' || err.message?.includes('Network')) {
+        error.value = 'Ошибка сети. Проверьте подключение.'
+        return
+      }
+      
+      error.value = formatApiError(err)
     }
     
     // ========================================================================
@@ -199,8 +240,8 @@ export const useAssetStore = defineStore(
     // ========================================================================
     
     /**
-     * Fetch assets with current filters and pagination
-     * Uses Mayan EDMS /api/v4/documents/ endpoint with documentAdapter
+     * Fetch assets from real Mayan EDMS API
+     * Uses optimized endpoint: GET /api/v4/documents/optimized/
      */
     async function fetchAssets(params?: GetAssetsParams): Promise<void> {
       isLoading.value = true
@@ -208,117 +249,68 @@ export const useAssetStore = defineStore(
       lastRawResponse.value = null
 
       try {
-        if (useMock.value) {
-          // Use mock data
-          await simulateDelay()
-          
-          const response = getMockAssets(
-            params?.page || currentPage.value,
-            params?.page_size || pageSize.value,
-            toMockFilters(),
-            toMockSort()
-          )
-          
-          assets.value = response.results
-          totalCount.value = response.count
-          totalPages.value = response.total_pages || Math.ceil(response.count / pageSize.value)
-          
-          // Update facets
-          availableTags.value = getMockTags()
-          typeCounts.value = getMockTypeCounts()
-          statusCounts.value = getMockStatusCounts()
-          
-          if (params?.page) {
-            currentPage.value = params.page
-          }
-          
-          console.log('[AssetStore] Loaded mock assets:', response.results.length)
-        } else {
-          // Use real Mayan EDMS API
-          const token = getToken()
-          
-          // If no token available, fall back to mock data
-          if (!token) {
-            console.warn('[AssetStore] No auth token found, falling back to mock data')
-            await simulateDelay()
-            
-            const response = getMockAssets(
-              params?.page || currentPage.value,
-              params?.page_size || pageSize.value,
-              toMockFilters(),
-              toMockSort()
-            )
-            
-            assets.value = response.results
-            totalCount.value = response.count
-            totalPages.value = response.total_pages || Math.ceil(response.count / pageSize.value)
-            
-            if (params?.page) {
-              currentPage.value = params.page
-            }
-            
-            console.log('[AssetStore] Loaded mock assets (no token):', response.results.length)
-            return
-          }
-          
-          console.log('[AssetStore] Fetching from real API...')
-
-          // Build query params
-          const queryParams = new URLSearchParams()
-          queryParams.set('page', String(params?.page || currentPage.value))
-          queryParams.set('page_size', String(params?.page_size || pageSize.value))
-          
-          // Add search query if present
-          if (searchQuery.value) {
-            queryParams.set('q', searchQuery.value)
-          }
-
-          // Fetch from Mayan API
-          const response = await axios.get<MayanPaginatedResponse<MayanDocument>>(
-            `/api/v4/documents/?${queryParams.toString()}`,
-            {
-              headers: {
-                'Authorization': `Token ${token}`,
-                'Content-Type': 'application/json'
-              }
-            }
-          )
-
-          // Store raw response for debugging
-          if (debugMode.value) {
-            lastRawResponse.value = response.data
-            console.log('[AssetStore] Raw API response:', response.data)
-          }
-
-          // Transform using adapter
-          const adapted = adaptPaginatedResponse(response.data)
-          
-          assets.value = adapted.results
-          totalCount.value = adapted.count
-          totalPages.value = adapted.total_pages || Math.ceil(adapted.count / pageSize.value)
-
-          if (params?.page) {
-            currentPage.value = params.page
-          }
-
-          console.log('[AssetStore] Loaded real assets:', adapted.results.length)
+        const token = getToken()
+        
+        if (!token) {
+          console.warn('[AssetStore] No auth token - redirecting to login')
+          const authStore = useAuthStore()
+          await authStore.logout()
+          error.value = 'Необходимо войти в систему'
+          return
         }
+        
+        const queryParams = buildQueryParams(params)
+        
+        // Try optimized endpoint first, fallback to standard if needed
+        const apiEndpoint = useOptimizedApi.value 
+          ? OPTIMIZED_DOCUMENTS_API 
+          : STANDARD_DOCUMENTS_API
+        
+        console.log(`[AssetStore] Fetching from ${apiEndpoint}?${queryParams.toString()}`)
+
+        const response = await axios.get<BackendPaginatedResponse<BackendOptimizedDocument>>(
+          `${apiEndpoint}?${queryParams.toString()}`,
+          { headers: getAuthHeaders() }
+        )
+
+        // Store raw response for debugging
+        if (debugMode.value) {
+          lastRawResponse.value = response.data
+          console.log('[AssetStore] Raw API response:', response.data)
+        }
+
+        // Transform using optimized adapter
+        const adapted = adaptBackendPaginatedResponse(response.data)
+        
+        assets.value = adapted.results
+        totalCount.value = adapted.count
+        totalPages.value = adapted.total_pages || Math.ceil(adapted.count / pageSize.value)
+
+        if (params?.page) {
+          currentPage.value = params.page
+        }
+
+        // Extract unique tags for filter UI
+        const allTags = new Set<string>()
+        adapted.results.forEach(asset => {
+          asset.tags?.forEach(tag => allTags.add(tag))
+        })
+        availableTags.value = Array.from(allTags).sort()
+
+        console.log(`[AssetStore] Loaded ${adapted.results.length} assets from API`)
+        
       } catch (err: any) {
-        console.error('[AssetStore] Fetch error:', err)
-        
-        // Handle specific error cases
-        if (err.response?.status === 401) {
-          error.value = 'Сессия истекла. Войдите снова.'
-        } else if (err.response?.status === 403) {
-          error.value = 'Нет доступа к документам.'
-        } else {
-          error.value = formatApiError(err)
+        // If optimized endpoint fails with 404, try standard endpoint
+        if (err.response?.status === 404 && useOptimizedApi.value) {
+          console.warn('[AssetStore] Optimized API not available, falling back to standard API')
+          useOptimizedApi.value = false
+          return fetchAssets(params)
         }
         
+        await handleApiError(err)
         assets.value = []
         totalCount.value = 0
         totalPages.value = 0
-        throw err
       } finally {
         isLoading.value = false
       }
@@ -335,56 +327,25 @@ export const useAssetStore = defineStore(
       
       try {
         const nextPage = currentPage.value + 1
+        const queryParams = buildQueryParams({ page: nextPage })
         
-        if (useMock.value) {
-          await simulateDelay()
-          
-          const response = getMockAssets(
-            nextPage,
-            pageSize.value,
-            toMockFilters(),
-            toMockSort()
-          )
-          
-          assets.value = [...assets.value, ...response.results]
-          currentPage.value = nextPage
-        } else {
-          // Use real Mayan API
-          const token = getToken()
-          
-          // Fallback to mock if no token
-          if (!token) {
-            await simulateDelay()
-            const response = getMockAssets(nextPage, pageSize.value, toMockFilters(), toMockSort())
-            assets.value = [...assets.value, ...response.results]
-            currentPage.value = nextPage
-            return
-          }
+        const apiEndpoint = useOptimizedApi.value 
+          ? OPTIMIZED_DOCUMENTS_API 
+          : STANDARD_DOCUMENTS_API
 
-          const queryParams = new URLSearchParams()
-          queryParams.set('page', String(nextPage))
-          queryParams.set('page_size', String(pageSize.value))
-          
-          if (searchQuery.value) {
-            queryParams.set('q', searchQuery.value)
-          }
+        const response = await axios.get<BackendPaginatedResponse<BackendOptimizedDocument>>(
+          `${apiEndpoint}?${queryParams.toString()}`,
+          { headers: getAuthHeaders() }
+        )
 
-          const response = await axios.get<MayanPaginatedResponse<MayanDocument>>(
-            `/api/v4/documents/?${queryParams.toString()}`,
-            {
-              headers: {
-                'Authorization': `Token ${token}`,
-                'Content-Type': 'application/json'
-              }
-            }
-          )
-
-          const adapted = adaptPaginatedResponse(response.data)
-          assets.value = [...assets.value, ...adapted.results]
-          currentPage.value = nextPage
-        }
-      } catch (err) {
-        error.value = formatApiError(err)
+        const adapted = adaptBackendPaginatedResponse(response.data)
+        assets.value = [...assets.value, ...adapted.results]
+        currentPage.value = nextPage
+        
+        console.log(`[AssetStore] Loaded more: ${adapted.results.length} assets`)
+        
+      } catch (err: any) {
+        await handleApiError(err)
       } finally {
         isLoadingMore.value = false
       }
@@ -392,56 +353,76 @@ export const useAssetStore = defineStore(
     
     /**
      * Get single asset details
+     * First tries enriched endpoint (/api/v4/document-detail/) for full document details
+     * Falls back to standard endpoint if DAM endpoint unavailable
      */
     async function getAssetDetail(id: number): Promise<Asset | null> {
       isLoading.value = true
       error.value = null
 
       try {
-        if (useMock.value) {
-          await simulateDelay()
-          
-          const asset = getMockAssetById(id)
-          if (asset) {
-            currentAsset.value = asset
-            return asset
-          }
-          throw new Error(`Asset with ID ${id} not found`)
-        } else {
-          // Use real Mayan API
-          const token = getToken()
-          
-          // Fallback to mock if no token
-          if (!token) {
-            await simulateDelay()
-            const asset = getMockAssetById(id)
-            if (asset) {
-              currentAsset.value = asset
-              return asset
-            }
-            throw new Error(`Asset with ID ${id} not found`)
-          }
-
-          const response = await axios.get<MayanDocument>(
-            `/api/v4/documents/${id}/`,
-            {
-              headers: {
-                'Authorization': `Token ${token}`,
-                'Content-Type': 'application/json'
-              }
-            }
+        // Try DAM-enriched endpoint first (includes AI analysis, metadata)
+        let response: any
+        
+        try {
+          response = await axios.get<BackendOptimizedDocument>(
+            `/api/v4/document-detail/${id}/`,
+            { headers: getAuthHeaders() }
           )
-
-          const asset = adaptDocument(response.data)
-          currentAsset.value = asset
-          return asset
+          if (debugMode.value) {
+            console.log('[AssetStore] Loaded via DAM endpoint:', response.data)
+          }
+        } catch (damError: any) {
+          // Fallback to standard documents API if DAM endpoint not available
+          if (damError.response?.status === 404) {
+            console.warn('[AssetStore] DAM endpoint not found, using standard API')
+            response = await axios.get<BackendOptimizedDocument>(
+              `/api/v4/documents/${id}/`,
+              { headers: getAuthHeaders() }
+            )
+          } else {
+            throw damError
+          }
         }
-      } catch (err) {
-        error.value = formatApiError(err)
+
+        const asset = adaptBackendAsset(response.data)
+        currentAsset.value = asset
+        return asset
+        
+      } catch (err: any) {
+        await handleApiError(err)
         currentAsset.value = null
         return null
       } finally {
         isLoading.value = false
+      }
+    }
+
+    /**
+     * Get asset processing status (AI analysis progress)
+     * Uses /api/v4/documents/{id}/processing_status/
+     */
+    async function getProcessingStatus(id: number): Promise<{
+      status: string
+      progress: number
+      current_step: string | null
+      ai_tags_ready: boolean
+      ai_description_ready: boolean
+      ai_colors_ready: boolean
+    } | null> {
+      try {
+        const response = await axios.get(
+          `/api/v4/documents/${id}/processing_status/`,
+          { headers: getAuthHeaders() }
+        )
+        return response.data
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          // Processing status endpoint not available
+          return null
+        }
+        console.error('[AssetStore] Error fetching processing status:', err)
+        return null
       }
     }
     
@@ -451,125 +432,60 @@ export const useAssetStore = defineStore(
     
     /**
      * Delete an asset
-     * Uses DELETE /api/v4/documents/{id}/ for real API
+     * Uses DELETE /api/v4/documents/{id}/
      */
     async function deleteAsset(id: number): Promise<boolean> {
       try {
-        if (useMock.value) {
-          await simulateDelay()
-          const success = deleteMockAsset(id)
-          if (success) {
-            // Remove from local state
-            assets.value = assets.value.filter(a => a.id !== id)
-            totalCount.value = Math.max(0, totalCount.value - 1)
-            selectedAssets.value.delete(id)
-            
-            if (currentAsset.value?.id === id) {
-              currentAsset.value = null
-            }
-          }
-          return success
-        } else {
-          // Use real Mayan EDMS API
-          const token = getToken()
-          
-          if (!token) {
-            // Fallback to mock
-            await simulateDelay()
-            const success = deleteMockAsset(id)
-            if (success) {
-              assets.value = assets.value.filter(a => a.id !== id)
-              totalCount.value = Math.max(0, totalCount.value - 1)
-              selectedAssets.value.delete(id)
-              if (currentAsset.value?.id === id) currentAsset.value = null
-            }
-            return success
-          }
-          
-          console.log('[AssetStore] Deleting document:', id)
-          await deleteDocumentApi(id)
-          
-          // Remove from local state
-          assets.value = assets.value.filter(a => a.id !== id)
-          totalCount.value = Math.max(0, totalCount.value - 1)
-          selectedAssets.value.delete(id)
-          
-          if (currentAsset.value?.id === id) {
-            currentAsset.value = null
-          }
-          
-          console.log('[AssetStore] Document deleted successfully')
-          return true
+        console.log('[AssetStore] Deleting document:', id)
+        await deleteDocumentApi(id)
+        
+        // Remove from local state
+        assets.value = assets.value.filter(a => a.id !== id)
+        totalCount.value = Math.max(0, totalCount.value - 1)
+        selectedAssets.value.delete(id)
+        
+        if (currentAsset.value?.id === id) {
+          currentAsset.value = null
         }
-      } catch (err) {
-        error.value = formatApiError(err)
-        console.error('[AssetStore] Delete error:', err)
+        
+        console.log('[AssetStore] Document deleted successfully')
+        return true
+        
+      } catch (err: any) {
+        await handleApiError(err)
         return false
       }
     }
     
     /**
      * Update an asset's metadata
-     * Uses PATCH /api/v4/documents/{id}/ for real API
+     * Uses PATCH /api/v4/documents/{id}/
      */
     async function updateAssetData(id: number, data: Partial<Asset>): Promise<Asset | null> {
       try {
-        if (useMock.value) {
-          await simulateDelay()
-          const updated = updateMockAsset(id, data)
-          if (updated) {
-            // Update in local state
-            const index = assets.value.findIndex(a => a.id === id)
-            if (index !== -1) {
-              assets.value[index] = updated
-            }
-            if (currentAsset.value?.id === id) {
-              currentAsset.value = updated
-            }
-          }
-          return updated || null
-        } else {
-          // Use real Mayan EDMS API
-          const token = getToken()
-          
-          if (!token) {
-            // Fallback to mock
-            await simulateDelay()
-            const updated = updateMockAsset(id, data)
-            if (updated) {
-              const index = assets.value.findIndex(a => a.id === id)
-              if (index !== -1) assets.value[index] = updated
-              if (currentAsset.value?.id === id) currentAsset.value = updated
-            }
-            return updated || null
-          }
-          
-          console.log('[AssetStore] Updating document metadata:', id, data)
-          
-          // Map Asset fields to Mayan document fields
-          const mayanData: Record<string, any> = {}
-          if (data.label !== undefined) mayanData.label = data.label
-          if (data.description !== undefined) mayanData.description = data.description
-          if (data.language !== undefined) mayanData.language = data.language
-          
-          const response = await updateDocumentMetadata(id, mayanData)
-          const updated = adaptDocument(response as MayanDocument)
-          
-          // Update local state
-          const index = assets.value.findIndex(a => a.id === id)
-          if (index !== -1) {
-            assets.value[index] = updated
-          }
-          if (currentAsset.value?.id === id) {
-            currentAsset.value = updated
-          }
-          
-          console.log('[AssetStore] Document updated successfully')
-          return updated
+        console.log('[AssetStore] Updating document metadata:', id, data)
+        
+        // Map Asset fields to Mayan document fields
+        const mayanData: Record<string, any> = {}
+        if (data.label !== undefined) mayanData.label = data.label
+        
+        const response = await updateDocumentMetadata(id, mayanData)
+        const updated = adaptBackendAsset(response as BackendOptimizedDocument)
+        
+        // Update local state
+        const index = assets.value.findIndex(a => a.id === id)
+        if (index !== -1) {
+          assets.value[index] = updated
         }
-      } catch (err) {
-        error.value = formatApiError(err)
-        console.error('[AssetStore] Update error:', err)
+        if (currentAsset.value?.id === id) {
+          currentAsset.value = updated
+        }
+        
+        console.log('[AssetStore] Document updated successfully')
+        return updated
+        
+      } catch (err: any) {
+        await handleApiError(err)
         return null
       }
     }
@@ -623,10 +539,15 @@ export const useAssetStore = defineStore(
     // ACTIONS - SELECTION
     // ========================================================================
     
-    function selectAsset(asset: Asset): void {
-      if (selectedAssets.value.has(asset.id)) {
-        selectedAssets.value.delete(asset.id)
+    function selectAsset(asset: Asset, multiSelect = false): void {
+      if (multiSelect) {
+        if (selectedAssets.value.has(asset.id)) {
+          selectedAssets.value.delete(asset.id)
+        } else {
+          selectedAssets.value.add(asset.id)
+        }
       } else {
+        selectedAssets.value.clear()
         selectedAssets.value.add(asset.id)
       }
       // Trigger reactivity
@@ -702,27 +623,10 @@ export const useAssetStore = defineStore(
     // ========================================================================
     // ACTIONS - UPLOAD
     // ========================================================================
-
-    /**
-     * Upload a new asset file
-     * Uses the 2-step Mayan EDMS API for real uploads
-     * 
-     * @deprecated Use uploadFile() for real API uploads with progress
-     */
-    async function uploadAsset(
-      formData: FormData,
-      options?: UploadOptions
-    ): Promise<Asset> {
-      // Legacy method - delegate to assetService for mock/form-based uploads
-      return assetService.uploadAsset(formData, {
-        onUploadProgress: options?.onUploadProgress,
-        signal: options?.signal
-      })
-    }
     
     /**
      * Upload a file using the real Mayan EDMS API
-     * This is the preferred method for production uploads
+     * Two-step process: Create document → Upload file
      */
     async function uploadFile(
       file: File,
@@ -761,57 +665,15 @@ export const useAssetStore = defineStore(
       }
     }
     
-    /**
-     * Add a new asset (for mock/local development)
-     * Creates asset from provided data and adds to the store
-     */
-    async function addAsset(assetData: Omit<Asset, 'id'>): Promise<Asset> {
-      await simulateDelay()
-      
-      if (useMock.value) {
-        // Add to mock data store
-        const newAsset = addMockAsset(assetData)
-        
-        // Add to local state at the beginning
-        assets.value = [newAsset, ...assets.value]
-        totalCount.value += 1
-        
-        // Update facets
-        availableTags.value = getMockTags()
-        typeCounts.value = getMockTypeCounts()
-        statusCounts.value = getMockStatusCounts()
-        
-        return newAsset
-      } else {
-        // For real API, use uploadAsset instead
-        throw new Error('addAsset is only available in mock mode. Use uploadAsset for real API.')
-      }
-    }
-    
-    /**
-     * Add multiple assets at once (batch upload)
-     */
-    async function addAssets(assetsData: Omit<Asset, 'id'>[]): Promise<Asset[]> {
-      const addedAssets: Asset[] = []
-      
-      for (const assetData of assetsData) {
-        const newAsset = await addAsset(assetData)
-        addedAssets.push(newAsset)
-      }
-      
-      return addedAssets
-    }
-    
     // ========================================================================
     // RETURN
     // ========================================================================
 
     return {
       // Configuration
-      useMock,
-      mockDelay,
       debugMode,
       lastRawResponse,
+      useOptimizedApi,
       
       // State
       assets,
@@ -845,6 +707,7 @@ export const useAssetStore = defineStore(
       fetchAssets,
       loadMore,
       getAssetDetail,
+      getProcessingStatus,
       
       // Actions - CRUD
       deleteAsset,
@@ -874,15 +737,12 @@ export const useAssetStore = defineStore(
       refresh,
       
       // Actions - Upload
-      uploadAsset,
       uploadFile,
-      addAsset,
-      addAssets,
     }
   },
   {
     persist: {
-      paths: ['pageSize', 'sort', 'useMock']
+      paths: ['pageSize', 'sort']
     }
   }
 )

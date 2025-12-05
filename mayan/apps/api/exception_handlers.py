@@ -1,4 +1,4 @@
-from rest_framework.views import exception_handler
+from rest_framework.views import exception_handler as drf_exception_handler
 from rest_framework import status
 import logging
 
@@ -11,7 +11,7 @@ def exception_handler(exc, context):
     Custom exception handler that enriches DRF responses with error_code.
     """
 
-    response = exception_handler(exc, context)
+    response = drf_exception_handler(exc, context)
 
     logger.exception(
         f'API Exception: {exc.__class__.__name__}',

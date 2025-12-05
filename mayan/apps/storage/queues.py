@@ -29,3 +29,11 @@ queue_storage_periodic.add_task_type(
         seconds=TASK_DOWNLOAD_FILE_STALE_INTERVAL
     )
 )
+
+# Chunked Upload cleanup task (Phase B3.2)
+queue_storage_periodic.add_task_type(
+    dotted_path='mayan.apps.storage.tasks.task_chunked_upload_cleanup',
+    label=_('Delete expired chunked uploads'),
+    name='task_chunked_upload_cleanup',
+    schedule=timedelta(hours=1)  # Run every hour
+)

@@ -7,16 +7,20 @@ import './styles/index.css'
 import { hasToken } from './services/authService'
 
 // ============================================================================
-// Sync persisted auth state with real token presence
-// This prevents "ghost" authenticated state from previous sessions
+// Phase A1.3: App Initialization with Auth State Sync
 // ============================================================================
-function syncAuthState() {
+
+/**
+ * Sync persisted auth state with real token presence.
+ * This prevents "ghost" authenticated state from previous sessions
+ * where the token was cleared but Pinia state persisted.
+ */
+function syncAuthState(): void {
   const hasRealToken = hasToken()
   const hasMockAuth = localStorage.getItem('dev_authenticated') === 'true'
   
   // If no real token and no mock flag, clear any persisted auth state
   if (!hasRealToken && !hasMockAuth) {
-    // Clear Pinia persisted auth state
     const persistedAuth = localStorage.getItem('auth')
     if (persistedAuth) {
       try {
@@ -32,24 +36,33 @@ function syncAuthState() {
   }
 }
 
-// Sync auth state before app initialization
+// ============================================================================
+// Bootstrap Application
+// ============================================================================
+
+// Step 1: Sync auth state BEFORE app initialization
 syncAuthState()
 
+// Step 2: Create Vue app
 const app = createApp(App)
 
-// Setup Pinia with persistence
+// Step 3: Setup Pinia with persistence
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
 
 app.use(pinia)
 app.use(router)
 
-// Mount app first
+// Step 4: Mount app
 app.mount('#app')
 
-// Initialize auth store AFTER mount - this is important for proper Pinia initialization
+// Step 5: Initialize auth store AFTER mount (important for proper Pinia initialization)
+// This validates the token and restores user session if valid
 import { useAuthStore } from './stores/authStore'
+
 const authStore = useAuthStore()
-authStore.checkAuth()
+authStore.initialize().then((isAuthenticated) => {
+  console.log('[Main] Auth initialized, authenticated:', isAuthenticated)
+})
 
 

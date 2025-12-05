@@ -1,5 +1,0 @@
-{
-  "summary": "Reviewed docs/api_surface.md for mock data or hardcoded inserts and cross-checked each section against the actual DAM and distribution viewsets plus Celery tasks to ensure the document reflects real backend behavior.",
-  "current_status": "API surface documentation is verified against backend implementations; everything stays in sync with dam api views, distribution routers, and Celery hooks."
-}
-
