@@ -243,3 +243,6 @@ class OptimizedAPIDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 
+
+
+

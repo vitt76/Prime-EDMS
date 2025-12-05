@@ -1036,3 +1036,4 @@ class HeadlessPasswordChangeTests(TestCase):
 
 *🚨 КРИТИЧЕСКИЙ ПЕРЕСМОТР: Mayan EDMS API не предоставляет необходимые self-service endpoints. Headless API Micro-App — единственный путь к production-ready SPA без модификации core Mayan.*
 
+
