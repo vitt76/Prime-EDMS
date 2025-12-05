@@ -43,7 +43,7 @@ COPY mayan/apps/documents/forms /opt/mayan-edms/lib/python3.9/site-packages/maya
 COPY mayan/apps/documents/templates /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/templates
 COPY mayan/apps/documents/views /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/views
 COPY mayan/apps/documents/storages.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/storages.py
-COPY mayan/apps/documents/search.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/search.py
+COPY mayan/apps/documents/search /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/search
 COPY mayan/apps/documents/models/document_file_models.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/models/document_file_models.py
 COPY mayan/apps/documents/migrations/0081_documentfile_filename_index.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/migrations/0081_documentfile_filename_index.py
 COPY mayan/apps/documents/migrations/0082_document_description_gin_index.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/migrations/0082_document_description_gin_index.py

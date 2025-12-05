@@ -55,8 +55,12 @@ class ApiService {
     this.client = axios.create({
       baseURL: API_BASE_URL,
       timeout: 30000,
+      withCredentials: true,  // Important for session cookies
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'DAM-Frontend/1.0',  // Force DRF to return JSON instead of HTML
+        'X-Requested-With': 'XMLHttpRequest'  // Additional header to ensure JSON response
       }
     })
 
@@ -76,10 +80,8 @@ class ApiService {
           config.headers['Authorization'] = `Token ${token}`
         }
 
-        // Add CSRF token (for session-based fallback)
-        const csrfToken = document.querySelector<HTMLMetaElement>(
-          'meta[name="csrf-token"]'
-        )?.content
+        // Add CSRF token from cookie or meta tag
+        const csrfToken = this.getCSRFToken()
         if (csrfToken && config.headers) {
           config.headers['X-CSRFToken'] = csrfToken
         }
@@ -254,6 +256,18 @@ class ApiService {
     }
     const paramsStr = JSON.stringify(params)
     return `${url}?${paramsStr}`
+  }
+
+  /**
+   * Get CSRF token from cookies or meta tag
+   */
+  private getCSRFToken(): string | null {
+    // Try cookie first
+    const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/)
+    if (cookieMatch) return cookieMatch[1]
+
+    // Fallback to meta tag
+    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || null
   }
 
   /**

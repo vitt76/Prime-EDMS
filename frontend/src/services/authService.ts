@@ -32,35 +32,6 @@ const USE_REAL_API = import.meta.env.VITE_USE_MOCK_AUTH !== 'true'
 const TOKEN_KEY = 'auth_token'
 const USER_KEY = 'auth_user'
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface LoginResponse {
-  user: User
-  permissions?: string[]
-}
-
-interface TokenObtainResponse {
-  token: string
-}
-
-interface MayanUserResponse {
-  id: number
-  username: string
-  email?: string
-  first_name?: string
-  last_name?: string
-  is_active?: boolean
-  date_joined?: string
-  last_login?: string
-  groups?: Array<{ id: number; name: string }>
-}
-
-interface GetCurrentUserResponse {
-  user: User
-  permissions?: string[]
-}
 
 // ============================================================================
 // TOKEN MANAGEMENT
@@ -99,30 +70,6 @@ export function hasToken(): boolean {
 // AXIOS INSTANCE WITH TOKEN
 // ============================================================================
 
-/**
- * Create axios instance with auth token header
- */
-function createAuthAxios() {
-  const instance = axios.create({
-    timeout: 30000,
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
-
-  // Add token to all requests
-  instance.interceptors.request.use((config) => {
-    const token = getToken()
-    if (token) {
-      config.headers.Authorization = `Token ${token}`
-    }
-    return config
-  })
-
-  return instance
-}
-
-const authAxios = createAuthAxios()
 
 // ============================================================================
 // AUTH SERVICE CLASS
@@ -130,10 +77,9 @@ const authAxios = createAuthAxios()
 
 class AuthService {
   /**
-   * Login with username/email and password using Token authentication
+   * Obtain auth token from backend or return mock token
    */
-  async login(username: string, password: string): Promise<void> {
-    // DEV MODE: Use mock login for UI testing
+  async obtainToken(username: string, password: string): Promise<{ token: string }> {
     if (!USE_REAL_API) {
       console.log('[Auth] Using mock login (DEV mode)')
       return this.mockLogin(username, password)
@@ -178,72 +124,19 @@ class AuthService {
       if (error.response?.status === 400) {
         throw new Error('Неверное имя пользователя или пароль')
       }
-      if (error.response?.status === 401) {
-        throw new Error('Неверные учетные данные')
-      }
-      if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-        throw new Error('Не удалось подключиться к серверу')
-      }
-      
-      console.error('[Auth] Login error:', error)
-      throw new Error(error.message || 'Ошибка входа')
-    }
-  }
 
-  /**
-   * Mock login for development
-   */
-  private async mockLogin(email: string, password: string): Promise<void> {
-    if (!email || !password) {
-      throw new Error('Email and password are required')
+      // Save user data
+      localStorage.setItem(USER_KEY, JSON.stringify(mockUser))
+
+      return { token: `mock_token_${Date.now()}` }
     }
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    // Store mock data
-    localStorage.setItem('dev_authenticated', 'true')
-    localStorage.setItem(USER_KEY, JSON.stringify({
-      id: 1,
-      username: email.split('@')[0] || 'user',
-      email: email,
-      first_name: 'Test',
-      last_name: 'User',
-      is_active: true,
-      permissions: ['admin.access', 'documents.view', 'documents.edit'],
-      role: 'admin'
-    }))
-
-    console.log('[Auth] Mock login successful for:', email)
-  }
-
-  /**
-   * Map Mayan user response to frontend User type
-   */
-  private mapMayanUser(mayanUser: MayanUserResponse): User {
-    // Extract permissions from groups
-    const permissions: string[] = []
-    if (mayanUser.groups) {
-      mayanUser.groups.forEach(group => {
-        // Map group names to permission strings
-        if (group.name.toLowerCase().includes('admin')) {
-          permissions.push('admin.access', 'documents.view', 'documents.edit', 'documents.delete')
-        } else {
-          permissions.push('documents.view')
-        }
-      })
-    }
-
-    return {
-      id: mayanUser.id,
-      username: mayanUser.username,
-      email: mayanUser.email || `${mayanUser.username}@localhost`,
-      first_name: mayanUser.first_name || '',
-      last_name: mayanUser.last_name || '',
-      is_active: mayanUser.is_active !== false,
-      permissions,
-      role: permissions.includes('admin.access') ? 'admin' : 'user'
-    }
+    // Real API mode
+    const response = await apiService.post<{ token: string }>(
+      '/api/v4/auth/token/obtain/',
+      { username, password }
+    )
+    return response
   }
 
   /**
@@ -312,25 +205,26 @@ class AuthService {
         clearToken()
         throw new Error('Session expired')
       }
-      throw error
+    }
+
+    // Real API mode - use correct endpoint
+    const response = await apiService.get<any>('/api/v4/users/current/')
+    return {
+      id: response.id,
+      username: response.username,
+      email: response.email,
+      first_name: response.first_name,
+      last_name: response.last_name,
+      is_active: response.is_active,
+      permissions: ['admin.access', 'documents.view', 'documents.edit'], // Default permissions
+      role: 'admin' // Default role
     }
   }
 
   /**
-   * Check if user is authenticated
+   * Logout (clear local storage or call API)
    */
-  isAuthenticated(): boolean {
-    if (!USE_REAL_API) {
-      return localStorage.getItem('dev_authenticated') === 'true'
-    }
-
-    return hasToken()
-  }
-
-  /**
-   * Validate token by making an API call
-   */
-  async validateToken(): Promise<boolean> {
+  async logout(): Promise<void> {
     if (!USE_REAL_API) {
       return this.isAuthenticated()
     }
@@ -367,51 +261,8 @@ class AuthService {
       return metaToken.content
     }
 
-    return ''
-  }
-
-  // ============================================================================
-  // PASSWORD MANAGEMENT (placeholder - needs backend support)
-  // ============================================================================
-
-  async requestPasswordReset(email: string): Promise<void> {
-    console.warn('[Auth] Password reset not implemented')
-    throw new Error('Password reset is not available')
-  }
-
-  async changePassword(payload: { oldPassword: string; newPassword: string }): Promise<void> {
-    console.warn('[Auth] Password change not implemented')
-    throw new Error('Password change is not available')
-  }
-
-  async resetPassword(payload: { token: string; newPassword: string; confirmPassword: string }): Promise<void> {
-    console.warn('[Auth] Password reset not implemented')
-    throw new Error('Password reset is not available')
-  }
-
-  // ============================================================================
-  // 2FA (placeholder - needs backend support)
-  // ============================================================================
-
-  async getTwoFactorStatus(): Promise<TwoFactorStatus> {
-    // 2FA not implemented in Mayan EDMS by default
-    return { enabled: false }
-  }
-
-  async enableTwoFactor(): Promise<TwoFactorSetup> {
-    throw new Error('2FA is not available')
-  }
-
-  async verifyTwoFactor(token: string, method: 'totp' | 'backup_code' = 'totp'): Promise<{ success: boolean; user?: User }> {
-    throw new Error('2FA is not available')
-  }
-
-  async disableTwoFactor(): Promise<{ success: boolean }> {
-    throw new Error('2FA is not available')
-  }
-
-  async regenerateBackupCodes(): Promise<{ backup_codes: string[] }> {
-    throw new Error('2FA is not available')
+    // Real API mode
+    await apiService.post('/api/v4/auth/logout/')
   }
 }
 
@@ -422,4 +273,4 @@ class AuthService {
 export const authService = new AuthService()
 
 // Export token utilities for use in other services
-export { authAxios, USE_REAL_API }
+export { USE_REAL_API }
