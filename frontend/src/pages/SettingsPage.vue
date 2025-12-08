@@ -259,6 +259,12 @@
         </Card>
       </div>
     </div>
+    <ChangePasswordModal
+      v-if="showChangePassword"
+      :isOpen="showChangePassword"
+      @close="showChangePassword = false"
+      @changed="showChangePassword = false"
+    />
   </div>
 </template>
 
@@ -270,11 +276,13 @@ import Card from '@/components/Common/Card.vue'
 import Button from '@/components/Common/Button.vue'
 import Input from '@/components/Common/Input.vue'
 import Select from '@/components/Common/Select.vue'
+import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue'
 
 const uiStore = useUIStore()
 const authStore = useAuthStore()
 
 const isSavingProfile = ref(false)
+const showChangePassword = ref(false)
 
 // Profile form
 const profileForm = ref({
@@ -363,11 +371,7 @@ async function handleSaveProfile() {
 }
 
 function handleChangePassword() {
-  // TODO: Open change password modal
-  uiStore.addNotification({
-    type: 'info',
-    message: 'Функция изменения пароля будет доступна в следующей версии'
-  })
+  showChangePassword.value = true
 }
 
 function handleManageApiKeys() {

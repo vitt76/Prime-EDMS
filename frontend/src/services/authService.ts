@@ -22,9 +22,10 @@ import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
 
 /**
  * Feature flags.
+ * BFF enabled by default unless explicitly disabled.
  */
 const USE_REAL_API = import.meta.env.VITE_USE_MOCK_AUTH !== 'true'
-const BFF_ENABLED = import.meta.env.VITE_BFF_ENABLED === 'true'
+const BFF_ENABLED = import.meta.env.VITE_BFF_ENABLED !== 'false'
 
 /**
  * LocalStorage keys
@@ -121,10 +122,6 @@ class AuthService {
    * Change password via headless API.
    */
   async changePassword(payload: { oldPassword: string; newPassword: string }): Promise<void> {
-    if (!BFF_ENABLED) {
-      throw new Error('Headless API не включен. Обратитесь к администратору.')
-    }
-
     await apiService.post(
       '/api/v4/headless/password/change/',
       {
