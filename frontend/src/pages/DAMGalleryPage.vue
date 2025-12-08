@@ -417,6 +417,7 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAssetStore } from '@/stores/assetStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import AssetCardEnhanced from '@/components/DAM/AssetCardEnhanced.vue'
 import type { Asset } from '@/types/api'
@@ -441,11 +442,7 @@ const sortOption = ref('date_added-desc')
 const previewAsset = ref<Asset | null>(null)
 const previewImageError = ref(false)
 const loadMoreTrigger = ref<HTMLElement | null>(null)
-const previewAssetSrc = computed(() => {
-  const asset = previewAsset.value
-  if (!asset) return ''
-  return asset.preview_url || asset.thumbnail_url || asset.download_url || ''
-})
+const previewAssetSrc = computed(() => resolveAssetImageUrl(previewAsset.value))
 const previewIsFavorite = computed(() => {
   const asset = previewAsset.value
   if (!asset) return false

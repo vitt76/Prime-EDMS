@@ -357,6 +357,13 @@ export const useAssetStore = defineStore(
      * Falls back to standard endpoint if DAM endpoint unavailable
      */
     async function getAssetDetail(id: number): Promise<Asset | null> {
+      // Try existing cached asset first (already has URLs)
+      const cached = assets.value.find(a => a.id === id)
+      if (cached) {
+        currentAsset.value = cached
+        return cached
+      }
+
       isLoading.value = true
       error.value = null
 

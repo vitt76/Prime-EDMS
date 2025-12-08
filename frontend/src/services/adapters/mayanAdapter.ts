@@ -164,6 +164,22 @@ function toAbsoluteUrl(url: string | undefined | null): string | undefined {
 }
 
 /**
+ * Check if URL is local (same host as API/frontend).
+ * External CDN/unsplash links can be blocked; prefer Mayan-generated previews.
+ */
+function isLocalUrl(url: string | undefined | null): boolean {
+  if (!url) return false
+  try {
+    const apiBase = baseUrl || (typeof window !== 'undefined' ? window.location.origin : '')
+    const parsed = new URL(url, apiBase)
+    const apiHost = new URL(apiBase).host
+    return parsed.host === apiHost
+  } catch (_) {
+    return false
+  }
+}
+
+/**
  * Get asset type from MIME type
  */
 function getAssetTypeFromMime(mimeType: string | undefined): string {
@@ -193,18 +209,18 @@ function getAssetTypeFromMime(mimeType: string | undefined): string {
 function getThumbnailUrl(doc: BackendOptimizedDocument): string {
   // Priority 1: Document-level thumbnail_url (computed by backend)
   // This could be a presigned S3 URL or Mayan-generated URL
-  if (doc.thumbnail_url) {
+  if (doc.thumbnail_url && isLocalUrl(doc.thumbnail_url)) {
     return toAbsoluteUrl(doc.thumbnail_url) || PLACEHOLDER_THUMBNAIL
   }
   
   // Priority 2: File latest thumbnail (presigned S3 URL from backend)
-  if (doc.file_latest?.thumbnail_url) {
+  if (doc.file_latest?.thumbnail_url && isLocalUrl(doc.file_latest.thumbnail_url)) {
     return toAbsoluteUrl(doc.file_latest.thumbnail_url) || PLACEHOLDER_THUMBNAIL
   }
   
   // Priority 3: File download URL as fallback for images
   // S3 presigned URLs work directly, Mayan URLs need auth
-  if (doc.file_latest?.download_url) {
+  if (doc.file_latest?.download_url && isLocalUrl(doc.file_latest.download_url)) {
     const mimeType = doc.file_latest.mimetype?.toLowerCase() || ''
     // Only use download URL for images (browsers can display them)
     if (mimeType.startsWith('image/')) {
@@ -229,17 +245,17 @@ function getThumbnailUrl(doc: BackendOptimizedDocument): string {
  */
 function getPreviewUrl(doc: BackendOptimizedDocument): string | undefined {
   // Priority 1: Document-level preview_url
-  if (doc.preview_url) {
+  if (doc.preview_url && isLocalUrl(doc.preview_url)) {
     return toAbsoluteUrl(doc.preview_url)
   }
   
   // Priority 2: File preview URL
-  if (doc.file_latest?.preview_url) {
+  if (doc.file_latest?.preview_url && isLocalUrl(doc.file_latest.preview_url)) {
     return toAbsoluteUrl(doc.file_latest.preview_url)
   }
   
   // Priority 3: File download URL
-  if (doc.file_latest?.download_url) {
+  if (doc.file_latest?.download_url && isLocalUrl(doc.file_latest.download_url)) {
     return toAbsoluteUrl(doc.file_latest.download_url)
   }
   

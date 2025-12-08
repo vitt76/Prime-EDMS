@@ -51,8 +51,8 @@
     >
       <!-- Optimized Image with WebP support and lazy loading -->
       <img
-        v-if="props.asset.thumbnail_url && !props.isLoading && shouldLoadImage"
-        :src="props.asset.thumbnail_url"
+        v-if="!props.isLoading && shouldLoadImage && !imageError"
+        :src="imageSrc"
         :alt="props.asset.label"
         loading="lazy"
         class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -300,6 +300,7 @@ import { formatFileSize, formatDate } from '@/utils/formatters'
 import { useIntersectionObserver } from '@/composables/useIntersectionObserver'
 import { useAssetStore } from '@/stores/assetStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 
 interface Props {
   asset: Asset
@@ -330,6 +331,7 @@ const imageError = ref(false)
 const thumbnailRef = ref<HTMLElement | null>(null)
 const isDragging = ref(false)
 const favoritesStore = useFavoritesStore()
+const imageSrc = computed(() => resolveAssetImageUrl(props.asset))
 
 // Intersection Observer for lazy loading
 const { hasIntersected } = useIntersectionObserver(thumbnailRef, {
