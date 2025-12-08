@@ -120,6 +120,27 @@ class AssetService {
   }
 
   /**
+   * Get paginated list of assets uploaded by current user (headless endpoint).
+   */
+  async getMyUploads(params?: GetAssetsParams): Promise<PaginatedResponse<Asset>> {
+    const queryParams: Record<string, string | number> = {}
+
+    if (params?.page) queryParams.page = params.page
+    if (params?.page_size) queryParams.page_size = params.page_size
+    if (params?.sort) queryParams.ordering = params.sort
+
+    const config: InternalAxiosRequestConfig = { params: queryParams }
+
+    const response = await apiService.get<BackendPaginatedResponse<BackendOptimizedDocument>>(
+      '/api/v4/headless/documents/my_uploads/',
+      config,
+      false
+    )
+
+    return adaptBackendPaginatedResponse(response)
+  }
+
+  /**
    * Get single asset by ID
    */
   async getAsset(id: number): Promise<AssetDetailResponse> {

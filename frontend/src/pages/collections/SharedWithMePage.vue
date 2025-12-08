@@ -84,7 +84,9 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CollectionBrowser from '@/components/collections/CollectionBrowser.vue'
-import { getMockSharedWithMe, toggleMockFavorite, OTHER_USERS, type ExtendedAsset } from '@/mocks/assets'
+import { apiService } from '@/services/apiService'
+import { assetService } from '@/services/assetService'
+import { OTHER_USERS, type ExtendedAsset } from '@/mocks/assets'
 import { useNotificationStore } from '@/stores/notificationStore'
 
 // ============================================================================
@@ -115,21 +117,24 @@ const pageSize = 20
 async function fetchSharedWithMe(page: number = 1, append: boolean = false) {
   isLoading.value = true
   
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 300))
-  
   try {
-    const response = getMockSharedWithMe(page, pageSize)
-    
+    const response = await assetService.getAssets({
+      page,
+      page_size: pageSize,
+      sort: '-datetime_created'
+    })
+
+    const mapped = response.results.map(mapToExtendedAsset)
+
     if (append) {
-      assets.value = [...assets.value, ...response.results]
+      assets.value = [...assets.value, ...mapped]
     } else {
-      assets.value = response.results
+      assets.value = mapped
     }
-    
+
     totalCount.value = response.count
     currentPage.value = page
-    hasMore.value = !!response.next
+    hasMore.value = Boolean(response.next)
   } finally {
     isLoading.value = false
   }
@@ -146,20 +151,29 @@ async function loadMore() {
 // ============================================================================
 
 async function handleToggleFavorite(asset: ExtendedAsset) {
-  const updated = toggleMockFavorite(asset.id)
-  
-  if (updated) {
-    // Update in local list
-    const index = assets.value.findIndex(a => a.id === asset.id)
-    if (index !== -1) {
-      assets.value[index] = updated
+  try {
+    if (asset.isFavorite) {
+      await apiService.post(`/api/v4/documents/${asset.id}/remove_from_favorites/`, {})
+      asset.isFavorite = false
+    } else {
+      await apiService.post(`/api/v4/documents/${asset.id}/add_to_favorites/`, {})
+      asset.isFavorite = true
     }
-    
+
+    assets.value = assets.value.map(a => a.id === asset.id ? { ...a, isFavorite: asset.isFavorite } : a)
+
     notificationStore.addNotification({
       type: 'success',
-      title: updated.isFavorite ? 'Добавлено в избранное' : 'Убрано из избранного',
+      title: asset.isFavorite ? 'Добавлено в избранное' : 'Убрано из избранного',
       message: `"${asset.label}"`,
     })
+  } catch (error) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка избранного',
+      message: 'Не удалось обновить избранное'
+    })
+    console.error(error)
   }
 }
 
@@ -194,5 +208,15 @@ function handleShare(asset: ExtendedAsset) {
 onMounted(() => {
   fetchSharedWithMe()
 })
+
+function mapToExtendedAsset(asset: any): ExtendedAsset {
+  return {
+    ...asset,
+    isFavorite: Boolean(asset.isFavorite),
+    lastAccessedAt: asset.date_added,
+    sharedBy: asset.sharedBy,
+    sharedAt: asset.date_added
+  } as ExtendedAsset
+}
 </script>
 

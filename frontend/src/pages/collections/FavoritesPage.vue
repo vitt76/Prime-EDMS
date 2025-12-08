@@ -64,7 +64,8 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CollectionBrowser from '@/components/collections/CollectionBrowser.vue'
-import { getMockFavorites, toggleMockFavorite, type ExtendedAsset } from '@/mocks/assets'
+import { apiService } from '@/services/apiService'
+import type { ExtendedAsset } from '@/mocks/assets'
 import { useNotificationStore } from '@/stores/notificationStore'
 
 // ============================================================================
@@ -91,22 +92,23 @@ const pageSize = 20
 
 async function fetchFavorites(page: number = 1, append: boolean = false) {
   isLoading.value = true
-  
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 300))
-  
+
   try {
-    const response = getMockFavorites(page, pageSize)
-    
+    const response = await apiService.get<any>('/api/v4/documents/favorites/', {
+      params: { page, page_size: pageSize }
+    })
+
+    const mapped = (response.results || []).map(mapFavoriteItem)
+
     if (append) {
-      assets.value = [...assets.value, ...response.results]
+      assets.value = [...assets.value, ...mapped]
     } else {
-      assets.value = response.results
+      assets.value = mapped
     }
-    
-    totalCount.value = response.count
+
+    totalCount.value = response.count || 0
     currentPage.value = page
-    hasMore.value = !!response.next
+    hasMore.value = Boolean(response.next)
   } finally {
     isLoading.value = false
   }
@@ -123,20 +125,22 @@ async function loadMore() {
 // ============================================================================
 
 async function handleToggleFavorite(asset: ExtendedAsset) {
-  const updated = toggleMockFavorite(asset.id)
-  
-  if (updated) {
-    // If un-favorited, remove from list immediately (UX enhancement)
-    if (!updated.isFavorite) {
-      assets.value = assets.value.filter(a => a.id !== asset.id)
-      totalCount.value--
-      
-      notificationStore.addNotification({
-        type: 'info',
-        title: 'Убрано из избранного',
-        message: `"${asset.label}" удалён из избранного`,
-      })
-    }
+  try {
+    await apiService.post(`/api/v4/documents/${asset.id}/remove_from_favorites/`, {})
+    assets.value = assets.value.filter(a => a.id !== asset.id)
+    totalCount.value = Math.max(0, totalCount.value - 1)
+    notificationStore.addNotification({
+      type: 'info',
+      title: 'Убрано из избранного',
+      message: `"${asset.label}" удалён из избранного`,
+    })
+  } catch (error) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось обновить избранное'
+    })
+    console.error(error)
   }
 }
 
@@ -172,5 +176,24 @@ function handleShare(asset: ExtendedAsset) {
 onMounted(() => {
   fetchFavorites()
 })
+
+function mapFavoriteItem(item: any): ExtendedAsset {
+  const doc = item.document || {}
+  const file = doc.file_latest || {}
+
+  return {
+    id: doc.id,
+    label: doc.label,
+    description: doc.description || '',
+    size: file.size || 0,
+    mime_type: file.mimetype || '',
+    filename: file.filename || doc.label,
+    download_url: file.download_url,
+    thumbnail_url: doc.thumbnail_url,
+    date_added: doc.datetime_created,
+    isFavorite: true,
+    lastAccessedAt: item.datetime_added || doc.datetime_created
+  } as ExtendedAsset
+}
 </script>
 

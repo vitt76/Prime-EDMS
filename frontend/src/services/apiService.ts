@@ -59,7 +59,6 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'User-Agent': 'DAM-Frontend/1.0',  // Force DRF to return JSON instead of HTML
         'X-Requested-With': 'XMLHttpRequest'  // Additional header to ensure JSON response
       }
     })
@@ -124,6 +123,16 @@ class ApiService {
             code: 'FORBIDDEN',
             message: 'Доступ запрещен',
             details: error.response.data
+          }
+          return Promise.reject(apiError)
+        }
+
+        // Handle missing headless endpoints gracefully
+        if (error.response?.status === 404 && error.config?.url?.includes('/headless/')) {
+          const apiError: ApiError = {
+            code: 'HEADLESS_NOT_AVAILABLE',
+            message: 'Headless API недоступен. Проверьте VITE_BFF_ENABLED и развертывание BFF.',
+            details: { url: error.config?.url }
           }
           return Promise.reject(apiError)
         }

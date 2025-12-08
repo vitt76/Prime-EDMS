@@ -506,6 +506,7 @@
 import { ref, computed, watch, h } from 'vue'
 import { useAssetStore } from '@/stores/assetStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { uploadService, type UploadResult } from '@/services/uploadService'
 import type { Asset } from '@/types/api'
 
 interface Props {
@@ -671,92 +672,47 @@ function prevStep() {
 
 async function handleUpload() {
   if (!canProceed.value || isUploading.value) return
-  
+  if (files.value.length === 0) return
+
   isUploading.value = true
-  
+
   try {
-    // Simulate upload progress for each file
-    for (let i = 0; i < files.value.length; i++) {
-      uploadProgress.value[i] = 0
-      
-      // Simulate progress
-      for (let progress = 0; progress <= 100; progress += 20) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        uploadProgress.value[i] = progress
-      }
-    }
-    
-    // Create assets from files
     const uploadedAssets: Asset[] = []
-    
+
     for (let i = 0; i < files.value.length; i++) {
       const file = files.value[i]
-      
-      // Determine file type
-      let fileType = 'document'
-      if (file.type.startsWith('image/')) fileType = 'image'
-      else if (file.type.startsWith('video/')) fileType = 'video'
-      else if (file.type.startsWith('audio/')) fileType = 'audio'
-      
-      // Create asset data
-      const assetData: Omit<Asset, 'id'> = {
-        label: files.value.length === 1 
-          ? metadata.value.title 
-          : `${metadata.value.title} (${i + 1})`,
+      uploadProgress.value[i] = 0
+
+      const result: UploadResult = await uploadService.uploadFile(file, {
+        documentTypeId: 1,
+        description: metadata.value.description,
+        onProgress: (progress) => {
+          uploadProgress.value[i] = Math.round(progress.percent)
+        }
+      })
+
+      uploadedAssets.push({
+        id: result.documentId,
+        label: file.name,
         filename: file.name,
         size: file.size,
         mime_type: file.type,
         date_added: new Date().toISOString(),
-        thumbnail_url: fileType === 'image' ? filePreviews.value.get(file) : undefined,
-        preview_url: fileType === 'image' ? filePreviews.value.get(file) : undefined,
+        download_url: result.downloadUrl,
+        thumbnail_url: file.type.startsWith('image/') ? filePreviews.value.get(file) : undefined,
         tags: [...metadata.value.tags],
-        metadata: {
-          status: 'pending',
-          type: fileType,
-          description: metadata.value.description,
-          author: 'Current User',
-        },
-        ai_analysis: metadata.value.enableAI ? {
-          status: 'pending',
-          tags: [],
-        } : undefined,
-        access_level: 'internal',
-      }
-      
-      // Add to store
-      const newAsset = await assetStore.addAsset(assetData)
-      uploadedAssets.push(newAsset)
-      
-      // Simulate AI analysis completion after a delay
-      if (metadata.value.enableAI) {
-        setTimeout(() => {
-          assetStore.updateAssetData(newAsset.id, {
-            ai_analysis: {
-              status: 'completed',
-              tags: ['auto-tag-1', 'auto-tag-2'],
-              confidence: 0.85,
-              ai_description: 'Автоматически сгенерированное описание',
-              provider: 'YandexGPT'
-            }
-          })
-        }, 2000)
-      }
+        metadata: { description: metadata.value.description }
+      } as Asset)
     }
-    
-    // Show success notification
+
     notificationStore.addNotification({
       type: 'success',
       title: 'Загрузка завершена',
       message: `Успешно загружено ${uploadedAssets.length} файл(ов)`
     })
-    
-    // Reset uploading state BEFORE closing so handleClose() doesn't return early
-    isUploading.value = false
-    
-    // Emit success and close
+
     emit('success', uploadedAssets)
     closeAndReset()
-    
   } catch (error) {
     console.error('Upload failed:', error)
     notificationStore.addNotification({
@@ -764,6 +720,7 @@ async function handleUpload() {
       title: 'Ошибка загрузки',
       message: 'Не удалось загрузить файлы. Попробуйте снова.'
     })
+  } finally {
     isUploading.value = false
   }
 }

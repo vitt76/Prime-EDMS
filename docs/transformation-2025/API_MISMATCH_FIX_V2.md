@@ -13,6 +13,14 @@ This document formalizes the API contract mismatches identified in API_MISMATCH_
 
 **Key Finding:** The mismatches are not bugs but fundamental architectural differences between automation-focused APIs and interactive SPA requirements.
 
+## Update 2025-12-08 (runtime check)
+
+- Vite-прокси теперь обращается к реальному Mayan по `/api/v4/*`; страницы админ‑панели используют живые endpoints `/api/v4/users/`, `/api/v4/groups/`, `/api/v4/workflow_templates/`, `/api/v4/metadata/metadata_types/` с пагинацией и поиском.
+- Upload flow (`/api/v4/uploads/` → `/api/v4/uploads/complete/`) отрабатывает успешно, создавая Document + DocumentFile; контракт совпадает.
+- `GET /api/v4/users/current/` и списки документов (`/api/v4/documents/optimized/`) возвращают корректный JSON (данные зависят от содержимого БД, сейчас пустой список).
+- Остаются разрывы: нет JSON endpoint для смены/сброса пароля (по‑прежнему 404/HTML), нет headless-конфигурации типов/обязательных метаданных, нет пользовательской ленты активности; при 401/302 Stronghold отдаёт HTML.
+- Добавлен headless endpoint `/api/v4/headless/documents/my_uploads/` (фильтр по actor из событий) + фиксация `_event_actor` в chunked upload для корректных событий.
+
 ---
 
 ## Critical API Contract Mismatches

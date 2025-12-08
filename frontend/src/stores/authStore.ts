@@ -13,10 +13,30 @@ export const useAuthStore = defineStore(
     const permissions = ref<string[]>([])
     const isLoading = ref(false)
     const error = ref<string | null>(null)
+    const lastActivity = ref<Date | null>(null)
+    const twoFactorStatus = ref<any | null>(null)
+    const twoFactorPending = ref(false)
+    const twoFactorSetup = ref<any | null>(null)
 
 
     // Computed
     const isAuthenticated = computed(() => !!token.value && !!user.value)
+
+    // Computed helpers
+    const hasPermission = (permission: string) => permissions.value.includes(permission)
+    const hasRole = (role: string) => {
+      const userRole = (user.value as any)?.role || (user.value as any)?.groups?.[0]
+      return userRole === role
+    }
+    const requiresTwoFactor = computed(() => {
+      const status = twoFactorStatus.value
+      return !!status?.enabled
+    })
+    const isTwoFactorVerified = computed(() => {
+      const status = twoFactorStatus.value
+      if (!status?.enabled) return true
+      return !!status?.verified
+    })
 
     // Actions
     async function login(username: string, password: string) {
@@ -77,16 +97,18 @@ export const useAuthStore = defineStore(
       // If we have persisted auth state but no real token and no mock flag, clear it
       if (isAuthenticated.value && !hasRealToken && !hasMockAuth) {
         console.warn('[AuthStore] Persisted auth but no token/mock flag, clearing state')
-        isAuthenticated.value = false
         user.value = null
         permissions.value = []
+        lastActivity.value = null
         return false
       }
       
       // No token found - user is not authenticated
       if (!hasRealToken && !hasMockAuth) {
         console.log('[AuthStore] No token found, user not authenticated')
-        isAuthenticated.value = false
+        user.value = null
+        permissions.value = []
+        lastActivity.value = null
         return false
       }
 
@@ -95,7 +117,6 @@ export const useAuthStore = defineStore(
         console.log('[AuthStore] Token found, validating...')
         const response = await authService.getCurrentUser()
         user.value = response.user
-        isAuthenticated.value = true
         permissions.value = response.permissions || []
         lastActivity.value = new Date()
         
@@ -104,9 +125,9 @@ export const useAuthStore = defineStore(
       } catch (error) {
         console.warn('[AuthStore] ❌ Token validation failed:', error)
         // Clear auth state on failure
-        isAuthenticated.value = false
         user.value = null
         permissions.value = []
+        lastActivity.value = null
         clearToken()
         localStorage.removeItem('dev_authenticated')
         return false
@@ -199,9 +220,12 @@ export const useAuthStore = defineStore(
     }
 
     return {
-      user, token, permissions, isLoading, error,
-      isAuthenticated,
+      user,
+      token,
       permissions,
+      isLoading,
+      error,
+      isAuthenticated,
       lastActivity,
       twoFactorStatus,
       twoFactorPending,

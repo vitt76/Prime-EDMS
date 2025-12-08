@@ -21,11 +21,10 @@ import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
 // ============================================================================
 
 /**
- * Use real API authentication.
- * Default: true (always try real API first)
- * Set VITE_USE_MOCK_AUTH=true in .env to force mock mode
+ * Feature flags.
  */
 const USE_REAL_API = import.meta.env.VITE_USE_MOCK_AUTH !== 'true'
+const BFF_ENABLED = import.meta.env.VITE_BFF_ENABLED === 'true'
 
 /**
  * LocalStorage keys
@@ -116,6 +115,24 @@ class AuthService {
 
     console.log('[Auth] Login successful for:', userData.username)
     return { token }
+  }
+
+  /**
+   * Change password via headless API.
+   */
+  async changePassword(payload: { oldPassword: string; newPassword: string }): Promise<void> {
+    if (!BFF_ENABLED) {
+      throw new Error('Headless API не включен. Обратитесь к администратору.')
+    }
+
+    await apiService.post(
+      '/api/v4/headless/password/change/',
+      {
+        current_password: payload.oldPassword,
+        new_password: payload.newPassword,
+        new_password_confirm: payload.newPassword
+      }
+    )
   }
 
   /**
@@ -226,4 +243,4 @@ class AuthService {
 export const authService = new AuthService()
 
 // Export token utilities for use in other services
-export { USE_REAL_API }
+export { USE_REAL_API, BFF_ENABLED }

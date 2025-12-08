@@ -11,4 +11,6 @@ export {
   type UploadOptions,
   type UploadResult
 } from './uploadService'
+export * from './documentTypeService'
+export * from './activityService'
 
