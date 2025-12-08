@@ -13,6 +13,7 @@
  */
 
 import axios from 'axios'
+import { apiService } from './apiService'
 import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
 
 // ============================================================================
@@ -67,11 +68,6 @@ export function hasToken(): boolean {
 }
 
 // ============================================================================
-// AXIOS INSTANCE WITH TOKEN
-// ============================================================================
-
-
-// ============================================================================
 // AUTH SERVICE CLASS
 // ============================================================================
 
@@ -88,72 +84,38 @@ class AuthService {
     // PRODUCTION: Real Django Token authentication
     console.log('[Auth] Attempting real login for:', username)
 
-    try {
-      // Step 1: Obtain token
-      const tokenResponse = await axios.post<TokenObtainResponse>(
-        '/api/v4/auth/token/obtain/',
-        { username, password },
-        {
-          headers: { 'Content-Type': 'application/json' }
+    // Step 1: Obtain token (DRF token auth)
+    const formData = new URLSearchParams()
+    formData.append('username', username)
+    formData.append('password', password)
+
+    const tokenResponse = await apiService.post<TokenObtainResponse>(
+      '/api/v4/auth/token/obtain/',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
         }
-      )
-
-      const token = tokenResponse.data.token
-      if (!token) {
-        throw new Error('Token not received from server')
       }
+    )
 
-      // Store token
-      setToken(token)
-      console.log('[Auth] Token obtained successfully')
-
-      // Step 2: Get current user info
-      const userResponse = await authAxios.get<MayanUserResponse>(
-        '/api/v4/users/current/'
-      )
-
-      // Store user data
-      const userData = this.mapMayanUser(userResponse.data)
-      localStorage.setItem(USER_KEY, JSON.stringify(userData))
-
-      console.log('[Auth] Login successful for:', userData.username)
-    } catch (error: any) {
+    const token = tokenResponse.token || (tokenResponse as any).data?.token
+    if (!token) {
       clearToken()
-      
-      // Handle specific error cases
-      if (error.response?.status === 400) {
-        throw new Error('Неверное имя пользователя или пароль')
-      }
-
-      // Save user data
-      localStorage.setItem(USER_KEY, JSON.stringify(mockUser))
-
-      return { token: `mock_token_${Date.now()}` }
+      throw new Error('Token not received from server')
     }
 
-    // Real API mode
-    const response = await apiService.post<{ token: string }>(
-      '/api/v4/auth/token/obtain/',
-      { username, password }
-    )
-    return response
-  }
+    // Store token for interceptors
+    setToken(token)
+    console.log('[Auth] Token obtained successfully')
 
-  /**
-   * Logout current user.
-   * Clears token from localStorage and removes Authorization header.
-   */
-  async logout(): Promise<void> {
-    console.log('[Auth] Logging out...')
-    
-    // Clear all auth data from localStorage
-    clearToken()
-    localStorage.removeItem('dev_authenticated')
-    
-    // Reset axios default headers
-    delete axios.defaults.headers.common['Authorization']
-    
-    console.log('[Auth] ✅ Logged out successfully')
+    // Step 2: Get current user info
+    const userResponse = await apiService.get<MayanUserResponse>('/api/v4/users/current/')
+    const userData = this.mapMayanUser(userResponse)
+    localStorage.setItem(USER_KEY, JSON.stringify(userData))
+
+    console.log('[Auth] Login successful for:', userData.username)
+    return { token }
   }
 
   /**
@@ -190,55 +152,46 @@ class AuthService {
       throw new Error('Not authenticated')
     }
 
-    try {
-      const response = await authAxios.get<MayanUserResponse>(
-        '/api/v4/users/current/'
-      )
-      const user = this.mapMayanUser(response.data)
-      
-      // Update stored user data
-      localStorage.setItem(USER_KEY, JSON.stringify(user))
+    const response = await apiService.get<MayanUserResponse>('/api/v4/users/current/')
+    const user = this.mapMayanUser(response)
+    
+    // Update stored user data
+    localStorage.setItem(USER_KEY, JSON.stringify(user))
 
-      return { user, permissions: user.permissions || [] }
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        clearToken()
-        throw new Error('Session expired')
-      }
+    return { user, permissions: user.permissions || [] }
+  }
+
+  /**
+   * Map Mayan user response to frontend User type
+   */
+  private mapMayanUser(data: any): User {
+    if (!data) {
+      throw new Error('Empty user response')
     }
-
-    // Real API mode - use correct endpoint
-    const response = await apiService.get<any>('/api/v4/users/current/')
     return {
-      id: response.id,
-      username: response.username,
-      email: response.email,
-      first_name: response.first_name,
-      last_name: response.last_name,
-      is_active: response.is_active,
-      permissions: ['admin.access', 'documents.view', 'documents.edit'], // Default permissions
-      role: 'admin' // Default role
+      id: data.id,
+      username: data.username,
+      email: data.email,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      is_active: data.is_active ?? true,
+      permissions: data.permissions || [],
+      role: data.role || (data.groups && data.groups[0]) || undefined,
+      two_factor_enabled: data.two_factor_enabled ?? false
     }
   }
 
   /**
-   * Logout (clear local storage or call API)
+   * Logout (clear local storage; optional API call)
    */
   async logout(): Promise<void> {
-    if (!USE_REAL_API) {
-      return this.isAuthenticated()
-    }
-
-    if (!hasToken()) {
-      return false
-    }
-
+    clearToken()
+    localStorage.removeItem('dev_authenticated')
+    // Optionally hit backend logout endpoint if implemented
     try {
-      await authAxios.get('/api/v4/users/current/')
-      return true
-    } catch {
-      clearToken()
-      return false
+      await apiService.post('/api/v4/auth/token/logout/', {})
+    } catch (err) {
+      console.warn('[Auth] Logout API call failed (ignored):', err)
     }
   }
 
@@ -261,8 +214,8 @@ class AuthService {
       return metaToken.content
     }
 
-    // Real API mode
-    await apiService.post('/api/v4/auth/logout/')
+    // Fallback for real API mode: return empty string if not found
+    return ''
   }
 }
 

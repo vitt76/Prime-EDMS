@@ -51,6 +51,8 @@ COPY mayan/apps/documents/migrations/0083_document_composite_indexes.py /opt/may
 COPY mayan/apps/document_indexing/queues.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/document_indexing/queues.py
 COPY mayan/apps/dynamic_search /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dynamic_search
 COPY mayan/apps/dam /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
+COPY mayan/apps/headless_api /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
+COPY mayan/apps/autoadmin /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/autoadmin
 COPY mayan/apps/storage /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/storage
 COPY mayan/apps/smart_settings/classes.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/smart_settings/classes.py
 COPY mayan/apps/lock_manager/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/lock_manager/apps.py
