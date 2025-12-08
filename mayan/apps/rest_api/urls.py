@@ -8,6 +8,7 @@ from mayan.apps.headless_api.views.config_views import HeadlessDocumentTypeConfi
 from mayan.apps.headless_api.views.activity_views import HeadlessActivityFeedView
 from mayan.apps.headless_api.views.password_views import HeadlessPasswordChangeView
 from mayan.apps.headless_api.views.my_uploads_views import HeadlessMyUploadsView
+from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
 from .literals import API_VERSION
 
 api_version_urls = [
@@ -49,6 +50,11 @@ api_version_urls = [
         regex=r'^headless/documents/my_uploads/$',
         view=HeadlessMyUploadsView.as_view(),
         name='headless-my-uploads'
+    ),
+    url(
+        regex=r'^headless/profile/$',
+        view=HeadlessProfileView.as_view(),
+        name='headless-profile'
     )
 ]
 

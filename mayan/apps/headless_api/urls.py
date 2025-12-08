@@ -11,6 +11,7 @@ from .views.password_views import HeadlessPasswordChangeView
 from .views.config_views import HeadlessDocumentTypeConfigView
 from .views.activity_views import HeadlessActivityFeedView
 from .views.my_uploads_views import HeadlessMyUploadsView
+from .views.profile_views import HeadlessProfileView
 
 app_name = 'headless_api'
 
@@ -40,5 +41,10 @@ api_urls = [
         regex=r'^documents/my_uploads/$',
         view=HeadlessMyUploadsView.as_view(),
         name='api-my-uploads'
+    ),
+    url(
+        regex=r'^profile/$',
+        view=HeadlessProfileView.as_view(),
+        name='api-profile'
     ),
 ]

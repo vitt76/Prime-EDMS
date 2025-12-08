@@ -249,6 +249,18 @@ class ApiService {
   }
 
   /**
+   * PATCH request
+   */
+  async patch<T>(
+    url: string,
+    data?: unknown,
+    config?: InternalAxiosRequestConfig
+  ): Promise<T> {
+    const response = await this.client.patch<ApiResponse<T>>(url, data, config)
+    return response.data.data || (response.data as unknown as T)
+  }
+
+  /**
    * DELETE request
    */
   async delete<T>(url: string, config?: InternalAxiosRequestConfig): Promise<T> {
