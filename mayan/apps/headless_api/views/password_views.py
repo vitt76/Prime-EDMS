@@ -5,13 +5,15 @@ Provides REST endpoints for password-related operations that Mayan EDMS
 doesn't expose through its standard API.
 """
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.authentication import TokenAuthentication
 from django.contrib.auth.hashers import check_password
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.utils.translation import ugettext_lazy as _
+from rest_framework import status
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 import logging
 
@@ -38,7 +40,7 @@ class HeadlessPasswordChangeView(APIView):
     - 200: {"message": "Password changed successfully", "status": "success"}
     - 400: {"error": "Error message", "error_code": "ERROR_CODE"}
     """
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -86,21 +88,15 @@ class HeadlessPasswordChangeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Validate new password complexity
-        if len(new_password) < 8:
+        # Validate new password using Django validators
+        try:
+            validate_password(password=new_password, user=user)
+        except ValidationError as exc:
             return Response(
                 {
-                    'error': _('Password must be at least 8 characters long'),
-                    'error_code': 'PASSWORD_TOO_SHORT'
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if new_password.isdigit():
-            return Response(
-                {
-                    'error': _('Password cannot be entirely numeric'),
-                    'error_code': 'PASSWORD_NUMERIC_ONLY'
+                    'error': _('Password validation failed'),
+                    'error_code': 'PASSWORD_VALIDATION_FAILED',
+                    'details': exc.messages
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )

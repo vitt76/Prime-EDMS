@@ -24,6 +24,7 @@
 
 import axios, { AxiosProgressEvent } from 'axios'
 import { getToken } from './authService'
+import { getDocumentTypeConfig, validateMetadata } from './documentTypeService'
 
 // ============================================================================
 // CONSTANTS
@@ -74,6 +75,8 @@ export interface UploadOptions {
   cabinetId?: number
   /** Optional language (ISO code) */
   language?: string
+  /** Optional metadata payload for dynamic validation */
+  metadata?: Record<string, string>
 }
 
 export interface UploadResult {
@@ -138,7 +141,8 @@ interface ChunkedUploadCompleteResponse {
 // ============================================================================
 
 class UploadService {
-  private baseUrl = '/api/v4'
+  private baseUrl = `${import.meta.env.VITE_API_URL || ''}/api/v4`
+  private readonly isBffEnabled = import.meta.env.VITE_BFF_ENABLED === 'true'
   
   /**
    * Main upload method - automatically selects strategy based on file size
@@ -151,6 +155,9 @@ class UploadService {
    * @returns UploadResult with document and file IDs
    */
   async uploadFile(file: File, options: UploadOptions = {}): Promise<UploadResult> {
+    // Validate metadata against headless config when available
+    await this.validateMetadataIfNeeded(options)
+
     if (file.size >= CHUNKED_UPLOAD_THRESHOLD) {
       console.log(`[UploadService] File ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) - using chunked upload`)
       return this.uploadChunked(file, options)
@@ -243,7 +250,10 @@ class UploadService {
       
       // Create FormData for file upload
       const formData = new FormData()
+      // Mayan expects file_new and an allowed action value; use '1' (DocumentFileActionUseNewPages)
+      formData.append('action', '1')
       formData.append('file_new', file)
+      formData.append('file', file)
       
       // Track upload progress
       let lastLoaded = 0
@@ -253,10 +263,7 @@ class UploadService {
         `${this.baseUrl}/documents/${documentId}/files/`,
         formData,
         {
-          headers: {
-            ...headers,
-            'Content-Type': 'multipart/form-data'
-          },
+          headers: headers,
           signal: options.signal,
           onUploadProgress: (event: AxiosProgressEvent) => {
             const loaded = event.loaded || 0
@@ -346,8 +353,40 @@ class UploadService {
       } else if (error.message === 'Upload cancelled') {
         throw error
       } else {
-        throw new Error(error.response?.data?.detail || error.message || 'Upload failed')
+        let detail: any = error.response?.data?.detail || error.response?.data || error.message
+        if (detail && typeof detail === 'object') {
+          try {
+            detail = JSON.stringify(detail)
+          } catch {
+            detail = 'Upload failed'
+          }
+        }
+        throw new Error(detail || 'Upload failed')
       }
+    }
+  }
+
+  /**
+   * Validate metadata using headless config when BFF is enabled.
+   */
+  private async validateMetadataIfNeeded(options: UploadOptions): Promise<void> {
+    if (!this.isBffEnabled) return
+    if (!options.documentTypeId) return
+
+    try {
+      const config = await getDocumentTypeConfig(options.documentTypeId)
+      const errors = validateMetadata(config, options.metadata || {})
+      if (errors.length > 0) {
+        const error = new Error(errors.join('; '))
+        error.name = 'UploadMetadataValidationError'
+        throw error
+      }
+    } catch (err) {
+      // Surface validation errors; for unreachable headless API fall back gracefully
+      if ((err as Error).name === 'UploadMetadataValidationError') {
+        throw err
+      }
+      console.warn('[UploadService] Metadata validation skipped:', err)
     }
   }
   

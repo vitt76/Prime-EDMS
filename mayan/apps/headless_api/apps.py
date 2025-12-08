@@ -38,9 +38,6 @@ class HeadlessAPIApp(AppConfig):
         Used for signal registration and API URL registration.
         """
         super().ready()
-        print('🚀 Headless API app is ready!')
-        print(f'   - has_rest_api: {self.has_rest_api}')
-        print(f'   - app_url: {self.app_url}')
 
         # Log that headless API is ready
         import logging

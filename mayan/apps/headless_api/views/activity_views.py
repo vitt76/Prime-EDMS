@@ -5,14 +5,14 @@ Provides REST endpoints for personalized activity feeds that Mayan EDMS
 doesn't provide through its standard API.
 """
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.authentication import TokenAuthentication
 from django.contrib.contenttypes.models import ContentType
-from django.core.paginator import Paginator
+from django.core.paginator import EmptyPage, Paginator
 from django.utils.translation import ugettext_lazy as _
+from rest_framework import status
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from mayan.apps.documents.models import Document
 from mayan.apps.events.models import Action
@@ -63,7 +63,7 @@ class HeadlessActivityFeedView(APIView):
         ]
     }
     """
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     # Translation mappings for activity verbs
@@ -101,7 +101,10 @@ class HeadlessActivityFeedView(APIView):
 
             # Paginate results
             paginator = Paginator(actions, page_size)
-            page_obj = paginator.page(page)
+            try:
+                page_obj = paginator.page(page)
+            except EmptyPage:
+                page_obj = paginator.page(paginator.num_pages or 1)
 
             # Serialize results
             results = [self._serialize_action(action) for action in page_obj.object_list]

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { dashboardService, type DashboardStats, type ActivityItem, type StorageMetrics } from '@/services/dashboardService'
+import { dashboardService, type DashboardStats, type StorageMetrics } from '@/services/dashboardService'
+import { getActivityFeedNormalized, type ActivityItem } from '@/services/activityService'
 import { formatApiError } from '@/utils/errors'
 
 export const useDashboardStore = defineStore(
@@ -105,8 +106,7 @@ export const useDashboardStore = defineStore(
           activityFeed.value = mockActivity.slice(0, limit)
           return
         }
-        const data = await dashboardService.getActivityFeed(limit)
-        activityFeed.value = data
+        activityFeed.value = await getActivityFeedNormalized(limit)
       } catch (err) {
         // Activity feed is optional, don't throw
         console.warn('Failed to fetch activity feed:', err)

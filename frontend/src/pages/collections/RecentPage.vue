@@ -68,7 +68,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CollectionBrowser from '@/components/collections/CollectionBrowser.vue'
-import { getRecentAssetsGrouped, toggleMockFavorite, type ExtendedAsset, touchMockAsset } from '@/mocks/assets'
+import { apiService } from '@/services/apiService'
+import type { ExtendedAsset } from '@/mocks/assets'
 import { useNotificationStore } from '@/stores/notificationStore'
 
 // ============================================================================
@@ -115,15 +116,13 @@ const groupedAssets = computed(() => [
 async function fetchRecent() {
   isLoading.value = true
   
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 300))
-  
   try {
-    const grouped = getRecentAssetsGrouped()
-    today.value = grouped.today
-    yesterday.value = grouped.yesterday
-    thisWeek.value = grouped.thisWeek
-    earlier.value = grouped.earlier
+    const response = await apiService.get<any>('/api/v4/documents/accessed/', {
+      params: { page_size: 50 }
+    })
+
+    const items = (response.results || []).map(mapRecentItem)
+    groupByDate(items)
   } finally {
     isLoading.value = false
   }
@@ -134,38 +133,37 @@ async function fetchRecent() {
 // ============================================================================
 
 async function handleToggleFavorite(asset: ExtendedAsset) {
-  const updated = toggleMockFavorite(asset.id)
-  
-  if (updated) {
-    // Update in all groups
-    const updateInGroup = (group: ExtendedAsset[]) => {
-      const index = group.findIndex(a => a.id === asset.id)
-      if (index !== -1) {
-        group[index] = updated
-      }
+  try {
+    if (asset.isFavorite) {
+      await apiService.post(`/api/v4/documents/${asset.id}/remove_from_favorites/`, {})
+      asset.isFavorite = false
+    } else {
+      await apiService.post(`/api/v4/documents/${asset.id}/add_to_favorites/`, {})
+      asset.isFavorite = true
     }
-    
-    updateInGroup(today.value)
-    updateInGroup(yesterday.value)
-    updateInGroup(thisWeek.value)
-    updateInGroup(earlier.value)
-    
+
+    updateAssetInGroups(asset)
+
     notificationStore.addNotification({
       type: 'success',
-      title: updated.isFavorite ? 'Добавлено в избранное' : 'Убрано из избранного',
+      title: asset.isFavorite ? 'Добавлено в избранное' : 'Убрано из избранного',
       message: `"${asset.label}"`,
     })
+  } catch (error) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка избранного',
+      message: 'Не удалось обновить избранное'
+    })
+    console.error(error)
   }
 }
 
 function handleAssetClick(asset: ExtendedAsset) {
-  // Touch asset to update lastAccessedAt
-  touchMockAsset(asset.id)
   router.push(`/dam/assets/${asset.id}`)
 }
 
 function handlePreview(asset: ExtendedAsset) {
-  touchMockAsset(asset.id)
   router.push(`/dam/assets/${asset.id}`)
 }
 
@@ -192,5 +190,61 @@ function handleShare(asset: ExtendedAsset) {
 onMounted(() => {
   fetchRecent()
 })
+
+function mapRecentItem(item: any): ExtendedAsset {
+  const doc = item.document || {}
+  const file = doc.file_latest || {}
+  return {
+    id: doc.id,
+    label: doc.label,
+    description: doc.description || '',
+    size: file.size || 0,
+    mime_type: file.mimetype || '',
+    filename: file.filename || doc.label,
+    download_url: file.download_url,
+    thumbnail_url: doc.thumbnail_url,
+    date_added: doc.datetime_created,
+    lastAccessedAt: item.datetime_accessed || doc.datetime_created,
+    isFavorite: false
+  } as ExtendedAsset
+}
+
+function groupByDate(items: ExtendedAsset[]) {
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfYesterday = new Date(startOfToday)
+  startOfYesterday.setDate(startOfToday.getDate() - 1)
+  const startOfWeek = new Date(startOfToday)
+  startOfWeek.setDate(startOfToday.getDate() - 7)
+
+  today.value = []
+  yesterday.value = []
+  thisWeek.value = []
+  earlier.value = []
+
+  items.forEach((asset) => {
+    const ts = asset.lastAccessedAt ? new Date(asset.lastAccessedAt) : new Date()
+    if (ts >= startOfToday) {
+      today.value.push(asset)
+    } else if (ts >= startOfYesterday) {
+      yesterday.value.push(asset)
+    } else if (ts >= startOfWeek) {
+      thisWeek.value.push(asset)
+    } else {
+      earlier.value.push(asset)
+    }
+  })
+}
+
+function updateAssetInGroups(updated: ExtendedAsset) {
+  const replace = (group: ExtendedAsset[]) => {
+    const idx = group.findIndex(a => a.id === updated.id)
+    if (idx !== -1) group[idx] = { ...group[idx], isFavorite: updated.isFavorite }
+  }
+  replace(today.value)
+  replace(yesterday.value)
+  replace(thisWeek.value)
+  replace(earlier.value)
+}
 </script>
 

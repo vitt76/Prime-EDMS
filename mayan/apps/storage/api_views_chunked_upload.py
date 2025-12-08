@@ -396,23 +396,26 @@ class ChunkedUploadCompleteView(APIView):
                 parts=parts
             )
             
-            # Create Document
+            # Create Document with actor for event logging
             document_label = label or upload.filename
-            document = Document.objects.create(
+            document = Document(
                 document_type=document_type,
                 label=document_label,
                 description=description
             )
+            document._event_actor = request.user
+            document.save()
             
-            # Create DocumentFile pointing to S3
-            # Note: We store the S3 key in the file field
-            document_file = DocumentFile.objects.create(
+            # Create DocumentFile pointing to S3 with actor
+            document_file = DocumentFile(
                 document=document,
                 filename=upload.filename,
                 mimetype=upload.content_type,
                 size=upload.uploaded_size,
                 comment=f'Uploaded via chunked upload (S3 key: {upload.s3_key})'
             )
+            document_file._event_actor = request.user
+            document_file.save()
             
             # Store S3 reference
             document_file.file.name = upload.s3_key

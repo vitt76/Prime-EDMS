@@ -36,6 +36,12 @@ This document describes all environment variables used by the frontend applicati
 - **Example**: `true`
 - **Usage**: Controls whether error tracking is enabled
 
+### `VITE_BFF_ENABLED`
+- **Description**: Включает использование headless/BFF endpoint’ов (`/api/v4/headless/*`)
+- **Default**: `false`
+- **Example**: `true`
+- **Usage**: При `true` фронтенд вызывает headless пароли/конфиг типов/лента активности
+
 ### `VITE_SENTRY_DSN`
 - **Description**: Sentry DSN for error tracking
 - **Default**: (empty)

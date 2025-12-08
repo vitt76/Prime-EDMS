@@ -5,13 +5,13 @@ Provides REST endpoints for exposing Mayan EDMS configuration data
 that frontend needs to build dynamic forms and interfaces.
 """
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.authentication import TokenAuthentication
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import ugettext_lazy as _
+from rest_framework import status
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from mayan.apps.documents.models import DocumentType
 from mayan.apps.metadata.models import DocumentTypeMetadataType
@@ -45,7 +45,7 @@ class HeadlessDocumentTypeConfigView(APIView):
         "capabilities": {...}
     }
     """
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request, document_type_id=None):
@@ -138,11 +138,8 @@ class HeadlessDocumentTypeConfigView(APIView):
             else:
                 optional_metadata.append(meta_config)
 
-        # Build workflows (simplified for now)
-        workflows = []
-        # TODO: Add workflow configuration when available
+        workflows = self._get_workflows(doc_type)
 
-        # Build retention policy
         retention_policy = {
             'enabled': hasattr(doc_type, 'delete_time_period') and doc_type.delete_time_period is not None,
             'days': getattr(doc_type, 'delete_time_period', 0) or 0
@@ -184,14 +181,11 @@ class HeadlessDocumentTypeConfigView(APIView):
             'default_value': getattr(meta, 'default', None)
         }
 
-        # Add validation if available
-        if hasattr(meta, 'validation') and meta.validation:
-            config['validation_regex'] = meta.validation
+        config['validation_regex'] = getattr(meta, 'validation', None)
 
         # Add options for select fields
-        if field_type == 'select' and hasattr(meta, 'lookup'):
-            # TODO: Add lookup options when available
-            config['options'] = []
+        if field_type == 'select' and getattr(meta, 'lookup', None):
+            config['options'] = self._parse_lookup_options(meta.lookup)
 
         return config
 
@@ -214,3 +208,37 @@ class HeadlessDocumentTypeConfigView(APIView):
 
         # Default to text
         return 'text'
+
+    def _parse_lookup_options(self, lookup_value):
+        """
+        Parse lookup options from metadata lookup field.
+        Expected format: newline separated values.
+        """
+        if not lookup_value:
+            return []
+
+        # Split by newline and remove empties
+        return [option.strip() for option in lookup_value.splitlines() if option.strip()]
+
+    def _get_workflows(self, doc_type):
+        """
+        Retrieve workflows associated with the document type, if available.
+        """
+        workflows = []
+        # Mayan document_states attaches workflows via related name 'workflows'
+        if hasattr(doc_type, 'workflows'):
+            for workflow in doc_type.workflows.all():
+                initial_state = None
+                try:
+                    initial = workflow.get_initial_state()
+                    initial_state = initial.label if initial else None
+                except Exception:
+                    initial_state = None
+
+                workflows.append({
+                    'id': workflow.pk,
+                    'label': workflow.label,
+                    'initial_state': initial_state
+                })
+
+        return workflows

@@ -10,6 +10,7 @@ from django.conf.urls import url
 from .views.password_views import HeadlessPasswordChangeView
 from .views.config_views import HeadlessDocumentTypeConfigView
 from .views.activity_views import HeadlessActivityFeedView
+from .views.my_uploads_views import HeadlessMyUploadsView
 
 app_name = 'headless_api'
 
@@ -34,5 +35,10 @@ api_urls = [
         regex=r'^activity/feed/$',
         view=HeadlessActivityFeedView.as_view(),
         name='api-activity-feed'
+    ),
+    url(
+        regex=r'^documents/my_uploads/$',
+        view=HeadlessMyUploadsView.as_view(),
+        name='api-my-uploads'
     ),
 ]
