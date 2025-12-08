@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 
 from mayan.apps.documents.models import Document
 from mayan.apps.events.models import Action
+from mayan.apps.headless_api.serializers import ActivityFeedSerializer
 
 import logging
 
@@ -227,3 +228,40 @@ class HeadlessActivityFeedView(APIView):
         target_label = str(action.target) if action.target else _('unknown object')
 
         return _(f"User {actor_name} {verb} '{target_label}'")
+
+
+class DashboardActivityView(APIView):
+    """
+    Lightweight activity feed for dashboard widget.
+
+    Endpoint: GET /api/v4/headless/dashboard/activity/
+    Returns last N events (default 20, max 50) in flattened format.
+    """
+
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            limit = min(int(request.query_params.get('limit', 20)), 50)
+
+            queryset = Action.objects.select_related(
+                'actor_content_type', 'target_content_type', 'action_object_content_type'
+            ).order_by('-timestamp')[:limit]
+
+            serializer = ActivityFeedSerializer(queryset, many=True)
+            return Response(serializer.data)
+
+        except Exception as exc:
+            logger.error(
+                'Error retrieving dashboard activity feed for %s: %s',
+                request.user.username,
+                exc
+            )
+            return Response(
+                {
+                    'error': _('Error retrieving activity feed'),
+                    'error_code': 'INTERNAL_ERROR'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

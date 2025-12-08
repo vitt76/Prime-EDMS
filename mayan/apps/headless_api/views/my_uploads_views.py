@@ -1,5 +1,7 @@
 from django.contrib.contenttypes.models import ContentType
 
+from django.db.models import IntegerField
+from django.db.models.functions import Cast
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 
@@ -38,9 +40,12 @@ class HeadlessMyUploadsView(generics.ListAPIView):
 
         doc_ids = Action.objects.filter(
             verb__in=verbs,
-            actor_object_id=self.request.user.pk,
-            target_content_type=document_ct
-        ).values_list('target_object_id', flat=True).distinct()
+            actor_object_id=str(self.request.user.pk),
+            target_content_type=document_ct,
+            target_object_id__regex=r'^\d+$'
+        ).annotate(
+            target_id_int=Cast('target_object_id', IntegerField())
+        ).values_list('target_id_int', flat=True).distinct()
 
         queryset = Document.valid.filter(pk__in=doc_ids)
 
@@ -57,4 +62,3 @@ class HeadlessMyUploadsView(generics.ListAPIView):
             queryset = queryset.order_by('-datetime_created')
 
         return queryset
-

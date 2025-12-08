@@ -5,7 +5,9 @@ from .api_views import (
     ProjectInformationAPIView, schema_view
 )
 from mayan.apps.headless_api.views.config_views import HeadlessDocumentTypeConfigView
-from mayan.apps.headless_api.views.activity_views import HeadlessActivityFeedView
+from mayan.apps.headless_api.views.activity_views import (
+    DashboardActivityView, HeadlessActivityFeedView
+)
 from mayan.apps.headless_api.views.password_views import HeadlessPasswordChangeView
 from mayan.apps.headless_api.views.my_uploads_views import HeadlessMyUploadsView
 from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
@@ -40,6 +42,11 @@ api_version_urls = [
         regex=r'^headless/activity/feed/$',
         view=HeadlessActivityFeedView.as_view(),
         name='headless-activity-feed'
+    ),
+    url(
+        regex=r'^headless/dashboard/activity/$',
+        view=DashboardActivityView.as_view(),
+        name='headless-dashboard-activity'
     ),
     url(
         regex=r'^headless/password/change/$',

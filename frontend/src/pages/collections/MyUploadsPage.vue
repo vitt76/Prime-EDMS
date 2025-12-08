@@ -115,6 +115,19 @@ async function fetchMyUploads(page: number = 1, append: boolean = false) {
     totalCount.value = response.count
     currentPage.value = page
     hasMore.value = Boolean(response.next)
+  } catch (error: any) {
+    // Gracefully handle missing headless endpoint or other API failures
+    console.error('[MyUploads] Failed to load uploads', error)
+    assets.value = []
+    totalCount.value = 0
+    hasMore.value = false
+    notificationStore.addNotification({
+      type: 'warning',
+      title: 'Мои загрузки недоступны',
+      message: error?.response?.status === 404
+        ? 'Endpoint /api/v4/headless/documents/my_uploads/ недоступен. Перезапустите backend или убедитесь, что headless_api загружен.'
+        : 'Не удалось загрузить список ваших файлов. Попробуйте позже.'
+    })
   } finally {
     isLoading.value = false
   }
