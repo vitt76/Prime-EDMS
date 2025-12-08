@@ -286,7 +286,7 @@
         <!-- Gallery item template -->
         <template #default="{ item, index }">
           <GalleryItem
-            :item="item"
+            :item="{ ...item, is_favorite: favoritesStore.isFavorite(item.id) }"
             :index="index"
             :view-mode="galleryStore.viewMode"
             :is-selected="galleryStore.selectedItems.has(item.id)"
@@ -332,6 +332,7 @@ import VirtualScroller from '@/components/VirtualScroller.vue'
 import GalleryItem from '@/components/gallery/GalleryItem.vue'
 import GalleryItemSkeleton from '@/components/gallery/GalleryItemSkeleton.vue'
 import { useUIStore } from '@/stores/uiStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
 
 // Types
 interface FileType {
@@ -342,6 +343,7 @@ interface FileType {
 // Composables
 const galleryStore = useGalleryStore()
 const uiStore = useUIStore()
+const favoritesStore = useFavoritesStore()
 
 // Reactive state
 const virtualScroller = ref()
@@ -461,9 +463,29 @@ const handleItemOpen = (item: any) => {
   console.log('Open item:', item)
 }
 
-const handleItemFavorite = (item: any) => {
-  // Toggle favorite status
-  console.log('Toggle favorite:', item)
+const handleItemFavorite = async (item: any) => {
+  try {
+    const favorited = await favoritesStore.toggleFavorite(item.id)
+
+    const target = galleryStore.items.find(i => i.id === item.id)
+    if (target) {
+      target.is_favorite = favorited
+    }
+
+    uiStore.addNotification({
+      type: favorited ? 'success' : 'info',
+      title: favorited ? 'Добавлено в избранное' : 'Убрано из избранного',
+      message: favorited
+        ? `"${item.name || item.label || 'Актив'}" добавлен в избранное`
+        : `"${item.name || item.label || 'Актив'}" удалён из избранного`
+    })
+  } catch (error: any) {
+    uiStore.addNotification({
+      type: 'error',
+      title: 'Ошибка избранного',
+      message: error?.message || 'Не удалось обновить избранное'
+    })
+  }
 }
 
 const handleItemShare = (item: any) => {
@@ -597,6 +619,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 // Lifecycle
 onMounted(() => {
   galleryStore.initialize()
+  favoritesStore.fetchFavorites()
   updateContainerHeight()
 
   window.addEventListener('resize', handleResize)

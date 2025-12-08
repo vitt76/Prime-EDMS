@@ -128,17 +128,6 @@
         </div>
       </div>
 
-      <!-- Bulk Actions Toolbar -->
-      <BulkActions
-        :selected-count="assetStore.selectedCount"
-        @tag="handleBulkTag"
-        @move="handleBulkMove"
-        @download="handleBulkDownload"
-        @share="handleBulkShare"
-        @delete="handleBulkDelete"
-        @clear-selection="handleClearSelection"
-      />
-
       <!-- Assets Grid (regular for small lists) -->
       <div
         v-if="assetStore.assets.length < 100"
@@ -258,7 +247,6 @@ import { useRouter } from 'vue-router'
 import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
 import AssetCard from './AssetCard.vue'
-import BulkActions from './BulkActions.vue'
 import BulkActionsBar from './BulkActionsBar.vue'
 import BulkTagModal from './BulkTagModal.vue'
 import BulkMoveModal from './BulkMoveModal.vue'

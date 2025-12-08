@@ -8,6 +8,9 @@ from mayan.apps.headless_api.views.config_views import HeadlessDocumentTypeConfi
 from mayan.apps.headless_api.views.activity_views import (
     DashboardActivityView, HeadlessActivityFeedView
 )
+from mayan.apps.headless_api.views.favorites_views import (
+    HeadlessFavoriteListView, HeadlessFavoriteToggleView
+)
 from mayan.apps.headless_api.views.password_views import HeadlessPasswordChangeView
 from mayan.apps.headless_api.views.my_uploads_views import HeadlessMyUploadsView
 from .literals import API_VERSION
@@ -46,6 +49,16 @@ api_version_urls = [
         regex=r'^headless/dashboard/activity/$',
         view=DashboardActivityView.as_view(),
         name='headless-dashboard-activity'
+    ),
+    url(
+        regex=r'^headless/favorites/$',
+        view=HeadlessFavoriteListView.as_view(),
+        name='headless-favorites-list'
+    ),
+    url(
+        regex=r'^headless/favorites/(?P<document_id>\d+)/$',
+        view=HeadlessFavoriteToggleView.as_view(),
+        name='headless-favorites-toggle'
     ),
     url(
         regex=r'^headless/password/change/$',

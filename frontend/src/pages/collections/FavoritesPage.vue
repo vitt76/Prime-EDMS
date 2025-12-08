@@ -67,6 +67,7 @@ import CollectionBrowser from '@/components/collections/CollectionBrowser.vue'
 import { apiService } from '@/services/apiService'
 import type { ExtendedAsset } from '@/mocks/assets'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
 
 // ============================================================================
 // STORES & ROUTER
@@ -74,6 +75,7 @@ import { useNotificationStore } from '@/stores/notificationStore'
 
 const router = useRouter()
 const notificationStore = useNotificationStore()
+const favoritesStore = useFavoritesStore()
 
 // ============================================================================
 // STATE
@@ -99,6 +101,8 @@ async function fetchFavorites(page: number = 1, append: boolean = false) {
     })
 
     const mapped = (response.results || []).map(mapFavoriteItem)
+    // sync favorites ids set
+    mapped.forEach(asset => favoritesStore.setFavorite(asset.id, true))
 
     if (append) {
       assets.value = [...assets.value, ...mapped]
@@ -126,9 +130,11 @@ async function loadMore() {
 
 async function handleToggleFavorite(asset: ExtendedAsset) {
   try {
-    await apiService.post(`/api/v4/documents/${asset.id}/remove_from_favorites/`, {})
-    assets.value = assets.value.filter(a => a.id !== asset.id)
-    totalCount.value = Math.max(0, totalCount.value - 1)
+    const favorited = await favoritesStore.toggleFavorite(asset.id)
+    if (!favorited) {
+      assets.value = assets.value.filter(a => a.id !== asset.id)
+      totalCount.value = Math.max(0, totalCount.value - 1)
+    }
     notificationStore.addNotification({
       type: 'info',
       title: 'Убрано из избранного',
