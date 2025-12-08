@@ -37,6 +37,24 @@ class CachedThumbnailMixin:
     Cache invalidation happens via signal on DocumentFile post_save.
     See: mayan/apps/documents/signals.py
     """
+    def _make_absolute(self, url: Optional[str]) -> Optional[str]:
+        """
+        Convert relative API URL to absolute using request context.
+        Keeps absolute URLs unchanged.
+        """
+        if not url:
+            return url
+
+        if url.startswith('http://') or url.startswith('https://'):
+            return url
+
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if request:
+            try:
+                return request.build_absolute_uri(url)
+            except Exception:  # pragma: no cover - defensive
+                return url
+        return url
     
     def _get_cached_thumbnail_url(
         self, 
@@ -59,7 +77,7 @@ class CachedThumbnailMixin:
         # Try cache first
         cached_url = cache.get(cache_key)
         if cached_url is not None:
-            return cached_url
+            return self._make_absolute(cached_url)
         
         # Cache miss - generate URL
         if version_id and page_id:
@@ -77,7 +95,7 @@ class CachedThumbnailMixin:
         # Cache the URL
         cache.set(cache_key, url, THUMBNAIL_CACHE_TTL)
         
-        return url
+        return self._make_absolute(url)
     
     def _get_cached_preview_url(
         self,
@@ -91,7 +109,7 @@ class CachedThumbnailMixin:
         
         cached_url = cache.get(cache_key)
         if cached_url is not None:
-            return cached_url
+            return self._make_absolute(cached_url)
         
         if version_id and page_id:
             url = (
@@ -106,7 +124,7 @@ class CachedThumbnailMixin:
         
         cache.set(cache_key, url, THUMBNAIL_CACHE_TTL)
         
-        return url
+        return self._make_absolute(url)
     
     def _get_cached_download_url(
         self,
@@ -114,7 +132,8 @@ class CachedThumbnailMixin:
         file_id: int
     ) -> str:
         """Get download URL (no caching needed - stable URL)."""
-        return f'/api/v4/documents/{document_id}/files/{file_id}/download/'
+        url = f'/api/v4/documents/{document_id}/files/{file_id}/download/'
+        return self._make_absolute(url)
 
 
 class OptimizedDocumentFileSerializer(serializers.ModelSerializer):

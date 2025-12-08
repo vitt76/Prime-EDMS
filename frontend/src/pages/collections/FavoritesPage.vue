@@ -96,12 +96,13 @@ async function fetchFavorites(page: number = 1, append: boolean = false) {
   isLoading.value = true
 
   try {
-    const response = await apiService.get<any>('/api/v4/documents/favorites/', {
+    const response = await apiService.get<any>('/api/v4/headless/favorites/', {
       params: { page, page_size: pageSize }
     })
 
-    const mapped = (response.results || []).map(mapFavoriteItem)
-    // sync favorites ids set
+    const items = Array.isArray(response?.results) ? response.results : []
+    const mapped = items.map(mapFavoriteItem).filter(Boolean)
+
     mapped.forEach(asset => favoritesStore.setFavorite(asset.id, true))
 
     if (append) {
@@ -110,9 +111,9 @@ async function fetchFavorites(page: number = 1, append: boolean = false) {
       assets.value = mapped
     }
 
-    totalCount.value = response.count || 0
+    totalCount.value = response?.count || mapped.length
     currentPage.value = page
-    hasMore.value = Boolean(response.next)
+    hasMore.value = Boolean(response?.next)
   } finally {
     isLoading.value = false
   }
@@ -184,19 +185,19 @@ onMounted(() => {
 })
 
 function mapFavoriteItem(item: any): ExtendedAsset {
-  const doc = item.document || {}
-  const file = doc.file_latest || {}
+  const doc = item?.document || item || {}
 
   return {
-    id: doc.id,
+    id: Number(doc.id),
     label: doc.label,
     description: doc.description || '',
-    size: file.size || 0,
-    mime_type: file.mimetype || '',
-    filename: file.filename || doc.label,
-    download_url: file.download_url,
-    thumbnail_url: doc.thumbnail_url,
-    date_added: doc.datetime_created,
+    size: doc.file_latest_size || doc.size || 0,
+    mime_type: doc.file_latest_mimetype || doc.mime_type || '',
+    filename: doc.file_latest_filename || doc.label,
+    download_url: doc.download_url,
+    thumbnail_url: doc.preview_url || doc.thumbnail_url,
+    preview_url: doc.preview_url || doc.thumbnail_url,
+    date_added: doc.datetime_created || item.datetime_added,
     isFavorite: true,
     lastAccessedAt: item.datetime_added || doc.datetime_created
   } as ExtendedAsset

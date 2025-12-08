@@ -13,22 +13,36 @@ export const useFavoritesStore = defineStore('favorites', () => {
 
   const setFavorite = (documentId: number, value: boolean) => {
     const id = Number(documentId)
+    const next = new Set(favoriteIds.value)
     if (value) {
-      favoriteIds.value.add(id)
+      next.add(id)
     } else {
-      favoriteIds.value.delete(id)
+      next.delete(id)
     }
+    favoriteIds.value = next
   }
 
   const fetchFavorites = async () => {
     isLoading.value = true
     error.value = null
     try {
-      const ids = await apiService.get<number[]>('/api/v4/headless/favorites/')
+      const response = await apiService.get<any>('/api/v4/headless/favorites/', {
+        params: { page_size: 200 }
+      })
+
+      let ids: number[] = []
+      if (Array.isArray(response)) {
+        ids = response.map((value: any) => Number(value))
+      } else if (Array.isArray(response?.results)) {
+        ids = response.results
+          .map((item: any) => Number(item?.document?.id ?? item?.id))
+          .filter((id: number) => !Number.isNaN(id))
+      }
+
       favoriteIds.value = new Set(ids)
     } catch (err: any) {
       error.value = err?.message || 'Не удалось загрузить избранное'
-      favoriteIds.value.clear()
+      favoriteIds.value = new Set()
     } finally {
       isLoading.value = false
     }

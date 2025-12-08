@@ -1,44 +1,91 @@
 """Headless API views for Favorites."""
 
 import logging
+from typing import Dict
 
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document, FavoriteDocument
 from mayan.apps.documents.permissions import permission_document_view
+from mayan.apps.headless_api.serializers import FavoriteDocumentEntrySerializer
 
 logger = logging.getLogger(__name__)
 
 
+class HeadlessFavoritesPagination(PageNumberPagination):
+    """Simple pagination for favorites list."""
+
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class HeadlessFavoriteListView(APIView):
     """
-    Return list of document IDs favorited by the current user.
+    Return list of favorited documents with thumbnail/preview URLs.
 
-    Response: [1, 2, 3]
+    Response (paginated):
+    {
+        "count": 2,
+        "next": null,
+        "previous": null,
+        "results": [
+            {
+                "document": {
+                    "id": 1,
+                    "label": "...",
+                    "thumbnail_url": "http://localhost:8080/api/v4/documents/1/versions/latest/pages/1/image/?width=150&height=150",
+                    "preview_url": "http://localhost:8080/api/v4/documents/1/versions/latest/pages/1/image/?width=800",
+                    ...
+                },
+                "datetime_added": "2025-12-08T10:00:00Z"
+            }
+        ]
+    }
     """
 
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        favorite_doc_ids = FavoriteDocument.objects.filter(
+        # Base favorites for user (ordered)
+        favorites_qs = FavoriteDocument.objects.filter(
             user=request.user
-        ).values_list('document_id', flat=True)
+        ).select_related('document', 'document__document_type').order_by('-datetime_added')
 
-        queryset = Document.valid.filter(pk__in=favorite_doc_ids)
-        queryset = AccessControlList.objects.restrict_queryset(
+        favorite_doc_ids = list(favorites_qs.values_list('document_id', flat=True))
+
+        # Apply ACLs to documents
+        documents_qs = Document.valid.filter(pk__in=favorite_doc_ids)
+        documents_qs = AccessControlList.objects.restrict_queryset(
             permission=permission_document_view,
-            queryset=queryset,
+            queryset=documents_qs,
             user=request.user
+        ).select_related('document_type').prefetch_related('tags')
+
+        # Map id -> document for serializer usage
+        document_map: Dict[int, Document] = {doc.pk: doc for doc in documents_qs}
+
+        # Filter favorites by permitted documents
+        filtered_favorites_qs = favorites_qs.filter(
+            document_id__in=document_map.keys()
         )
 
-        ids = list(queryset.values_list('pk', flat=True))
-        return Response(ids)
+        paginator = HeadlessFavoritesPagination()
+        page = paginator.paginate_queryset(filtered_favorites_qs, request, view=self)
+
+        serializer = FavoriteDocumentEntrySerializer(
+            page,
+            many=True,
+            context={'request': request, 'document_map': document_map}
+        )
+        return paginator.get_paginated_response(serializer.data)
 
 
 class HeadlessFavoriteToggleView(APIView):
