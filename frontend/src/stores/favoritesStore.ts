@@ -1,9 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiService } from '@/services/apiService'
+import { adaptBackendAsset } from '@/services/adapters/mayanAdapter'
+import type { Asset } from '@/types/api'
 
 export const useFavoritesStore = defineStore('favorites', () => {
   const favoriteIds = ref<Set<number>>(new Set())
+  const favoriteAssets = ref<Asset[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -31,18 +34,27 @@ export const useFavoritesStore = defineStore('favorites', () => {
       })
 
       let ids: number[] = []
-      if (Array.isArray(response)) {
-        ids = response.map((value: any) => Number(value))
-      } else if (Array.isArray(response?.results)) {
+      let assets: Asset[] = []
+
+      if (Array.isArray(response?.results)) {
         ids = response.results
           .map((item: any) => Number(item?.document?.id ?? item?.id))
           .filter((id: number) => !Number.isNaN(id))
+
+        assets = response.results
+          .map((item: any) => item?.document)
+          .filter((doc: any) => !!doc)
+          .map((doc: any) => adaptBackendAsset(doc))
+      } else if (Array.isArray(response)) {
+        ids = response.map((value: any) => Number(value)).filter((id: number) => !Number.isNaN(id))
       }
 
       favoriteIds.value = new Set(ids)
+      favoriteAssets.value = assets
     } catch (err: any) {
       error.value = err?.message || 'Не удалось загрузить избранное'
       favoriteIds.value = new Set()
+      favoriteAssets.value = []
     } finally {
       isLoading.value = false
     }
@@ -59,6 +71,11 @@ export const useFavoritesStore = defineStore('favorites', () => {
         {}
       )
       setFavorite(id, resp.favorited)
+
+      if (resp.favorited === false) {
+        favoriteAssets.value = favoriteAssets.value.filter(asset => asset.id !== id)
+      }
+
       return resp.favorited
     } catch (err) {
       // revert on error
@@ -69,6 +86,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
 
   return {
     favoriteIds,
+    favoriteAssets,
     isLoading,
     error,
     isFavorite,

@@ -49,23 +49,10 @@
 </template>
 
 <script setup lang="ts">
-/**
- * FavoritesPage.vue
- * 
- * Displays assets where isFavorite === true.
- * Users can un-favorite items directly from this page.
- * 
- * Backend Alignment (Mayan EDMS):
- * - Would use a separate "bookmarks" or "favorites" table
- * - Or leverage tags with special "favorite" tag
- * - ACL permissions for viewing favorites
- */
-
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CollectionBrowser from '@/components/collections/CollectionBrowser.vue'
-import { apiService } from '@/services/apiService'
-import type { ExtendedAsset } from '@/mocks/assets'
+import type { Asset } from '@/types/api'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 
@@ -81,65 +68,45 @@ const favoritesStore = useFavoritesStore()
 // STATE
 // ============================================================================
 
-const assets = ref<ExtendedAsset[]>([])
-const totalCount = ref(0)
+const assets = computed<Asset[]>(() => favoritesStore.favoriteAssets)
+const totalCount = computed(() => favoritesStore.favoriteAssets.length)
 const isLoading = ref(false)
-const currentPage = ref(1)
 const hasMore = ref(false)
-const pageSize = 20
 
 // ============================================================================
 // DATA FETCHING
 // ============================================================================
 
-async function fetchFavorites(page: number = 1, append: boolean = false) {
+async function fetchFavorites() {
   isLoading.value = true
-
   try {
-    const response = await apiService.get<any>('/api/v4/headless/favorites/', {
-      params: { page, page_size: pageSize }
-    })
-
-    const items = Array.isArray(response?.results) ? response.results : []
-    const mapped = items.map(mapFavoriteItem).filter(Boolean)
-
-    mapped.forEach(asset => favoritesStore.setFavorite(asset.id, true))
-
-    if (append) {
-      assets.value = [...assets.value, ...mapped]
-    } else {
-      assets.value = mapped
-    }
-
-    totalCount.value = response?.count || mapped.length
-    currentPage.value = page
-    hasMore.value = Boolean(response?.next)
+    await favoritesStore.fetchFavorites()
   } finally {
     isLoading.value = false
   }
 }
 
 async function loadMore() {
-  if (hasMore.value && !isLoading.value) {
-    await fetchFavorites(currentPage.value + 1, true)
-  }
+  // pagination не используется для избранного пока
+  return
 }
 
 // ============================================================================
 // HANDLERS
 // ============================================================================
 
-async function handleToggleFavorite(asset: ExtendedAsset) {
+async function handleToggleFavorite(asset: Asset) {
   try {
     const favorited = await favoritesStore.toggleFavorite(asset.id)
     if (!favorited) {
-      assets.value = assets.value.filter(a => a.id !== asset.id)
-      totalCount.value = Math.max(0, totalCount.value - 1)
+      // список обновится из стора
     }
     notificationStore.addNotification({
-      type: 'info',
-      title: 'Убрано из избранного',
-      message: `"${asset.label}" удалён из избранного`,
+      type: favorited ? 'success' : 'info',
+      title: favorited ? 'Добавлено в избранное' : 'Убрано из избранного',
+      message: favorited
+        ? `"${asset.label}" добавлен в избранное`
+        : `"${asset.label}" удалён из избранного`,
     })
   } catch (error) {
     notificationStore.addNotification({
@@ -151,16 +118,16 @@ async function handleToggleFavorite(asset: ExtendedAsset) {
   }
 }
 
-function handleAssetClick(asset: ExtendedAsset) {
+function handleAssetClick(asset: Asset) {
   router.push(`/dam/assets/${asset.id}`)
 }
 
-function handlePreview(asset: ExtendedAsset) {
+function handlePreview(asset: Asset) {
   // Open preview modal or navigate to asset detail
   router.push(`/dam/assets/${asset.id}`)
 }
 
-function handleDownload(asset: ExtendedAsset) {
+function handleDownload(asset: Asset) {
   notificationStore.addNotification({
     type: 'info',
     title: 'Скачивание',
@@ -168,7 +135,7 @@ function handleDownload(asset: ExtendedAsset) {
   })
 }
 
-function handleShare(asset: ExtendedAsset) {
+function handleShare(asset: Asset) {
   notificationStore.addNotification({
     type: 'info',
     title: 'Поделиться',
@@ -183,24 +150,5 @@ function handleShare(asset: ExtendedAsset) {
 onMounted(() => {
   fetchFavorites()
 })
-
-function mapFavoriteItem(item: any): ExtendedAsset {
-  const doc = item?.document || item || {}
-
-  return {
-    id: Number(doc.id),
-    label: doc.label,
-    description: doc.description || '',
-    size: doc.file_latest_size || doc.size || 0,
-    mime_type: doc.file_latest_mimetype || doc.mime_type || '',
-    filename: doc.file_latest_filename || doc.label,
-    download_url: doc.download_url,
-    thumbnail_url: doc.preview_url || doc.thumbnail_url,
-    preview_url: doc.preview_url || doc.thumbnail_url,
-    date_added: doc.datetime_created || item.datetime_added,
-    isFavorite: true,
-    lastAccessedAt: item.datetime_added || doc.datetime_created
-  } as ExtendedAsset
-}
 </script>
 
