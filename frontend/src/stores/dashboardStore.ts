@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { dashboardService, type DashboardStats, type StorageMetrics } from '@/services/dashboardService'
-import { getActivityFeedNormalized, type ActivityItem } from '@/services/activityService'
+import { getDashboardActivityNormalized, type ActivityItem } from '@/services/activityService'
 import { formatApiError } from '@/utils/errors'
 
 export const useDashboardStore = defineStore(
@@ -49,12 +49,6 @@ export const useDashboardStore = defineStore(
       ]
     }
 
-    const mockActivity: ActivityItem[] = [
-      { id: 1, type: 'upload', user: 'admin', user_id: 1, asset_id: 101, asset_label: 'image_001.jpg', timestamp: new Date().toISOString(), description: 'Загружен файл image_001.jpg' },
-      { id: 2, type: 'tag', user: 'editor', user_id: 2, asset_id: 102, asset_label: 'video_promo.mp4', timestamp: new Date(Date.now() - 3600000).toISOString(), description: 'Добавлены теги к video_promo.mp4' },
-      { id: 3, type: 'download', user: 'manager', user_id: 3, asset_id: 103, asset_label: 'report_2025.pdf', timestamp: new Date(Date.now() - 7200000).toISOString(), description: 'Скачан документ report_2025.pdf' }
-    ]
-
     const mockStorage: StorageMetrics = {
       total_size: 107374182400,
       used_size: 16890000000,
@@ -100,21 +94,10 @@ export const useDashboardStore = defineStore(
 
     async function fetchActivityFeed(limit = 20) {
       try {
-        // In dev mode, use mock data
-        if (import.meta.env.DEV) {
-          await new Promise(resolve => setTimeout(resolve, 200))
-          activityFeed.value = mockActivity.slice(0, limit)
-          return
-        }
-        activityFeed.value = await getActivityFeedNormalized(limit)
+        activityFeed.value = await getDashboardActivityNormalized(limit)
       } catch (err) {
-        // Activity feed is optional, don't throw
         console.warn('Failed to fetch activity feed:', err)
-        if (import.meta.env.DEV) {
-          activityFeed.value = mockActivity
-        } else {
-          activityFeed.value = []
-        }
+        activityFeed.value = []
       }
     }
 

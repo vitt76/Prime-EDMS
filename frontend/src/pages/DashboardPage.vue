@@ -275,19 +275,19 @@
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      :d="getActivityIcon(activity.type)"
+                      :d="getActivityIcon(activity.icon)"
                     />
                   </svg>
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm text-neutral-900 dark:text-neutral-900">
                     <span class="font-medium">{{ activity.user }}</span>
-                    {{ activity.description }}
+                    {{ activity.action_text }}
                     <span
-                      v-if="activity.asset_label"
+                      v-if="activity.object_name"
                       class="font-medium"
                     >
-                      {{ activity.asset_label }}
+                      {{ activity.object_name }}
                     </span>
                   </p>
                   <p class="text-xs text-neutral-600 dark:text-neutral-600 mt-1">

@@ -1,40 +1,15 @@
 import { apiService } from './apiService'
 
-export interface ActivityActor {
-  id: number | null
-  username: string
-  full_name: string
-}
-
-export interface ActivityTarget {
+export interface DashboardActivityItem {
   id: number
-  type: string
-  label: string
-  url: string | null
-}
-
-export interface HeadlessActivityItem {
-  id: number
+  user: string
+  user_id: number | null
+  action_text: string
+  object_name: string | null
   timestamp: string
-  actor: ActivityActor
+  icon: string
   verb: string
-  verb_code: string
-  target: ActivityTarget | null
-  description: string
-}
-
-export interface ActivityFeedResponse {
-  count: number
-  page: number
-  page_size: number
-  total_pages?: number
-  results: HeadlessActivityItem[]
-}
-
-export interface ActivityFeedOptions {
-  filter?: 'my_actions' | 'my_documents' | 'all'
-  page?: number
-  page_size?: number
+  target_id: number | null
 }
 
 export interface ActivityItem {
@@ -42,53 +17,30 @@ export interface ActivityItem {
   user: string
   user_id: number | null
   timestamp: string
-  description: string
-  target?: string | null
+  action_text: string
+  object_name: string | null
+  icon: string
 }
 
-const BFF_ENABLED = import.meta.env.VITE_BFF_ENABLED === 'true'
-
-export async function getActivityFeed(
-  options: ActivityFeedOptions = {}
-): Promise<ActivityFeedResponse> {
-  if (!BFF_ENABLED) {
-    return {
-      count: 0,
-      page: options.page || 1,
-      page_size: options.page_size || 20,
-      results: []
-    }
-  }
-
-  const params = new URLSearchParams()
-  if (options.filter) params.append('filter', options.filter)
-  if (options.page) params.append('page', options.page.toString())
-  if (options.page_size) params.append('page_size', options.page_size.toString())
-
-  const queryString = params.toString()
-  const url = queryString
-    ? `/api/v4/headless/activity/feed/?${queryString}`
-    : '/api/v4/headless/activity/feed/'
-
-  return apiService.get<ActivityFeedResponse>(url)
+export async function getDashboardActivity(
+  limit = 20
+): Promise<DashboardActivityItem[]> {
+  const url = `/api/v4/headless/dashboard/activity/?limit=${limit}`
+  return apiService.get<DashboardActivityItem[]>(url)
 }
 
-export async function getActivityFeedNormalized(
+export async function getDashboardActivityNormalized(
   limit = 20
 ): Promise<ActivityItem[]> {
-  const response = await getActivityFeed({
-    filter: 'my_actions',
-    page: 1,
-    page_size: limit
-  })
-
-  return response.results.map((item) => ({
+  const items = await getDashboardActivity(limit)
+  return items.map((item) => ({
     id: item.id,
-    user: item.actor?.username || 'system',
-    user_id: item.actor?.id ?? null,
+    user: item.user,
+    user_id: item.user_id,
     timestamp: item.timestamp,
-    description: item.description,
-    target: item.target?.label ?? null
+    action_text: item.action_text,
+    object_name: item.object_name,
+    icon: item.icon || 'upload'
   }))
 }
 
