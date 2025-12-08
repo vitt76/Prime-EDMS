@@ -133,6 +133,41 @@ class AuthService {
   }
 
   /**
+   * Update current user profile (headless).
+   */
+  async updateProfile(payload: { firstName: string; lastName: string; email: string }): Promise<User> {
+    const response = await apiService.patch<{
+      id: number
+      username: string
+      first_name: string
+      last_name: string
+      email: string
+    }>(
+      '/api/v4/headless/profile/',
+      {
+        first_name: payload.firstName,
+        last_name: payload.lastName,
+        email: payload.email
+      }
+    )
+
+    const user: User = {
+      id: response.id,
+      username: response.username,
+      first_name: response.first_name,
+      last_name: response.last_name,
+      email: response.email,
+      is_active: true,
+      permissions: [],
+      role: undefined
+    }
+
+    // Persist locally for session continuity
+    localStorage.setItem(USER_KEY, JSON.stringify(user))
+    return user
+  }
+
+  /**
    * Get current authenticated user
    */
   async getCurrentUser(): Promise<GetCurrentUserResponse> {

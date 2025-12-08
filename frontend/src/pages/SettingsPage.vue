@@ -272,6 +272,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
+import { authService } from '@/services/authService'
 import Card from '@/components/Common/Card.vue'
 import Button from '@/components/Common/Button.vue'
 import Input from '@/components/Common/Input.vue'
@@ -350,15 +351,32 @@ function handlePreferencesChange() {
 }
 
 async function handleSaveProfile() {
+  console.log('[SettingsPage] save profile click')
+  uiStore.addNotification({
+    type: 'info',
+    message: 'Сохраняем профиль...'
+  })
   isSavingProfile.value = true
   try {
-    // TODO: Implement API call to update profile
-    // await authService.updateProfile(profileForm.value)
-    await new Promise((resolve) => setTimeout(resolve, 500)) // Simulate API call
-    // Show success notification
+    const updatedUser = await authService.updateProfile({
+      firstName: profileForm.value.firstName,
+      lastName: profileForm.value.lastName,
+      email: profileForm.value.email
+    })
+
+    // sync authStore user
+    authStore.user = {
+      ...(authStore.user || {}),
+      ...{
+        first_name: updatedUser.first_name,
+        last_name: updatedUser.last_name,
+        email: updatedUser.email
+      }
+    }
+
     uiStore.addNotification({
       type: 'success',
-      message: 'Профиль успешно обновлен'
+      message: 'Профиль успешно обновлён'
     })
   } catch (error) {
     uiStore.addNotification({
