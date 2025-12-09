@@ -73,3 +73,4 @@ export function getOptimalImageSize(viewportWidth: number): number {
 
 
 
+

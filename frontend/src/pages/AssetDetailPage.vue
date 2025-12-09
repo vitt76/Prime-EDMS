@@ -199,7 +199,8 @@
             </button>
             <img
               v-if="!previewError"
-              :src="previewSrc"
+              :key="asset?.id || previewSrc"
+              :src="previewResolved"
               :alt="asset.label"
               class="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-transform duration-200"
               :style="{ transform: `scale(${zoom}) rotate(${rotation}deg)` }"
@@ -698,7 +699,11 @@ const tabs = [
 // Computed
 const assetId = computed(() => Number(route.params.id))
 
-const isImage = computed(() => asset.value?.mime_type?.startsWith('image/'))
+const isImage = computed(() => {
+  if (asset.value?.mime_type?.startsWith('image/')) return true
+  // Fallback: if we have preview/thumbnail, treat as image to render
+  return !!(asset.value?.preview_url || asset.value?.thumbnail_url)
+})
 const isVideo = computed(() => asset.value?.mime_type?.startsWith('video/'))
 const isDocument = computed(() => 
   asset.value?.mime_type?.includes('pdf') || 
@@ -728,6 +733,8 @@ const usage = computed((): UsageStats | undefined => {
 })
 
 const previewSrc = computed(() => resolveAssetImageUrl(asset.value))
+const previewFallback = ref<string | null>(null)
+const previewResolved = computed(() => previewFallback.value || previewSrc.value)
 const isFavorite = computed(() => (asset.value ? favoritesStore.isFavorite(asset.value.id) : false))
 const previewError = ref(false)
 
@@ -798,6 +805,12 @@ async function toggleFavorite(): Promise<void> {
 }
 
 function handlePreviewImageError(): void {
+  // First failure: try placeholder
+  if (!previewFallback.value) {
+    previewFallback.value = '/assets/placeholder.png'
+    previewError.value = false
+    return
+  }
   previewError.value = true
 }
 
