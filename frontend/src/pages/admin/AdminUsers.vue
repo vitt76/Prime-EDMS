@@ -1019,15 +1019,29 @@ function hasPermission(roleId: number, permName: string): boolean {
   return rolePermissionMatrix.value[roleId]?.has(permName) ?? false
 }
 
-function togglePermission(roleId: number, permName: string): void {
+async function togglePermission(roleId: number, permName: string): Promise<void> {
   if (!rolePermissionMatrix.value[roleId]) {
     rolePermissionMatrix.value[roleId] = new Set()
   }
   
-  if (rolePermissionMatrix.value[roleId].has(permName)) {
-    rolePermissionMatrix.value[roleId].delete(permName)
-  } else {
-    rolePermissionMatrix.value[roleId].add(permName)
+  const has = rolePermissionMatrix.value[roleId].has(permName)
+  rolePermissionMatrix.value[roleId][has ? 'delete' : 'add'](permName)
+
+  try {
+    if (has) {
+      await adminService.removeRolePermission(roleId, permName)
+    } else {
+      await adminService.addRolePermission(roleId, permName)
+    }
+  } catch (err) {
+    // Rollback on failure
+    if (has) {
+      rolePermissionMatrix.value[roleId].add(permName)
+    } else {
+      rolePermissionMatrix.value[roleId].delete(permName)
+    }
+    console.error('[AdminUsers] Failed to toggle permission', err)
+    showToast('Не удалось обновить разрешение', 'error')
   }
 }
 

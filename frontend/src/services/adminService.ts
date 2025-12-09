@@ -469,18 +469,50 @@ class AdminService {
    * Endpoint: GET /api/v4/roles/{id}/permissions/
    */
   async getRolePermissions(roleId: number): Promise<StoredPermission[]> {
-    const response = await apiService.get<MayanPaginatedResponse<{ namespace: string; pk: string; label: string }>>(
-      `/api/v4/roles/${roleId}/permissions/`,
-      { params: { page_size: 500 } },
-      true
-    )
-    const perms = response.results || []
-    return perms.map((p, idx) => ({
-      id: idx + 1,
-      namespace: p.namespace,
-      name: p.pk,
-      label: p.label
-    }))
+    const perms: StoredPermission[] = []
+    let nextUrl: string | null = `/api/v4/roles/${roleId}/permissions/`
+
+    while (nextUrl) {
+      const response = await apiService.get<MayanPaginatedResponse<{ namespace: string; pk: string; label: string }>>(
+        nextUrl,
+        { params: { page_size: 500 } },
+        false
+      )
+      const pagePerms = response.results || []
+      pagePerms.forEach((p, idx) => {
+        perms.push({
+          id: perms.length + idx + 1,
+          namespace: p.namespace,
+          name: p.pk,
+          label: p.label
+        })
+      })
+      nextUrl = response.next
+    }
+
+    return perms
+  }
+
+  /**
+   * Add permission to role
+   *
+   * Endpoint: POST /api/v4/roles/{id}/permissions/add/
+   */
+  async addRolePermission(roleId: number, permissionPk: string): Promise<void> {
+    await apiService.post(`/api/v4/roles/${roleId}/permissions/add/`, {
+      permission: permissionPk
+    })
+  }
+
+  /**
+   * Remove permission from role
+   *
+   * Endpoint: POST /api/v4/roles/{id}/permissions/remove/
+   */
+  async removeRolePermission(roleId: number, permissionPk: string): Promise<void> {
+    await apiService.post(`/api/v4/roles/${roleId}/permissions/remove/`, {
+      permission: permissionPk
+    })
   }
 
   /**
@@ -503,18 +535,28 @@ class AdminService {
    * Endpoint: GET /api/v4/permissions/
    */
   async getPermissions(): Promise<StoredPermission[]> {
-    const response = await apiService.get<MayanPaginatedResponse<{ namespace: string; pk: string; label: string }>>(
-      '/api/v4/permissions/',
-      { params: { page_size: 500 } },
-      true
-    )
-    const perms = response.results || []
-    return perms.map((p, idx) => ({
-      id: idx + 1,
-      namespace: p.namespace,
-      name: p.pk,
-      label: p.label
-    }))
+    const perms: StoredPermission[] = []
+    let nextUrl: string | null = '/api/v4/permissions/'
+
+    while (nextUrl) {
+      const response = await apiService.get<MayanPaginatedResponse<{ namespace: string; pk: string; label: string }>>(
+        nextUrl,
+        { params: { page_size: 500 } },
+        false // always refresh to avoid stale cache
+      )
+      const pagePerms = response.results || []
+      pagePerms.forEach((p, idx) => {
+        perms.push({
+          id: perms.length + idx + 1,
+          namespace: p.namespace,
+          name: p.pk,
+          label: p.label
+        })
+      })
+      nextUrl = response.next
+    }
+
+    return perms
   }
 
   /**
