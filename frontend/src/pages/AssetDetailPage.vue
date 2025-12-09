@@ -181,9 +181,9 @@
       <div class="flex flex-1 overflow-hidden">
         <!-- Preview Area (70%) -->
         <div class="flex-1 flex items-center justify-center bg-neutral-900 relative overflow-hidden">
-          <!-- Image Preview -->
+          <!-- Preview (image or previewable doc) -->
           <div
-            v-if="isImage"
+            v-if="showPreview"
             class="relative w-full h-full flex items-center justify-center p-8"
           >
             <button
@@ -228,22 +228,22 @@
             </video>
           </div>
 
-          <!-- Document Preview -->
-          <div v-else-if="isDocument" class="relative w-full h-full flex items-center justify-center p-8">
-            <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md text-center">
-              <svg class="w-24 h-24 mx-auto text-neutral-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <h3 class="text-lg font-semibold text-neutral-900 mb-2">{{ asset.filename }}</h3>
-                  <p class="text-sm text-neutral-600 mb-4">
-                    {{ formatFileSize(asset.size) }} • {{ (asset.metadata as Record<string, unknown>)?.pages || '?' }} страниц
-              </p>
-              <button
-                class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                @click="handleDownload"
-              >
-                Скачать документ
-              </button>
+          <!-- Other File Types (icon fallback) -->
+          <div v-else class="flex-1 flex items-center justify-center">
+            <div class="text-center text-neutral-300">
+              <div class="mx-auto mb-3 w-16 h-16 rounded-lg bg-neutral-800 flex items-center justify-center">
+                <span class="text-sm font-semibold uppercase">{{ fileExtension || 'file' }}</span>
+              </div>
+              <p class="text-lg font-semibold text-neutral-200">{{ asset.file_details?.filename || asset.filename || asset.label }}</p>
+              <p class="text-sm text-neutral-400 mt-1">Предпросмотр недоступен</p>
+              <div class="mt-4 flex items-center justify-center gap-3">
+                <button
+                  class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                  @click="handleDownload"
+                >
+                  Скачать
+                </button>
+              </div>
             </div>
           </div>
 
@@ -699,6 +699,12 @@ const tabs = [
 // Computed
 const assetId = computed(() => Number(route.params.id))
 
+const fileExtension = computed(() => {
+  const name = asset.value?.file_details?.filename || asset.value?.filename || asset.value?.label || ''
+  const match = name.match(/\.([a-z0-9]+)$/i)
+  return match ? match[1].toLowerCase() : ''
+})
+
 const isImage = computed(() => {
   if (asset.value?.mime_type?.startsWith('image/')) return true
   // Fallback: if we have preview/thumbnail, treat as image to render
@@ -711,6 +717,9 @@ const isDocument = computed(() =>
   asset.value?.mime_type?.includes('word')
 )
 const isAudio = computed(() => asset.value?.mime_type?.startsWith('audio/'))
+
+const hasPreviewUrl = computed(() => !!(asset.value?.preview_url || asset.value?.thumbnail_url))
+const showPreview = computed(() => isImage.value || (hasPreviewUrl.value && !isVideo.value))
 
 const documentType = computed(() => {
   if (isImage.value) return 'image'
