@@ -138,8 +138,13 @@ export interface BackendPaginatedResponse<T> {
 /** Default placeholder for missing thumbnails */
 const PLACEHOLDER_THUMBNAIL = '/placeholder-document.svg'
 
-/** Base URL for API (empty for same-origin) */
-let baseUrl = ''
+/** Base URL for API (prefers VITE_API_BASE_URL, then VITE_API_URL, then origin) */
+const DEFAULT_BASE_URL =
+  (import.meta as any)?.env?.VITE_API_BASE_URL ||
+  (import.meta as any)?.env?.VITE_API_URL ||
+  (typeof window !== 'undefined' ? window.location.origin : '')
+
+let baseUrl = DEFAULT_BASE_URL.replace(/\/$/, '')
 
 /**
  * Set the base URL for API calls
@@ -157,10 +162,12 @@ export function setBaseUrl(url: string): void {
  */
 function toAbsoluteUrl(url: string | undefined | null): string | undefined {
   if (!url) return undefined
+  if (url.startsWith('data:image')) return url
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url
   }
-  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`
+  const effectiveBase = baseUrl || (typeof window !== 'undefined' ? window.location.origin : '')
+  return `${effectiveBase}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
 /**
@@ -245,7 +252,11 @@ function getPreviewUrl(doc: BackendOptimizedDocument): string | undefined {
   
   // Priority 4: Generate Mayan page image URL (larger size)
   if (doc.file_latest && doc.id) {
-    return `${baseUrl}/api/v4/documents/${doc.id}/versions/latest/pages/1/image/?width=1200`
+    const versionId =
+      (doc as any).version_active?.id ||
+      (doc as any).version_active_id ||
+      'latest'
+    return `${baseUrl}/api/v4/documents/${doc.id}/versions/${versionId}/pages/1/image/?width=1200`
   }
   
   return undefined
@@ -359,8 +370,28 @@ export function adaptBackendMetadata(
  * @param backendDoc - Raw document from /api/v4/documents/optimized/
  * @returns Transformed Asset for Frontend consumption
  */
+function inferMimeFromFilename(filename?: string, fallback = 'application/octet-stream'): string {
+  if (!filename) return fallback
+  const lower = filename.toLowerCase()
+  if (lower.match(/\.(jpg|jpeg)$/)) return 'image/jpeg'
+  if (lower.match(/\.(png)$/)) return 'image/png'
+  if (lower.match(/\.(gif)$/)) return 'image/gif'
+  if (lower.match(/\.(webp)$/)) return 'image/webp'
+  if (lower.match(/\.(bmp)$/)) return 'image/bmp'
+  if (lower.match(/\.(heic|heif)$/)) return 'image/heic'
+  if (lower.match(/\.(mp4|mov|mkv|avi)$/)) return 'video/mp4'
+  if (lower.match(/\.(mp3|wav|flac)$/)) return 'audio/mpeg'
+  if (lower.match(/\.(pdf)$/)) return 'application/pdf'
+  return fallback
+}
+
 export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
-  const mimeType = backendDoc.file_latest?.mimetype || 'application/octet-stream'
+  const rawMime = backendDoc.file_latest?.mimetype
+  const inferredMime = inferMimeFromFilename(
+    backendDoc.file_latest?.filename || backendDoc.label,
+    'application/octet-stream'
+  )
+  const mimeType = rawMime && rawMime !== 'application/octet-stream' ? rawMime : inferredMime
   const assetType = getAssetTypeFromMime(mimeType)
   
   // Combine manual tags and AI tags

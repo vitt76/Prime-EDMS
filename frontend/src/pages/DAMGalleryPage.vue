@@ -312,9 +312,34 @@
             <div class="dam-gallery__modal-content">
               <div class="dam-gallery__modal-image">
                 <img
-                  :src="previewAsset.thumbnail_url || previewAsset.preview_url"
+                  v-if="previewAssetSrc && !previewImageError"
+                  :src="previewAssetSrc"
                   :alt="previewAsset.label"
+                  @error="handlePreviewImageError"
                 />
+                <div
+                  v-else
+                  class="dam-gallery__modal-image-placeholder"
+                  role="img"
+                  aria-label="Нет предпросмотра"
+                >
+                  <svg class="w-12 h-12 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p class="text-sm text-neutral-500 mt-2">Предпросмотр недоступен</p>
+                </div>
+                <button
+                  v-if="previewAsset"
+                  class="dam-gallery__modal-favorite"
+                  :class="{ 'dam-gallery__modal-favorite--active': previewIsFavorite }"
+                  @click.stop="togglePreviewFavorite"
+                  aria-label="Добавить в избранное"
+                  type="button"
+                >
+                  <svg class="w-5 h-5" :fill="previewIsFavorite ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                </button>
               </div>
               
               <div class="dam-gallery__modal-info">
@@ -391,6 +416,8 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAssetStore } from '@/stores/assetStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import AssetCardEnhanced from '@/components/DAM/AssetCardEnhanced.vue'
 import type { Asset } from '@/types/api'
@@ -401,6 +428,7 @@ import type { Asset } from '@/types/api'
 
 const router = useRouter()
 const assetStore = useAssetStore()
+const favoritesStore = useFavoritesStore()
 
 // ============================================================================
 // STATE
@@ -412,7 +440,14 @@ const localSearch = ref('')
 const tagInput = ref('')
 const sortOption = ref('date_added-desc')
 const previewAsset = ref<Asset | null>(null)
+const previewImageError = ref(false)
 const loadMoreTrigger = ref<HTMLElement | null>(null)
+const previewAssetSrc = computed(() => resolveAssetImageUrl(previewAsset.value))
+const previewIsFavorite = computed(() => {
+  const asset = previewAsset.value
+  if (!asset) return false
+  return favoritesStore.isFavorite(asset.id) || asset.is_favorite === true
+})
 
 // Local filters (applied on button click)
 const localFilters = ref({
@@ -543,11 +578,13 @@ function handleAssetOpen(asset: Asset): void {
 }
 
 function handleAssetPreview(asset: Asset): void {
+  previewImageError.value = false
   previewAsset.value = asset
 }
 
 function closePreview(): void {
   previewAsset.value = null
+  previewImageError.value = false
 }
 
 function handleAssetDownload(asset: Asset): void {
@@ -558,6 +595,20 @@ function handleAssetDownload(asset: Asset): void {
 function handleAssetShare(asset: Asset): void {
   console.log('Share:', asset.label)
   // TODO: Open share modal
+}
+
+async function togglePreviewFavorite(): Promise<void> {
+  if (!previewAsset.value) return
+  try {
+    const favorited = await favoritesStore.toggleFavorite(previewAsset.value.id)
+    previewAsset.value.is_favorite = favorited
+  } catch (error) {
+    // ignore, store will revert on failure
+  }
+}
+
+function handlePreviewImageError(): void {
+  previewImageError.value = true
 }
 
 function handleAssetDelete(asset: Asset): void {
@@ -624,6 +675,7 @@ watch(loadMoreTrigger, () => {
 onMounted(() => {
   // Initial fetch
   assetStore.fetchAssets()
+  favoritesStore.fetchFavorites().catch(() => {})
 })
 </script>
 
@@ -961,11 +1013,24 @@ onMounted(() => {
 }
 
 .dam-gallery__modal-image {
-  @apply md:w-1/2 bg-neutral-100 flex items-center justify-center;
+  @apply relative md:w-1/2 bg-neutral-100 flex items-center justify-center;
 }
 
 .dam-gallery__modal-image img {
   @apply max-w-full max-h-[50vh] md:max-h-[70vh] object-contain;
+}
+
+.dam-gallery__modal-image-placeholder {
+  @apply flex flex-col items-center justify-center text-center text-neutral-500;
+}
+
+.dam-gallery__modal-favorite {
+  @apply absolute top-4 left-4 p-2.5 bg-white/95 rounded-full shadow-lg transition-all duration-200;
+  @apply text-neutral-700 hover:bg-white hover:scale-105;
+}
+
+.dam-gallery__modal-favorite--active {
+  @apply text-red-500;
 }
 
 .dam-gallery__modal-info {

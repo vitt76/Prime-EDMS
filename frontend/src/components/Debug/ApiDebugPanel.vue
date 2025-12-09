@@ -43,69 +43,7 @@ function toggleDebugMode() {
 }
 </script>
 
-<template>
-  <div v-if="isDev" class="api-debug-panel">
-    <!-- Toggle Button -->
-    <button
-      type="button"
-      class="debug-toggle"
-      :class="{ active: assetStore.debugMode }"
-      @click="toggleDebugMode"
-      title="Toggle API Debug Panel"
-    >
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-      </svg>
-      <span class="ml-1">Debug</span>
-    </button>
-
-    <!-- Debug Panel -->
-    <Transition name="slide">
-      <div v-if="isVisible" class="debug-content">
-        <div class="debug-header">
-          <h3 class="text-sm font-bold text-gray-900">🔧 API Debug Panel</h3>
-          <div class="flex items-center gap-2 text-xs">
-            <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-700">
-              {{ assetStore.useMock ? 'Mock Mode' : 'Real API' }}
-            </span>
-            <span class="text-gray-500">
-              {{ assetStore.totalCount }} документов
-            </span>
-          </div>
-        </div>
-
-        <div class="debug-grid">
-          <!-- Raw Response -->
-          <div class="debug-section">
-            <h4 class="debug-section-title">
-              <span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-2"></span>
-              Raw API Response (первый результат)
-            </h4>
-            <pre class="debug-json">{{ rawJson }}</pre>
-          </div>
-
-          <!-- Adapted Response -->
-          <div class="debug-section">
-            <h4 class="debug-section-title">
-              <span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-2"></span>
-              Adapted Asset (после адаптера)
-            </h4>
-            <pre class="debug-json">{{ adaptedJson }}</pre>
-          </div>
-        </div>
-
-        <!-- Status Info -->
-        <div class="debug-footer">
-          <div class="text-xs text-gray-500">
-            <span class="mr-4">Page: {{ assetStore.currentPage }}/{{ assetStore.totalPages }}</span>
-            <span class="mr-4">Loading: {{ assetStore.isLoading ? 'Yes' : 'No' }}</span>
-            <span>Error: {{ assetStore.error || 'None' }}</span>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </div>
-</template>
+<template></template>
 
 <style scoped>
 .api-debug-panel {

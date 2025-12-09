@@ -10,6 +10,7 @@ from django.conf.urls import url
 from .views.password_views import HeadlessPasswordChangeView
 from .views.config_views import HeadlessDocumentTypeConfigView
 from .views.activity_views import DashboardActivityView, HeadlessActivityFeedView
+from .views.favorites_views import HeadlessFavoriteListView, HeadlessFavoriteToggleView
 from .views.my_uploads_views import HeadlessMyUploadsView
 from .views.profile_views import HeadlessProfileView
 
@@ -41,6 +42,16 @@ api_urls = [
         regex=r'^dashboard/activity/$',
         view=DashboardActivityView.as_view(),
         name='api-dashboard-activity'
+    ),
+    url(
+        regex=r'^favorites/$',
+        view=HeadlessFavoriteListView.as_view(),
+        name='api-favorites-list'
+    ),
+    url(
+        regex=r'^favorites/(?P<document_id>\d+)/$',
+        view=HeadlessFavoriteToggleView.as_view(),
+        name='api-favorites-toggle'
     ),
     url(
         regex=r'^documents/my_uploads/$',

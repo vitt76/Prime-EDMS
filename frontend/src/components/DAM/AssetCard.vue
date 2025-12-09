@@ -51,8 +51,8 @@
     >
       <!-- Optimized Image with WebP support and lazy loading -->
       <img
-        v-if="props.asset.thumbnail_url && !props.isLoading && shouldLoadImage"
-        :src="props.asset.thumbnail_url"
+        v-if="!props.isLoading && shouldLoadImage && !imageError"
+        :src="imageSrc"
         :alt="props.asset.label"
         loading="lazy"
         class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -124,6 +124,18 @@
                  flex items-end justify-center pb-4 gap-2"
           @click.stop
         >
+          <button
+            class="absolute top-3 right-3 p-2.5 bg-white/95 rounded-full hover:bg-white hover:scale-110 
+                   transition-all duration-200 shadow-lg"
+            :class="{ 'text-red-500': isFavorite }"
+            @click.stop="handleFavorite"
+            aria-label="Добавить в избранное"
+            type="button"
+          >
+            <svg class="w-5 h-5" :fill="isFavorite ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+          </button>
           <button
             class="p-2.5 bg-white/95 rounded-full hover:bg-white hover:scale-110 
                    transition-all duration-200 shadow-lg"
@@ -287,6 +299,8 @@ import type { Asset } from '@/types/api'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import { useIntersectionObserver } from '@/composables/useIntersectionObserver'
 import { useAssetStore } from '@/stores/assetStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 
 interface Props {
   asset: Asset
@@ -316,6 +330,8 @@ const isHovered = ref(false)
 const imageError = ref(false)
 const thumbnailRef = ref<HTMLElement | null>(null)
 const isDragging = ref(false)
+const favoritesStore = useFavoritesStore()
+const imageSrc = computed(() => resolveAssetImageUrl(props.asset))
 
 // Intersection Observer for lazy loading
 const { hasIntersected } = useIntersectionObserver(thumbnailRef, {
@@ -372,6 +388,10 @@ const cardClasses = computed(() => {
   return base.join(' ')
 })
 
+const isFavorite = computed(() => {
+  return favoritesStore.isFavorite(props.asset.id) || props.asset.is_favorite === true
+})
+
 const statusBadgeClasses = computed(() => {
   const status = props.asset.metadata?.status as string
   const base = 'px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded backdrop-blur-sm'
@@ -417,7 +437,7 @@ function getStatusLabel(status: string): string {
 }
 
 function handleClick() {
-  emit('select', props.asset)
+  emit('preview', props.asset)
 }
 
 function handleDoubleClick() {
@@ -442,6 +462,15 @@ function handleShare() {
 
 function handleMore() {
   emit('more', props.asset)
+}
+
+async function handleFavorite() {
+  try {
+    const favorited = await favoritesStore.toggleFavorite(props.asset.id)
+    props.asset.is_favorite = favorited
+  } catch (error) {
+    // ignore errors for now; UI will revert via store
+  }
 }
 
 // ============================================================================

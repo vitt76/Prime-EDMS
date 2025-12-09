@@ -186,12 +186,34 @@
             v-if="isImage"
             class="relative w-full h-full flex items-center justify-center p-8"
           >
+            <button
+              class="absolute top-4 right-4 p-2.5 rounded-full bg-white/90 text-neutral-700 hover:bg-white hover:scale-105 transition"
+              :class="{ 'text-red-500': isFavorite }"
+              @click.stop="toggleFavorite"
+              aria-label="Добавить в избранное"
+              type="button"
+            >
+              <svg class="w-5 h-5" :fill="isFavorite ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            </button>
             <img
-              :src="asset.preview_url || asset.thumbnail_url"
+              v-if="!previewError"
+              :key="asset?.id || previewSrc"
+              :src="previewResolved"
               :alt="asset.label"
               class="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-transform duration-200"
               :style="{ transform: `scale(${zoom}) rotate(${rotation}deg)` }"
+              @error="handlePreviewImageError"
             />
+            <div
+              v-else
+              class="w-full h-full flex items-center justify-center bg-neutral-800 rounded-lg"
+            >
+              <svg class="w-16 h-16 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
           </div>
 
           <!-- Video Preview -->
@@ -636,6 +658,8 @@ import {
 } from '@heroicons/vue/24/outline'
 import { useAssetStore } from '@/stores/assetStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import MetadataEditor from '@/components/asset/MetadataEditor.vue'
 import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
 import AIInsightsWidget from '@/components/asset/AIInsightsWidget.vue'
@@ -651,6 +675,7 @@ const route = useRoute()
 const router = useRouter() // Reserved for future navigation
 const assetStore = useAssetStore()
 const notificationStore = useNotificationStore()
+const favoritesStore = useFavoritesStore()
 
 // State
 const isLoading = ref(true)
@@ -674,7 +699,11 @@ const tabs = [
 // Computed
 const assetId = computed(() => Number(route.params.id))
 
-const isImage = computed(() => asset.value?.mime_type?.startsWith('image/'))
+const isImage = computed(() => {
+  if (asset.value?.mime_type?.startsWith('image/')) return true
+  // Fallback: if we have preview/thumbnail, treat as image to render
+  return !!(asset.value?.preview_url || asset.value?.thumbnail_url)
+})
 const isVideo = computed(() => asset.value?.mime_type?.startsWith('video/'))
 const isDocument = computed(() => 
   asset.value?.mime_type?.includes('pdf') || 
@@ -703,10 +732,17 @@ const usage = computed((): UsageStats | undefined => {
   return extendedAsset.value?.usage
 })
 
+const previewSrc = computed(() => resolveAssetImageUrl(asset.value))
+const previewFallback = ref<string | null>(null)
+const previewResolved = computed(() => previewFallback.value || previewSrc.value)
+const isFavorite = computed(() => (asset.value ? favoritesStore.isFavorite(asset.value.id) : false))
+const previewError = ref(false)
+
 // Methods
 async function loadAsset() {
   isLoading.value = true
   error.value = null
+  previewError.value = false
   
   try {
     console.log('[AssetDetail] Loading asset:', assetId.value)
@@ -752,6 +788,30 @@ async function loadAsset() {
   } finally {
     isLoading.value = false
   }
+}
+
+async function toggleFavorite(): Promise<void> {
+  if (!asset.value) return
+  try {
+    await favoritesStore.toggleFavorite(asset.value.id)
+    asset.value.is_favorite = favoritesStore.isFavorite(asset.value.id)
+  } catch (e) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка избранного',
+      message: 'Не удалось обновить избранное'
+    })
+  }
+}
+
+function handlePreviewImageError(): void {
+  // First failure: try placeholder
+  if (!previewFallback.value) {
+    previewFallback.value = '/assets/placeholder.png'
+    previewError.value = false
+    return
+  }
+  previewError.value = true
 }
 
 function formatFileSize(bytes: number): string {
