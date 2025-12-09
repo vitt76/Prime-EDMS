@@ -22,9 +22,10 @@ import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
 
 /**
  * Feature flags.
+ * BFF enabled by default unless explicitly disabled.
  */
 const USE_REAL_API = import.meta.env.VITE_USE_MOCK_AUTH !== 'true'
-const BFF_ENABLED = import.meta.env.VITE_BFF_ENABLED === 'true'
+const BFF_ENABLED = import.meta.env.VITE_BFF_ENABLED !== 'false'
 
 /**
  * LocalStorage keys
@@ -121,10 +122,6 @@ class AuthService {
    * Change password via headless API.
    */
   async changePassword(payload: { oldPassword: string; newPassword: string }): Promise<void> {
-    if (!BFF_ENABLED) {
-      throw new Error('Headless API не включен. Обратитесь к администратору.')
-    }
-
     await apiService.post(
       '/api/v4/headless/password/change/',
       {
@@ -133,6 +130,41 @@ class AuthService {
         new_password_confirm: payload.newPassword
       }
     )
+  }
+
+  /**
+   * Update current user profile (headless).
+   */
+  async updateProfile(payload: { firstName: string; lastName: string; email: string }): Promise<User> {
+    const response = await apiService.patch<{
+      id: number
+      username: string
+      first_name: string
+      last_name: string
+      email: string
+    }>(
+      '/api/v4/headless/profile/',
+      {
+        first_name: payload.firstName,
+        last_name: payload.lastName,
+        email: payload.email
+      }
+    )
+
+    const user: User = {
+      id: response.id,
+      username: response.username,
+      first_name: response.first_name,
+      last_name: response.last_name,
+      email: response.email,
+      is_active: true,
+      permissions: [],
+      role: undefined
+    }
+
+    // Persist locally for session continuity
+    localStorage.setItem(USER_KEY, JSON.stringify(user))
+    return user
   }
 
   /**

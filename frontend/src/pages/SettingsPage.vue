@@ -259,6 +259,12 @@
         </Card>
       </div>
     </div>
+    <ChangePasswordModal
+      v-if="showChangePassword"
+      :isOpen="showChangePassword"
+      @close="showChangePassword = false"
+      @changed="showChangePassword = false"
+    />
   </div>
 </template>
 
@@ -266,15 +272,18 @@
 import { ref, onMounted, computed } from 'vue'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
+import { authService } from '@/services/authService'
 import Card from '@/components/Common/Card.vue'
 import Button from '@/components/Common/Button.vue'
 import Input from '@/components/Common/Input.vue'
 import Select from '@/components/Common/Select.vue'
+import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue'
 
 const uiStore = useUIStore()
 const authStore = useAuthStore()
 
 const isSavingProfile = ref(false)
+const showChangePassword = ref(false)
 
 // Profile form
 const profileForm = ref({
@@ -342,15 +351,32 @@ function handlePreferencesChange() {
 }
 
 async function handleSaveProfile() {
+  console.log('[SettingsPage] save profile click')
+  uiStore.addNotification({
+    type: 'info',
+    message: 'Сохраняем профиль...'
+  })
   isSavingProfile.value = true
   try {
-    // TODO: Implement API call to update profile
-    // await authService.updateProfile(profileForm.value)
-    await new Promise((resolve) => setTimeout(resolve, 500)) // Simulate API call
-    // Show success notification
+    const updatedUser = await authService.updateProfile({
+      firstName: profileForm.value.firstName,
+      lastName: profileForm.value.lastName,
+      email: profileForm.value.email
+    })
+
+    // sync authStore user
+    authStore.user = {
+      ...(authStore.user || {}),
+      ...{
+        first_name: updatedUser.first_name,
+        last_name: updatedUser.last_name,
+        email: updatedUser.email
+      }
+    }
+
     uiStore.addNotification({
       type: 'success',
-      message: 'Профиль успешно обновлен'
+      message: 'Профиль успешно обновлён'
     })
   } catch (error) {
     uiStore.addNotification({
@@ -363,11 +389,7 @@ async function handleSaveProfile() {
 }
 
 function handleChangePassword() {
-  // TODO: Open change password modal
-  uiStore.addNotification({
-    type: 'info',
-    message: 'Функция изменения пароля будет доступна в следующей версии'
-  })
+  showChangePassword.value = true
 }
 
 function handleManageApiKeys() {

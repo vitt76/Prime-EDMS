@@ -251,6 +251,17 @@
               </svg>
               Профиль
             </router-link>
+          <a
+            v-if="isAdmin"
+            href="http://localhost:5173/admin"
+            class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            @click="closeUserMenu"
+          >
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+            </svg>
+            Админ-панель
+          </a>
             <router-link
               to="/settings"
               class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -364,6 +375,18 @@ const userName = computed(() => {
 
 const userEmail = computed(() => {
   return authStore.user?.email || 'user@example.com'
+})
+const isAdmin = computed(() => {
+  const user = authStore.user as any
+  if (!user) return false
+  const perms: string[] = user.permissions || []
+  return Boolean(
+    user.is_superuser ||
+    user.role === 'admin' ||
+    user.username === 'admin' ||
+    perms.includes('admin.access') ||
+    perms.includes('mayan.add_user')
+  )
 })
 
 const currentSortLabel = computed(() => {

@@ -23,6 +23,8 @@ class DistributionApp(MayanAppConfig):
         # Ensure settings and storages are registered
         from . import settings as distribution_settings  # noqa: F401
         from . import storages as distribution_storages  # noqa: F401
+        # Register permissions
+        from . import permissions as distribution_permissions  # noqa: F401
 
         # Force add ourselves to INSTALLED_APPS if not already there
         from django.conf import settings

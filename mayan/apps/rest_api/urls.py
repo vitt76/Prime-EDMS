@@ -4,6 +4,7 @@ from .api_views import (
     APIRoot, APIVersionRoot, BatchRequestAPIView, BrowseableObtainAuthToken,
     ProjectInformationAPIView, schema_view
 )
+from mayan.apps.permissions.urls import api_urls as permissions_api_urls
 from mayan.apps.headless_api.views.config_views import HeadlessDocumentTypeConfigView
 from mayan.apps.headless_api.views.activity_views import (
     DashboardActivityView, HeadlessActivityFeedView
@@ -13,6 +14,7 @@ from mayan.apps.headless_api.views.favorites_views import (
 )
 from mayan.apps.headless_api.views.password_views import HeadlessPasswordChangeView
 from mayan.apps.headless_api.views.my_uploads_views import HeadlessMyUploadsView
+from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
 from .literals import API_VERSION
 
 api_version_urls = [
@@ -69,8 +71,16 @@ api_version_urls = [
         regex=r'^headless/documents/my_uploads/$',
         view=HeadlessMyUploadsView.as_view(),
         name='headless-my-uploads'
+    ),
+    url(
+        regex=r'^headless/profile/$',
+        view=HeadlessProfileView.as_view(),
+        name='headless-profile'
     )
 ]
+
+# Expose permissions (roles) API for SPA role/permission matrix.
+api_version_urls.extend(permissions_api_urls)
 
 api_urls = [
     url(
