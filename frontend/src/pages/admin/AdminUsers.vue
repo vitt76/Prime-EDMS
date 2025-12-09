@@ -861,29 +861,11 @@ const statusLabels: Record<string, string> = {
   inactive: 'Неактивен'
 }
 
-// Groups (roles in Mayan context)
+// Roles and permissions (from backend)
 const roles = ref<AdminRole[]>([])
 const isLoadingGroups = ref(false)
-
-const permissions = ref<StoredPermission[]>([
-  { id: 1, namespace: 'documents', name: 'documents.view', label: 'Просмотр документов' },
-  { id: 2, namespace: 'documents', name: 'documents.create', label: 'Создание документов' },
-  { id: 3, namespace: 'documents', name: 'documents.edit', label: 'Редактирование документов' },
-  { id: 4, namespace: 'documents', name: 'documents.delete', label: 'Удаление документов' },
-  { id: 5, namespace: 'metadata', name: 'metadata.view', label: 'Просмотр метаданных' },
-  { id: 6, namespace: 'metadata', name: 'metadata.edit', label: 'Редактирование метаданных' },
-  { id: 7, namespace: 'users', name: 'users.view', label: 'Просмотр пользователей' },
-  { id: 8, namespace: 'users', name: 'users.manage', label: 'Управление пользователями' },
-  { id: 9, namespace: 'sharing', name: 'sharing.create', label: 'Создание ссылок' },
-  { id: 10, namespace: 'sharing', name: 'sharing.manage', label: 'Управление публикациями' }
-])
-
-const permissionMatrix = ref<Record<number, Set<string>>>({
-  1: new Set(['documents.view', 'documents.create', 'documents.edit', 'documents.delete', 'metadata.view', 'metadata.edit', 'users.view', 'users.manage', 'sharing.create', 'sharing.manage']),
-  2: new Set(['documents.view', 'documents.create', 'documents.edit', 'metadata.view', 'metadata.edit', 'sharing.create']),
-  3: new Set(['documents.view', 'metadata.view']),
-  4: new Set(['documents.view', 'documents.create', 'metadata.view'])
-})
+const permissions = ref<StoredPermission[]>([])
+const rolePermissionMatrix = ref<Record<number, Set<string>>>({})
 
 // Use store users instead of local mock
 const users = computed(() => adminStore.users as AdminUser[])
@@ -911,7 +893,7 @@ const error = computed(() => adminStore.error)
 
 const groupedPermissions = computed(() => {
   const groups: Record<string, StoredPermission[]> = {}
-  permissions.value.forEach(perm => {
+  permissions.value.forEach((perm) => {
     if (!groups[perm.namespace]) {
       groups[perm.namespace] = []
     }
@@ -947,14 +929,33 @@ async function loadUsers(page = 1) {
 async function loadGroups() {
   isLoadingGroups.value = true
   try {
-    const response = await adminService.getGroups({ page_size: 100 })
-    const groups = response?.results || []
-    roles.value = groups.map(g => ({
-      id: g.id,
-      label: g.name,
-      permissions: [],
-      groups: []
-    }))
+    // Load master permissions list
+    permissions.value = await adminService.getPermissions()
+
+    // Load roles
+    const rolesResponse = await adminService.getRoles()
+    const loadedRoles = rolesResponse.results || []
+
+    // For each role load its permissions and groups
+    const hydratedRoles: AdminRole[] = []
+    for (const r of loadedRoles) {
+      const rolePerms = await adminService.getRolePermissions(r.id)
+      const roleGroups = await adminService.getRoleGroups(r.id)
+      hydratedRoles.push({
+        id: r.id,
+        label: r.label,
+        permissions: rolePerms,
+        groups: roleGroups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          users_count: 0,
+          permissions_count: 0
+        }))
+      })
+      rolePermissionMatrix.value[r.id] = new Set(rolePerms.map((p) => p.name))
+    }
+
+    roles.value = hydratedRoles
   } catch (err) {
     console.error('[AdminUsers] Failed to load groups:', err)
   } finally {
@@ -1015,18 +1016,18 @@ function formatDate(iso: string): string {
 }
 
 function hasPermission(roleId: number, permName: string): boolean {
-  return permissionMatrix.value[roleId]?.has(permName) ?? false
+  return rolePermissionMatrix.value[roleId]?.has(permName) ?? false
 }
 
 function togglePermission(roleId: number, permName: string): void {
-  if (!permissionMatrix.value[roleId]) {
-    permissionMatrix.value[roleId] = new Set()
+  if (!rolePermissionMatrix.value[roleId]) {
+    rolePermissionMatrix.value[roleId] = new Set()
   }
   
-  if (permissionMatrix.value[roleId].has(permName)) {
-    permissionMatrix.value[roleId].delete(permName)
+  if (rolePermissionMatrix.value[roleId].has(permName)) {
+    rolePermissionMatrix.value[roleId].delete(permName)
   } else {
-    permissionMatrix.value[roleId].add(permName)
+    rolePermissionMatrix.value[roleId].add(permName)
   }
 }
 
