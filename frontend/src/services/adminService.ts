@@ -40,6 +40,19 @@ interface MayanGroup {
   id: number
   name: string
   url?: string
+  users_url?: string
+}
+
+interface MayanRole {
+  id: number
+  label: string
+  url?: string
+  groups_url?: string
+  groups_add_url?: string
+  groups_remove_url?: string
+  permissions_url?: string
+  permissions_add_url?: string
+  permissions_remove_url?: string
 }
 
 interface MayanPaginatedResponse<T> {
@@ -82,15 +95,18 @@ interface SystemHealthResponse {
 /**
  * Maps Mayan EDMS User to Frontend User type
  */
-function adaptMayanUser(mayanUser: MayanUser): User {
+function adaptMayanUser(mayanUser: MayanUser, groupList?: MayanGroup[]): User {
   // Determine user status based on is_active
   let status: 'active' | 'invited' | 'suspended' | 'inactive' = 'active'
   if (!mayanUser.is_active) {
     status = mayanUser.last_login ? 'suspended' : 'inactive'
   }
 
+  const groupsSource = groupList !== undefined ? groupList : mayanUser.groups
+  const groups = Array.isArray(groupsSource) ? groupsSource : []
+
   // Map groups to roles (Mayan uses groups for permissions)
-  const roles = mayanUser.groups.map(g => ({
+  const roles = groups.map(g => ({
     id: g.id,
     label: g.name,
     permissions: [],
@@ -109,7 +125,7 @@ function adaptMayanUser(mayanUser: MayanUser): User {
     date_joined: mayanUser.date_joined,
     last_login: mayanUser.last_login,
     status,
-    groups: mayanUser.groups.map(g => ({
+    groups: groups.map(g => ({
       id: g.id,
       name: g.name,
       users_count: 0,
@@ -208,11 +224,67 @@ class AdminService {
       false // Don't cache user lists for security
     )
 
+    const results = response.results || []
+
+    // Base users without groups to avoid undefined map errors.
+    const userMap = new Map<number, User>()
+    results.forEach((u) => {
+      const mapped = adaptMayanUser(u, [])
+      userMap.set(mapped.id, mapped)
+    })
+
+    // Fetch groups and hydrate membership -> roles/groups.
+    try {
+      const groupsResponse = await apiService.get<MayanPaginatedResponse<MayanGroup>>(
+        '/api/v4/groups/',
+        { params: { page_size: 200 } },
+        true
+      )
+      const groups = groupsResponse.results || []
+
+      for (const g of groups) {
+        if (!g.users_url) {
+          continue
+        }
+        try {
+          const groupUsers = await apiService.get<MayanPaginatedResponse<MayanUser>>(g.users_url, undefined, false)
+          const groupUserList = groupUsers.results || []
+          groupUserList.forEach((gu) => {
+            const user = userMap.get(gu.id)
+            if (user) {
+              user.groups = user.groups || []
+              user.roles = user.roles || []
+              user.groups.push({
+                id: g.id,
+                name: g.name,
+                users_count: 0,
+                permissions_count: 0
+              })
+              // Group as role proxy if no dedicated role fetched yet.
+              user.roles.push({
+                id: g.id,
+                label: g.name,
+                permissions: [],
+                groups: []
+              })
+            }
+          })
+        } catch (e) {
+          // If a group users endpoint fails, skip quietly.
+          // eslint-disable-next-line no-console
+          console.warn('[adminService] Failed to load users for group', g.id, e)
+        }
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[adminService] Failed to load groups for hydration', e)
+    }
+
     return {
-      count: response.count,
+      count: response.count || 0,
       next: response.next,
       previous: response.previous,
-      results: response.results.map(adaptMayanUser)
+      results: Array.from(userMap.values())
     }
   }
 
@@ -358,11 +430,133 @@ class AdminService {
       queryParams.search = params.search
     }
 
-    return apiService.get<MayanPaginatedResponse<MayanGroup>>(
+    const response = await apiService.get<MayanPaginatedResponse<MayanGroup>>(
       '/api/v4/groups/',
       { params: queryParams },
       true // Cache groups list
     )
+
+    return {
+      count: response.count || 0,
+      next: response.next,
+      previous: response.previous,
+      results: response.results || []
+    }
+  }
+
+  /**
+   * Get list of roles (permissions roles)
+   *
+   * Endpoint: GET /api/v4/roles/
+   */
+  async getRoles(): Promise<PaginatedResponse<MayanRole>> {
+    const response = await apiService.get<MayanPaginatedResponse<MayanRole>>(
+      '/api/v4/roles/',
+      { params: { page_size: 200 } },
+      true
+    )
+    return {
+      count: response.count || 0,
+      next: response.next,
+      previous: response.previous,
+      results: response.results || []
+    }
+  }
+
+  /**
+   * Get role permissions list
+   *
+   * Endpoint: GET /api/v4/roles/{id}/permissions/
+   */
+  async getRolePermissions(roleId: number): Promise<StoredPermission[]> {
+    const perms: StoredPermission[] = []
+    let nextUrl: string | null = `/api/v4/roles/${roleId}/permissions/`
+
+    while (nextUrl) {
+      const response = await apiService.get<MayanPaginatedResponse<{ namespace: string; pk: string; label: string }>>(
+        nextUrl,
+        { params: { page_size: 500 } },
+        false
+      )
+      const pagePerms = response.results || []
+      pagePerms.forEach((p, idx) => {
+        perms.push({
+          id: perms.length + idx + 1,
+          namespace: p.namespace,
+          name: p.pk,
+          label: p.label
+        })
+      })
+      nextUrl = response.next
+    }
+
+    return perms
+  }
+
+  /**
+   * Add permission to role
+   *
+   * Endpoint: POST /api/v4/roles/{id}/permissions/add/
+   */
+  async addRolePermission(roleId: number, permissionPk: string): Promise<void> {
+    await apiService.post(`/api/v4/roles/${roleId}/permissions/add/`, {
+      permission: permissionPk
+    })
+  }
+
+  /**
+   * Remove permission from role
+   *
+   * Endpoint: POST /api/v4/roles/{id}/permissions/remove/
+   */
+  async removeRolePermission(roleId: number, permissionPk: string): Promise<void> {
+    await apiService.post(`/api/v4/roles/${roleId}/permissions/remove/`, {
+      permission: permissionPk
+    })
+  }
+
+  /**
+   * Get role groups mapping
+   *
+   * Endpoint: GET /api/v4/roles/{id}/groups/
+   */
+  async getRoleGroups(roleId: number): Promise<MayanGroup[]> {
+    const response = await apiService.get<MayanPaginatedResponse<MayanGroup>>(
+      `/api/v4/roles/${roleId}/groups/`,
+      { params: { page_size: 200 } },
+      true
+    )
+    return response.results || []
+  }
+
+  /**
+   * Get all stored permissions
+   *
+   * Endpoint: GET /api/v4/permissions/
+   */
+  async getPermissions(): Promise<StoredPermission[]> {
+    const perms: StoredPermission[] = []
+    let nextUrl: string | null = '/api/v4/permissions/'
+
+    while (nextUrl) {
+      const response = await apiService.get<MayanPaginatedResponse<{ namespace: string; pk: string; label: string }>>(
+        nextUrl,
+        { params: { page_size: 500 } },
+        false // always refresh to avoid stale cache
+      )
+      const pagePerms = response.results || []
+      pagePerms.forEach((p, idx) => {
+        perms.push({
+          id: perms.length + idx + 1,
+          namespace: p.namespace,
+          name: p.pk,
+          label: p.label
+        })
+      })
+      nextUrl = response.next
+    }
+
+    return perms
   }
 
   /**

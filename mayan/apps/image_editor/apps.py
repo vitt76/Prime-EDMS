@@ -17,6 +17,11 @@ class ImageEditorApp(MayanAppConfig):
         print('🎯 Image Editor: ready() method called')
         super().ready()
         print('🎨 Image Editor module loaded successfully!')
+        # Register permissions
+        try:
+            from . import permissions as image_editor_permissions  # noqa: F401
+        except Exception as exc:
+            print(f'❌ Image Editor permissions import failed: {exc}')
 
         # Отладка URL
         try:

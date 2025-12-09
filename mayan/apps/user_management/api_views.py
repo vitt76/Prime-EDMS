@@ -143,6 +143,10 @@ class APIUserListView(generics.ListCreateAPIView):
     def get_instance_extra_data(self):
         return {'_event_actor': self.request.user}
 
+    def get_queryset(self):
+        # Pass the requesting user to ensure staff/superuser can see all users.
+        return get_user_queryset(user=self.request.user)
+
 
 class APIUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
@@ -163,6 +167,10 @@ class APIUserDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_instance_extra_data(self):
         return {'_event_actor': self.request.user}
+
+    def get_queryset(self):
+        # Pass the requesting user to ensure staff/superuser can access all users.
+        return get_user_queryset(user=self.request.user)
 
 
 class APIUserGroupListView(
