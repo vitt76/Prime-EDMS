@@ -89,8 +89,10 @@ function adaptMayanUser(mayanUser: MayanUser): User {
     status = mayanUser.last_login ? 'suspended' : 'inactive'
   }
 
+  const groups = Array.isArray(mayanUser.groups) ? mayanUser.groups : []
+
   // Map groups to roles (Mayan uses groups for permissions)
-  const roles = mayanUser.groups.map(g => ({
+  const roles = groups.map(g => ({
     id: g.id,
     label: g.name,
     permissions: [],
@@ -109,7 +111,7 @@ function adaptMayanUser(mayanUser: MayanUser): User {
     date_joined: mayanUser.date_joined,
     last_login: mayanUser.last_login,
     status,
-    groups: mayanUser.groups.map(g => ({
+    groups: groups.map(g => ({
       id: g.id,
       name: g.name,
       users_count: 0,
@@ -208,11 +210,13 @@ class AdminService {
       false // Don't cache user lists for security
     )
 
+    const results = response.results || []
+
     return {
-      count: response.count,
+      count: response.count || 0,
       next: response.next,
       previous: response.previous,
-      results: response.results.map(adaptMayanUser)
+      results: results.map(adaptMayanUser)
     }
   }
 
@@ -358,11 +362,18 @@ class AdminService {
       queryParams.search = params.search
     }
 
-    return apiService.get<MayanPaginatedResponse<MayanGroup>>(
+    const response = await apiService.get<MayanPaginatedResponse<MayanGroup>>(
       '/api/v4/groups/',
       { params: queryParams },
       true // Cache groups list
     )
+
+    return {
+      count: response.count || 0,
+      next: response.next,
+      previous: response.previous,
+      results: response.results || []
+    }
   }
 
   /**

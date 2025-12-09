@@ -948,7 +948,8 @@ async function loadGroups() {
   isLoadingGroups.value = true
   try {
     const response = await adminService.getGroups({ page_size: 100 })
-    roles.value = response.results.map(g => ({
+    const groups = response?.results || []
+    roles.value = groups.map(g => ({
       id: g.id,
       label: g.name,
       permissions: [],
