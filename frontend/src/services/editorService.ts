@@ -33,7 +33,50 @@ export async function saveEditedImage(
   return data as SaveEditedImageResponse
 }
 
+export async function createAssetFromImage(
+  documentTypeId: number,
+  blob: Blob,
+  filename: string,
+  options?: {
+    format?: string
+    comment?: string
+  }
+): Promise<{ documentId: number; fileId: number }> {
+  // 1) create document
+  const docPayload = {
+    document_type_id: documentTypeId,
+    label: filename,
+    description: options?.comment || 'Создано из копии'
+  }
+
+  const docResp = await apiService.post('/api/v4/documents/', docPayload)
+  const documentId = docResp.data?.id
+  if (!documentId) {
+    throw new Error('Не удалось создать документ для копии')
+  }
+
+  // 2) upload file
+  const extension = (options?.format || 'jpeg').toLowerCase()
+  const formData = new FormData()
+  formData.append('file', blob, filename || `copy.${extension}`)
+  formData.append('action', '1') // DocumentFileActionUseNewPages.backend_id
+
+  const fileResp = await apiService.post(
+    `/api/v4/documents/${documentId}/files/`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }
+  )
+
+  return {
+    documentId,
+    fileId: fileResp.data?.id
+  }
+}
+
 export default {
-  saveEditedImage
+  saveEditedImage,
+  createAssetFromImage
 }
 

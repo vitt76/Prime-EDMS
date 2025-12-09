@@ -155,13 +155,20 @@
                     <div class="relative max-w-full max-h-full">
                       <!-- Main Image -->
                       <img
+                        v-if="imageSrc"
                         ref="imageRef"
-                        :src="asset?.preview_url || asset?.thumbnail_url"
+                        :src="imageSrc"
                         :alt="asset?.label"
                         class="max-w-full max-h-[55vh] object-contain rounded-lg shadow-2xl transition-transform duration-200"
                         :style="imagePreviewStyle"
                         @load="handleImageLoad"
                       />
+                      <div
+                        v-else
+                        class="w-full h-full flex items-center justify-center text-neutral-400 text-sm"
+                      >
+                        {{ loadError || 'Изображение не загружено' }}
+                      </div>
                       
                       <!-- Crop Overlay -->
                       <div 
@@ -817,7 +824,8 @@ import {
 } from '@heroicons/vue/24/outline'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useEditorStore, type WatermarkPosition } from '@/stores/editorStore'
-import { saveEditedImage } from '@/services/editorService'
+import { saveEditedImage, createAssetFromImage } from '@/services/editorService'
+import { apiService } from '@/services/apiService'
 import SaveVersionModal from '@/components/asset/SaveVersionModal.vue'
 import type { Asset } from '@/types/api'
 
@@ -840,6 +848,45 @@ const editorStore = useEditorStore()
 // Refs
 const imageRef = ref<HTMLImageElement | null>(null)
 const watermarkInput = ref<HTMLInputElement | null>(null)
+const imageSrc = ref<string | null>(null)
+const objectUrl = ref<string | null>(null)
+const loadError = ref<string | null>(null)
+
+async function prepareImageSrc() {
+  if (!props.asset) return
+  const url =
+    (props.asset as any)?.preview_url ||
+    (props.asset as any)?.thumbnail_url ||
+    (props.asset as any)?.download_url
+
+  if (!url) {
+    throw new Error('Нет доступного URL изображения для редактора')
+  }
+
+  try {
+    const response = await apiService.get(url, {
+      responseType: 'blob',
+      headers: {
+        Accept: '*/*'
+      }
+    } as any)
+    const candidate = (response as any)?.data ?? response
+    if (!(candidate instanceof Blob)) {
+      console.error('[Editor] Expected Blob, got:', candidate)
+      throw new Error('Invalid response type for image')
+    }
+    if (objectUrl.value) {
+      URL.revokeObjectURL(objectUrl.value)
+    }
+    objectUrl.value = URL.createObjectURL(candidate)
+    imageSrc.value = objectUrl.value
+    loadError.value = null
+  } catch (e) {
+    console.error('[Editor] Authenticated image load failed:', e)
+    loadError.value = 'Не удалось загрузить изображение (auth)'
+    throw e
+  }
+}
 
 // Local State
 const activeToolId = ref<'crop' | 'resize' | 'format' | 'watermark' | 'adjust'>('crop')
@@ -938,8 +985,6 @@ const cropOverlayStyle = computed(() => {
 
 const watermarkPreviewStyle = computed(() => {
   const { position, offsetX, offsetY } = editorStore.currentState.watermark
-  const style: Record<string, string> = {}
-  
   const posMap: Record<WatermarkPosition, { top?: string; bottom?: string; left?: string; right?: string; transform?: string }> = {
     'top-left': { top: `${offsetY}px`, left: `${offsetX}px` },
     'top-center': { top: `${offsetY}px`, left: '50%', transform: 'translateX(-50%)' },
@@ -995,6 +1040,11 @@ function formatFileSize(bytes: number): string {
 }
 
 function handleClose() {
+  if (objectUrl.value) {
+    URL.revokeObjectURL(objectUrl.value)
+    objectUrl.value = null
+    imageSrc.value = null
+  }
   if (!isProcessing.value) {
     emit('close')
   }
@@ -1210,7 +1260,7 @@ function mapFormatToMime(format: string): string {
 }
 
 async function buildBlobFromImage(format: string): Promise<Blob> {
-  if (!imageRef.value) {
+  if (!imageRef.value || !imageSrc.value) {
     throw new Error('Изображение не загружено')
   }
 
@@ -1224,7 +1274,18 @@ async function buildBlobFromImage(format: string): Promise<Blob> {
     throw new Error('Canvas не поддерживается')
   }
 
-  ctx.drawImage(imageRef.value, 0, 0, canvas.width, canvas.height)
+  // Рисуем только из локального blob-URL (imageSrc), чтобы избежать tainted canvas.
+  const sourceForDraw = imageSrc.value
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  img.src = sourceForDraw
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve()
+    }
+    img.onerror = () => reject(new Error('Не удалось загрузить изображение для отрисовки'))
+  })
 
   const mime = format === 'original' ? mapFormatToMime(editorStore.currentState.format) : mapFormatToMime(format)
 
@@ -1263,8 +1324,13 @@ async function handleConfirmSave(format: string, comment: string) {
     isSaveModalOpen.value = false
     emit('close')
   } catch (error: any) {
-    const message = error?.response?.data?.detail || error?.message || 'Не удалось сохранить изменения'
+    const message =
+      error?.response?.data?.detail ||
+      error?.response?.data?.error ||
+      error?.message ||
+      'Не удалось сохранить изменения'
     saveError.value = message
+    console.error('[Editor] Save version failed:', error)
     notificationStore.addNotification({
       type: 'error',
       title: 'Ошибка',
@@ -1278,56 +1344,117 @@ async function handleConfirmSave(format: string, comment: string) {
 
 async function handleSaveAsCopy() {
   if (!props.asset) return
-  
+
   isProcessing.value = true
   processingMessage.value = 'Создание копии...'
-  
+  saveError.value = null
+
   try {
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    const newAssetId = Date.now()
+    const blob = await buildBlobFromImage(editorStore.currentState.format)
+    const filename =
+      props.asset.file_details?.filename ||
+      props.asset.filename ||
+      `copy.${editorStore.currentState.format}`
+
+    const docTypeId =
+      (props.asset as any)?.document_type_id ||
+      (props.asset as any)?.document_type?.id ||
+      (props.asset as any)?.metadata?.document_type_id ||
+      null
+    if (!docTypeId) {
+      throw new Error('Не определён тип документа для копии (document_type_id отсутствует)')
+    }
+
+    const result = await createAssetFromImage(
+      docTypeId,
+      blob,
+      filename,
+      {
+        format: editorStore.currentState.format,
+        comment: 'Создано как копия в редакторе'
+      }
+    )
+
     notificationStore.addNotification({
       type: 'success',
       title: 'Копия создана',
-      message: `Новый актив #${newAssetId} добавлен`
+      message: `Новый актив #${result.documentId} добавлен`
     })
-    emit('saveCopy', props.asset.id, newAssetId)
+    emit('saveCopy', props.asset.id, result.documentId)
     emit('close')
-  } catch (error) {
+  } catch (error: any) {
+    const message =
+      error?.response?.data?.detail ||
+      error?.response?.data?.error ||
+      error?.message ||
+      'Не удалось создать копию'
+    saveError.value = message
+    console.error('[Editor] Copy failed:', error)
     notificationStore.addNotification({
       type: 'error',
       title: 'Ошибка',
-      message: 'Не удалось создать копию'
+      message
     })
   } finally {
     isProcessing.value = false
+    processingMessage.value = ''
   }
 }
 
 async function handleDownload() {
+  if (!props.asset) return
   isProcessing.value = true
   processingMessage.value = 'Подготовка к скачиванию...'
-  
+
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
+    const format = editorStore.currentState.format
+    const blob = await buildBlobFromImage(format)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${props.asset.label || 'edited_image'}.${format}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
     notificationStore.addNotification({
       type: 'success',
       title: 'Скачивание началось',
-      message: `${props.asset?.label}.${editorStore.currentState.format}`
+      message: `${props.asset.label || 'edited_image'}.${format}`
+    })
+  } catch (error: any) {
+    const message = error?.message || 'Не удалось скачать файл'
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message
     })
   } finally {
     isProcessing.value = false
+    processingMessage.value = ''
   }
 }
 
 // Lifecycle
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  // загрузить изображение для редактора
+  prepareImageSrc().catch(() => {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка загрузки',
+      message: 'Не удалось загрузить изображение с авторизацией'
+    })
+  })
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  if (objectUrl.value) {
+    URL.revokeObjectURL(objectUrl.value)
+    objectUrl.value = null
+  }
 })
 
 // Watch for asset changes
@@ -1336,12 +1463,20 @@ watch(() => props.asset, (newAsset) => {
     activeToolId.value = 'crop'
     cropPreview.value = false
     watermarkImagePreview.value = null
+    prepareImageSrc().catch(() => {
+      notificationStore.addNotification({
+        type: 'error',
+        title: 'Ошибка загрузки',
+        message: 'Не удалось загрузить изображение с авторизацией'
+      })
+    })
   }
 })
 </script>
 
 <style scoped>
 input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
   -webkit-appearance: none;
   height: 16px;
   width: 16px;
@@ -1353,6 +1488,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 input[type="range"]::-moz-range-thumb {
+  appearance: none;
   height: 16px;
   width: 16px;
   border-radius: 50%;
@@ -1363,6 +1499,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 input[type="color"] {
+  appearance: none;
   -webkit-appearance: none;
   border: none;
   padding: 0;

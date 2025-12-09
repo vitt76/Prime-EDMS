@@ -1,6 +1,11 @@
 <template>
   <TransitionRoot as="div" :show="isOpen">
-    <Dialog as="div" class="relative z-50" @close="handleCancel">
+    <Dialog
+      as="div"
+      class="relative z-50"
+      :initial-focus="cancelButtonRef"
+      @close="handleCancel"
+    >
       <TransitionChild
         as="div"
         enter="ease-out duration-200"
@@ -80,6 +85,7 @@
                   class="px-4 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
                   @click="handleCancel"
                   :disabled="isSubmitting"
+                  ref="cancelButtonRef"
                 >
                   Отмена
                 </button>
@@ -130,6 +136,7 @@ const localFormat = ref<string>(props.defaultFormat || 'original')
 const localComment = ref<string>('')
 const isSubmitting = ref(false)
 const error = ref<string | null>(null)
+const cancelButtonRef = ref<HTMLButtonElement | null>(null)
 
 watch(
   () => props.isOpen,
