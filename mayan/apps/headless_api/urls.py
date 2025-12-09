@@ -13,6 +13,7 @@ from .views.activity_views import DashboardActivityView, HeadlessActivityFeedVie
 from .views.favorites_views import HeadlessFavoriteListView, HeadlessFavoriteToggleView
 from .views.my_uploads_views import HeadlessMyUploadsView
 from .views.profile_views import HeadlessProfileView
+from .views.profile_views import HeadlessEditView
 
 app_name = 'headless_api'
 
@@ -57,6 +58,11 @@ api_urls = [
         regex=r'^documents/my_uploads/$',
         view=HeadlessMyUploadsView.as_view(),
         name='api-my-uploads'
+    ),
+    url(
+        regex=r'^documents/(?P<document_id>\d+)/versions/new_from_edit/$',
+        view=HeadlessEditView.as_view(),
+        name='api-document-version-new-from-edit'
     ),
     url(
         regex=r'^profile/$',

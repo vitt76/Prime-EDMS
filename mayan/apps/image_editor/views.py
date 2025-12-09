@@ -33,7 +33,11 @@ class ImageEditorView(SingleObjectDetailView):
 
 
 class ImageEditorSaveView(ExternalObjectViewMixin, View):
-    """Сохранение изменений изображения и создание новой версии."""
+    """[DEPRECATED] Сохранение изменений изображения и создание новой версии.
+
+    Используйте headless endpoint:
+    POST /api/v4/headless/documents/{id}/versions/new_from_edit/
+    """
 
     external_object_permission = permission_document_file_edit
     external_object_pk_url_kwarg = 'document_file_id'

@@ -6,3 +6,6 @@ from mayan.apps.headless_api.serializers.activity import (  # noqa: F401
 from mayan.apps.headless_api.serializers.favorites import (  # noqa: F401
     FavoriteDocumentEntrySerializer,
 )
+from mayan.apps.headless_api.serializers.version import (  # noqa: F401
+    HeadlessDocumentVersionSerializer,
+)

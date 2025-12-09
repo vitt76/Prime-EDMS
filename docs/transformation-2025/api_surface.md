@@ -6,8 +6,8 @@
 
 ## 1. Глобальные правила
 
-- **Аутентификация**: DRF включает `SessionAuthentication`, `TokenAuthentication`, Basic. Middleware Stronghold закрывает все URL, кроме whitelisted. Неавторизованные запросы получают `302 /authentication/login/?next=...`.
-- **Token API**: `POST /api/v4/auth/token/obtain/` принимает `{"username":"", "password":""}` и возвращает `{"token": "..."}`. Управление токенами пока отсутствует (см. раздел 9).
+- **Аутентификация**: DRF включает `SessionAuthentication`, `TokenAuthentication` (Basic не активирован). Stronghold закрывает все URL, кроме whitelisted. Неавторизованные запросы получают `302 /authentication/login/?next=...` и HTML.
+- **Token API**: `POST /api/v4/auth/token/obtain/` принимает `{"username":"", "password":""}` и возвращает `{"token": "..."}`. Управление токенами в коде отсутствует.
 - **Заголовки**: для REST используйте `Authorization: Token <key>` или cookie‑сессию.
 - **Тип данных**: `application/json`. Загрузка файлов — multipart (DRF parsers).
 - **Пагинация**: `MayanPageNumberPagination`, параметры `?page`, `?page_size` (верхний предел управляется Smart Settings).
@@ -23,7 +23,18 @@
 | Логин (форма) | `POST /authentication/login/` | Для cookie‑сессий. |
 | Логаут | `POST /authentication/logout/` | Завершает сессию. |
 | Получить DRF token | `POST /api/v4/auth/token/obtain/` | Возвращает `{"token": "..."} `. |
-| Управление токенами | `GET/POST /api/v4/auth/tokens/`, `DELETE /api/v4/auth/tokens/<key>/` | Пользователь видит только свои токены, суперпользователь — все; повторное `POST` вращает ключ. |
+| Управление токенами | — | В коде отсутствует (нет `/api/v4/auth/tokens/`). |
+
+### Headless (SPA) endpoints — реализовано
+- `POST /api/v4/headless/password/change/` — смена пароля (Token/Session).
+- `GET /api/v4/headless/config/document_types/` и `.../{id}/` — полная конфигурация типов (required/optional metadata, workflows, retention, capabilities).
+- `GET /api/v4/headless/activity/feed/` — персональная лента (filter=`my_actions|my_documents|all`, пагинация).  
+  `GET /api/v4/headless/dashboard/activity/` — упрощённый фид для виджета.
+- `GET /api/v4/headless/favorites/`, `POST /api/v4/headless/favorites/{document_id}/` — избранное.
+- `GET /api/v4/headless/documents/my_uploads/` — «Мои загрузки» по событиям `documents.document_create/document_file_created`.
+- `POST /api/v4/headless/documents/{id}/versions/new_from_edit/` — создание версии из web‑редактора (multipart file, optional format/comment).
+
+Все headless маршруты подключены через `mayan/apps/rest_api/urls.py` под `/api/v4/headless/`; требуют Token или сессию, при 401/302 возвращают HTML (Stronghold).
 
 ---
 
