@@ -2,7 +2,7 @@
   <TransitionRoot as="template" :show="isOpen">
     <Dialog as="div" class="relative z-50" @close="handleClose">
       <TransitionChild
-        as="template"
+        as="div"
         enter="ease-out duration-200"
         enter-from="opacity-0"
         enter-to="opacity-100"
@@ -16,7 +16,7 @@
       <div class="fixed inset-0 z-50 overflow-y-auto">
         <div class="flex min-h-full items-center justify-center p-4">
           <TransitionChild
-            as="template"
+            as="div"
             enter="ease-out duration-200"
             enter-from="opacity-0 scale-95"
             enter-to="opacity-100 scale-100"

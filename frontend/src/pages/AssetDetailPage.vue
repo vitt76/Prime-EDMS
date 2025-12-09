@@ -228,25 +228,6 @@
             </video>
           </div>
 
-          <!-- Other File Types (icon fallback) -->
-          <div v-else class="flex-1 flex items-center justify-center">
-            <div class="text-center text-neutral-300">
-              <div class="mx-auto mb-3 w-16 h-16 rounded-lg bg-neutral-800 flex items-center justify-center">
-                <span class="text-sm font-semibold uppercase">{{ fileExtension || 'file' }}</span>
-              </div>
-              <p class="text-lg font-semibold text-neutral-200">{{ asset.file_details?.filename || asset.filename || asset.label }}</p>
-              <p class="text-sm text-neutral-400 mt-1">Предпросмотр недоступен</p>
-              <div class="mt-4 flex items-center justify-center gap-3">
-                <button
-                  class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                  @click="handleDownload"
-                >
-                  Скачать
-                </button>
-              </div>
-            </div>
-          </div>
-
           <!-- Audio Preview -->
           <div v-else-if="isAudio" class="relative w-full h-full flex items-center justify-center p-8">
             <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-lg">
@@ -512,6 +493,25 @@
                 </div>
               </div>
             </div>
+
+          <!-- Other File Types (icon fallback) -->
+          <div v-else class="flex-1 flex items-center justify-center">
+            <div class="text-center text-neutral-300">
+              <div class="mx-auto mb-3 w-16 h-16 rounded-lg bg-neutral-800 flex items-center justify-center">
+                <span class="text-sm font-semibold uppercase">{{ fileExtension || 'file' }}</span>
+              </div>
+              <p class="text-lg font-semibold text-neutral-200">{{ asset.file_details?.filename || asset.filename || asset.label }}</p>
+              <p class="text-sm text-neutral-400 mt-1">Предпросмотр недоступен</p>
+              <div class="mt-4 flex items-center justify-center gap-3">
+                <button
+                  class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                  @click="handleDownload"
+                >
+                  Скачать
+                </button>
+              </div>
+            </div>
+          </div>
 
             <!-- Comments Tab -->
             <div v-if="activeTab === 'comments'" class="flex flex-col h-full">

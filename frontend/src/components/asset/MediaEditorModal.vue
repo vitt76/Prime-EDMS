@@ -1,8 +1,8 @@
 <template>
-  <TransitionRoot as="template" :show="isOpen">
+  <TransitionRoot as="div" :show="isOpen">
     <Dialog as="div" class="relative z-50" @close="handleClose">
       <TransitionChild
-        as="template"
+        as="div"
         enter="ease-out duration-300"
         enter-from="opacity-0"
         enter-to="opacity-100"
@@ -16,7 +16,7 @@
       <div class="fixed inset-0 z-50 overflow-y-auto">
         <div class="flex min-h-full items-center justify-center p-4">
           <TransitionChild
-            as="template"
+            as="div"
             enter="ease-out duration-300"
             enter-from="opacity-0 scale-95"
             enter-to="opacity-100 scale-100"
@@ -743,7 +743,7 @@
                              bg-blue-600 text-white rounded-lg hover:bg-blue-700 
                              transition-colors font-medium text-sm disabled:opacity-50"
                       :disabled="isProcessing"
-                      @click="handleSaveAsVersion"
+                      @click="openSaveModal"
                     >
                       <DocumentDuplicateIcon class="w-5 h-5" />
                       Сохранить как версию
@@ -778,6 +778,14 @@
         </div>
       </div>
     </Dialog>
+
+    <SaveVersionModal
+      :is-open="isSaveModalOpen"
+      :default-format="editorStore.currentState.format"
+      :error-message="saveError"
+      @close="isSaveModalOpen = false"
+      @save="handleConfirmSave"
+    />
   </TransitionRoot>
 </template>
 
@@ -809,6 +817,8 @@ import {
 } from '@heroicons/vue/24/outline'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useEditorStore, type WatermarkPosition } from '@/stores/editorStore'
+import { saveEditedImage } from '@/services/editorService'
+import SaveVersionModal from '@/components/asset/SaveVersionModal.vue'
 import type { Asset } from '@/types/api'
 
 interface Props {
@@ -837,6 +847,8 @@ const isProcessing = ref(false)
 const processingMessage = ref('')
 const cropPreview = ref(false)
 const watermarkImagePreview = ref<string | null>(null)
+const isSaveModalOpen = ref(false)
+const saveError = ref<string | null>(null)
 
 // Tool definitions
 const tools = [
@@ -1184,32 +1196,83 @@ function updateWatermarkOpacity(e: Event) {
   editorStore.setWatermark({ opacity: value })
 }
 
-// Save actions
-async function handleSaveAsVersion() {
+function openSaveModal() {
+  saveError.value = null
+  isSaveModalOpen.value = true
+}
+
+function mapFormatToMime(format: string): string {
+  const fmt = format.toLowerCase()
+  if (fmt === 'jpg' || fmt === 'jpeg') return 'image/jpeg'
+  if (fmt === 'png') return 'image/png'
+  if (fmt === 'webp') return 'image/webp'
+  return 'image/jpeg'
+}
+
+async function buildBlobFromImage(format: string): Promise<Blob> {
+  if (!imageRef.value) {
+    throw new Error('Изображение не загружено')
+  }
+
+  const canvas = document.createElement('canvas')
+  const { width, height } = editorStore.currentState.resize
+  canvas.width = width || imageRef.value.naturalWidth
+  canvas.height = height || imageRef.value.naturalHeight
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    throw new Error('Canvas не поддерживается')
+  }
+
+  ctx.drawImage(imageRef.value, 0, 0, canvas.width, canvas.height)
+
+  const mime = format === 'original' ? mapFormatToMime(editorStore.currentState.format) : mapFormatToMime(format)
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) return reject(new Error('Не удалось сформировать файл'))
+      resolve(blob)
+    }, mime, editorStore.currentState.quality / 100)
+  })
+}
+
+async function handleConfirmSave(format: string, comment: string) {
   if (!props.asset) return
-  
   isProcessing.value = true
   processingMessage.value = 'Создание новой версии...'
-  
+  saveError.value = null
+
   try {
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    const versionId = Date.now()
+    const blob = await buildBlobFromImage(format)
+    const result = await saveEditedImage(
+      props.asset.id,
+      blob,
+      {
+        format: format === 'original' ? undefined : format,
+        comment: comment || 'Edited via Web Editor'
+      }
+    )
+
     notificationStore.addNotification({
       type: 'success',
       title: 'Версия создана',
-      message: `Новая версия #${versionId} сохранена`
+      message: `Версия #${result.version_id ?? ''} сохранена`
     })
-    emit('saveVersion', props.asset.id, versionId)
+
+    emit('saveVersion', props.asset.id, result.version_id || Date.now())
+    isSaveModalOpen.value = false
     emit('close')
-  } catch (error) {
+  } catch (error: any) {
+    const message = error?.response?.data?.detail || error?.message || 'Не удалось сохранить изменения'
+    saveError.value = message
     notificationStore.addNotification({
       type: 'error',
       title: 'Ошибка',
-      message: 'Не удалось сохранить изменения'
+      message
     })
   } finally {
     isProcessing.value = false
+    processingMessage.value = ''
   }
 }
 
