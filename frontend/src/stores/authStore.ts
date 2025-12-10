@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { authService, hasToken, clearToken } from '@/services/authService'
 import { formatApiError } from '@/utils/errors'
 import type { User } from '@/types'
+import router from '@/router'
 
 export const useAuthStore = defineStore(
   'auth',
@@ -51,7 +52,7 @@ export const useAuthStore = defineStore(
 
         // Step 2: Get user info
         const userResponse = await authService.getCurrentUser()
-        user.value = userResponse
+        user.value = userResponse.user
         permissions.value = userResponse.permissions || []
 
         return { success: true }
@@ -72,6 +73,9 @@ export const useAuthStore = defineStore(
         user.value = null
         permissions.value = []
         localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
+        localStorage.removeItem('dev_authenticated')
+        router.replace('/login').catch(() => {})
       }
     }
 

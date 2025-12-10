@@ -24,8 +24,8 @@ import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
  * Feature flags.
  * BFF enabled by default unless explicitly disabled.
  */
-const USE_REAL_API = import.meta.env.VITE_USE_MOCK_AUTH !== 'true'
-const BFF_ENABLED = import.meta.env.VITE_BFF_ENABLED !== 'false'
+const USE_REAL_API = true
+const BFF_ENABLED = true
 
 /**
  * LocalStorage keys
@@ -236,12 +236,7 @@ class AuthService {
   async logout(): Promise<void> {
     clearToken()
     localStorage.removeItem('dev_authenticated')
-    // Optionally hit backend logout endpoint if implemented
-    try {
-      await apiService.post('/api/v4/auth/token/logout/', {})
-    } catch (err) {
-      console.warn('[Auth] Logout API call failed (ignored):', err)
-    }
+    // Backend logout not required for token auth; endpoint may be absent (404)
   }
 
   /**

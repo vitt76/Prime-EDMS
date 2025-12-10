@@ -147,7 +147,7 @@
                     :key="role.id"
                     class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700"
                   >
-                    {{ role.label }}
+                    {{ roleLabelByGroup[role.id] || role.label }}
                   </span>
                   <span
                     v-if="user.is_superuser"
@@ -277,7 +277,7 @@
                   :key="role.id"
                   class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-100 text-violet-700"
                 >
-                  {{ role.label }}
+                  {{ roleLabelByGroup[role.id] || role.label }}
                 </span>
                 <span
                   v-if="user.two_factor_enabled"
@@ -404,6 +404,7 @@
         <button
           type="button"
           class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+          @click="showCreateRoleModal = true"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -423,9 +424,19 @@
               <th
                 v-for="role in roles"
                 :key="role.id"
-                class="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[120px]"
+                class="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[140px]"
               >
-                {{ role.label }}
+                <div class="flex items-center justify-center gap-2">
+                  <span>{{ role.label }}</span>
+                  <button
+                    type="button"
+                    class="text-violet-600 hover:text-violet-800"
+                    title="Переименовать роль"
+                    @click="openEditRole(role)"
+                  >
+                    ✎
+                  </button>
+                </div>
               </th>
             </tr>
           </thead>
@@ -661,6 +672,7 @@
               <select
                 v-model="editForm.status"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                title="Статус is_active пользователя"
               >
                 <option value="active">Активен</option>
                 <option value="suspended">Заблокирован</option>
@@ -674,6 +686,7 @@
                   v-model="editForm.is_staff"
                   type="checkbox"
                   class="w-4 h-4 text-violet-600 border-gray-300 rounded focus:ring-violet-500"
+                  title="is_staff — доступ к админским разделам"
                 />
                 <span class="text-sm text-gray-700">Сотрудник</span>
               </label>
@@ -682,6 +695,7 @@
                   v-model="editForm.is_superuser"
                   type="checkbox"
                   class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                  title="is_superuser — полный доступ без ACL"
                 />
                 <span class="text-sm text-gray-700">Суперпользователь</span>
               </label>
@@ -765,6 +779,127 @@
       </div>
     </Teleport>
 
+    <!-- Create Role Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showCreateRoleModal"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+      >
+        <div class="absolute inset-0 bg-black/50" @click="showCreateRoleModal = false" />
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+          <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-gray-900">Новая роль</h2>
+            <button class="text-gray-400 hover:text-gray-600" @click="showCreateRoleModal = false">
+              ✕
+            </button>
+          </div>
+          <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Название роли</label>
+              <input
+                v-model="newRoleName"
+                type="text"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                placeholder="Например, Rules"
+              />
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="block text-sm font-medium text-gray-700">Разрешения</label>
+                <span class="text-xs text-gray-500">Клик по чекбоксу добавляет/убирает право</span>
+              </div>
+              <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                <template v-for="(perms, namespace) in groupedPermissions" :key="namespace">
+                  <div class="bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-600 uppercase">
+                    {{ namespace }}
+                  </div>
+                  <div class="px-4 py-2 space-y-2">
+                    <label
+                      v-for="perm in perms"
+                      :key="perm.id"
+                      class="flex items-center gap-3 text-sm text-gray-700"
+                    >
+                      <input
+                        type="checkbox"
+                        class="w-4 h-4 text-violet-600 border-gray-300 rounded focus:ring-violet-500"
+                        :checked="newRolePermissions.has(perm.name)"
+                        @change="toggleNewRolePermission(perm.name)"
+                      />
+                      <span>{{ perm.label }}</span>
+                      <span class="text-xs text-gray-400 ml-auto">{{ perm.name }}</span>
+                    </label>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+          <div class="px-6 py-4 border-t border-gray-200 flex gap-3">
+            <button
+              type="button"
+              class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              @click="showCreateRoleModal = false"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              class="flex-1 px-4 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors disabled:opacity-60"
+              :disabled="createRoleLoading || !newRoleName.trim()"
+              @click="createRole"
+            >
+              {{ createRoleLoading ? 'Создание...' : 'Создать роль' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Edit Role Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showEditRoleModal"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+      >
+        <div class="absolute inset-0 bg-black/50" @click="showEditRoleModal = false" />
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4">
+          <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-gray-900">Переименовать роль</h2>
+            <button class="text-gray-400 hover:text-gray-600" @click="showEditRoleModal = false">
+              ✕
+            </button>
+          </div>
+          <div class="px-6 py-4 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Новое имя роли</label>
+              <input
+                v-model="editRoleName"
+                type="text"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                placeholder="Например, Rules"
+              />
+            </div>
+          </div>
+          <div class="px-6 py-4 border-t border-gray-200 flex gap-3">
+            <button
+              type="button"
+              class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              @click="showEditRoleModal = false"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              class="flex-1 px-4 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors disabled:opacity-60"
+              :disabled="editRoleLoading || !editRoleName.trim()"
+              @click="saveEditRole"
+            >
+              {{ editRoleLoading ? 'Сохранение...' : 'Сохранить' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Toast Notification -->
     <Teleport to="body">
       <Transition name="toast">
@@ -809,6 +944,14 @@ const showEditModal = ref(false)
 const showDeleteModal = ref(false)
 const editingUser = ref<AdminUser | null>(null)
 const deletingUser = ref<AdminUser | null>(null)
+const showCreateRoleModal = ref(false)
+const createRoleLoading = ref(false)
+const newRoleName = ref('')
+const newRolePermissions = ref<Set<string>>(new Set())
+const showEditRoleModal = ref(false)
+const editRoleLoading = ref(false)
+const editRoleId = ref<number | null>(null)
+const editRoleName = ref('')
 
 // Pagination state
 const currentPage = ref(1)
@@ -821,6 +964,15 @@ const toast = reactive({
   message: '',
   type: 'success' as 'success' | 'error'
 })
+
+function showToast(message: string, type: 'success' | 'error' = 'success') {
+  toast.message = message
+  toast.type = type
+  toast.show = true
+  setTimeout(() => {
+    toast.show = false
+  }, 3000)
+}
 
 const inviteForm = ref({
   email: '',
@@ -866,6 +1018,15 @@ const roles = ref<AdminRole[]>([])
 const isLoadingGroups = ref(false)
 const permissions = ref<StoredPermission[]>([])
 const rolePermissionMatrix = ref<Record<number, Set<string>>>({})
+const roleLabelByGroup = computed<Record<number, string>>(() => {
+  const map: Record<number, string> = {}
+  roles.value.forEach((role) => {
+    role.groups?.forEach((g) => {
+      map[g.id] = role.label
+    })
+  })
+  return map
+})
 
 // Use store users instead of local mock
 const users = computed(() => adminStore.users as AdminUser[])
@@ -923,6 +1084,64 @@ async function loadUsers(page = 1) {
   } catch (err) {
     console.error('[AdminUsers] Failed to load users:', err)
     showToast('Ошибка загрузки пользователей', 'error')
+  }
+}
+
+function toggleNewRolePermission(permName: string): void {
+  if (newRolePermissions.value.has(permName)) {
+    newRolePermissions.value.delete(permName)
+  } else {
+    newRolePermissions.value.add(permName)
+  }
+}
+
+async function createRole(): Promise<void> {
+  if (!newRoleName.value.trim()) return
+  createRoleLoading.value = true
+  try {
+    const role = await adminService.createRole(newRoleName.value.trim())
+    const perms = Array.from(newRolePermissions.value)
+    for (const p of perms) {
+      try {
+        await adminService.addRolePermission(role.id, p)
+      } catch (e) {
+        console.warn('[AdminUsers] Failed to add permission to role', role.id, p, e)
+      }
+    }
+    await loadGroups()
+    showCreateRoleModal.value = false
+    newRoleName.value = ''
+    newRolePermissions.value.clear()
+    showToast('Роль создана')
+  } catch (err) {
+    console.error('[AdminUsers] Failed to create role', err)
+    showToast('Не удалось создать роль', 'error')
+  } finally {
+    createRoleLoading.value = false
+  }
+}
+
+function openEditRole(role: AdminRole): void {
+  editRoleId.value = role.id
+  editRoleName.value = role.label
+  showEditRoleModal.value = true
+}
+
+async function saveEditRole(): Promise<void> {
+  if (!editRoleId.value || !editRoleName.value.trim()) return
+  editRoleLoading.value = true
+  try {
+    await adminService.updateRole(editRoleId.value, editRoleName.value.trim())
+    await loadGroups()
+    showToast('Роль переименована')
+    showEditRoleModal.value = false
+    editRoleId.value = null
+    editRoleName.value = ''
+  } catch (err) {
+    console.error('[AdminUsers] Failed to rename role', err)
+    showToast('Не удалось переименовать роль', 'error')
+  } finally {
+    editRoleLoading.value = false
   }
 }
 
@@ -1045,13 +1264,26 @@ async function togglePermission(roleId: number, permName: string): Promise<void>
   }
 }
 
-function showToast(message: string, type: 'success' | 'error' = 'success') {
-  toast.message = message
-  toast.type = type
-  toast.show = true
-  setTimeout(() => {
-    toast.show = false
-  }, 3000)
+function extractErrorMessage(err: unknown): string {
+  const axiosErr = err as { response?: { data?: Record<string, unknown> }; message?: string }
+  const data = axiosErr?.response?.data
+  if (data && typeof data === 'object') {
+    if (Array.isArray((data as any).non_field_errors) && (data as any).non_field_errors.length) {
+      return (data as any).non_field_errors.join(' ')
+    }
+    const keys = Object.keys(data)
+    for (const key of keys) {
+      const val = (data as any)[key]
+      if (Array.isArray(val) && val.length) {
+        return `${key}: ${val.join(' ')}`
+      }
+    }
+  }
+  return axiosErr?.message || 'Произошла ошибка'
+}
+
+function passwordPolicyHint(): string {
+  return 'Пароль должен быть не слишком распространённым, минимум 8 символов, с цифрами, верхним/нижним регистром и спецсимволом.'
 }
 
 async function inviteUser(): Promise<void> {
@@ -1063,11 +1295,18 @@ async function inviteUser(): Promise<void> {
       password: inviteForm.value.password || generateTempPassword(),
       first_name: '',
       last_name: '',
-      is_active: true,
-      groups_pk_list: inviteForm.value.roleId ? [Number(inviteForm.value.roleId)] : []
+      is_active: true
     }
     
-    await adminStore.createUser(userData)
+    const newUser = await adminStore.createUser(userData)
+    if (inviteForm.value.roleId) {
+      const rolePk = Number(inviteForm.value.roleId)
+      try {
+        await adminService.addUserToGroups(newUser.id, [rolePk])
+      } catch (err) {
+        console.error('[AdminUsers] Failed to add user to group', err)
+      }
+    }
     
     showInviteModal.value = false
     inviteForm.value = { email: '', username: '', password: '', roleId: '', sendEmail: true }
@@ -1076,8 +1315,12 @@ async function inviteUser(): Promise<void> {
     // Reload users list
     await loadUsers(currentPage.value)
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Ошибка создания пользователя'
-    showToast(errorMsg, 'error')
+    const baseMsg = extractErrorMessage(err)
+    const msg =
+      baseMsg.toLowerCase().includes('password') || baseMsg.toLowerCase().includes('парол')
+        ? `${baseMsg} ${passwordPolicyHint()}`
+        : baseMsg
+    showToast(msg, 'error')
   }
 }
 
@@ -1107,12 +1350,9 @@ function closeEditModal(): void {
 }
 
 function toggleRole(roleId: number): void {
-  const idx = editForm.value.roleIds.indexOf(roleId)
-  if (idx > -1) {
-    editForm.value.roleIds.splice(idx, 1)
-  } else {
-    editForm.value.roleIds.push(roleId)
-  }
+  const isSelected = editForm.value.roleIds.includes(roleId)
+  // Разрешаем только одну роль: либо снять, либо выбрать единственную
+  editForm.value.roleIds = isSelected ? [] : [roleId]
 }
 
 async function saveUser(): Promise<void> {
@@ -1121,7 +1361,7 @@ async function saveUser(): Promise<void> {
   try {
     // Determine is_active based on status
     const is_active = editForm.value.status === 'active'
-    
+
     await adminStore.updateUser(editingUser.value.id, {
       first_name: editForm.value.first_name,
       last_name: editForm.value.last_name,
@@ -1129,9 +1369,21 @@ async function saveUser(): Promise<void> {
       username: editForm.value.username,
       is_active,
       is_staff: editForm.value.is_staff,
-      is_superuser: editForm.value.is_superuser,
-      groups_pk_list: editForm.value.roleIds
+      is_superuser: editForm.value.is_superuser
     })
+
+    // Sync group (role) membership: only one allowed
+    const desiredGroupId = editForm.value.roleIds[0]
+    const currentGroupIds = editingUser.value.roles?.map(r => r.id) || []
+    const toRemove = currentGroupIds.filter((id) => desiredGroupId === undefined || id !== desiredGroupId)
+    const toAdd = desiredGroupId && !currentGroupIds.includes(desiredGroupId) ? [desiredGroupId] : []
+
+    if (toRemove.length) {
+      await adminService.removeUserFromGroups(editingUser.value.id, toRemove)
+    }
+    if (toAdd.length) {
+      await adminService.addUserToGroups(editingUser.value.id, toAdd)
+    }
     
     closeEditModal()
     showToast('Пользователь успешно обновлён')

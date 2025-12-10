@@ -2,6 +2,10 @@ from drf_yasg.views import get_schema_view
 
 from rest_framework import mixins, permissions, renderers
 from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.authtoken.models import Token
+from rest_framework.response import Response
+from django.contrib.auth.models import update_last_login
+import logging
 from rest_framework.schemas.generators import EndpointEnumerator
 
 import mayan
@@ -112,6 +116,21 @@ class BrowseableObtainAuthToken(ObtainAuthToken):
     Obtain an API authentication token.
     """
     renderer_classes = (renderers.BrowsableAPIRenderer, renderers.JSONRenderer)
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(
+            data=request.data, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        token, created = Token.objects.get_or_create(user=user)
+        try:
+            update_last_login(sender=None, user=user)
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                'Unable to update last_login for user %s: %s', user, exc
+            )
+        return Response({'token': token.key})
 
 
 class ProjectInformationAPIView(RetrieveAPIView):
