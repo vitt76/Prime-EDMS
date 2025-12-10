@@ -14,6 +14,7 @@
 
 import axios from 'axios'
 import { apiService } from './apiService'
+import { cacheService } from './cacheService'
 import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
 
 // ============================================================================
@@ -201,7 +202,11 @@ class AuthService {
       throw new Error('Not authenticated')
     }
 
-    const response = await apiService.get<MayanUserResponse>('/api/v4/users/current/')
+    const response = await apiService.get<MayanUserResponse>(
+      '/api/v4/users/current/',
+      undefined,
+      false // do not cache current user; ensures fresh user after switch
+    )
     const user = this.mapMayanUser(response)
     
     // Update stored user data
@@ -235,6 +240,7 @@ class AuthService {
    */
   async logout(): Promise<void> {
     clearToken()
+    cacheService.clear()
     localStorage.removeItem('dev_authenticated')
     // Backend logout not required for token auth; endpoint may be absent (404)
   }

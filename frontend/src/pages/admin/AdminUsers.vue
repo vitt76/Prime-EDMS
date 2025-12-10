@@ -1301,10 +1301,15 @@ async function inviteUser(): Promise<void> {
     const newUser = await adminStore.createUser(userData)
     if (inviteForm.value.roleId) {
       const rolePk = Number(inviteForm.value.roleId)
-      try {
-        await adminService.addUserToGroups(newUser.id, [rolePk])
-      } catch (err) {
-        console.error('[AdminUsers] Failed to add user to group', err)
+      const targetGroupId = resolveGroupIdFromRole(rolePk)
+      if (targetGroupId) {
+        try {
+          await adminService.addUserToGroups(newUser.id, [targetGroupId])
+        } catch (err) {
+          console.error('[AdminUsers] Failed to add user to group', err)
+        }
+      } else {
+        showToast('Не найдена группа для выбранной роли', 'error')
       }
     }
     
@@ -1355,6 +1360,13 @@ function toggleRole(roleId: number): void {
   editForm.value.roleIds = isSelected ? [] : [roleId]
 }
 
+function resolveGroupIdFromRole(roleId?: number): number | undefined {
+  if (!roleId) return undefined
+  const role = roles.value.find(r => r.id === roleId)
+  // Берём первую группу, привязанную к роли; если нет — используем сам roleId на всякий случай
+  return role?.groups?.[0]?.id ?? roleId
+}
+
 async function saveUser(): Promise<void> {
   if (!editingUser.value) return
   
@@ -1373,7 +1385,8 @@ async function saveUser(): Promise<void> {
     })
 
     // Sync group (role) membership: only one allowed
-    const desiredGroupId = editForm.value.roleIds[0]
+    const desiredRoleId = editForm.value.roleIds[0]
+    const desiredGroupId = resolveGroupIdFromRole(desiredRoleId)
     const currentGroupIds = editingUser.value.roles?.map(r => r.id) || []
     const toRemove = currentGroupIds.filter((id) => desiredGroupId === undefined || id !== desiredGroupId)
     const toAdd = desiredGroupId && !currentGroupIds.includes(desiredGroupId) ? [desiredGroupId] : []
