@@ -1,4 +1,5 @@
 from django.conf.urls import include, url
+from django.http import JsonResponse
 
 from .api_views import (
     APIRoot, APIVersionRoot, BatchRequestAPIView, BrowseableObtainAuthToken,
@@ -15,6 +16,7 @@ from mayan.apps.headless_api.views.favorites_views import (
 from mayan.apps.headless_api.views.password_views import HeadlessPasswordChangeView
 from mayan.apps.headless_api.views.my_uploads_views import HeadlessMyUploadsView
 from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
+from mayan.apps.headless_api.views.version_views import HeadlessEditView
 from .literals import API_VERSION
 
 api_version_urls = [
@@ -73,9 +75,19 @@ api_version_urls = [
         name='headless-my-uploads'
     ),
     url(
+        regex=r'^headless/ping/$',
+        view=lambda request: JsonResponse({'status': 'pong'}),
+        name='headless-ping'
+    ),
+    url(
         regex=r'^headless/profile/$',
         view=HeadlessProfileView.as_view(),
         name='headless-profile'
+    ),
+    url(
+        regex=r'^headless/documents/(?P<document_id>\d+)/versions/new_from_edit/$',
+        view=HeadlessEditView.as_view(),
+        name='headless-document-version-new-from-edit'
     )
 ]
 

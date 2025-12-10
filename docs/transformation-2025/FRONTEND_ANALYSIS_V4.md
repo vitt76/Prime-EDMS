@@ -279,6 +279,12 @@ export async function getActivityFeed(
 
 ## 3. План Рефакторинга URL
 
+**Что меняем (URL → headless):**
+- `authService.ts` — смена пароля: `/api/v4/headless/password/change/`
+- `uploadService.ts` — конфиг типов/валидация метаданных: `/api/v4/headless/config/document_types/...`
+- `activityService.ts` — персональная лента: `/api/v4/headless/activity/feed/` (+ dashboard уже headless)
+- `documentTypeService.ts` (новый/подключаемый) — чтение конфигов через headless
+
 ### 3.1 Карта Изменений Сервисов
 
 | Файл | Текущий Endpoint | Новый Endpoint | Статус |

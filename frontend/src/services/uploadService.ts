@@ -69,6 +69,8 @@ export interface UploadOptions {
   signal?: AbortSignal
   /** Document type ID (defaults to 1 = "Default" type) */
   documentTypeId?: number
+  /** Optional document label (defaults to file name) */
+  label?: string
   /** Optional description */
   description?: string
   /** Optional folder (cabinet) ID to place the document */
@@ -213,7 +215,7 @@ class UploadService {
         `${this.baseUrl}/documents/`,
         {
           document_type_id: documentTypeId,
-          label: file.name,
+          label: options.label || file.name,
           description: options.description || '',
           language: options.language || 'rus', // Russian by default
         },
@@ -320,7 +322,7 @@ class UploadService {
       return {
         documentId,
         fileId: fileResponse.data.id,
-        label: file.name,
+        label: options.label || file.name,
         documentUrl: `${this.baseUrl}/documents/${documentId}/`,
         downloadUrl: fileResponse.data.download_url
       }
@@ -513,7 +515,7 @@ class UploadService {
       const initResponse = await axios.post<ChunkedUploadInitResponse>(
         `${this.baseUrl}/uploads/init/`,
         {
-          filename: file.name,
+          filename: options.label || file.name,
           total_size: file.size,
           content_type: file.type || 'application/octet-stream'
         },
@@ -610,7 +612,7 @@ class UploadService {
         `${this.baseUrl}/uploads/complete/`,
         {
           upload_id: uploadId,
-          label: file.name,
+          label: options.label || file.name,
           description: options.description || '',
           document_type_id: documentTypeId,
           parts
@@ -644,7 +646,7 @@ class UploadService {
       return {
         documentId: completeResponse.data.document_id,
         fileId: completeResponse.data.file_id,
-        label: file.name,
+        label: options.label || file.name,
         documentUrl: `${this.baseUrl}/documents/${completeResponse.data.document_id}/`,
         downloadUrl: completeResponse.data.download_url
       }

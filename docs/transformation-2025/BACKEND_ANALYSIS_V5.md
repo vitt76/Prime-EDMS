@@ -10,7 +10,7 @@
 ## 1. Что действительно развернуто (доказано кодом)
 
 - **INSTALLED_APPS:** `mayan.apps.headless_api` подключен в `mayan/settings/base.py` (стр. ~101).
-- **Аутентификация:** DRF `TokenAuthentication` + `SessionAuthentication` (нет Knox / SimpleJWT). См. `REST_FRAMEWORK.DEFAULT_AUTHENTICATION_CLASSES`.
+- **Аутентификация:** DRF `TokenAuthentication` + `SessionAuthentication` (нет Knox / SimpleJWT). См. `REST_FRAMEWORK.DEFAULT_AUTHENTICATION_CLASSES`, `DEFAULT_PERMISSION_CLASSES=IsAuthenticated`, Stronghold закрывает HTML/REST без сессии/токена.
 - **URL включение:** headless endpoints подключены в `mayan/apps/rest_api/urls.py` под префиксом `/api/v4/headless/` (AcceptHeaderVersioning). Отдельный `mayan/apps/headless_api/urls.py` зеркалирует маршруты, но фактический вход — через REST API router.
 
 ---
@@ -27,7 +27,8 @@
 | `GET /api/v4/headless/favorites/` | `HeadlessFavoriteListView` | Token/Session | Избранное пользователя | Пагинация, использует `OptimizedDocumentListSerializer` |
 | `POST /api/v4/headless/favorites/{document_id}/` | `HeadlessFavoriteToggleView` | Token/Session | Добавить/убрать из избранного | Проверка ACL (view) |
 | `GET /api/v4/headless/documents/my_uploads/` | `HeadlessMyUploadsView` | Token/Session | «Мои загрузки» | По событиям `documents.document_create`/`document_file_created`, ACL фильтр |
-| `POST /api/v4/headless/documents/{id}/versions/new_from_edit/` | `HeadlessEditView` | Token/Session | Создание новой версии из отредактированного изображения | Принимает `file` (multipart), опционально `format`, `comment`, `action_id`; конвертация через Pillow |
+| `POST /api/v4/headless/documents/{id}/versions/new_from_edit/` | `HeadlessEditView` | 🔴 **НЕ ПРОБРОШЕН** | Реализован во view, но **нет** в `mayan/apps/rest_api/urls.py`; import в `headless_api/urls.py` указывает на `profile_views` → 404 | Требуется подключить через REST API маршруты |
+| `GET /api/v4/headless/profile/` | `HeadlessProfileView` | Token/Session | Профиль текущего пользователя | Вернёт id/username/email/is_staff/is_superuser |
 
 ### Связанные сериализаторы (documents)
 - `OptimizedDocumentListSerializer`: содержит `document_type_id` (read-only) и `document_type_label`, file_latest*, thumbnail/preview/download URLs (кэшируемые).
@@ -43,13 +44,19 @@
 ## 3. Подробности реализации ключевых view
 
 ### HeadlessEditView (`mayan/apps/headless_api/views/version_views.py`)
-- Маршрут: `/api/v4/headless/documents/{document_id}/versions/new_from_edit/`.
-- Auth: Session + Token, Permission: `permission_document_version_create` (ACL check).
-- Логика:
+- **Сейчас не подключён в REST API:** в `mayan/apps/rest_api/urls.py` нет маршрута для `new_from_edit`, поэтому вызов `/api/v4/headless/documents/{id}/versions/new_from_edit/` вернёт 404.  
+- В `mayan/apps/headless_api/urls.py` endpoint описан, но импорт ошибочный (`HeadlessEditView` тянется из `profile_views`, а не из `version_views`).  
+- Логика (реализована во view):
   - Читает `file` из multipart, опционально `format` (конвертация через Pillow), `comment`, `action_id` (default `DocumentFileActionUseNewPages.backend_id`).
+  - Проверяет ACL `permission_document_version_create`.
   - Создаёт новую `DocumentFile` через `document.file_new(...)`.
   - Возвращает `{document_id, file_id, version_id, version}` (cериализовано `HeadlessDocumentVersionSerializer`).
-  - HTML view `ImageEditorSaveView` в `mayan/apps/image_editor/views.py` помечен как **DEPRECATED** и переадресует на headless API.
+  - HTML view `ImageEditorSaveView` в `mayan/apps/image_editor/views.py` помечен как **DEPRECATED** и должна переадресовывать на headless API после починки маршрута.
+
+### HeadlessPasswordChangeView (`mayan/apps/headless_api/views/password_views.py`)
+- Auth: Session + Token, Permission: `IsAuthenticated`.
+- Валидация: проверяет `current_password` через `check_password`, совпадение новых паролей, прогоняет Django `validate_password`; при ошибке — `400` с `error_code` (`MISSING_FIELDS`, `INVALID_CURRENT_PASSWORD`, `PASSWORD_MISMATCH`, `PASSWORD_VALIDATION_FAILED`).
+- Без инвалидирования токена/сессии; при успехе логирует событие и возвращает 200.
 
 ### HeadlessDocumentTypeConfigView
 - Даёт полный конфиг: required/optional metadata (lookup → select options), workflows (если есть), retention, capabilities (`ocr_enabled`, `ai_analysis_enabled`, `preview_enabled`).
@@ -66,6 +73,18 @@
 ### My Uploads
 - Использует события (`Action`) с verb `documents.document_create`/`document_file_created`, actor = текущий пользователь, target_content_type = Document; приводит target_object_id к int.
 - Результат сериализуется `OptimizedDocumentListSerializer` + ACL фильтр.
+
+### Profile
+- `GET /headless/profile/` — короткий профиль текущего пользователя (id, username, first_name, last_name, email, is_staff, is_superuser).
+
+### RBAC / Roles & Permissions (ядро Mayan)
+- REST API для ролей и прав подключён через `permissions_api_urls` в `mayan/apps/rest_api/urls.py`.
+- Доступные маршруты (`/api/v4/permissions/...`):
+  - `GET /permissions/` — список всех stored permissions.
+  - `GET/POST /roles/`, `GET /roles/{id}/` — CRUD ролей.
+  - `GET /roles/{id}/groups/`, `POST /roles/{id}/groups/add/`, `POST /roles/{id}/groups/remove/` — управление связью ролей и групп.
+  - `GET /roles/{id}/permissions/`, `POST /roles/{id}/permissions/add/`, `POST /roles/{id}/permissions/remove/` — управление правами роли.
+- ACL остаются обязательными: даже с ролью без ACL документ недоступен.
 
 ---
 
@@ -87,17 +106,19 @@
 | Лента активности | ✅ Реализована (feed + dashboard) | В фронте используется только dashboard endpoint; персональная feed не подключена |
 | My Uploads | ✅ Реализовано через события | Нужна привязка фронтенда (коллекции «Мои загрузки») |
 | Favorites | ✅ Реализовано | Проверить интеграцию коллекций на фронте |
+| new_from_edit | 🔴 Реализован view, **не подключён** в `rest_api/urls.py`; неправильный импорт в `headless_api/urls.py` | Добавить url в REST API и исправить импорт на `version_views.HeadlessEditView` |
 | Auth | ✅ Token/Session | Нет JWT; редирект/очистка токена реализованы на фронте |
 
 ---
 
 ## 6. Итог для V5
 
-1) **API Surface (headless) подтверждён**: password/change, config/document_types (list/detail), activity/feed, dashboard/activity, favorites (list/toggle), documents/my_uploads, documents/{id}/versions/new_from_edit.  
-2) **OptimizedDocumentSerializer** реально содержит `document_type_id` (write_only) и `document_type` (read).  
-3) **Аутентификация** — только DRF Token + Session; никаких Knox/SimpleJWT.  
-4) **Документация V4** устарела: headless endpoints существуют; фронт подключён частично и gated через `VITE_BFF_ENABLED`.  
-5) **Дальнейшие действия:** синхронизировать фронт (services/stores) на headless endpoints, добавить e2e smoke для `/headless/documents/{id}/versions/new_from_edit/`, `/headless/activity/feed/`, `/headless/config/document_types/{id}/`, убрать использование deprecated HTML `ImageEditorSaveView`.
+1) **API Surface (headless) подтверждён**: password/change, config/document_types (list/detail), activity/feed, dashboard/activity, favorites (list/toggle), documents/my_uploads, profile.  
+2) **HeadlessEditView** реализован, но **не проброшен** в `rest_api/urls.py` (нужен маршрут) и в `headless_api/urls.py` импортируется неверно; фактически отдаёт 404 до исправления.  
+3) **OptimizedDocumentSerializer** реально содержит `document_type_id` (write_only) и `document_type` (read).  
+4) **Аутентификация** — только DRF Token + Session; никаких Knox/SimpleJWT.  
+5) **Документация V4** устарела: headless endpoints существуют; фронт подключён частично и gated через `VITE_BFF_ENABLED`.  
+6) **Дальнейшие действия:** пробросить `new_from_edit` в REST, исправить импорт, синхронизировать фронт (services/stores) на headless endpoints, добавить e2e smoke для `/headless/activity/feed/`, `/headless/config/document_types/{id}/`, `/headless/documents/{id}/versions/new_from_edit/` после подключения, убрать использование deprecated HTML `ImageEditorSaveView`.
 
 ---
 

@@ -685,15 +685,17 @@ async function handleUpload() {
 
       const result: UploadResult = await uploadService.uploadFile(file, {
         documentTypeId: 1,
+        label: metadata.value.title || file.name,
         description: metadata.value.description,
         onProgress: (progress) => {
           uploadProgress.value[i] = Math.round(progress.percent)
         }
       })
 
+      const effectiveLabel = metadata.value.title || file.name
       uploadedAssets.push({
         id: result.documentId,
-        label: file.name,
+        label: effectiveLabel,
         filename: file.name,
         size: file.size,
         mime_type: file.type,

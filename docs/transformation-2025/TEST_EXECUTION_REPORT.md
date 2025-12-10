@@ -29,6 +29,9 @@
 - Unable to create test user programmatically (WSL access issues)
 - Unknown admin credentials prevent authenticated testing
 - Manual user creation required for complete test execution
+- 09 Dec 2025: Попытка запуска `pytest mayan/apps/headless_api/tests/test_password_views.py` на хосте Windows → `pytest` не установлен (cmdlet not found). Автотесты headless_api не выполнены.
+- 09 Dec 2025: Создано venv (`python -m venv .venv`), поставлен `pytest`, но установка `requirements/testing.txt` упала на сборке `psutil==5.8.0` — требуется Microsoft Visual C++ 14.0+ (wheels для Python 3.14 отсутствуют). Запуск `pytest …/test_password_views.py` теперь падает на `ModuleNotFoundError: No module named 'django'` (Django не установлен из-за провала инсталляции зависимостей).
+- 09 Dec 2025: Запуск в Docker (WSL) с `docker compose -f docker/docker-compose.yml run --rm app /opt/mayan-edms/bin/python /opt/mayan-edms/bin/mayan-edms.py test ... --settings=mayan.settings.testing.base` при запущенных `redis` и `postgresql` завершился ошибкой импорта: `ModuleNotFoundError: No module named 'mayan.apps.documents.serializers.optimized_document_serializers'` — образ не содержит обновлённый модуль сериализаторов. Требуется доп. COPY в Dockerfile/app или bind-mount исходников.
 
 ---
 

@@ -28,7 +28,7 @@
   - `createAssetFromImage(documentTypeId, blob, filename, {format?, comment?})`:
     1) `POST /api/v4/documents/` с `document_type_id`, label/description.
     2) `POST /api/v4/documents/{id}/files/` multipart (action=1).
-  - **Статус:** Работает; зависит от Token auth.
+  - **Статус:** Клиентский код есть, но бэкенд-маршрут сейчас **не проброшен** в `mayan/apps/rest_api/urls.py`, поэтому получает 404 до исправления маршрута.
 
 - **activityService.ts**
   - Реально обращается к `GET /api/v4/headless/dashboard/activity/?limit=` (упрощённая лента для дашборда).
@@ -52,11 +52,13 @@
 ## 3. Компоненты и состояние
 
 ### AssetDetailPage.vue
+
 - **Кнопка «Редактировать»:** `v-if="isImage"` — доступна для любых изображений, доп. проверок разрешений нет.
 - **Предпросмотр:** `showPreview` рендерит изображение/видео/аудио; фавориты через `toggleFavorite`.
 - **Открытие редактора:** `showMediaEditor = true` → `<MediaEditorModal :asset="asset" :is-open="showMediaEditor" @saveVersion ... />`.
 
 ### MediaEditorModal.vue
+
 - Использует локальный blob-URL: `URL.createObjectURL`, `img.crossOrigin='anonymous'`, рисует только из локального blob чтобы избежать **tainted canvas** (фикс применён).
 - Сохранение:
   - Собирает canvas → `canvas.toBlob` → вызывает `saveEditedImage` (headless new_from_edit).
@@ -65,6 +67,7 @@
 - Дополнительная функция `createAssetFromImage` (в сервисе) позволяет создать новый документ из копии.
 
 ### Auth и Stores
+
 - `authStore`: токен хранится в localStorage (`auth_token`), читается `apiService`; 401 очищает токен и редиректит. Логин = `authService.obtainToken` (form-urlencoded), потом `getCurrentUser`.
 - Коллекции/галерея используют реальные REST (`/api/v4/documents/optimized/` и т.п.).
 - Админ-панель (Users/Groups/Schemas/Workflows) работает на `/api/v4/...` с пагинацией/поиском.
@@ -79,6 +82,7 @@
 | Лента активности (персональная) | В сервисе только dashboard endpoint (`/headless/dashboard/activity/`), feed отсутствует | Добавить `/api/v4/headless/activity/feed/` с фильтрами и пагинацией |
 | Динамические формы загрузки | `documentTypeService` есть, но отключён при `VITE_BFF_ENABLED=false`; upload валидацию пропускает | Включить BFF, сделать обязательную валидацию metadata перед upload |
 | Favorites/My Uploads | Backend готов; фронт нужно проверить на использование headless (`/headless/favorites/`, `/headless/documents/my_uploads/`) | Подтвердить вызовы и UI; добавить fallback/обработку 401/403 |
+| new_from_edit маршрут | Фронт вызывает `/api/v4/headless/documents/{id}/versions/new_from_edit/`, но маршрут не подключён в `rest_api/urls.py` | Пробросить endpoint на бэкенде или временно отключить вызов, чтобы избегать 404 |
 
 ---
 
@@ -96,6 +100,7 @@
 1) **Переключить сервисы на headless:**
    - Обеспечить `VITE_BFF_ENABLED=true` для prod/stage; включить `authService.changePassword`, `documentTypeService`, метаданные валидацию в `uploadService`.
    - Добавить `activityService.getActivityFeed` → `/api/v4/headless/activity/feed/` (filter/pagination) и подключить в UI.
+   - Пробросить на бэкенде маршрут `new_from_edit` (headless) или добавить fallback в UI, пока 404 не устранён.
 
 2) **Доработать UI/ACL:**
    - В `AssetDetailPage` скрывать/дизейблить «Редактировать» при отсутствии прав; обработать 403 от headless/new_from_edit.
@@ -110,4 +115,3 @@
 **Версия документа:** 5.0 (актуальный код)  
 **Дата:** 08 декабря 2025  
 **Автор:** Lead Software Architect
-

@@ -193,7 +193,8 @@
           <button
             class="p-2.5 bg-white/95 rounded-full hover:bg-white hover:scale-110 
                    transition-all duration-200 shadow-lg"
-            @click.stop="handleMore"
+            ref="moreBtnRef"
+            @click.stop="toggleActionsMenu"
             aria-label="Дополнительные действия"
             type="button"
           >
@@ -208,6 +209,71 @@
           </button>
         </div>
       </Transition>
+
+      <!-- Actions dropdown -->
+      <Teleport to="body">
+        <Transition
+          enter-active-class="transition ease-out duration-150"
+          enter-from-class="opacity-0 translate-y-1"
+          enter-to-class="opacity-100 translate-y-0"
+          leave-active-class="transition ease-in duration-100"
+          leave-from-class="opacity-100 translate-y-0"
+          leave-to-class="opacity-0 translate-y-1"
+        >
+          <div
+            v-if="showActionsMenu"
+            ref="actionsMenuRef"
+            class="fixed bg-white shadow-2xl rounded-2xl border border-neutral-200 z-[2000] overflow-hidden ring-1 ring-black/5 backdrop-blur max-h-[70vh]"
+            :style="menuStyle"
+          >
+            <div class="flex items-center justify-between px-4 py-3 sm:py-2.5 bg-neutral-50 text-sm sm:text-xs font-semibold text-neutral-600 border-b border-neutral-200">
+              Дополнительные действия
+              <button
+                class="p-1.5 sm:p-1 rounded-full hover:bg-neutral-200 transition-colors"
+                @click.stop="showActionsMenu = false"
+                aria-label="Закрыть"
+                type="button"
+              >
+                <svg class="w-4 h-4 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="py-1 divide-y divide-neutral-100">
+              <button
+                class="w-full flex items-center gap-2 px-4 py-3 sm:py-2 text-base sm:text-sm text-neutral-800 hover:bg-neutral-50 text-left"
+                @click.stop="handleAddTags"
+                title="Добавить теги"
+              >
+                <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 12h10M7 17h6" />
+                </svg>
+                Теги
+              </button>
+              <button
+                class="w-full flex items-center gap-2 px-4 py-3 sm:py-2 text-base sm:text-sm text-neutral-800 hover:bg-neutral-50 text-left"
+                @click.stop="handleMove"
+                title="Переместить"
+              >
+                <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16l-4-4-5 5" />
+                </svg>
+                Переместить
+              </button>
+              <button
+                class="w-full flex items-center gap-2 px-4 py-3 sm:py-2 text-base sm:text-sm text-red-500 hover:bg-red-50 text-left"
+                @click.stop="handleDelete"
+                title="Удалить"
+              >
+                <svg class="w-5 h-5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Удалить
+              </button>
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
 
       <!-- File Type Badge (top right) -->
       <div class="absolute top-3 right-3 flex gap-1.5">
@@ -294,7 +360,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import type { Asset } from '@/types/api'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import { useIntersectionObserver } from '@/composables/useIntersectionObserver'
@@ -323,7 +389,9 @@ const emit = defineEmits<{
   preview: [asset: Asset]
   download: [asset: Asset]
   share: [asset: Asset]
-  more: [asset: Asset]
+  addTags: [asset: Asset]
+  move: [asset: Asset]
+  delete: [asset: Asset]
 }>()
 
 const isHovered = ref(false)
@@ -332,6 +400,10 @@ const thumbnailRef = ref<HTMLElement | null>(null)
 const isDragging = ref(false)
 const favoritesStore = useFavoritesStore()
 const imageSrc = computed(() => resolveAssetImageUrl(props.asset))
+const showActionsMenu = ref(false)
+const moreBtnRef = ref<HTMLElement | null>(null)
+const actionsMenuRef = ref<HTMLElement | null>(null)
+const menuStyle = ref<Record<string, string>>({})
 
 // Intersection Observer for lazy loading
 const { hasIntersected } = useIntersectionObserver(thumbnailRef, {
@@ -388,9 +460,7 @@ const cardClasses = computed(() => {
   return base.join(' ')
 })
 
-const isFavorite = computed(() => {
-  return favoritesStore.isFavorite(props.asset.id) || props.asset.is_favorite === true
-})
+const isFavorite = computed(() => favoritesStore.isFavorite(props.asset.id))
 
 const statusBadgeClasses = computed(() => {
   const status = props.asset.metadata?.status as string
@@ -460,14 +530,85 @@ function handleShare() {
   emit('share', props.asset)
 }
 
-function handleMore() {
-  emit('more', props.asset)
+function toggleActionsMenu() {
+  if (showActionsMenu.value) {
+    showActionsMenu.value = false
+    return
+  }
+  const btn = moreBtnRef.value
+  if (btn) {
+    const rect = btn.getBoundingClientRect()
+    const menuWidth = Math.min(280, window.innerWidth - 16)
+    const left = Math.min(
+      Math.max(8, rect.left),
+      window.innerWidth - menuWidth - 8
+    )
+    const top = rect.bottom + 8
+    menuStyle.value = {
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${menuWidth}px`
+    }
+  }
+  showActionsMenu.value = true
 }
+
+function handleAddTags() {
+  showActionsMenu.value = false
+  emit('addTags', props.asset)
+}
+
+function handleMove() {
+  showActionsMenu.value = false
+  emit('move', props.asset)
+}
+
+function handleDelete() {
+  showActionsMenu.value = false
+  emit('delete', props.asset)
+}
+
+function handleGlobalClick(event: MouseEvent) {
+  if (!showActionsMenu.value) return
+  const target = event.target as Node
+  if (
+    actionsMenuRef.value?.contains(target) ||
+    moreBtnRef.value?.contains(target)
+  ) {
+    return
+  }
+  showActionsMenu.value = false
+}
+
+function handleGlobalEscape(event: KeyboardEvent) {
+  if (event.key === 'Escape' && showActionsMenu.value) {
+    showActionsMenu.value = false
+  }
+}
+
+function handleGlobalResizeScroll() {
+  if (showActionsMenu.value) {
+    toggleActionsMenu() // recompute
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('click', handleGlobalClick, true)
+  window.addEventListener('keydown', handleGlobalEscape)
+  window.addEventListener('resize', handleGlobalResizeScroll)
+  window.addEventListener('scroll', handleGlobalResizeScroll, true)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', handleGlobalClick, true)
+  window.removeEventListener('keydown', handleGlobalEscape)
+  window.removeEventListener('resize', handleGlobalResizeScroll)
+  window.removeEventListener('scroll', handleGlobalResizeScroll, true)
+})
 
 async function handleFavorite() {
   try {
-    const favorited = await favoritesStore.toggleFavorite(props.asset.id)
-    props.asset.is_favorite = favorited
+    await favoritesStore.toggleFavorite(props.asset.id)
   } catch (error) {
     // ignore errors for now; UI will revert via store
   }
