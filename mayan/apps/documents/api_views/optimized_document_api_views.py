@@ -85,7 +85,10 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
         ).values('pk')[:1]
         
         # Build main queryset with optimizations
-        queryset = Document.valid.select_related(
+        queryset = Document.valid.annotate(
+            latest_file_id=Subquery(latest_file_subquery),
+            active_version_id=Subquery(active_version_subquery)
+        ).select_related(
             'document_type'  # ForeignKey - single JOIN
         ).prefetch_related(
             # Prefetch latest file with all its fields
@@ -94,7 +97,7 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
                 queryset=DocumentFile.objects.annotate(
                     is_latest=Subquery(latest_file_subquery)
                 ).filter(pk=Subquery(latest_file_subquery)),
-                to_attr='_prefetched_file_latest_list'
+                to_attr='_prefetched_latest_file_list'
             ),
             # Prefetch active version
             Prefetch(

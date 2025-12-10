@@ -367,6 +367,7 @@ import { useIntersectionObserver } from '@/composables/useIntersectionObserver'
 import { useAssetStore } from '@/stores/assetStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { resolveAssetImageUrl } from '@/utils/imageUtils'
+import { apiService } from '@/services/apiService'
 
 interface Props {
   asset: Asset
@@ -404,6 +405,7 @@ const showActionsMenu = ref(false)
 const moreBtnRef = ref<HTMLElement | null>(null)
 const actionsMenuRef = ref<HTMLElement | null>(null)
 const menuStyle = ref<Record<string, string>>({})
+const isDownloading = ref(false)
 
 // Intersection Observer for lazy loading
 const { hasIntersected } = useIntersectionObserver(thumbnailRef, {
@@ -520,10 +522,144 @@ function handleSelect() {
 
 function handlePreview() {
   emit('preview', props.asset)
+  emit('open', props.asset)
 }
 
-function handleDownload() {
-  emit('download', props.asset)
+async function handleDownload() {
+  if (isDownloading.value) return
+  isDownloading.value = true
+
+  const assetAny = props.asset as any
+  let directUrl = assetAny.download_url as string | undefined
+  let fileId =
+    assetAny.file_latest_id ||
+    assetAny.file_latest?.id ||
+    props.asset.file_latest?.id
+  let versionDownloadUrl: string | undefined
+  let versionId: number | undefined
+  let detailData: any
+
+  // Если нет данных о файле — попытаться подтянуть detail
+  const extractIdFromUrl = (url?: string | null) => {
+    if (!url) return undefined
+    const match = String(url).match(/files\/(\d+)\//)
+    return match?.[1] ? Number(match[1]) : undefined
+  }
+  const extractVersionIdFromUrl = (url?: string | null) => {
+    if (!url) return undefined
+    const match = String(url).match(/versions\/(\d+)\//)
+    return match?.[1] ? Number(match[1]) : undefined
+  }
+
+  if (!directUrl && !fileId) {
+    try {
+      const detail = await apiService.get(`/api/v4/documents/${props.asset.id}/`)
+      detailData = detail.data
+      directUrl = detail.data?.file_latest?.download_url
+      fileId = detail.data?.file_latest?.id
+      // Парсим id из url, если нет поля id
+      if (!fileId) fileId = extractIdFromUrl(detail.data?.file_latest?.url)
+      // Сохраним данные по версии, если есть
+      versionDownloadUrl = detail.data?.version_active?.download_url
+      versionId =
+        detail.data?.version_active?.id ||
+        extractVersionIdFromUrl(detail.data?.version_active?.url)
+      // Дополнительный fallback: взять первый файл из списка files, если latest не пришёл
+      if (!directUrl && !fileId && Array.isArray(detail.data?.files) && detail.data.files.length > 0) {
+        const firstFile = detail.data.files[0]
+        directUrl = firstFile?.download_url
+        fileId = firstFile?.id
+        if (!fileId) {
+          fileId =
+            firstFile?.pk ||
+            firstFile?.document_file_id ||
+            extractIdFromUrl(firstFile?.download_url) ||
+            extractIdFromUrl(firstFile?.url)
+        }
+      }
+      // Если всё ещё нет — запросить список файлов
+      if (!directUrl && !fileId) {
+        const filesResp = await apiService.get(`/api/v4/documents/${props.asset.id}/files/`)
+        const first = filesResp.data?.results?.[0]
+        if (first) {
+          directUrl = first.download_url
+          fileId =
+            first.id ||
+            first.pk ||
+            first.document_file_id ||
+            extractIdFromUrl(first.download_url) ||
+            extractIdFromUrl(first.url)
+        }
+      }
+      // Если всё ещё нет — попробуем версии из detail или отдельного запроса
+      if (!directUrl && !fileId) {
+        if (!versionDownloadUrl && !versionId) {
+          try {
+            const versionsResp = await apiService.get(`/api/v4/documents/${props.asset.id}/versions/`)
+            const firstVer = versionsResp.data?.results?.[0]
+            versionDownloadUrl = firstVer?.download_url
+            versionId =
+              firstVer?.id ||
+              extractVersionIdFromUrl(firstVer?.download_url) ||
+              extractVersionIdFromUrl(firstVer?.url)
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('No file_latest_id found for asset and detail fetch failed', props.asset.id)
+    }
+  }
+
+  if (!directUrl && !fileId && (versionDownloadUrl || versionId)) {
+    // Переключаемся на загрузку версии
+    if (versionDownloadUrl) {
+      directUrl = versionDownloadUrl
+    } else if (versionId) {
+      directUrl = `/api/v4/documents/${props.asset.id}/versions/${versionId}/download/`
+    }
+  }
+
+  if (!directUrl && !fileId) {
+    console.warn('No file_latest_id found for asset', props.asset.id, 'detail:', detailData)
+    isDownloading.value = false
+    return
+  }
+
+  let urlToFetch: string | null = directUrl || null
+  if (!urlToFetch && fileId) {
+    urlToFetch = `/api/v4/documents/${props.asset.id}/files/${fileId}/download/`
+  }
+
+  // Если URL относительный — дополняем базой
+  if (urlToFetch && urlToFetch.startsWith('/')) {
+    const base = import.meta.env.VITE_API_URL || window.location.origin
+    urlToFetch = `${base}${urlToFetch}`
+  }
+
+  const filename = props.asset.label || `asset-${props.asset.id}`
+
+  try {
+    const response: any = await apiService.get(urlToFetch as string, {
+      responseType: 'blob',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      headers: { Accept: '*/*' } as any
+    })
+    const blobUrl = URL.createObjectURL(response.data as Blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(blobUrl)
+  } catch (error) {
+    // fallback на существующий поток, если прямое скачивание не удалось
+    emit('download', props.asset)
+  } finally {
+    isDownloading.value = false
+  }
 }
 
 function handleShare() {

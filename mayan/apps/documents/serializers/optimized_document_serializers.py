@@ -141,13 +141,31 @@ class OptimizedDocumentFileSerializer(serializers.ModelSerializer):
     Optimized file serializer for embedded use in document serializer.
     Only includes essential fields to reduce payload size.
     """
+
+    download_url = serializers.SerializerMethodField()
+    url = serializers.SerializerMethodField()
     
     class Meta:
         model = DocumentFile
         fields = (
-            'id', 'filename', 'mimetype', 'size', 'timestamp', 'checksum'
+            'id', 'filename', 'mimetype', 'size', 'timestamp', 'checksum',
+            'download_url', 'url'
         )
         read_only_fields = fields
+    
+    def get_download_url(self, obj):
+        request = self.context.get('request')
+        url = obj.download_url
+        if request and url and url.startswith('/'):
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        url = obj.get_absolute_url()
+        if request and url and url.startswith('/'):
+            return request.build_absolute_uri(url)
+        return url
 
 
 class OptimizedDocumentListSerializer(
@@ -185,6 +203,8 @@ class OptimizedDocumentListSerializer(
     
     # File info (uses prefetched data)
     file_latest_id = serializers.SerializerMethodField()
+    file_latest_download_url = serializers.SerializerMethodField()
+    file_latest_url = serializers.SerializerMethodField()
     file_latest_filename = serializers.SerializerMethodField()
     file_latest_mimetype = serializers.SerializerMethodField()
     file_latest_size = serializers.SerializerMethodField()
@@ -205,14 +225,17 @@ class OptimizedDocumentListSerializer(
         fields = (
             'id', 'uuid', 'label', 'datetime_created',
             'document_type_id', 'document_type_label',
-            'file_latest_id', 'file_latest_filename', 
-            'file_latest_mimetype', 'file_latest_size',
+            'file_latest_id', 'file_latest_download_url', 'file_latest_url',
+            'file_latest_filename', 'file_latest_mimetype', 'file_latest_size',
             'thumbnail_url', 'preview_url', 'download_url',
             'tags', 'ai_status'
         )
     
     def _get_file_latest(self, obj):
         """Get prefetched file_latest or fallback to property."""
+        if hasattr(obj, '_prefetched_latest_file_list'):
+            files = obj._prefetched_latest_file_list
+            return files[0] if files else None
         if hasattr(obj, '_prefetched_file_latest_list'):
             files = obj._prefetched_file_latest_list
             return files[0] if files else None
@@ -232,7 +255,36 @@ class OptimizedDocumentListSerializer(
     
     def get_file_latest_id(self, obj):
         file = self._get_file_latest(obj)
-        return file.pk if file else None
+        if file:
+            return file.pk
+        return getattr(obj, 'latest_file_id', None)
+
+    def get_file_latest_download_url(self, obj):
+        file = self._get_file_latest(obj)
+        file_id = file.pk if file else getattr(obj, 'latest_file_id', None)
+        if file and file.download_url:
+            url = file.download_url
+        elif file_id:
+            url = f'/api/v4/documents/{obj.pk}/files/{file_id}/download/'
+        else:
+            url = None
+
+        if url and url.startswith('/'):
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(url)
+        return url
+
+    def get_file_latest_url(self, obj):
+        file = self._get_file_latest(obj)
+        if file:
+            url = file.get_absolute_url()
+            if url and url.startswith('/'):
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(url)
+            return url
+        return getattr(obj, 'latest_file_id', None)
     
     def get_file_latest_filename(self, obj):
         file = self._get_file_latest(obj)
@@ -390,6 +442,8 @@ class OptimizedDocumentSerializer(
         if file:
             return {
                 'id': file.pk,
+                'download_url': file.download_url,
+                'url': file.get_absolute_url(),
                 'filename': file.filename,
                 'mimetype': file.mimetype,
                 'size': file.size,
