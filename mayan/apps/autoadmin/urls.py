@@ -9,3 +9,4 @@ api_urls = [
         name='autoadmin-credentials'
     )
 ]
+

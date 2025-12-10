@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 
 from mayan.apps.rest_api import generics
@@ -144,7 +145,10 @@ class APIUserListView(generics.ListCreateAPIView):
         return {'_event_actor': self.request.user}
 
     def get_queryset(self):
-        # Pass the requesting user to ensure staff/superuser can see all users.
+        # Superuser sees every user regardless of ACL filtering.
+        if getattr(self.request.user, 'is_superuser', False):
+            return get_user_model().objects.all().order_by('username')
+        # Pass the requesting user to ensure staff can see permitted users.
         return get_user_queryset(user=self.request.user)
 
 
@@ -169,7 +173,9 @@ class APIUserDetailView(generics.RetrieveUpdateDestroyAPIView):
         return {'_event_actor': self.request.user}
 
     def get_queryset(self):
-        # Pass the requesting user to ensure staff/superuser can access all users.
+        if getattr(self.request.user, 'is_superuser', False):
+            return get_user_model().objects.all().order_by('username')
+        # Pass the requesting user to ensure staff can access permitted users.
         return get_user_queryset(user=self.request.user)
 
 

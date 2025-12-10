@@ -225,15 +225,66 @@
             </svg>
           </button>
 
-          <!-- Admin User -->
-          <div class="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-200">
-            <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-full flex items-center justify-center text-white text-sm font-medium shadow-md shadow-violet-500/20">
-              {{ userInitials }}
-            </div>
-            <div class="hidden xl:block">
-              <p class="text-sm font-medium text-gray-900">{{ userName }}</p>
-              <p class="text-xs text-gray-500">Администратор</p>
-            </div>
+          <!-- Admin User Menu -->
+          <div class="relative" ref="userMenuRef">
+            <button
+              type="button"
+              class="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
+              @click="toggleUserMenu"
+              :aria-expanded="isUserMenuOpen"
+            >
+              <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-full flex items-center justify-center text-white text-sm font-medium shadow-md shadow-violet-500/20">
+                {{ userInitials }}
+              </div>
+              <div class="hidden xl:block text-left">
+                <p class="text-sm font-medium text-gray-900">{{ userName }}</p>
+                <p class="text-xs text-gray-500">{{ userEmail }}</p>
+              </div>
+            </button>
+
+            <Transition
+              enter-active-class="transition ease-out duration-100"
+              enter-from-class="transform opacity-0 scale-95"
+              enter-to-class="transform opacity-100 scale-100"
+              leave-active-class="transition ease-in duration-75"
+              leave-from-class="transform opacity-100 scale-100"
+              leave-to-class="transform opacity-0 scale-95"
+            >
+              <div
+                v-if="isUserMenuOpen"
+                class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-50"
+              >
+                <div class="px-4 py-3 border-b border-gray-100">
+                  <p class="text-sm font-medium text-gray-900">{{ userName }}</p>
+                  <p class="text-xs text-gray-500 truncate">{{ userEmail }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  @click="goTo('/settings/profile')"
+                >
+                  <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-semibold">P</span>
+                  <span>Профиль</span>
+                </button>
+                <button
+                  type="button"
+                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  @click="goTo('/settings')"
+                >
+                  <span class="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-semibold">S</span>
+                  <span>Настройки</span>
+                </button>
+                <div class="border-t border-gray-100 my-1" />
+                <button
+                  type="button"
+                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  @click="handleLogout"
+                >
+                  <span class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xs font-semibold">Выйти</span>
+                  <span>Выйти</span>
+                </button>
+              </div>
+            </Transition>
           </div>
         </div>
       </header>
@@ -248,10 +299,11 @@
 
 <script setup lang="ts">
 import { ref, computed, h, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -398,6 +450,10 @@ const userName = computed(() => {
     ? `${user.first_name} ${user.last_name}`
     : user.username || 'Admin'
 })
+const userEmail = computed(() => authStore.user?.email || 'user@example.com')
+
+const isUserMenuOpen = ref(false)
+const userMenuRef = ref<HTMLElement | null>(null)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Methods
@@ -408,6 +464,24 @@ function isActive(path: string): boolean {
 
 function toggleSidebar() {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
+}
+
+function toggleUserMenu() {
+  isUserMenuOpen.value = !isUserMenuOpen.value
+}
+
+function closeUserMenu() {
+  isUserMenuOpen.value = false
+}
+
+function goTo(path: string) {
+  closeUserMenu()
+  router.push(path)
+}
+
+async function handleLogout() {
+  await authStore.logout()
+  closeUserMenu()
 }
 </script>
 

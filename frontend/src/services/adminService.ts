@@ -166,9 +166,6 @@ function adaptUserForMayan(userData: CreateUserRequest | UpdateUserRequest): Rec
   if ('is_superuser' in userData && userData.is_superuser !== undefined) {
     payload.is_superuser = userData.is_superuser
   }
-  if ('groups_pk_list' in userData && userData.groups_pk_list) {
-    payload.groups_pk_list = userData.groups_pk_list
-  }
 
   return payload
 }
@@ -389,22 +386,22 @@ class AdminService {
   /**
    * Add user to groups
    * 
-   * Endpoint: POST /api/v4/users/{id}/groups/
+   * Endpoint: POST /api/v4/groups/{group_id}/users/add/
    */
   async addUserToGroups(userId: number, groupIds: number[]): Promise<void> {
     for (const groupId of groupIds) {
-      await apiService.post(`/api/v4/users/${userId}/groups/`, { group_pk: groupId })
+      await apiService.post(`/api/v4/groups/${groupId}/users/add/`, { user: userId })
     }
   }
 
   /**
    * Remove user from groups
    * 
-   * Endpoint: DELETE /api/v4/users/{id}/groups/{group_id}/
+   * Endpoint: POST /api/v4/groups/{group_id}/users/remove/
    */
   async removeUserFromGroups(userId: number, groupIds: number[]): Promise<void> {
     for (const groupId of groupIds) {
-      await apiService.delete(`/api/v4/users/${userId}/groups/${groupId}/`)
+      await apiService.post(`/api/v4/groups/${groupId}/users/remove/`, { user: userId })
     }
   }
 
@@ -557,6 +554,24 @@ class AdminService {
     }
 
     return perms
+  }
+
+  /**
+   * Create a new role
+   *
+   * Endpoint: POST /api/v4/roles/
+   */
+  async createRole(label: string): Promise<MayanRole> {
+    return apiService.post<MayanRole>('/api/v4/roles/', { label })
+  }
+
+  /**
+   * Update role
+   *
+   * Endpoint: PATCH /api/v4/roles/{id}/
+   */
+  async updateRole(roleId: number, label: string): Promise<MayanRole> {
+    return apiService.patch<MayanRole>(`/api/v4/roles/${roleId}/`, { label })
   }
 
   /**

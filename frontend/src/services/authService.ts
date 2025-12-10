@@ -14,6 +14,7 @@
 
 import axios from 'axios'
 import { apiService } from './apiService'
+import { cacheService } from './cacheService'
 import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
 
 // ============================================================================
@@ -24,8 +25,8 @@ import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
  * Feature flags.
  * BFF enabled by default unless explicitly disabled.
  */
-const USE_REAL_API = import.meta.env.VITE_USE_MOCK_AUTH !== 'true'
-const BFF_ENABLED = import.meta.env.VITE_BFF_ENABLED !== 'false'
+const USE_REAL_API = true
+const BFF_ENABLED = true
 
 /**
  * LocalStorage keys
@@ -201,7 +202,11 @@ class AuthService {
       throw new Error('Not authenticated')
     }
 
-    const response = await apiService.get<MayanUserResponse>('/api/v4/users/current/')
+    const response = await apiService.get<MayanUserResponse>(
+      '/api/v4/users/current/',
+      undefined,
+      false // do not cache current user; ensures fresh user after switch
+    )
     const user = this.mapMayanUser(response)
     
     // Update stored user data
@@ -235,13 +240,9 @@ class AuthService {
    */
   async logout(): Promise<void> {
     clearToken()
+    cacheService.clear()
     localStorage.removeItem('dev_authenticated')
-    // Optionally hit backend logout endpoint if implemented
-    try {
-      await apiService.post('/api/v4/auth/token/logout/', {})
-    } catch (err) {
-      console.warn('[Auth] Logout API call failed (ignored):', err)
-    }
+    // Backend logout not required for token auth; endpoint may be absent (404)
   }
 
   /**
