@@ -5,7 +5,10 @@ This module defines the URL patterns for the Headless API endpoints that provide
 SPA-friendly REST interfaces for functionality not exposed by Mayan EDMS core API.
 """
 
+print(">>> HEADLESS URLS LOADED <<<")  # Debug canary for runtime import
+
 from django.conf.urls import url
+from django.http import JsonResponse
 
 from .views.password_views import HeadlessPasswordChangeView
 from .views.config_views import HeadlessDocumentTypeConfigView
@@ -13,12 +16,13 @@ from .views.activity_views import DashboardActivityView, HeadlessActivityFeedVie
 from .views.favorites_views import HeadlessFavoriteListView, HeadlessFavoriteToggleView
 from .views.my_uploads_views import HeadlessMyUploadsView
 from .views.profile_views import HeadlessProfileView
-from .views.profile_views import HeadlessEditView
+from .views.version_views import HeadlessEditView
 
 app_name = 'headless_api'
 
 # API URLs for Mayan REST API integration
 api_urls = [
+    url(regex=r'^ping/$', view=lambda request: JsonResponse({'status': 'pong'}), name='api-ping'),
     url(
         regex=r'^password/change/$',
         view=HeadlessPasswordChangeView.as_view(),

@@ -179,9 +179,9 @@ GET /api/v4/headless/config/document_types/1/
 
 ## 4. Новая Архитектура: Headless API Micro-App
 
-### 4.1 Концепция Sidecar App
+### 4.1 Micro-App Strategy: headless_api (Sidecar)
 
-**Принцип:** Мы **НЕ модифицируем** core Mayan код. Вместо этого создаем отдельное Django приложение `headless_api`, которое:
+**Принцип:** Мы **НЕ модифицируем** core Mayan код. Вместо этого создаем отдельное Django приложение `headless_api` (sidecar/micro-app), которое:
 
 1. **Изолировано** от Mayan core
 2. **Расширяет** функционал через внутренние Django/Mayan API

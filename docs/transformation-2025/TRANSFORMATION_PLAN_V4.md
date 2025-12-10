@@ -168,6 +168,8 @@ API **НЕ** предоставляет:
 
 **Цель:** Создать недостающие endpoints для SPA self-service функционала.
 
+> Реалистичная корректировка сроков: +2 недели к плану V3 из-за подтверждённых CRITICAL FAILURE (400/404/401) по TEST_EXECUTION_REPORT.md.
+
 #### Task B.1: HeadlessPasswordView (Исправляет TC-AUTH-02)
 
 **Проблема:** POST `/api/v4/users/current/password/` возвращает 404

@@ -164,6 +164,12 @@
                         @load="handleImageLoad"
                       />
                       <div
+                        v-if="imageSrc && !isEditorReady"
+                        class="absolute inset-0 flex items-center justify-center bg-black/40 text-neutral-200 text-sm"
+                      >
+                        Загрузка изображения...
+                      </div>
+                      <div
                         v-else
                         class="w-full h-full flex items-center justify-center text-neutral-400 text-sm"
                       >
@@ -749,7 +755,7 @@
                       class="w-full flex items-center justify-center gap-2 px-4 py-3 
                              bg-blue-600 text-white rounded-lg hover:bg-blue-700 
                              transition-colors font-medium text-sm disabled:opacity-50"
-                      :disabled="isProcessing"
+                      :disabled="isProcessing || !isEditorReady || !imageSrc"
                       @click="openSaveModal"
                     >
                       <DocumentDuplicateIcon class="w-5 h-5" />
@@ -760,7 +766,7 @@
                         class="flex items-center justify-center gap-2 px-4 py-2.5 
                                bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 
                                transition-colors text-sm disabled:opacity-50"
-                        :disabled="isProcessing"
+                        :disabled="isProcessing || !isEditorReady || !imageSrc"
                         @click="handleSaveAsCopy"
                       >
                         <FolderPlusIcon class="w-4 h-4" />
@@ -770,7 +776,7 @@
                         class="flex items-center justify-center gap-2 px-4 py-2.5 
                                bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 
                                transition-colors text-sm disabled:opacity-50"
-                        :disabled="isProcessing"
+                        :disabled="isProcessing || !isEditorReady || !imageSrc"
                         @click="handleDownload"
                       >
                         <ArrowDownTrayIcon class="w-4 h-4" />
@@ -790,6 +796,7 @@
       :is-open="isSaveModalOpen"
       :default-format="editorStore.currentState.format"
       :error-message="saveError"
+      :disabled="!isEditorReady || !imageSrc"
       @close="isSaveModalOpen = false"
       @save="handleConfirmSave"
     />
@@ -851,13 +858,25 @@ const watermarkInput = ref<HTMLInputElement | null>(null)
 const imageSrc = ref<string | null>(null)
 const objectUrl = ref<string | null>(null)
 const loadError = ref<string | null>(null)
+const isEditorReady = ref(false)
 
 async function prepareImageSrc() {
+  isEditorReady.value = false
+  loadError.value = null
   if (!props.asset) return
-  const url =
+  const makeAbsolute = (u?: string | null) => {
+    if (!u) return null
+    if (u.startsWith('http://') || u.startsWith('https://')) return u
+    const base = import.meta.env.VITE_API_URL || ''
+    if (!base) return u
+    return `${base.replace(/\/$/, '')}/${u.replace(/^\//, '')}`
+  }
+
+  const url = makeAbsolute(
     (props.asset as any)?.preview_url ||
     (props.asset as any)?.thumbnail_url ||
     (props.asset as any)?.download_url
+  )
 
   if (!url) {
     throw new Error('Нет доступного URL изображения для редактора')
@@ -884,6 +903,7 @@ async function prepareImageSrc() {
   } catch (e) {
     console.error('[Editor] Authenticated image load failed:', e)
     loadError.value = 'Не удалось загрузить изображение (auth)'
+    isEditorReady.value = false
     throw e
   }
 }
@@ -1045,6 +1065,7 @@ function handleClose() {
     objectUrl.value = null
     imageSrc.value = null
   }
+    isEditorReady.value = false
   if (!isProcessing.value) {
     emit('close')
   }
@@ -1060,6 +1081,7 @@ function handleImageLoad() {
       width,
       height
     )
+    isEditorReady.value = true
   }
 }
 
@@ -1260,8 +1282,8 @@ function mapFormatToMime(format: string): string {
 }
 
 async function buildBlobFromImage(format: string): Promise<Blob> {
-  if (!imageRef.value || !imageSrc.value) {
-    throw new Error('Изображение не загружено')
+  if (!isEditorReady.value || !imageRef.value || !imageSrc.value) {
+    throw new Error('Редактор не инициализирован: изображение не загружено')
   }
 
   const canvas = document.createElement('canvas')
@@ -1299,6 +1321,10 @@ async function buildBlobFromImage(format: string): Promise<Blob> {
 
 async function handleConfirmSave(format: string, comment: string) {
   if (!props.asset) return
+  if (!isEditorReady.value || !imageSrc.value) {
+    saveError.value = 'Изображение ещё загружается'
+    return
+  }
   isProcessing.value = true
   processingMessage.value = 'Создание новой версии...'
   saveError.value = null
@@ -1344,6 +1370,10 @@ async function handleConfirmSave(format: string, comment: string) {
 
 async function handleSaveAsCopy() {
   if (!props.asset) return
+  if (!isEditorReady.value || !imageSrc.value) {
+    saveError.value = 'Изображение ещё загружается'
+    return
+  }
 
   isProcessing.value = true
   processingMessage.value = 'Создание копии...'
@@ -1356,14 +1386,58 @@ async function handleSaveAsCopy() {
       props.asset.filename ||
       `copy.${editorStore.currentState.format}`
 
-    const docTypeId =
-      (props.asset as any)?.document_type_id ||
-      (props.asset as any)?.document_type?.id ||
-      (props.asset as any)?.metadata?.document_type_id ||
-      null
-    if (!docTypeId) {
-      throw new Error('Не определён тип документа для копии (document_type_id отсутствует)')
+    const parseIdFromUrl = (url?: string | null) => {
+      if (!url) return null
+      // Mayan document type URLs look like /api/v4/document_types/<id>/
+      const match = url.match(/document_types\/(\d+)\//)
+      return match && match[1] ? Number(match[1]) : null
     }
+
+    const resolveDocumentTypeId = async (): Promise<number> => {
+      const candidates: Array<number | null | undefined> = [
+        (props.asset as any)?.document_type_id,
+        (props.asset as any)?.document_type?.id,
+        (props.asset as any)?.document_type?.pk,
+        (props.asset as any)?.metadata?.document_type_id,
+        parseIdFromUrl((props.asset as any)?.document_type_url),
+        parseIdFromUrl((props.asset as any)?.document_type?.url)
+      ]
+
+      const takeFirst = (values: Array<number | null | undefined>) => {
+        return values.find((v) => Number.isFinite(v as number)) as number | undefined
+      }
+
+      const fromDirect = takeFirst(candidates)
+      if (fromDirect !== undefined) return Number(fromDirect)
+
+      try {
+        if (!props.asset) throw new Error('asset is null')
+        const detail: any = await apiService.get(`/api/v4/documents/${props.asset.id}/`)
+        const d: any = detail?.data || {}
+        const detailCandidates: Array<number | null | undefined> = [
+          d.document_type_id,
+          d.document_type?.id,
+          d.document_type?.pk,
+          d.metadata?.document_type_id,
+          parseIdFromUrl(d.document_type_url),
+          parseIdFromUrl(d.document_type?.url)
+        ]
+        const fromDetail = takeFirst(detailCandidates)
+        if (fromDetail !== undefined) return Number(fromDetail)
+        // Fallback: если document_type нет, попробуем default 1
+        console.warn('[Editor] document_type_id not found in detail, using default 1')
+        return 1
+      } catch (e) {
+        console.error('[Editor] Failed to resolve document type via API', e)
+        // Last resort fallback
+        return 1
+      }
+
+      console.warn('[Editor] document_type_id not found, fallback to 1') // TODO: replace fallback with proper document type resolution
+      return 1
+    }
+
+    const docTypeId = await resolveDocumentTypeId()
 
     const result = await createAssetFromImage(
       docTypeId,
@@ -1403,6 +1477,14 @@ async function handleSaveAsCopy() {
 
 async function handleDownload() {
   if (!props.asset) return
+  if (!isEditorReady.value || !imageSrc.value) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Изображение ещё загружается'
+    })
+    return
+  }
   isProcessing.value = true
   processingMessage.value = 'Подготовка к скачиванию...'
 
@@ -1457,12 +1539,32 @@ onUnmounted(() => {
   }
 })
 
+// Reload when modal reopened with same asset
+watch(
+  () => props.isOpen,
+  (open) => {
+    if (open && props.asset) {
+      isEditorReady.value = false
+      loadError.value = null
+      prepareImageSrc().catch(() => {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Ошибка загрузки',
+          message: 'Не удалось загрузить изображение с авторизацией'
+        })
+      })
+    }
+  }
+)
+
 // Watch for asset changes
 watch(() => props.asset, (newAsset) => {
   if (newAsset) {
     activeToolId.value = 'crop'
     cropPreview.value = false
     watermarkImagePreview.value = null
+    isEditorReady.value = false
+    loadError.value = null
     prepareImageSrc().catch(() => {
       notificationStore.addNotification({
         type: 'error',

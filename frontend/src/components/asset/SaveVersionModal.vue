@@ -39,7 +39,7 @@
                 <button
                   class="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 dark:hover:text-white dark:hover:bg-neutral-800 transition-colors"
                   @click="handleCancel"
-                  :disabled="isSubmitting"
+                  :disabled="isSubmitting || props.disabled"
                 >
                   <XMarkIcon class="w-5 h-5" />
                 </button>
@@ -53,7 +53,7 @@
                   <select
                     v-model="localFormat"
                     class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    :disabled="isSubmitting"
+                    :disabled="isSubmitting || props.disabled"
                   >
                     <option value="original">Оригинал</option>
                     <option value="jpg">JPG</option>
@@ -71,7 +71,7 @@
                     rows="3"
                     class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Опишите изменения (необязательно)"
-                    :disabled="isSubmitting"
+                    :disabled="isSubmitting || props.disabled"
                   />
                 </div>
 
@@ -84,14 +84,14 @@
                 <button
                   class="px-4 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
                   @click="handleCancel"
-                  :disabled="isSubmitting"
+                  :disabled="isSubmitting || props.disabled"
                   ref="cancelButtonRef"
                 >
                   Отмена
                 </button>
                 <button
                   class="px-4 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2"
-                  :disabled="isSubmitting"
+                  :disabled="isSubmitting || props.disabled"
                   @click="handleSave"
                 >
                   <svg
@@ -124,6 +124,7 @@ interface Props {
   isOpen: boolean
   defaultFormat?: string
   errorMessage?: string | null
+  disabled?: boolean
 }
 
 const props = defineProps<Props>()
@@ -155,7 +156,7 @@ function handleCancel() {
 }
 
 async function handleSave() {
-  if (isSubmitting.value) return
+  if (isSubmitting.value || props.disabled) return
   error.value = null
   isSubmitting.value = true
   try {

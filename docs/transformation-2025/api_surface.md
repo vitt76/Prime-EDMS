@@ -32,9 +32,10 @@
   `GET /api/v4/headless/dashboard/activity/` — упрощённый фид для виджета.
 - `GET /api/v4/headless/favorites/`, `POST /api/v4/headless/favorites/{document_id}/` — избранное.
 - `GET /api/v4/headless/documents/my_uploads/` — «Мои загрузки» по событиям `documents.document_create/document_file_created`.
-- `POST /api/v4/headless/documents/{id}/versions/new_from_edit/` — создание версии из web‑редактора (multipart file, optional format/comment).
+- `POST /api/v4/headless/documents/{id}/versions/new_from_edit/` — **реализован во view, но не проброшен** в `mayan/apps/rest_api/urls.py` → фактически 404 до фикса маршрута.
+- `GET /api/v4/headless/profile/` — базовый профиль текущего пользователя (id, username, email, флаги staff/superuser).
 
-Все headless маршруты подключены через `mayan/apps/rest_api/urls.py` под `/api/v4/headless/`; требуют Token или сессию, при 401/302 возвращают HTML (Stronghold).
+Headless маршруты подключены через `mayan/apps/rest_api/urls.py` под `/api/v4/headless/`; **исключение:** `new_from_edit` пока не добавлен, его нужно пробросить. Все требуют Token или сессию, при 401/302 возвращают HTML (Stronghold).
 
 ---
 
@@ -96,6 +97,7 @@
 | CRUD пользователей | `/api/v4/user_management/users/` |
 | CRUD групп | `/api/v4/user_management/groups/` |
 | Группы пользователя / пользователи группы | вложенные `/users/<id>/groups/`, `/groups/<id>/users/` |
+| Роли и права | `/api/v4/permissions/permissions/`, `/api/v4/permissions/roles/`, `/roles/{id}/permissions/(add|remove)/`, `/roles/{id}/groups/(add|remove)/` |
 | Объектные ACL | `/api/v4/acls/access_controls/` |
 | Глобальные разрешения ролей | `/api/v4/permissions/permissions/by_role/` |
 

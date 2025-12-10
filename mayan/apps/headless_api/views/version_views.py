@@ -51,20 +51,12 @@ class HeadlessEditView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, document_id: int):
-        document = get_object_or_404(Document.valid, pk=document_id)
-
-        # Permissions check
-        try:
-            AccessControlList.objects.check_access(
-                permission=permission_document_version_create,
-                user=request.user,
-                obj=document,
-            )
-        except Exception as exc:
-            return Response(
-                {'error': 'access_denied', 'detail': str(exc)},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        queryset = AccessControlList.objects.restrict_queryset(
+            permission=permission_document_version_create,
+            queryset=Document.valid.all(),
+            user=request.user
+        )
+        document = get_object_or_404(queryset, pk=document_id)
 
         uploaded_file = request.FILES.get('file')
         if not uploaded_file:
