@@ -98,7 +98,9 @@
                         <DocumentIcon class="w-4 h-4 text-neutral-500" />
                         <span>Оригинал</span>
                       </div>
-                      <span class="text-xs text-neutral-400">{{ formatFileSize(asset?.size || 0) }}</span>
+                      <span class="text-xs text-neutral-400">
+                        {{ formatFileSize(asset?.file_details?.size || asset?.size || 0) }}
+                      </span>
                     </button>
                   </MenuItem>
                   <MenuItem v-slot="{ active }">
@@ -659,16 +661,16 @@ import {
 import { useAssetStore } from '@/stores/assetStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
+import { apiService } from '@/services/apiService'
 import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import MetadataEditor from '@/components/asset/MetadataEditor.vue'
 import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
 import AIInsightsWidget from '@/components/asset/AIInsightsWidget.vue'
 import MediaEditorModal from '@/components/asset/MediaEditorModal.vue'
-import type { Asset, Comment, Version } from '@/types/api'
-import type { ExtendedAsset, UsageStats } from '@/mocks/assets'
-import type { WorkflowState } from '@/mocks/workflows'
-import type { AIAnalysis, AITag } from '@/mocks/ai'
-import { getMockAssetById } from '@/mocks/assets'
+import type { Asset, Comment, Version, ExtendedAsset, UsageStats, AIAnalysis } from '@/types/api'
+
+type WorkflowState = { id: string; label: string; color?: string }
+type AITag = { id?: string | number; label: string }
 
 const route = useRoute()
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -729,9 +731,7 @@ const documentType = computed(() => {
   return 'image' // default
 })
 
-const versions = computed((): Version[] => {
-  return asset.value?.version_history || extendedAsset.value?.version_history || []
-})
+const versions = computed((): Version[] => asset.value?.version_history || [])
 
 const comments = computed((): Comment[] => {
   return asset.value?.comments || []
@@ -761,39 +761,14 @@ async function loadAsset() {
     
     if (storeAsset) {
       console.log('[AssetDetail] Loaded from real API:', storeAsset)
-      asset.value = storeAsset
-      
-      // If asset has AI analysis, set it as extended data
-      if (storeAsset.ai_analysis) {
-        extendedAsset.value = {
-          ...storeAsset,
-          ai_analysis: storeAsset.ai_analysis
-        } as ExtendedAsset
-      }
+      asset.value = storeAsset as Asset
+      extendedAsset.value = storeAsset as ExtendedAsset
     } else {
-      // Fallback to mock data for development/demo
-      console.log('[AssetDetail] API returned null, trying mock data')
-      const mockAsset = getMockAssetById(assetId.value)
-      
-      if (mockAsset) {
-        asset.value = mockAsset as Asset
-        extendedAsset.value = mockAsset
-      } else {
-        error.value = `Актив с ID ${assetId.value} не найден`
-      }
+      error.value = `Актив с ID ${assetId.value} не найден`
     }
   } catch (e: any) {
     console.error('[AssetDetail] Error loading asset:', e)
-    
-    // Try mock data as fallback on error
-    const mockAsset = getMockAssetById(assetId.value)
-    if (mockAsset) {
-      console.log('[AssetDetail] Using mock data as fallback')
-      asset.value = mockAsset as Asset
-      extendedAsset.value = mockAsset
-    } else {
-      error.value = e.message || 'Не удалось загрузить актив'
-    }
+    error.value = e.message || 'Не удалось загрузить актив'
   } finally {
     isLoading.value = false
   }
@@ -878,27 +853,49 @@ function resetView() {
   rotation.value = 0
 }
 
-function handleDownload() {
+async function handleDownload() {
   if (!asset.value) return
-  
-  // Use real download URL if available (from metadata or generate from ID)
-  const downloadUrl = (asset.value as any).download_url || 
-    `/api/v4/documents/${asset.value.id}/files/latest/download/`
-  
+
+  const filename =
+    asset.value.file_details?.filename ||
+    asset.value.filename ||
+    asset.value.label ||
+    `document-${asset.value.id}`
+
+  const url =
+    asset.value.download_url ||
+    (asset.value.file_latest_id
+      ? `/api/v4/documents/${asset.value.id}/files/${asset.value.file_latest_id}/download/`
+      : `/api/v4/documents/${asset.value.id}/files/latest/download/`)
+
   notificationStore.addNotification({
     type: 'info',
     title: 'Загрузка началась',
-    message: `Скачивание ${asset.value.filename}...`,
+    message: `Скачивание ${filename}...`,
   })
-  
-  // Trigger download via hidden anchor
-  const link = document.createElement('a')
-  link.href = downloadUrl
-  link.download = asset.value.filename
-  link.target = '_blank'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+
+  try {
+    // Fetch blob via API to avoid SPA HTML fallback and include auth headers
+    const blob = await apiService.get<Blob>(url, {
+      responseType: 'blob'
+    } as any)
+
+    const objectUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(objectUrl)
+  } catch (err) {
+    console.error('[AssetDetail] Download failed', err)
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка загрузки',
+      message: 'Не удалось скачать файл'
+    })
+  }
 }
 
 type DownloadFormat = 'original' | 'low_res' | 'high_res' | 'pdf'
@@ -920,22 +917,53 @@ async function handleDownloadAs(format: DownloadFormat) {
   })
   
   if (format === 'original') {
-    // Direct download of original file
     handleDownload()
     return
   }
-  
-  // For other formats, we would need backend conversion endpoints
-  // For now, download original and show info message
-  await new Promise(resolve => setTimeout(resolve, 500))
-  
-  notificationStore.addNotification({
-    type: 'info',
-    title: 'Конвертация не реализована',
-    message: `Формат ${formatLabels[format]} пока не поддерживается. Скачивается оригинал.`,
-  })
-  
-  handleDownload()
+
+  // Map UI formats to backend target formats
+  const targetFormat = format === 'pdf'
+    ? 'pdf'
+    : format === 'high_res'
+      ? 'png'
+      : 'jpeg' // low_res default
+
+  try {
+    const blob = await apiService.get<Blob>(
+      `/api/v4/headless/documents/${asset.value.id}/convert/`,
+      {
+        params: { format: targetFormat },
+        responseType: 'blob'
+      } as any
+    )
+
+    const objectUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const baseName =
+      asset.value.file_details?.filename?.split('.')?.[0] ||
+      asset.value.filename?.split('.')?.[0] ||
+      asset.value.label ||
+      `document-${asset.value.id}`
+    link.href = objectUrl
+    link.download = `${baseName}.${targetFormat === 'jpeg' ? 'jpg' : targetFormat}`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(objectUrl)
+
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Готово',
+      message: `Файл скачан в формате ${formatLabels[format]}`
+    })
+  } catch (err) {
+    console.error('[AssetDetail] Conversion download failed', err)
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка конвертации',
+      message: `Не удалось скачать файл в формате ${formatLabels[format]}`
+    })
+  }
 }
 
 function handleShare() {

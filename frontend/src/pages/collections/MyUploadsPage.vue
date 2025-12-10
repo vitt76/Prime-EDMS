@@ -67,7 +67,7 @@ import { useRouter } from 'vue-router'
 import CollectionBrowser from '@/components/collections/CollectionBrowser.vue'
 import { apiService } from '@/services/apiService'
 import { assetService } from '@/services/assetService'
-import type { ExtendedAsset } from '@/mocks/assets'
+import type { ExtendedAsset } from '@/types/api'
 import { useUIStore } from '@/stores/uiStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 

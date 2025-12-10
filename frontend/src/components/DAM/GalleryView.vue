@@ -244,6 +244,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { apiService } from '@/services/apiService'
 import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
 import AssetCard from './AssetCard.vue'
@@ -428,9 +429,49 @@ function handleAssetPreview(asset: Asset) {
   console.log('Preview asset:', asset.id)
 }
 
-function handleAssetDownload(asset: Asset) {
-  // TODO: Implement download
-  console.log('Download asset:', asset.id)
+async function handleAssetDownload(asset: Asset) {
+  try {
+    let fileId = (asset as any).file_latest_id
+    let downloadUrl = (asset as any).download_url as string | undefined
+
+    // If no download_url provided, try to fetch latest file id
+    if (!downloadUrl) {
+      if (!fileId) {
+        // Fetch latest file via API as fallback
+        const filesResp = await apiService.get<any>(
+          `/api/v4/documents/${asset.id}/files/`,
+          { params: { page_size: 1, ordering: '-timestamp' } }
+        )
+        fileId = filesResp?.results?.[0]?.id
+      }
+      if (fileId) {
+        downloadUrl = `/api/v4/documents/${asset.id}/files/${fileId}/download/`
+      } else {
+        downloadUrl = `/api/v4/documents/${asset.id}/files/latest/download/`
+      }
+    }
+
+    const filename =
+      asset.file_details?.filename ||
+      asset.filename ||
+      asset.label ||
+      `document-${asset.id}`
+
+    const blob = await apiService.get<Blob>(downloadUrl, {
+      responseType: 'blob'
+    } as any)
+
+    const objectUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(objectUrl)
+  } catch (error) {
+    console.error('[GalleryView] Download failed', error)
+  }
 }
 
 function handleAssetShare(asset: Asset) {

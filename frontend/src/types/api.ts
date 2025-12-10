@@ -30,6 +30,8 @@ export interface Asset {
   date_added: string
   thumbnail_url?: string
   preview_url?: string
+  download_url?: string
+  file_latest_id?: number
   tags?: string[]
   metadata?: Record<string, unknown>
   file_details?: FileDetails
@@ -37,6 +39,41 @@ export interface Asset {
   comments?: Comment[]
   version_history?: Version[]
   access_level?: string
+}
+
+export interface UsageStats {
+  views?: number
+  downloads?: number
+  shares?: number
+  usedInLinks?: number
+  usedInPublications?: number
+  lastViewedAt?: string
+  lastDownloadedAt?: string
+}
+
+export interface ExtendedAsset extends Asset {
+  isFavorite?: boolean
+  uploadedBy?: {
+    id?: number
+    username?: string
+    email?: string
+    first_name?: string
+    last_name?: string
+    avatar_url?: string
+  }
+  lastAccessedAt?: string
+  sharedWithMe?: boolean
+  sharedBy?: {
+    id?: number
+    username?: string
+    email?: string
+    first_name?: string
+    last_name?: string
+    avatar_url?: string
+  }
+  sharedAt?: string
+  exif?: Record<string, unknown>
+  usage?: UsageStats
 }
 
 export interface FileDetails {

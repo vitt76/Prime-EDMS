@@ -421,6 +421,7 @@ import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import AssetCardEnhanced from '@/components/DAM/AssetCardEnhanced.vue'
 import type { Asset } from '@/types/api'
+import { apiService } from '@/services/apiService'
 
 // ============================================================================
 // COMPOSABLES
@@ -587,9 +588,35 @@ function closePreview(): void {
   previewImageError.value = false
 }
 
-function handleAssetDownload(asset: Asset): void {
-  console.log('Download:', asset.label)
-  // TODO: Implement download
+async function handleAssetDownload(asset: Asset): Promise<void> {
+  const filename =
+    asset.file_details?.filename ||
+    asset.filename ||
+    asset.label ||
+    `document-${asset.id}`
+
+  const url =
+    (asset as any).download_url ||
+    (asset as any).file_latest_id
+      ? `/api/v4/documents/${asset.id}/files/${(asset as any).file_latest_id}/download/`
+      : `/api/v4/documents/${asset.id}/files/latest/download/`
+
+  try {
+    const blob = await apiService.get<Blob>(url, {
+      responseType: 'blob'
+    } as any)
+
+    const objectUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(objectUrl)
+  } catch (error) {
+    console.error('[DAMGallery] Download failed', error)
+  }
 }
 
 function handleAssetShare(asset: Asset): void {

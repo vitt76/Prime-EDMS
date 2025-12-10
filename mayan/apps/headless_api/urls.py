@@ -17,6 +17,7 @@ from .views.favorites_views import HeadlessFavoriteListView, HeadlessFavoriteTog
 from .views.my_uploads_views import HeadlessMyUploadsView
 from .views.profile_views import HeadlessProfileView
 from .views.version_views import HeadlessEditView
+from .views.conversion_views import HeadlessDocumentConvertView
 
 app_name = 'headless_api'
 
@@ -67,6 +68,11 @@ api_urls = [
         regex=r'^documents/(?P<document_id>\d+)/versions/new_from_edit/$',
         view=HeadlessEditView.as_view(),
         name='api-document-version-new-from-edit'
+    ),
+    url(
+        regex=r'^documents/(?P<document_id>\d+)/convert/$',
+        view=HeadlessDocumentConvertView.as_view(),
+        name='api-document-convert'
     ),
     url(
         regex=r'^profile/$',

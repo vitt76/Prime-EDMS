@@ -69,7 +69,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CollectionBrowser from '@/components/collections/CollectionBrowser.vue'
 import { apiService } from '@/services/apiService'
-import type { ExtendedAsset } from '@/mocks/assets'
+import type { ExtendedAsset } from '@/types/api'
 import { useNotificationStore } from '@/stores/notificationStore'
 
 // ============================================================================

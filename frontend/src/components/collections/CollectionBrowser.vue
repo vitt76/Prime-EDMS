@@ -158,7 +158,7 @@
 <script setup lang="ts">
 import { computed, h } from 'vue'
 import CollectionAssetCard from './CollectionAssetCard.vue'
-import type { ExtendedAsset } from '@/mocks/assets'
+import type { ExtendedAsset } from '@/types/api'
 
 // ============================================================================
 // PROPS
