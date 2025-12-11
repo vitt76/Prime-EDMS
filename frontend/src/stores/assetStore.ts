@@ -35,6 +35,7 @@ import {
   deleteDocument as deleteDocumentApi,
   type UploadProgress
 } from '@/services/uploadService'
+const LOG_ENDPOINT = 'http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac'
 
 // Import auth store for logout on 401
 import { useAuthStore } from '@/stores/authStore'
@@ -410,14 +411,16 @@ export const useAssetStore = defineStore(
      * First tries enriched endpoint (/api/v4/document-detail/) for full document details
      * Falls back to standard endpoint if DAM endpoint unavailable
      */
-    async function getAssetDetail(id: number): Promise<Asset | null> {
+    async function getAssetDetail(id: number, forceReload = false): Promise<Asset | null> {
       // Try existing cached asset first (already has URLs)
-      const cached = assets.value.find(a => a.id === id)
-      if (cached) {
-        currentAsset.value = cached
-        return cached
+      if (!forceReload) {
+        const cached = assets.value.find(a => a.id === id)
+        if (cached) {
+          currentAsset.value = cached
+          return cached
+        }
       }
-
+      
       isLoading.value = true
       error.value = null
 
@@ -447,6 +450,60 @@ export const useAssetStore = defineStore(
         }
 
         const asset = adaptBackendAsset(response.data)
+        // Fetch metadata separately (optimized endpoint may omit it)
+        const meta = await fetchDocumentMetadata(id)
+        if (meta) {
+          const metaMap: Record<string, string> = {}
+          meta.forEach((m: any) => {
+            const key = m.metadata_type?.name || m.metadata_type?.label || `meta_${m.id}`
+            if (key) {
+              metaMap[key] = m.value
+            }
+          })
+          if (metaMap.description && !asset.description) {
+            asset.description = metaMap.description
+          }
+          if (metaMap.tags) {
+            const metaTags = metaMap.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+            asset.tags = Array.from(new Set([...(asset.tags || []), ...metaTags]))
+          }
+          asset.metadata = { ...(asset.metadata || {}), ...metaMap }
+        }
+        // Fetch tags separately (Mayan tags API)
+        const tagList = await fetchDocumentTags(id)
+        if (tagList && Array.isArray(tagList)) {
+          const tagNames = tagList
+            .map((t: any) => t.label || t.name || t.tag || '')
+            .filter((t: string) => !!t)
+          asset.tags = Array.from(new Set([...(asset.tags || []), ...tagNames]))
+        }
+        // #region agent log
+        try {
+          fetch(LOG_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'upload-meta',
+              hypothesisId: 'H-detail',
+              location: 'assetStore:getAssetDetail',
+              message: 'Detail snapshot',
+              data: {
+                id,
+                description: asset.description || '',
+                tags: asset.tags ? asset.tags.length : 0,
+                metadataKeys: asset.metadata ? Object.keys(asset.metadata).length : 0,
+                metaFetched: meta ? meta.length : 0,
+                tagsFetched: tagList ? tagList.length : 0
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {})
+        } catch (e) {
+          // ignore logging errors
+        }
+        // #endregion agent log
+
         currentAsset.value = asset
         return asset
         
@@ -456,6 +513,76 @@ export const useAssetStore = defineStore(
         return null
       } finally {
         isLoading.value = false
+      }
+    }
+
+    async function fetchDocumentMetadata(id: number): Promise<any[] | null> {
+      try {
+        const resp = await axios.get(`/api/v4/documents/${id}/metadata/`, {
+          headers: getAuthHeaders()
+        })
+        const data = Array.isArray(resp.data) ? resp.data : resp.data?.results || null
+        // #region agent log
+        try {
+          fetch(LOG_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'upload-meta',
+              hypothesisId: 'H-meta-fetch',
+              location: 'assetStore:fetchDocumentMetadata',
+              message: 'Metadata fetched',
+              data: { id, count: data ? data.length : 0 },
+              timestamp: Date.now()
+            })
+          }).catch(() => {})
+        } catch (e) {
+          // ignore logging errors
+        }
+        // #endregion agent log
+        return data
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          return null
+        }
+        console.error('[AssetStore] Error fetching document metadata:', err)
+        return null
+      }
+    }
+
+    async function fetchDocumentTags(id: number): Promise<any[] | null> {
+      try {
+        const resp = await axios.get(`/api/v4/documents/${id}/tags/`, {
+          headers: getAuthHeaders()
+        })
+        const data = Array.isArray(resp.data) ? resp.data : resp.data?.results || null
+        // #region agent log
+        try {
+          fetch(LOG_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'upload-meta',
+              hypothesisId: 'H-tags-fetch',
+              location: 'assetStore:fetchDocumentTags',
+              message: 'Tags fetched',
+              data: { id, count: data ? data.length : 0 },
+              timestamp: Date.now()
+            })
+          }).catch(() => {})
+        } catch (e) {
+          // ignore logging errors
+        }
+        // #endregion agent log
+        return data
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          return null
+        }
+        console.error('[AssetStore] Error fetching document tags:', err)
+        return null
       }
     }
 

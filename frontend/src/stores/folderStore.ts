@@ -149,10 +149,18 @@ export const useFolderStore = defineStore(
     }
 
     function getSystemSection(): FolderTreeSection {
-      return (
-        sections.value.find(section => section.type === 'local') ||
-        sections.value[0]
-      )
+      const found = sections.value.find(section => section.type === 'local')
+      if (found) return found
+      if (sections.value[0]) return sections.value[0]
+      return {
+        id: 'section-system',
+        name: 'Системные папки',
+        type: 'local',
+        icon: 'folder',
+        color: 'amber',
+        folders: [],
+        expanded: true,
+      }
     }
 
     /**

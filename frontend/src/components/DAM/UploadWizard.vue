@@ -121,7 +121,6 @@
                     @drop.prevent="handleDrop"
                   >
                     <input
-                      ref="fileInput"
                       type="file"
                       multiple
                       accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
@@ -178,9 +177,9 @@
                     </div>
                     
                     <div class="max-h-60 overflow-y-auto space-y-2">
-                      <div
-                        v-for="(file, index) in files"
-                        :key="index"
+                    <div
+                      v-for="(file, idx) in files"
+                      :key="getFileKey(file)"
                         class="flex items-center gap-3 p-3 bg-neutral-50 rounded-lg group"
                       >
                         <!-- File Icon -->
@@ -204,15 +203,15 @@
                         </div>
                         
                         <!-- Progress Bar (during upload simulation) -->
-                        <div v-if="uploadProgress[index] !== undefined" class="w-24">
+                        <div v-if="uploadProgress[idx] !== undefined" class="w-24">
                           <div class="h-1.5 bg-neutral-200 rounded-full overflow-hidden">
                             <div
                               class="h-full bg-primary-500 rounded-full transition-all duration-300"
-                              :style="{ width: `${uploadProgress[index]}%` }"
+                              :style="{ width: `${uploadProgress[idx]}%` }"
                             />
                           </div>
                           <p class="mt-0.5 text-[10px] text-neutral-500 text-right">
-                            {{ uploadProgress[index] }}%
+                            {{ uploadProgress[idx] }}%
                           </p>
                         </div>
                         
@@ -221,7 +220,7 @@
                           v-else
                           type="button"
                           class="p-1.5 text-neutral-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                          @click="removeFile(index)"
+                          @click="removeFile(idx)"
                           aria-label="Удалить файл"
                         >
                           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -234,126 +233,122 @@
                 </div>
 
                 <!-- Step 2: Metadata -->
-                <div v-else-if="currentStep === 1" class="space-y-6">
-                  <!-- Common metadata for all files -->
-                  <div class="space-y-4">
-                    <div>
-                      <label for="title" class="block text-sm font-medium text-neutral-700 mb-1">
-                        Название <span class="text-red-500">*</span>
-                      </label>
-                      <input
-                        id="title"
-                        v-model="metadata.title"
-                        type="text"
-                        class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg 
-                               focus:ring-2 focus:ring-primary-500 focus:border-primary-500
-                               transition-colors"
-                        placeholder="Введите название для файлов"
-                      />
-                    </div>
-
-                    <div>
-                      <label for="description" class="block text-sm font-medium text-neutral-700 mb-1">
-                        Описание
-                      </label>
-                      <textarea
-                        id="description"
-                        v-model="metadata.description"
-                        rows="3"
-                        class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg 
-                               focus:ring-2 focus:ring-primary-500 focus:border-primary-500
-                               transition-colors resize-none"
-                        placeholder="Добавьте описание..."
-                      />
-                    </div>
-
-                    <div>
-                      <label class="block text-sm font-medium text-neutral-700 mb-1">
-                        Теги
-                      </label>
-                      <div class="flex flex-wrap gap-2 p-3 border border-neutral-300 rounded-lg min-h-[48px]">
-                        <span
-                          v-for="tag in metadata.tags"
-                          :key="tag"
-                          class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-100 text-primary-700 
-                                 text-sm rounded-full"
-                        >
-                          {{ tag }}
+                <div v-else-if="currentStep === 1" class="space-y-4">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-medium text-neutral-700">Метаданные по каждому файлу</h3>
+                    <p class="text-xs text-neutral-500">Название обязательно для каждого файла</p>
+                  </div>
+                  <div class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                    <div
+                      v-for="file in files"
+                      :key="getFileKey(file)"
+                      class="border border-neutral-200 rounded-lg p-4 space-y-3 shadow-sm"
+                    >
+                      <div class="flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium text-neutral-800 truncate">{{ file.name }}</p>
+                          <p class="text-xs text-neutral-500">{{ formatFileSize(file.size) }}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs text-neutral-500">AI</span>
                           <button
                             type="button"
-                            class="hover:text-primary-900"
-                            @click="removeTag(tag)"
+                            :class="[
+                              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                              ensureFileMeta(file).enableAI ? 'bg-purple-600' : 'bg-neutral-200'
+                            ]"
+                            @click="ensureFileMeta(file).enableAI = !ensureFileMeta(file).enableAI"
                           >
-                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                            </svg>
+                            <span class="sr-only">Toggle AI</span>
+                            <span
+                              :class="[
+                                'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                                ensureFileMeta(file).enableAI ? 'translate-x-6' : 'translate-x-1'
+                              ]"
+                            />
                           </button>
-                        </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-medium text-neutral-700 mb-1">
+                          Название <span class="text-red-500">*</span>
+                        </label>
                         <input
-                          v-model="newTag"
+                          v-model="ensureFileMeta(file).title"
                           type="text"
-                          class="flex-1 min-w-[120px] border-0 p-0 text-sm focus:ring-0 placeholder-neutral-400"
-                          placeholder="Добавить тег..."
-                          @keydown.enter.prevent="addTag"
-                          @keydown.comma.prevent="addTag"
+                          class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg 
+                                 focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+                                 transition-colors"
+                          :placeholder="file.name"
                         />
                       </div>
-                      <p class="mt-1 text-xs text-neutral-500">
-                        Нажмите Enter или запятую для добавления тега
-                      </p>
-                    </div>
 
-                    <!-- Suggested Tags -->
-                    <div v-if="suggestedTags.length > 0">
-                      <p class="text-xs text-neutral-500 mb-2">Популярные теги:</p>
-                      <div class="flex flex-wrap gap-1.5">
-                        <button
-                          v-for="tag in suggestedTags"
-                          :key="tag"
-                          type="button"
-                          :class="[
-                            'px-2.5 py-1 text-xs rounded-full transition-colors',
-                            metadata.tags.includes(tag)
-                              ? 'bg-primary-100 text-primary-700'
-                              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                          ]"
-                          @click="toggleTag(tag)"
-                        >
-                          {{ tag }}
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- AI Analysis Toggle -->
-                    <div class="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-100">
-                      <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                          <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z"/>
-                          </svg>
-                        </div>
-                        <div>
-                          <p class="font-medium text-neutral-800">AI Анализ</p>
-                          <p class="text-sm text-neutral-600">
-                            Автоматически добавить теги и описание
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        :class="[
-                          'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                          metadata.enableAI ? 'bg-purple-600' : 'bg-neutral-200'
-                        ]"
-                        @click="metadata.enableAI = !metadata.enableAI"
-                      >
-                        <span
-                          :class="[
-                            'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-                            metadata.enableAI ? 'translate-x-6' : 'translate-x-1'
-                          ]"
+                      <div>
+                        <label class="block text-sm font-medium text-neutral-700 mb-1">
+                          Описание
+                        </label>
+                        <textarea
+                          v-model="ensureFileMeta(file).description"
+                          rows="2"
+                          class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg 
+                                 focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+                                 transition-colors resize-none"
+                          placeholder="Добавьте описание..."
                         />
-                      </button>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-medium text-neutral-700 mb-1">
+                          Теги
+                        </label>
+                        <div class="flex flex-wrap gap-2 p-3 border border-neutral-300 rounded-lg min-h-[48px]">
+                          <span
+                            v-for="tag in ensureFileMeta(file).tags"
+                            :key="tag"
+                            class="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-100 text-primary-700 
+                                   text-sm rounded-full"
+                          >
+                            {{ tag }}
+                            <button
+                              type="button"
+                              class="hover:text-primary-900"
+                              @click="removeTagForFile(getFileKey(file), tag)"
+                            >
+                              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                              </svg>
+                            </button>
+                          </span>
+                          <input
+                            v-model="newTagMap[getFileKey(file)]"
+                            type="text"
+                            class="flex-1 min-w-[120px] border-0 p-0 text-sm focus:ring-0 placeholder-neutral-400"
+                            placeholder="Добавить тег..."
+                            @keydown.enter.prevent="addTagForFile(getFileKey(file))"
+                            @keydown.comma.prevent="addTagForFile(getFileKey(file))"
+                          />
+                        </div>
+                        <p class="mt-1 text-xs text-neutral-500">
+                          Нажмите Enter или запятую для добавления тега
+                        </p>
+                        <div v-if="suggestedTags.length > 0" class="mt-2 flex flex-wrap gap-1.5">
+                          <button
+                            v-for="tag in suggestedTags"
+                            :key="tag"
+                            type="button"
+                            :class="[
+                              'px-2.5 py-1 text-xs rounded-full transition-colors',
+                              ensureFileMeta(file).tags.includes(tag)
+                                ? 'bg-primary-100 text-primary-700'
+                                : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                            ]"
+                            @click="toggleTagForFile(getFileKey(file), tag)"
+                          >
+                            {{ tag }}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -373,31 +368,9 @@
                         <dd class="text-sm font-medium text-neutral-800">{{ formatFileSize(totalSize) }}</dd>
                       </div>
                       <div class="flex justify-between">
-                        <dt class="text-sm text-neutral-600">Название:</dt>
-                        <dd class="text-sm font-medium text-neutral-800">{{ metadata.title || '—' }}</dd>
-                      </div>
-                      <div v-if="metadata.description" class="flex justify-between">
-                        <dt class="text-sm text-neutral-600">Описание:</dt>
-                        <dd class="text-sm font-medium text-neutral-800 text-right max-w-[200px] truncate">
-                          {{ metadata.description }}
-                        </dd>
-                      </div>
-                      <div v-if="metadata.tags.length > 0">
-                        <dt class="text-sm text-neutral-600 mb-1">Теги:</dt>
-                        <dd class="flex flex-wrap gap-1">
-                          <span
-                            v-for="tag in metadata.tags"
-                            :key="tag"
-                            class="px-2 py-0.5 bg-primary-100 text-primary-700 text-xs rounded-full"
-                          >
-                            {{ tag }}
-                          </span>
-                        </dd>
-                      </div>
-                      <div class="flex justify-between">
                         <dt class="text-sm text-neutral-600">AI Анализ:</dt>
-                        <dd class="text-sm font-medium" :class="metadata.enableAI ? 'text-purple-600' : 'text-neutral-500'">
-                          {{ metadata.enableAI ? 'Включен' : 'Выключен' }}
+                        <dd class="text-sm font-medium text-neutral-800">
+                          {{ files.filter(f => ensureFileMeta(f).enableAI).length }} из {{ files.length }} включены
                         </dd>
                       </div>
                     </dl>
@@ -431,7 +404,10 @@
                         </div>
                         <!-- Overlay with filename -->
                         <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-                          <p class="text-xs text-white truncate">{{ file.name }}</p>
+                          <p class="text-xs text-white truncate">{{ ensureFileMeta(file).title || file.name }}</p>
+                          <p class="text-[10px] text-white/80 truncate">
+                            {{ ensureFileMeta(file).tags.join(', ') || '—' }} • AI: {{ ensureFileMeta(file).enableAI ? 'On' : 'Off' }}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -508,6 +484,7 @@ import { useAssetStore } from '@/stores/assetStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { uploadService, type UploadResult } from '@/services/uploadService'
 import type { Asset } from '@/types/api'
+const LOG_ENDPOINT = 'http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac'
 
 interface Props {
   isOpen: boolean
@@ -542,21 +519,20 @@ const isDragging = ref(false)
 const isUploading = ref(false)
 const files = ref<File[]>([])
 const uploadProgress = ref<Record<number, number>>({})
-const fileInput = ref<HTMLInputElement | null>(null)
-const newTag = ref('')
 const filePreviews = ref<Map<File, string>>(new Map())
 
-const metadata = ref({
-  title: '',
-  description: '',
-  tags: [] as string[],
-  enableAI: true
-})
+type FileMeta = {
+  title: string
+  description: string
+  tags: string[]
+  enableAI: boolean
+}
+
+const fileMetadata = ref<Record<string, FileMeta>>({})
+const newTagMap = ref<Record<string, string>>({})
 
 // Suggested tags from existing assets
-const suggestedTags = computed(() => {
-  return assetStore.availableTags.slice(0, 10)
-})
+const suggestedTags = computed(() => assetStore.availableTags.slice(0, 10))
 
 // Computed
 const totalSize = computed(() => files.value.reduce((sum, f) => sum + f.size, 0))
@@ -566,9 +542,9 @@ const canProceed = computed(() => {
     case 0:
       return files.value.length > 0
     case 1:
-      return metadata.value.title.trim().length > 0
+      return files.value.length > 0 && files.value.every(f => ensureFileMeta(f).title.trim().length > 0)
     case 2:
-      return files.value.length > 0 && metadata.value.title.trim().length > 0
+      return files.value.length > 0 && files.value.every(f => ensureFileMeta(f).title.trim().length > 0)
     default:
       return false
   }
@@ -589,6 +565,25 @@ function handleDrop(event: DragEvent) {
   }
 }
 
+function getFileKey(file: File): string {
+  return `${file.name}-${file.size}-${file.lastModified}`
+}
+
+function ensureFileMeta(file: File): FileMeta {
+  const key = getFileKey(file)
+  if (!fileMetadata.value[key]) {
+    const basename = file.name.replace(/\.[^/.]+$/, '')
+    fileMetadata.value[key] = {
+      title: basename || file.name,
+      description: '',
+      tags: [],
+      enableAI: true
+    }
+  }
+  if (!newTagMap.value[key]) newTagMap.value[key] = ''
+  return fileMetadata.value[key]
+}
+
 function addFiles(newFiles: File[]) {
   const validFiles = newFiles.filter(file => {
     // Check file size (500MB max)
@@ -604,6 +599,22 @@ function addFiles(newFiles: File[]) {
   })
   
   files.value = [...files.value, ...validFiles]
+  validFiles.forEach(file => ensureFileMeta(file))
+  // #region agent log
+  fetch(LOG_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'debug-session',
+      runId: 'upload-meta',
+      hypothesisId: 'H-upload-files',
+      location: 'UploadWizard:addFiles',
+      message: 'Files added',
+      data: { added: validFiles.length, total: files.value.length },
+      timestamp: Date.now()
+    })
+  }).catch(() => {})
+  // #endregion agent log
   
   // Generate previews for images
   validFiles.forEach(file => {
@@ -619,6 +630,7 @@ function addFiles(newFiles: File[]) {
 
 function removeFile(index: number) {
   const file = files.value[index]
+  if (!file) return
   if (filePreviews.value.has(file)) {
     filePreviews.value.delete(file)
   }
@@ -629,32 +641,40 @@ function clearFiles() {
   files.value = []
   filePreviews.value.clear()
   uploadProgress.value = {}
+  fileMetadata.value = {}
+  newTagMap.value = {}
 }
 
 function getFilePreview(file: File): string {
   return filePreviews.value.get(file) || ''
 }
 
-function addTag() {
-  const tag = newTag.value.trim().replace(/,/g, '')
-  if (tag && !metadata.value.tags.includes(tag)) {
-    metadata.value.tags.push(tag)
+function addTagForFile(key: string) {
+  const tag = (newTagMap.value[key] || '').trim().replace(/,/g, '')
+  const meta = fileMetadata.value[key]
+  if (!meta) return
+  if (tag && !meta.tags.includes(tag)) {
+    meta.tags.push(tag)
   }
-  newTag.value = ''
+  newTagMap.value[key] = ''
 }
 
-function removeTag(tag: string) {
-  const index = metadata.value.tags.indexOf(tag)
+function removeTagForFile(key: string, tag: string) {
+  const meta = fileMetadata.value[key]
+  if (!meta) return
+  const index = meta.tags.indexOf(tag)
   if (index > -1) {
-    metadata.value.tags.splice(index, 1)
+    meta.tags.splice(index, 1)
   }
 }
 
-function toggleTag(tag: string) {
-  if (metadata.value.tags.includes(tag)) {
-    removeTag(tag)
+function toggleTagForFile(key: string, tag: string) {
+  const meta = fileMetadata.value[key]
+  if (!meta) return
+  if (meta.tags.includes(tag)) {
+    removeTagForFile(key, tag)
   } else {
-    metadata.value.tags.push(tag)
+    meta.tags.push(tag)
   }
 }
 
@@ -680,19 +700,47 @@ async function handleUpload() {
     const uploadedAssets: Asset[] = []
 
     for (let i = 0; i < files.value.length; i++) {
-      const file = files.value[i]
+      const file = files.value[i] as File
       uploadProgress.value[i] = 0
+      const key = getFileKey(file)
+      const meta = ensureFileMeta(file)
+      // #region agent log
+      fetch(LOG_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'upload-meta',
+          hypothesisId: 'H-upload-meta',
+          location: 'UploadWizard:handleUpload',
+          message: 'Uploading with meta',
+          data: {
+            key,
+            title: meta.title,
+            enableAI: meta.enableAI,
+            tags: meta.tags,
+            description: meta.description
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion agent log
 
       const result: UploadResult = await uploadService.uploadFile(file, {
         documentTypeId: 1,
-        label: metadata.value.title || file.name,
-        description: metadata.value.description,
+        label: meta.title || file.name,
+        description: meta.description,
+        tags: meta.tags,
+        metadata: {
+          tags: meta.tags.join(','),
+          description: meta.description
+        },
         onProgress: (progress) => {
           uploadProgress.value[i] = Math.round(progress.percent)
         }
       })
 
-      const effectiveLabel = metadata.value.title || file.name
+      const effectiveLabel = meta.title || file.name
       uploadedAssets.push({
         id: result.documentId,
         label: effectiveLabel,
@@ -702,8 +750,8 @@ async function handleUpload() {
         date_added: new Date().toISOString(),
         download_url: result.downloadUrl,
         thumbnail_url: file.type.startsWith('image/') ? filePreviews.value.get(file) : undefined,
-        tags: [...metadata.value.tags],
-        metadata: { description: metadata.value.description }
+        tags: [...meta.tags],
+        metadata: { description: meta.description, enableAI: meta.enableAI }
       } as Asset)
     }
 
@@ -736,12 +784,8 @@ function closeAndReset() {
   files.value = []
   filePreviews.value.clear()
   uploadProgress.value = {}
-  metadata.value = {
-    title: '',
-    description: '',
-    tags: [],
-    enableAI: true
-  }
+  fileMetadata.value = {}
+  newTagMap.value = {}
   
   emit('close')
 }

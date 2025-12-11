@@ -364,6 +364,14 @@
                 </dl>
               </section>
 
+              <!-- Description -->
+              <section v-if="asset.description">
+                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white mb-2">Описание</h3>
+                <p class="text-sm text-neutral-700 dark:text-neutral-300 whitespace-pre-line">
+                  {{ asset.description }}
+                </p>
+              </section>
+
               <!-- EXIF Data (for images) -->
               <section v-if="extendedAsset?.exif">
                 <h3 class="text-sm font-semibold text-neutral-900 dark:text-white mb-3">EXIF / Камера</h3>
