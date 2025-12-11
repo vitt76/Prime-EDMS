@@ -16,8 +16,10 @@
 
 <script setup lang="ts">
 import { ref, defineAsyncComponent, onMounted } from 'vue'
+import { onBeforeRouteUpdate } from 'vue-router'
 import GalleryView from '@/components/DAM/GalleryView.vue'
 import { useAssetStore } from '@/stores/assetStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
 
 // Lazy load debug panel to avoid blocking main page
 const ApiDebugPanel = defineAsyncComponent(() => 
@@ -26,11 +28,19 @@ const ApiDebugPanel = defineAsyncComponent(() =>
 
 const isDev = ref(import.meta.env.DEV)
 const assetStore = useAssetStore()
+const favoritesStore = useFavoritesStore()
 
 onMounted(() => {
   // При заходе в основную галерею сбрасываем фильтр по папкам
   assetStore.setFolderFilter(null, null)
   assetStore.fetchAssets({ page: 1 })
+  favoritesStore.fetchFavorites()
+})
+
+onBeforeRouteUpdate(() => {
+  // При возврате на /dam обновим избранное и сбросим фильтр
+  assetStore.setFolderFilter(null, null)
+  favoritesStore.fetchFavorites()
 })
 
 defineEmits<{
