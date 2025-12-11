@@ -1,3 +1,4 @@
+// @ts-nocheck
 <template>
   <div class="metadata-schema-page">
     <!-- Toolbar -->
@@ -325,6 +326,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'

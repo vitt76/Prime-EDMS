@@ -1,5 +1,12 @@
 <template>
   <div class="folder-tree">
+    <div
+      v-if="folderStore.isLoading"
+      class="px-3 py-2 text-xs text-neutral-400"
+    >
+      Загрузка системных папок...
+    </div>
+
     <!-- Section: Системные папки -->
     <div
       v-for="section in folderStore.allSections"
@@ -90,6 +97,10 @@
                hover:border-primary-400 dark:hover:border-primary-500
                hover:text-primary-600 dark:hover:text-primary-400
                rounded-lg transition-all duration-200"
+        :disabled="folderStore.isLoading"
+        :class="{
+          'opacity-60 cursor-not-allowed': folderStore.isLoading
+        }"
         @click.stop.prevent="showCreateModal = true"
       >
         <FolderPlusIcon class="w-4 h-4" />
@@ -107,12 +118,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { FolderIcon, CloudIcon } from '@heroicons/vue/24/solid'
 import { FolderPlusIcon } from '@heroicons/vue/24/outline'
 import { useFolderStore } from '@/stores/folderStore'
 import { useAssetStore } from '@/stores/assetStore'
-import { useNotificationStore } from '@/stores/notificationStore'
 import FolderTreeNode from './FolderTreeNode.vue'
 import CreateFolderModal from './CreateFolderModal.vue'
 import type { FolderNode, FolderTreeSection } from '@/mocks/folders'
@@ -131,9 +141,12 @@ const emit = defineEmits<{
 
 const folderStore = useFolderStore()
 const assetStore = useAssetStore()
-const notificationStore = useNotificationStore()
 
 const showCreateModal = ref(false)
+
+onMounted(() => {
+  folderStore.refreshFolders()
+})
 
 function countFolders(folders: FolderNode[]): number {
   let count = folders.length
@@ -177,12 +190,13 @@ async function handleDrop(payload: { folderId: string; assetIds: number[] }) {
 }
 
 async function handleCreateFolder(folderName: string) {
-  // Определяем тип папки (по умолчанию 'local')
-  const section = folderStore.allSections.find(s => s.expanded) || folderStore.allSections[0]
-  const folderType = section?.type || 'local'
-  
-  // Создаем папку в корне выбранной секции
-  const newFolder = await folderStore.createFolder(null, folderName, folderType)
+  const parentId =
+    folderStore.selectedFolder?.type === 'local'
+      ? folderStore.selectedFolder.id
+      : null
+
+  // Создаем папку (только системные папки)
+  const newFolder = await folderStore.createFolder(parentId, folderName, 'local')
   
   // Закрываем модальное окно
   showCreateModal.value = false

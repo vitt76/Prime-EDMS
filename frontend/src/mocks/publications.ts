@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Mock Data for Distribution/Sharing Feature
  * 

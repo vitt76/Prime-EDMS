@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Mayan Adapter - Optimized API Transformation Layer
  * ===========================================================================

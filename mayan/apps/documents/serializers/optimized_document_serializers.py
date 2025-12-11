@@ -262,7 +262,7 @@ class OptimizedDocumentListSerializer(
     def get_file_latest_download_url(self, obj):
         file = self._get_file_latest(obj)
         file_id = file.pk if file else getattr(obj, 'latest_file_id', None)
-        if file and file.download_url:
+        if file and hasattr(file, 'download_url') and file.download_url:
             url = file.download_url
         elif file_id:
             url = f'/api/v4/documents/{obj.pk}/files/{file_id}/download/'

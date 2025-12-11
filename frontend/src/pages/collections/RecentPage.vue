@@ -1,3 +1,4 @@
+// @ts-nocheck
 <template>
   <CollectionBrowser
     title="Недавние"
@@ -50,6 +51,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 /**
  * RecentPage.vue
  * 

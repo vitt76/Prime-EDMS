@@ -30,6 +30,7 @@ export interface Asset {
   date_added: string
   thumbnail_url?: string
   preview_url?: string
+  download_url?: string
   tags?: string[]
   metadata?: Record<string, unknown>
   file_details?: FileDetails
@@ -37,6 +38,8 @@ export interface Asset {
   comments?: Comment[]
   version_history?: Version[]
   access_level?: string
+  is_favorite?: boolean
+  isFavorite?: boolean
 }
 
 export interface FileDetails {

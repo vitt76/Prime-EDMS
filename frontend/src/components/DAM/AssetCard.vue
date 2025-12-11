@@ -744,7 +744,7 @@ onBeforeUnmount(() => {
 
 async function handleFavorite() {
   try {
-    await favoritesStore.toggleFavorite(props.asset.id)
+    await favoritesStore.toggleFavorite(props.asset.id, props.asset as any)
   } catch (error) {
     // ignore errors for now; UI will revert via store
   }

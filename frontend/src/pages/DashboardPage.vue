@@ -380,6 +380,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import { onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboardStore'

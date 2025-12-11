@@ -13,14 +13,14 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import {
   FOLDER_TREE_SECTIONS,
-  findFolderInTree,
   findFolderById,
-  getFolderPath,
-  moveAssetToFolder,
   type FolderNode,
   type FolderTreeSection,
   type FolderSource,
 } from '@/mocks/folders'
+import {
+  cabinetService,
+} from '@/services/cabinetService'
 import { useNotificationStore } from './notificationStore'
 
 export const useFolderStore = defineStore(
@@ -30,10 +30,34 @@ export const useFolderStore = defineStore(
     // STATE
     // ========================================================================
     
-    // Tree sections with folders
-    const sections = ref<FolderTreeSection[]>(
-      JSON.parse(JSON.stringify(FOLDER_TREE_SECTIONS))
+    // Helpers to keep Yandex data intact
+    const yandexSectionTemplate = FOLDER_TREE_SECTIONS.find(
+      section => section.type === 'yandex'
     )
+
+    // Tree sections with folders (system from API, Yandex from mocks)
+    const sections = ref<FolderTreeSection[]>([
+      {
+        id: 'section-system',
+        name: 'Системные папки',
+        type: 'local',
+        icon: 'folder',
+        color: 'amber',
+        folders: [],
+        expanded: true,
+      },
+      yandexSectionTemplate
+        ? JSON.parse(JSON.stringify(yandexSectionTemplate))
+        : {
+            id: 'section-yandex',
+            name: 'Яндекс.Диск',
+            type: 'yandex' as FolderSource,
+            icon: 'cloud' as const,
+            color: 'blue',
+            folders: [],
+            expanded: true,
+          },
+    ])
     
     // Currently selected folder
     const selectedFolderId = ref<string | null>(null)
@@ -76,7 +100,7 @@ export const useFolderStore = defineStore(
      */
     const selectedFolder = computed((): FolderNode | null => {
       if (!selectedFolderId.value) return null
-      return findFolderInTree(selectedFolderId.value)
+      return findFolderInSections(selectedFolderId.value)
     })
     
     /**
@@ -84,7 +108,7 @@ export const useFolderStore = defineStore(
      */
     const selectedFolderPath = computed((): FolderNode[] => {
       if (!selectedFolderId.value) return []
-      return getFolderPath(selectedFolderId.value)
+      return getFolderPathFromSections(selectedFolderId.value)
     })
     
     /**
@@ -122,6 +146,30 @@ export const useFolderStore = defineStore(
         if (found) return found
       }
       return null
+    }
+
+    function getSystemSection(): FolderTreeSection {
+      return (
+        sections.value.find(section => section.type === 'local') ||
+        sections.value[0]
+      )
+    }
+
+    /**
+     * Build breadcrumb path using current sections state
+     */
+    function getFolderPathFromSections(folderId: string): FolderNode[] {
+      const path: FolderNode[] = []
+      let current = findFolderInSections(folderId)
+
+      while (current) {
+        path.unshift(current)
+        current = current.parentId
+          ? findFolderInSections(current.parentId)
+          : null
+      }
+
+      return path
     }
     
     /**
@@ -193,7 +241,7 @@ export const useFolderStore = defineStore(
       
       // Expand parent folders to make selection visible
       if (folderId) {
-        const path = getFolderPath(folderId)
+        const path = getFolderPathFromSections(folderId)
         for (const folder of path.slice(0, -1)) { // Exclude the selected folder itself
           expandFolder(folder.id)
         }
@@ -235,23 +283,32 @@ export const useFolderStore = defineStore(
       folderId: string
     ): Promise<boolean> {
       const notificationStore = useNotificationStore()
-      const result = moveAssetToFolder(assetId, folderId)
-      
-      if (result.success) {
+      const targetFolder = findFolderInSections(folderId)
+
+      if (!targetFolder || targetFolder.type !== 'local') {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Недоступно',
+          message: 'Перемещение в эту папку недоступно',
+        })
+        return false
+      }
+
+      try {
+        await cabinetService.addDocumentsToCabinet(
+          Number(folderId),
+          [assetId]
+        )
+
         notificationStore.addNotification({
           type: 'success',
           title: 'Файл перемещён',
-          message: `Файл перемещён в папку "${result.folderName}"`,
+          message: `Файл перемещён в папку "${targetFolder.name}"`,
         })
-        
-        // Update folder asset count (mock)
-        const folder = findFolderInSections(folderId)
-        if (folder) {
-          folder.assetCount++
-        }
-        
+
+        targetFolder.assetCount += 1
         return true
-      } else {
+      } catch (error) {
         notificationStore.addNotification({
           type: 'error',
           title: 'Ошибка перемещения',
@@ -269,40 +326,40 @@ export const useFolderStore = defineStore(
       folderId: string
     ): Promise<{ success: number; failed: number }> {
       const notificationStore = useNotificationStore()
-      let success = 0
-      let failed = 0
-      
-      for (const assetId of assetIds) {
-        const result = moveAssetToFolder(assetId, folderId)
-        if (result.success) {
-          success++
-        } else {
-          failed++
-        }
+      const targetFolder = findFolderInSections(folderId)
+
+      if (!targetFolder || targetFolder.type !== 'local') {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Недоступно',
+          message: 'Перемещение в эту папку недоступно',
+        })
+        return { success: 0, failed: assetIds.length }
       }
-      
-      const folder = findFolderInSections(folderId)
-      if (folder) {
-        folder.assetCount += success
-      }
-      
-      if (success > 0) {
+
+      try {
+        await cabinetService.addDocumentsToCabinet(
+          Number(folderId),
+          assetIds
+        )
+
+        targetFolder.assetCount += assetIds.length
+
         notificationStore.addNotification({
           type: 'success',
           title: 'Файлы перемещены',
-          message: `${success} файл(ов) перемещено в папку "${folder?.name || 'Неизвестно'}"`,
+          message: `${assetIds.length} файл(ов) перемещено в папку "${targetFolder.name}"`,
         })
-      }
-      
-      if (failed > 0) {
+
+        return { success: assetIds.length, failed: 0 }
+      } catch (error) {
         notificationStore.addNotification({
-          type: 'warning',
-          title: 'Частичная ошибка',
-          message: `${failed} файл(ов) не удалось переместить`,
+          type: 'error',
+          title: 'Ошибка перемещения',
+          message: 'Не удалось переместить файлы в указанную папку',
         })
+        return { success: 0, failed: assetIds.length }
       }
-      
-      return { success, failed }
     }
     
     /**
@@ -314,47 +371,48 @@ export const useFolderStore = defineStore(
       type: FolderSource
     ): Promise<FolderNode | null> {
       const notificationStore = useNotificationStore()
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300))
-      
-      const newFolder: FolderNode = {
-        id: `${type === 'local' ? 'sys' : 'yd'}-new-${Date.now()}`,
-        name,
-        type,
-        parentId,
-        children: [],
-        expanded: false,
-        assetCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        canEdit: true,
-        canDelete: true,
-        canAddChildren: true,
+
+      if (type !== 'local') {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Создание недоступно',
+          message: 'Создавать можно только системные папки',
+        })
+        return null
       }
-      
-      if (parentId) {
-        // Add to parent folder
-        const parent = findFolderInSections(parentId)
-        if (parent) {
-          parent.children.push(newFolder)
-          expandFolder(parentId)
+
+      try {
+        const newFolder = await cabinetService.createCabinet({
+          label: name,
+          parent: parentId ? Number(parentId) : null,
+        })
+
+        if (parentId) {
+          const parent = findFolderInSections(parentId)
+          if (parent) {
+            parent.children.push(newFolder)
+            expandFolder(parentId)
+          }
+        } else {
+          const systemSection = getSystemSection()
+          systemSection.folders.push(newFolder)
         }
-      } else {
-        // Add to section root
-        const section = sections.value.find(s => s.type === type)
-        if (section) {
-          section.folders.push(newFolder)
-        }
+        
+        notificationStore.addNotification({
+          type: 'success',
+          title: 'Папка создана',
+          message: `Папка "${name}" успешно создана`,
+        })
+
+        return newFolder
+      } catch (error) {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Ошибка создания',
+          message: 'Не удалось создать папку',
+        })
+        return null
       }
-      
-      notificationStore.addNotification({
-        type: 'success',
-        title: 'Папка создана',
-        message: `Папка "${name}" успешно создана`,
-      })
-      
-      return newFolder
     }
     
     /**
@@ -362,22 +420,47 @@ export const useFolderStore = defineStore(
      */
     async function renameFolder(folderId: string, newName: string): Promise<boolean> {
       const notificationStore = useNotificationStore()
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300))
-      
-      for (const section of sections.value) {
-        if (updateFolderInTree(section.folders, folderId, { 
-          name: newName,
-          updatedAt: new Date().toISOString(),
-        })) {
-          notificationStore.addNotification({
-            type: 'success',
-            title: 'Папка переименована',
-            message: `Папка переименована в "${newName}"`,
-          })
-          return true
+
+      const folder = findFolderInSections(folderId)
+
+      if (!folder || folder.type !== 'local' || !folder.canEdit) {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Переименование недоступно',
+          message: 'Недостаточно прав для изменения этой папки',
+        })
+        return false
+      }
+
+      try {
+        const updated = await cabinetService.updateCabinet(Number(folderId), {
+          label: newName,
+        })
+
+        for (const section of sections.value) {
+          if (
+            updateFolderInTree(section.folders, folderId, { 
+              name: updated.name,
+              updatedAt: updated.updatedAt,
+              canEdit: updated.canEdit,
+              canDelete: updated.canDelete,
+              canAddChildren: updated.canAddChildren,
+            })
+          ) {
+            notificationStore.addNotification({
+              type: 'success',
+              title: 'Папка переименована',
+              message: `Папка переименована в "${newName}"`,
+            })
+            return true
+          }
         }
+      } catch (error) {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Ошибка сохранения',
+          message: 'Не удалось переименовать папку',
+        })
       }
       
       return false
@@ -392,7 +475,7 @@ export const useFolderStore = defineStore(
       
       if (!folder) return false
       
-      if (!folder.canDelete) {
+      if (folder.type !== 'local' || !folder.canDelete) {
         notificationStore.addNotification({
           type: 'error',
           title: 'Удаление запрещено',
@@ -401,35 +484,41 @@ export const useFolderStore = defineStore(
         return false
       }
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300))
-      
-      // Remove from parent or section
-      function removeFromTree(folders: FolderNode[]): boolean {
-        const index = folders.findIndex(f => f.id === folderId)
-        if (index > -1) {
-          folders.splice(index, 1)
-          return true
-        }
-        for (const f of folders) {
-          if (removeFromTree(f.children)) return true
-        }
-        return false
-      }
-      
-      for (const section of sections.value) {
-        if (removeFromTree(section.folders)) {
-          if (selectedFolderId.value === folderId) {
-            selectedFolderId.value = null
+      try {
+        await cabinetService.deleteCabinet(Number(folderId))
+        
+        function removeFromTree(folders: FolderNode[]): boolean {
+          const index = folders.findIndex(f => f.id === folderId)
+          if (index > -1) {
+            folders.splice(index, 1)
+            return true
           }
-          
-          notificationStore.addNotification({
-            type: 'success',
-            title: 'Папка удалена',
-            message: `Папка "${folder.name}" удалена`,
-          })
-          return true
+          for (const f of folders) {
+            if (removeFromTree(f.children)) return true
+          }
+          return false
         }
+        
+        for (const section of sections.value) {
+          if (removeFromTree(section.folders)) {
+            if (selectedFolderId.value === folderId) {
+              selectedFolderId.value = null
+            }
+            
+            notificationStore.addNotification({
+              type: 'success',
+              title: 'Папка удалена',
+              message: `Папка "${folder.name}" удалена`,
+            })
+            return true
+          }
+        }
+      } catch (error) {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Ошибка удаления',
+          message: 'Не удалось удалить папку',
+        })
       }
       
       return false
@@ -441,13 +530,17 @@ export const useFolderStore = defineStore(
     async function refreshFolders(): Promise<void> {
       isLoading.value = true
       
+      const notificationStore = useNotificationStore()
       try {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // In real implementation, fetch from API
-        // For now, just reset to mock data
-        sections.value = JSON.parse(JSON.stringify(FOLDER_TREE_SECTIONS))
+        const systemTree = await cabinetService.getCabinetTree()
+        const systemSection = getSystemSection()
+        systemSection.folders = systemTree
+      } catch (error) {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Ошибка загрузки',
+          message: 'Не удалось загрузить системные папки',
+        })
       } finally {
         isLoading.value = false
       }

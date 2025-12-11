@@ -57,15 +57,15 @@ export interface Collection {
   name: string
   description?: string
   parent_id: number | null
-  is_favorite: boolean
-  is_shared: boolean
+  is_favorite?: boolean
+  is_shared?: boolean
   visibility: CollectionVisibility
-  asset_count: number
-  created_by: number
+  asset_count?: number
+  created_by?: number
   created_by_username?: string
-  created_at: string
-  updated_at: string
-  cover_image_id: number | null
+  created_at?: string
+  updated_at?: string
+  cover_image_id?: number | null
   cover_image_url?: string | null
 }
 

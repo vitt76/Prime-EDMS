@@ -19,6 +19,50 @@ from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
 from mayan.apps.headless_api.views.version_views import HeadlessEditView
 from .literals import API_VERSION
 
+# #region agent log
+try:
+    import json as _json, time as _time
+    with open(r"c:\DAM\Prime-EDMS\.cursor\debug.log", "a", encoding="utf-8") as _f:
+        _f.write(_json.dumps({
+            "id": "log_rest_api_urls_enter",
+            "timestamp": _time.time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "pre-fix",
+            "hypothesisId": "H3",
+            "location": "rest_api/urls.py:api_version_urls",
+            "message": "Building rest_api api_version_urls",
+            "data": {}
+        }) + "\n")
+except Exception:
+    pass
+# #endregion agent log
+
+# #region agent log http
+try:
+    import json as _json, time as _time
+    import urllib.request as _r
+    _r.urlopen(
+        _r.Request(
+            "http://host.docker.internal:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac",
+            data=_json.dumps({
+                "id": "log_rest_api_urls_enter_http",
+                "timestamp": _time.time() * 1000,
+                "sessionId": "debug-session",
+                "runId": "pre-fix",
+                "hypothesisId": "H3",
+                "location": "rest_api/urls.py:api_version_urls",
+                "message": "Building rest_api api_version_urls",
+                "data": {}
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        ),
+        timeout=2
+    )
+except Exception:
+    pass
+# #endregion agent log
+
 api_version_urls = [
     url(regex=r'^$', name='api_version_root', view=APIVersionRoot.as_view()),
     url(

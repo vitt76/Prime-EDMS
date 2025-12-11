@@ -11,7 +11,8 @@ from .permissions import (
     permission_cabinet_remove_document, permission_cabinet_view
 )
 from .serializers import (
-    CabinetDocumentAddSerializer, CabinetDocumentRemoveSerializer,
+    CabinetDocumentAddSerializer, CabinetDocumentBulkRemoveSerializer,
+    CabinetDocumentBulkSerializer, CabinetDocumentRemoveSerializer,
     CabinetSerializer
 )
 
@@ -47,6 +48,20 @@ class APICabinetListView(generics.ListCreateAPIView):
         return {
             '_event_actor': self.request.user
         }
+
+
+class APICabinetTreeView(generics.ListAPIView):
+    """
+    get: Returns a hierarchical list of cabinets (root nodes with children).
+    """
+    mayan_object_permissions = {'GET': (permission_cabinet_view,)}
+    pagination_class = None
+    serializer_class = CabinetSerializer
+
+    def get_queryset(self):
+        return Cabinet.objects.filter(parent=None).prefetch_related(
+            'children', 'documents'
+        )
 
 
 class APICabinetView(generics.RetrieveUpdateDestroyAPIView):
@@ -89,6 +104,24 @@ class APICabinetDocumentAddView(generics.ObjectActionAPIView):
         self.object.document_add(document=document)
 
 
+class APICabinetDocumentBulkAddView(generics.ObjectActionAPIView):
+    """
+    post: Add multiple documents to a cabinet.
+    """
+    lookup_url_kwarg = 'cabinet_id'
+    mayan_object_permissions = {
+        'POST': (permission_cabinet_add_document,)
+    }
+    serializer_class = CabinetDocumentBulkSerializer
+    queryset = Cabinet.objects.all()
+
+    def object_action(self, request, serializer):
+        documents = serializer.validated_data['documents']
+        self.object._event_actor = self.request.user
+        for document in documents:
+            self.object.document_add(document=document)
+
+
 class APICabinetDocumentRemoveView(generics.ObjectActionAPIView):
     """
     post: Remove a document from a cabinet.
@@ -104,6 +137,24 @@ class APICabinetDocumentRemoveView(generics.ObjectActionAPIView):
         document = serializer.validated_data['document']
         self.object._event_actor = self.request.user
         self.object.document_remove(document=document)
+
+
+class APICabinetDocumentBulkRemoveView(generics.ObjectActionAPIView):
+    """
+    post: Remove multiple documents from a cabinet.
+    """
+    lookup_url_kwarg = 'cabinet_id'
+    mayan_object_permissions = {
+        'POST': (permission_cabinet_remove_document,)
+    }
+    serializer_class = CabinetDocumentBulkRemoveSerializer
+    queryset = Cabinet.objects.all()
+
+    def object_action(self, request, serializer):
+        documents = serializer.validated_data['documents']
+        self.object._event_actor = self.request.user
+        for document in documents:
+            self.object.document_remove(document=document)
 
 
 class APICabinetDocumentListView(

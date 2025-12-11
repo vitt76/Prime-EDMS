@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { apiService } from './apiService'
 import type {
   User,

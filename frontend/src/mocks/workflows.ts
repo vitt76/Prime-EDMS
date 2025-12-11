@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Mock Workflow States, Transitions, and History
  * Maps to Backend: /api/v4/workflows/

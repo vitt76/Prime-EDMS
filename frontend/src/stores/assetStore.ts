@@ -18,6 +18,7 @@ import axios from 'axios'
 import type { Asset, GetAssetsParams, PaginatedResponse } from '@/types/api'
 import { formatApiError } from '@/utils/errors'
 import type { AxiosProgressEvent } from 'axios'
+import type { FolderSource } from '@/mocks/folders'
 
 // Import optimized adapter for Mayan API transformation
 import {
@@ -104,6 +105,8 @@ export const useAssetStore = defineStore(
     const filters = ref<AssetFilters>({})
     const sort = ref<AssetSort>({ field: 'date_added', direction: 'desc' })
     const searchQuery = ref('')
+    const folderFilterId = ref<string | null>(null)
+    const folderFilterType = ref<FolderSource | null>(null)
     
     // Facets for filtering UI
     const availableTags = ref<string[]>([])
@@ -146,6 +149,8 @@ export const useAssetStore = defineStore(
     const selectedAssetsList = computed(() => 
       assets.value.filter(asset => selectedAssets.value.has(asset.id))
     )
+
+    const activeFolderId = computed(() => folderFilterId.value)
     
     // ========================================================================
     // HELPER FUNCTIONS
@@ -171,6 +176,11 @@ export const useAssetStore = defineStore(
       // Search
       if (searchQuery.value.trim()) {
         queryParams.set('q', searchQuery.value.trim())
+      }
+
+      // Folder (cabinet) filter - only for local system folders
+      if (folderFilterId.value && folderFilterType.value === 'local') {
+        queryParams.set('cabinets__id', folderFilterId.value)
       }
       
       // Type filter
@@ -265,6 +275,28 @@ export const useAssetStore = defineStore(
         const apiEndpoint = useOptimizedApi.value 
           ? OPTIMIZED_DOCUMENTS_API 
           : STANDARD_DOCUMENTS_API
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `log_fetchAssets_req_${Date.now()}`,
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'post-fix',
+            hypothesisId: 'H4',
+            location: 'assetStore:fetchAssets',
+            message: 'Requesting assets',
+            data: {
+              apiEndpoint,
+              query: queryParams.toString(),
+              folderFilterId: folderFilterId.value,
+              folderFilterType: folderFilterType.value
+            }
+          })
+        }).catch(() => {})
+        // #endregion agent log
         
         console.log(`[AssetStore] Fetching from ${apiEndpoint}?${queryParams.toString()}`)
 
@@ -298,6 +330,28 @@ export const useAssetStore = defineStore(
         availableTags.value = Array.from(allTags).sort()
 
         console.log(`[AssetStore] Loaded ${adapted.results.length} assets from API`)
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `log_fetchAssets_ok_${Date.now()}`,
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'post-fix',
+            hypothesisId: 'H4',
+            location: 'assetStore:fetchAssets',
+            message: 'Assets loaded',
+            data: {
+              count: adapted.results.length,
+              total: adapted.count,
+              folderFilterId: folderFilterId.value,
+              folderFilterType: folderFilterType.value
+            }
+          })
+        }).catch(() => {})
+        // #endregion agent log
         
       } catch (err: any) {
         // If optimized endpoint fails with 404, try standard endpoint
@@ -579,6 +633,35 @@ export const useAssetStore = defineStore(
       selectedAssets.value.clear()
       selectedAssets.value = new Set(selectedAssets.value)
     }
+
+    /**
+     * Set folder (cabinet) filter for assets
+     */
+    function setFolderFilter(
+      folderId: string | null,
+      folderType: FolderSource | null = null
+    ): void {
+      folderFilterId.value = folderId
+      folderFilterType.value = folderType
+      currentPage.value = 1
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: `log_setFolderFilter_${Date.now()}`,
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'post-fix',
+          hypothesisId: 'H4',
+          location: 'assetStore:setFolderFilter',
+          message: 'Set folder filter',
+          data: { folderId, folderType }
+        })
+      }).catch(() => {})
+      // #endregion agent log
+    }
     
     function isSelected(id: number): boolean {
       return selectedAssets.value.has(id)
@@ -699,6 +782,8 @@ export const useAssetStore = defineStore(
       availableTags,
       typeCounts,
       statusCounts,
+      folderFilterId,
+      folderFilterType,
 
       // Getters
       hasNextPage,
@@ -709,6 +794,7 @@ export const useAssetStore = defineStore(
       currentPageAssets,
       hasActiveFilters,
       selectedAssetsList,
+      activeFolderId,
 
       // Actions - Fetch
       fetchAssets,
@@ -741,6 +827,7 @@ export const useAssetStore = defineStore(
       setFilters,
       clearFilters,
       setSearchQuery,
+      setFolderFilter,
       refresh,
       
       // Actions - Upload

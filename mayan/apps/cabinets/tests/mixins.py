@@ -47,6 +47,9 @@ class CabinetAPIViewTestMixin:
     def _request_test_cabinet_list_api_view(self):
         return self.get(viewname='rest_api:cabinet-list')
 
+    def _request_test_cabinet_tree_api_view(self):
+        return self.get(viewname='rest_api:cabinet-tree')
+
 
 class CabinetDocumentAPIViewTestMixin:
     def _request_test_cabinet_document_add_api_view(self):
@@ -71,6 +74,26 @@ class CabinetDocumentAPIViewTestMixin:
                 'cabinet_id': self._test_cabinet.pk
             }, data={
                 'document': self._test_document.pk
+            }
+        )
+
+    def _request_test_cabinet_document_bulk_add_api_view(self, documents):
+        return self.post(
+            viewname='rest_api:cabinet-document-bulk-add', kwargs={
+                'cabinet_id': self._test_cabinet.pk
+            }, data={
+                'documents': documents
+            }
+        )
+
+    def _request_test_cabinet_document_bulk_remove_api_view(
+        self, documents
+    ):
+        return self.post(
+            viewname='rest_api:cabinet-document-bulk-remove', kwargs={
+                'cabinet_id': self._test_cabinet.pk
+            }, data={
+                'documents': documents
             }
         )
 
