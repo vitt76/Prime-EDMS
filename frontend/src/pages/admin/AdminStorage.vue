@@ -125,7 +125,7 @@
             </svg>
           </div>
           <div>
-            <p class="text-xl sm:text-2xl font-semibold text-gray-900">{{ formatBytes(stats.monthly_transfer) }}</p>
+            <p class="text-xl sm:text-2xl font-semibold text-gray-900">{{ formatBytesOrDash(stats.monthly_transfer) }}</p>
             <p class="text-xs sm:text-sm text-gray-500">Трафик / мес</p>
           </div>
         </div>
@@ -138,7 +138,9 @@
         <h2 class="font-semibold text-gray-900">Бакеты</h2>
         <button
           type="button"
-          class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+          disabled
+          title="В текущей интеграции используется один S3 bucket из docker-compose.yml. Управление бакетами будет добавлено позже."
+          class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-violet-600 hover:bg-violet-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           @click="showCreateBucketModal = true"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -216,11 +218,11 @@
               <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   class="h-full bg-gradient-to-r from-violet-500 to-violet-600 rounded-full transition-all"
-                  :style="{ width: `${(bucket.size / stats.total_size) * 100}%` }"
+                  :style="{ width: `${stats.total_size ? (bucket.size / stats.total_size) * 100 : 0}%` }"
                 />
               </div>
               <span class="text-xs text-gray-500 w-12 text-right">
-                {{ ((bucket.size / stats.total_size) * 100).toFixed(1) }}%
+                {{ (stats.total_size ? (bucket.size / stats.total_size) * 100 : 0).toFixed(1) }}%
               </span>
             </div>
             <div class="flex items-center gap-4 text-xs text-gray-500">
@@ -289,6 +291,10 @@
         <div class="absolute inset-0 bg-black/50" @click="showSettingsModal = false" />
         <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6">
           <h2 class="text-lg font-semibold text-gray-900 mb-4">Настройки S3</h2>
+          <p class="text-xs text-gray-500 mb-4">
+            Настройки берутся из <code class="px-1 py-0.5 bg-gray-100 rounded">docker-compose.yml</code> (read-only).
+            Изменения через UI пока отключены, чтобы не сломать подключение к Beget S3.
+          </p>
           
           <form @submit.prevent="saveSettings" class="space-y-4">
             <div>
@@ -296,8 +302,9 @@
               <input
                 v-model="settingsForm.endpoint"
                 type="text"
-                placeholder="https://s3.amazonaws.com"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                disabled
+                placeholder="https://s3.ru1.storage.beget.cloud"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:cursor-not-allowed"
               />
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -306,8 +313,9 @@
                 <input
                   v-model="settingsForm.accessKey"
                   type="text"
-                  placeholder="AKIAIOSFODNN7EXAMPLE"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  disabled
+                  placeholder="(masked)"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:cursor-not-allowed"
                 />
               </div>
               <div>
@@ -315,8 +323,9 @@
                 <input
                   v-model="settingsForm.secretKey"
                   type="password"
-                  placeholder="••••••••••••"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  disabled
+                  placeholder="(masked)"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -324,12 +333,10 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">Регион</label>
               <select
                 v-model="settingsForm.region"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                disabled
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:cursor-not-allowed"
               >
-                <option value="ru-central1">ru-central1 (Москва)</option>
-                <option value="ru-central3">ru-central3 (С.-Петербург)</option>
-                <option value="eu-west-1">eu-west-1 (Ирландия)</option>
-                <option value="us-east-1">us-east-1 (Вирджиния)</option>
+                <option value="ru-1">ru-1 (Beget)</option>
               </select>
             </div>
             <div class="flex items-center gap-2">
@@ -337,7 +344,8 @@
                 v-model="settingsForm.useSSL"
                 type="checkbox"
                 id="use-ssl"
-                class="w-4 h-4 text-violet-600 border-gray-300 rounded"
+                disabled
+                class="w-4 h-4 text-violet-600 border-gray-300 rounded disabled:cursor-not-allowed"
               />
               <label for="use-ssl" class="text-sm text-gray-700">Использовать SSL</label>
             </div>
@@ -380,7 +388,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h } from 'vue'
+import { ref, reactive, h, onMounted } from 'vue'
+import { apiService } from '@/services/apiService'
 
 interface S3Config {
   connected: boolean
@@ -412,6 +421,45 @@ interface Operation {
   timestamp: string
 }
 
+interface HeadlessS3ConfigResponse {
+  config: {
+    enabled: boolean
+    endpoint_url: string
+    bucket_name: string
+    region_name: string
+    use_ssl: boolean
+    verify: boolean
+    location: string
+    distribution_location: string
+    access_key_masked: string
+    secret_key_masked: string
+  }
+  connection: {
+    connected: boolean
+    message: string
+  }
+  source: string
+}
+
+interface HeadlessS3StatsResponse {
+  connection: {
+    connected: boolean
+    message: string
+  }
+  stats: {
+    bucket_name: string
+    endpoint_url?: string
+    region_name?: string
+    total_objects: number
+    total_size: number
+    is_partial: boolean
+    scanned_objects: number
+    elapsed_ms: number
+    breakdown: Record<string, { objects: number; size: number }>
+    recent_objects: Array<{ key: string; size: number; last_modified: string }>
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -426,85 +474,36 @@ const toast = reactive({
 })
 
 const settingsForm = ref({
-  endpoint: 'https://storage.yandexcloud.net',
-  accessKey: 'YCAJExxxxxxxxxxxxxxxx',
+  endpoint: '',
+  accessKey: '',
   secretKey: '',
-  region: 'ru-central1',
-  useSSL: true
+  region: 'ru-1',
+  useSSL: true,
+  verify: true,
+  bucketName: '',
+  location: '',
+  distributionLocation: ''
 })
 
 const s3Config = ref<S3Config>({
-  connected: true,
-  endpoint: 'https://storage.yandexcloud.net',
-  region: 'ru-central1',
-  accessKey: 'YCAJExxxxxxxxxxxxxxxx'
+  connected: false,
+  endpoint: '',
+  region: 'ru-1',
+  accessKey: ''
 })
 
 const stats = ref({
-  buckets_count: 4,
-  total_objects: 15847,
-  total_size: 128_000_000_000,
-  monthly_transfer: 45_000_000_000
+  buckets_count: 0,
+  total_objects: 0,
+  total_size: 0,
+  monthly_transfer: 0,
+  is_partial: false,
+  scanned_objects: 0,
+  elapsed_ms: 0
 })
 
-const buckets = ref<Bucket[]>([
-  {
-    name: 'dam-documents',
-    description: 'Основное хранилище документов',
-    type: 'documents',
-    objects_count: 8420,
-    size: 65_000_000_000,
-    status: 'active',
-    is_default: true,
-    region: 'ru-central1',
-    versioning: true,
-    created_at: '2024-01-15T10:00:00Z'
-  },
-  {
-    name: 'dam-media',
-    description: 'Медиафайлы (изображения, видео)',
-    type: 'media',
-    objects_count: 5200,
-    size: 48_000_000_000,
-    status: 'active',
-    is_default: false,
-    region: 'ru-central1',
-    versioning: true,
-    created_at: '2024-01-15T10:00:00Z'
-  },
-  {
-    name: 'dam-renditions',
-    description: 'Превью и трансформации',
-    type: 'renditions',
-    objects_count: 1890,
-    size: 12_000_000_000,
-    status: 'active',
-    is_default: false,
-    region: 'ru-central1',
-    versioning: false,
-    created_at: '2024-02-01T10:00:00Z'
-  },
-  {
-    name: 'dam-backups',
-    description: 'Резервные копии',
-    type: 'backups',
-    objects_count: 337,
-    size: 3_000_000_000,
-    status: 'active',
-    is_default: false,
-    region: 'ru-central3',
-    versioning: true,
-    created_at: '2024-01-20T10:00:00Z'
-  }
-])
-
-const recentOperations = ref<Operation[]>([
-  { id: 1, type: 'upload', description: 'Загружено 45 файлов', bucket: 'dam-documents', size: 256_000_000, status: 'success', timestamp: new Date(Date.now() - 5 * 60000).toISOString() },
-  { id: 2, type: 'sync', description: 'Синхронизация с Яндекс.Диск', bucket: 'dam-media', size: 1_200_000_000, status: 'success', timestamp: new Date(Date.now() - 15 * 60000).toISOString() },
-  { id: 3, type: 'download', description: 'Скачивание архива', bucket: 'dam-backups', size: 500_000_000, status: 'success', timestamp: new Date(Date.now() - 30 * 60000).toISOString() },
-  { id: 4, type: 'delete', description: 'Очистка временных файлов', bucket: 'dam-renditions', size: 150_000_000, status: 'success', timestamp: new Date(Date.now() - 60 * 60000).toISOString() },
-  { id: 5, type: 'upload', description: 'Ошибка загрузки большого файла', bucket: 'dam-media', size: 2_000_000_000, status: 'error', timestamp: new Date(Date.now() - 90 * 60000).toISOString() }
-])
+const buckets = ref<Bucket[]>([])
+const recentOperations = ref<Operation[]>([])
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Methods
@@ -529,6 +528,11 @@ function formatBytes(bytes: number): string {
     unitIndex++
   }
   return `${size.toFixed(1)} ${units[unitIndex]}`
+}
+
+function formatBytesOrDash(bytes: number): string {
+  if (!bytes) return '—'
+  return formatBytes(bytes)
 }
 
 function formatDate(iso: string): string {
@@ -593,23 +597,137 @@ function getOperationIcon(type: Operation['type']): string {
 
 async function refreshStats() {
   isRefreshing.value = true
-  await new Promise(resolve => setTimeout(resolve, 1000))
+  try {
+    await loadS3Data()
+    showToast('Статистика обновлена')
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка обновления статистики'
+    showToast(msg, 'error')
+  }
   isRefreshing.value = false
-  showToast('Статистика обновлена')
 }
 
 function testConnection() {
-  showToast('Подключение успешно!')
+  // Read-only: backend checks the connection using current settings.
+  refreshStats()
 }
 
 function saveSettings() {
+  // IMPORTANT: settings are controlled via docker-compose.yml / environment.
+  // We intentionally do not write these settings from the SPA to avoid breaking S3.
   showSettingsModal.value = false
-  showToast('Настройки сохранены')
+  showToast('Настройки берутся из docker-compose.yml (read-only)')
 }
 
 function editBucket(bucket: Bucket) {
   console.log('Edit bucket:', bucket.name)
 }
+
+async function loadS3Data(): Promise<void> {
+  const [configResp, statsResp] = await Promise.all([
+    apiService.get<HeadlessS3ConfigResponse>('/api/v4/headless/storage/s3/config/', undefined as any, false),
+    apiService.get<HeadlessS3StatsResponse>(
+      '/api/v4/headless/storage/s3/stats/',
+      { params: { max_objects: 20000 } } as any,
+      false
+    ),
+  ])
+
+  // Connection + config (masked)
+  s3Config.value.connected = Boolean(configResp.connection?.connected)
+  s3Config.value.endpoint = configResp.config?.endpoint_url || ''
+  s3Config.value.region = configResp.config?.region_name || 'ru-1'
+  s3Config.value.accessKey = configResp.config?.access_key_masked || ''
+
+  settingsForm.value.endpoint = configResp.config?.endpoint_url || ''
+  settingsForm.value.accessKey = configResp.config?.access_key_masked || ''
+  settingsForm.value.secretKey = configResp.config?.secret_key_masked || ''
+  settingsForm.value.region = configResp.config?.region_name || 'ru-1'
+  settingsForm.value.useSSL = Boolean(configResp.config?.use_ssl)
+  settingsForm.value.verify = Boolean(configResp.config?.verify)
+  settingsForm.value.bucketName = configResp.config?.bucket_name || ''
+  settingsForm.value.location = configResp.config?.location || ''
+  settingsForm.value.distributionLocation = configResp.config?.distribution_location || ''
+
+  // Stats
+  const s = statsResp.stats
+  stats.value.total_objects = s.total_objects || 0
+  stats.value.total_size = s.total_size || 0
+  stats.value.is_partial = Boolean(s.is_partial)
+  stats.value.scanned_objects = s.scanned_objects || 0
+  stats.value.elapsed_ms = s.elapsed_ms || 0
+
+  // Virtual buckets (prefix breakdown)
+  const breakdown = s.breakdown || {}
+  const region = configResp.config?.region_name || 'ru-1'
+  const nowIso = new Date().toISOString()
+  const bucketName = configResp.config?.bucket_name || s.bucket_name || 's3-bucket'
+
+  const docs = breakdown.documents || { objects: 0, size: 0 }
+  const pubs = breakdown.publications || { objects: 0, size: 0 }
+  const other = breakdown.other || { objects: 0, size: 0 }
+
+  buckets.value = [
+    {
+      name: bucketName,
+      description: `Документы (prefix: ${settingsForm.value.location || '/'})`,
+      type: 'documents',
+      objects_count: docs.objects,
+      size: docs.size,
+      status: statsResp.connection?.connected ? 'active' : 'inactive',
+      is_default: true,
+      region,
+      versioning: false,
+      created_at: nowIso
+    },
+    {
+      name: bucketName,
+      description: `Публикации (prefix: ${settingsForm.value.distributionLocation || '/'})`,
+      type: 'media',
+      objects_count: pubs.objects,
+      size: pubs.size,
+      status: statsResp.connection?.connected ? 'active' : 'inactive',
+      is_default: false,
+      region,
+      versioning: false,
+      created_at: nowIso
+    },
+    {
+      name: bucketName,
+      description: 'Прочее (все остальные ключи)',
+      type: 'renditions',
+      objects_count: other.objects,
+      size: other.size,
+      status: statsResp.connection?.connected ? 'active' : 'inactive',
+      is_default: false,
+      region,
+      versioning: false,
+      created_at: nowIso
+    }
+  ]
+
+  stats.value.buckets_count = buckets.value.length
+
+  // Recent operations: map recent objects to "upload" events
+  recentOperations.value = (s.recent_objects || []).map((obj, idx) => {
+    return {
+      id: idx + 1,
+      type: 'upload',
+      description: `Объект: ${obj.key}`,
+      bucket: bucketName,
+      size: obj.size || 0,
+      status: 'success',
+      timestamp: obj.last_modified
+    }
+  })
+}
+
+onMounted(() => {
+  loadS3Data().catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки S3'
+    showToast(msg, 'error')
+  })
+})
 </script>
 
 <style scoped>

@@ -20,6 +20,7 @@ from mayan.apps.headless_api.views.version_views import HeadlessEditView
 from mayan.apps.headless_api.views.conversion_views import HeadlessDocumentConvertView
 from mayan.apps.headless_api.views.dashboard_stats_views import HeadlessDashboardStatsView
 from mayan.apps.headless_api.views.auth_views import HeadlessAuthMeView
+from mayan.apps.headless_api.views.storage_views import HeadlessS3ConfigView, HeadlessS3StatsView
 from .literals import API_VERSION
 
 # #region agent log
@@ -95,6 +96,16 @@ api_version_urls = [
         regex=r'^headless/auth/me/$',
         view=HeadlessAuthMeView.as_view(),
         name='headless-auth-me'
+    ),
+    url(
+        regex=r'^headless/storage/s3/config/$',
+        view=HeadlessS3ConfigView.as_view(),
+        name='headless-storage-s3-config'
+    ),
+    url(
+        regex=r'^headless/storage/s3/stats/$',
+        view=HeadlessS3StatsView.as_view(),
+        name='headless-storage-s3-stats'
     ),
     url(
         regex=r'^headless/activity/feed/$',
