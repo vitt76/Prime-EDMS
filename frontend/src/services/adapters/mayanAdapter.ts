@@ -399,6 +399,36 @@ function inferMimeFromFilename(filename?: string, fallback = 'application/octet-
 }
 
 export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'info-card-debug',
+        hypothesisId: 'H-info-fields',
+        location: 'mayanAdapter:adaptBackendAsset',
+        message: 'Raw backend document fields for info card',
+        data: {
+          id: backendDoc.id,
+          label: backendDoc.label,
+          description: backendDoc.description,
+          datetime_created: backendDoc.datetime_created,
+          all_keys: Object.keys(backendDoc),
+          file_latest_exists: !!backendDoc.file_latest,
+          file_latest: backendDoc.file_latest,
+          files_count: backendDoc.files_count,
+          version_active: backendDoc.version_active
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+  } catch (e) {
+    // ignore logging errors
+  }
+  // #endregion agent log
+
   const rawMime = backendDoc.file_latest?.mimetype
   const inferredMime = inferMimeFromFilename(
     backendDoc.file_latest?.filename || backendDoc.label,
@@ -449,14 +479,74 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
     backendDoc.ai_analysis?.analysis_status
   )
   
+  // Get file information with fallback logic
+  let filename = backendDoc.label
+  let size = 0
+  let mime_type = mimeType
+  let file_details = undefined
+  let date_added = backendDoc.datetime_created
+
+  if (backendDoc.file_latest) {
+    filename = backendDoc.file_latest.filename || backendDoc.label
+    size = backendDoc.file_latest.size || 0
+    mime_type = backendDoc.file_latest.mimetype || mimeType
+    file_details = {
+      filename: backendDoc.file_latest.filename,
+      size: backendDoc.file_latest.size,
+      mime_type: backendDoc.file_latest.mimetype,
+      uploaded_date: backendDoc.file_latest.timestamp,
+      checksum: backendDoc.file_latest.checksum,
+    }
+    // Use file timestamp as date_added if available (more accurate)
+    if (backendDoc.file_latest.timestamp) {
+      date_added = backendDoc.file_latest.timestamp
+    }
+  } else {
+    // Fallback: try to infer from label if no file_latest
+    filename = backendDoc.label
+    size = 0 // We don't have size info
+    mime_type = mimeType // Use inferred mime type
+  }
+
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'info-card-debug',
+        hypothesisId: 'H-info-fields',
+        location: 'mayanAdapter:adaptBackendAsset',
+        message: 'Final asset fields mapping',
+        data: {
+          id: backendDoc.id,
+          original_filename: backendDoc.file_latest?.filename,
+          final_filename: filename,
+          original_size: backendDoc.file_latest?.size,
+          final_size: size,
+          original_mime: backendDoc.file_latest?.mimetype,
+          final_mime: mime_type,
+          original_date: backendDoc.datetime_created,
+          final_date: date_added,
+          has_file_latest: !!backendDoc.file_latest
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+  } catch (e) {
+    // ignore logging errors
+  }
+  // #endregion agent log
+
   return {
     id: backendDoc.id,
     label: backendDoc.label,
     description: backendDoc.description,
-    filename: backendDoc.file_latest?.filename || backendDoc.label,
-    size: backendDoc.file_latest?.size || 0,
-    mime_type: mimeType,
-    date_added: backendDoc.datetime_created,
+    filename: filename,
+    size: size,
+    mime_type: mime_type,
+    date_added: date_added,
     thumbnail_url: getThumbnailUrl(backendDoc),
     preview_url: getPreviewUrl(backendDoc),
     tags: allTags,
@@ -466,13 +556,7 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
     },
     ai_analysis: adaptBackendAIAnalysis(backendDoc.ai_analysis),
     access_level: 'internal',
-    file_details: backendDoc.file_latest ? {
-      filename: backendDoc.file_latest.filename,
-      size: backendDoc.file_latest.size,
-      mime_type: backendDoc.file_latest.mimetype,
-      uploaded_date: backendDoc.file_latest.timestamp,
-      checksum: backendDoc.file_latest.checksum,
-    } : undefined,
+    file_details: file_details,
   }
 }
 

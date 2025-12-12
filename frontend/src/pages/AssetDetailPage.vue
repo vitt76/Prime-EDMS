@@ -300,27 +300,27 @@
           <!-- Workflow Widget (Collapsible) -->
           <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
             <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
-              <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
-                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
-                  <ArrowPathRoundedSquareIcon class="w-4 h-4 text-neutral-500" />
-                  Статус и согласование
-                </h3>
-                <button
-                  type="button"
-                  class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                  @click="collapsedSections.status = !collapsedSections.status"
+              <Disclosure v-slot="{ open }" :default-open="!collapsedSections.status">
+                <DisclosureButton
+                  class="w-full flex items-center justify-between px-4 py-3 text-left border-b border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                  @click="collapsedSections.status = !open"
                 >
-                  {{ collapsedSections.status ? 'Развернуть' : 'Свернуть' }}
-                </button>
-              </div>
-              <Transition name="fade">
-                <div v-if="!collapsedSections.status" class="p-0">
+                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                    <ArrowPathRoundedSquareIcon class="w-4 h-4 text-neutral-500" />
+                    Статус и согласование
+                  </h3>
+                  <ChevronDownIcon
+                    :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                  />
+                </DisclosureButton>
+
+                <DisclosurePanel class="p-0">
                   <WorkflowWidget
                     :asset-id="assetId"
                     @status-change="handleWorkflowStatusChange"
                   />
-                </div>
-              </Transition>
+                </DisclosurePanel>
+              </Disclosure>
             </div>
           </div>
 
@@ -374,7 +374,7 @@
                   </div>
                   <div class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Добавлен</dt>
-                    <dd class="text-sm text-neutral-900 dark:text-white">{{ formatDate(asset.date_added) }}</dd>
+                    <dd class="text-sm text-neutral-900 dark:text-white">{{ formatDate(asset.file_details?.uploaded_date || asset.date_added) }}</dd>
                   </div>
                   <div v-if="asset.metadata?.width && asset.metadata?.height" class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Размеры</dt>
@@ -392,19 +392,20 @@
               </section>
 
               <!-- EXIF Data (for images) -->
-              <section v-if="extendedAsset?.exif" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">EXIF / Камера</h3>
-                  <button
-                    type="button"
-                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                    @click="collapsedSections.exif = !collapsedSections.exif"
+              <section v-if="extendedAsset?.exif" class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+                <Disclosure v-slot="{ open }" :default-open="!collapsedSections.exif">
+                  <DisclosureButton
+                    class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    @click="collapsedSections.exif = !open"
                   >
-                    {{ collapsedSections.exif ? 'Развернуть' : 'Свернуть' }}
-                  </button>
-                </div>
-                <Transition name="fade">
-                  <dl v-if="!collapsedSections.exif" class="space-y-3">
+                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">EXIF / Камера</h3>
+                    <ChevronDownIcon
+                      :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                    />
+                  </DisclosureButton>
+
+                  <DisclosurePanel class="px-4 pb-4">
+                    <dl class="space-y-3">
                   <div v-if="extendedAsset.exif.make" class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Камера</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.make }} {{ extendedAsset.exif.model }}</dd>
@@ -437,24 +438,26 @@
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">DPI</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.dpi }}</dd>
                   </div>
-                  </dl>
-                </Transition>
+                    </dl>
+                  </DisclosurePanel>
+                </Disclosure>
               </section>
 
               <!-- Tags -->
-              <section v-if="asset.tags && asset.tags.length > 0" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Теги</h3>
-                  <button
-                    type="button"
-                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                    @click="collapsedSections.tags = !collapsedSections.tags"
+              <section v-if="asset.tags && asset.tags.length > 0" class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+                <Disclosure v-slot="{ open }" :default-open="!collapsedSections.tags">
+                  <DisclosureButton
+                    class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    @click="collapsedSections.tags = !open"
                   >
-                    {{ collapsedSections.tags ? 'Развернуть' : 'Свернуть' }}
-                  </button>
-                </div>
-                <Transition name="fade">
-                  <div v-if="!collapsedSections.tags" class="flex flex-wrap gap-2">
+                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Теги</h3>
+                    <ChevronDownIcon
+                      :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                    />
+                  </DisclosureButton>
+
+                  <DisclosurePanel class="px-4 pb-4">
+                    <div class="flex flex-wrap gap-2">
                     <span
                       v-for="tag in asset.tags"
                       :key="tag"
@@ -464,24 +467,25 @@
                     >
                       {{ tag }}
                     </span>
-                  </div>
-                </Transition>
+                    </div>
+                  </DisclosurePanel>
+                </Disclosure>
               </section>
 
               <!-- AI Analysis -->
-              <section v-if="asset.ai_analysis?.status === 'completed'" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">AI Анализ</h3>
-                  <button
-                    type="button"
-                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                    @click="collapsedSections.ai = !collapsedSections.ai"
+              <section v-if="asset.ai_analysis?.status === 'completed'" class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+                <Disclosure v-slot="{ open }" :default-open="!collapsedSections.ai">
+                  <DisclosureButton
+                    class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    @click="collapsedSections.ai = !open"
                   >
-                    {{ collapsedSections.ai ? 'Развернуть' : 'Свернуть' }}
-                  </button>
-                </div>
-                <Transition name="fade">
-                  <div v-if="!collapsedSections.ai">
+                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">AI Анализ</h3>
+                    <ChevronDownIcon
+                      :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                    />
+                  </DisclosureButton>
+
+                  <DisclosurePanel class="px-4 pb-4">
                     <p v-if="asset.ai_analysis.ai_description" class="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
                       {{ asset.ai_analysis.ai_description }}
                     </p>
@@ -494,8 +498,8 @@
                         {{ tag }}
                       </span>
                     </div>
-                  </div>
-                </Transition>
+                  </DisclosurePanel>
+                </Disclosure>
               </section>
             </div>
 
@@ -741,7 +745,7 @@
 // @ts-nocheck
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import { Menu, MenuButton, MenuItem, MenuItems, Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 import {
   ArrowDownTrayIcon,
   ArrowPathRoundedSquareIcon,
@@ -891,6 +895,31 @@ async function loadAsset() {
     
     if (storeAsset) {
       console.log('[AssetDetail] Loaded from real API:', storeAsset)
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          location:'AssetDetailPage:loadAsset',
+          message:'Asset data analysis for info card',
+          data: {
+            id: storeAsset.id,
+            filename: storeAsset.filename,
+            size: storeAsset.size,
+            mime_type: storeAsset.mime_type,
+            date_added: storeAsset.date_added,
+            date_added_type: typeof storeAsset.date_added,
+            file_details: storeAsset.file_details,
+            file_details_date: storeAsset.file_details?.uploaded_date,
+            allKeys: Object.keys(storeAsset)
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'info-card-debug',
+          hypothesisId: 'H-info-fields'
+        })
+      }).catch(() => {})
+      // #endregion agent log
       asset.value = storeAsset
       
       // If asset has AI analysis, set it as extended data
@@ -982,8 +1011,11 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('ru-RU', {
+function formatDate(dateString: string | undefined): string {
+  if (!dateString) return '--'
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return '--'
+  return date.toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
