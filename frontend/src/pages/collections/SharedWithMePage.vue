@@ -86,7 +86,7 @@ import { useRouter } from 'vue-router'
 import CollectionBrowser from '@/components/collections/CollectionBrowser.vue'
 import { apiService } from '@/services/apiService'
 import { assetService } from '@/services/assetService'
-import { OTHER_USERS, type ExtendedAsset } from '@/mocks/assets'
+import type { ExtendedAsset } from '@/types/api'
 import { useNotificationStore } from '@/stores/notificationStore'
 
 // ============================================================================
@@ -96,8 +96,8 @@ import { useNotificationStore } from '@/stores/notificationStore'
 const router = useRouter()
 const notificationStore = useNotificationStore()
 
-// Mock users for empty state display
-const mockUsers = OTHER_USERS
+// Placeholder for users who shared items (to be loaded from backend when available)
+const mockUsers: any[] = []
 
 // ============================================================================
 // STATE

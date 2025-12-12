@@ -42,6 +42,41 @@ export interface Asset {
   isFavorite?: boolean
 }
 
+export interface UsageStats {
+  views?: number
+  downloads?: number
+  shares?: number
+  usedInLinks?: number
+  usedInPublications?: number
+  lastViewedAt?: string
+  lastDownloadedAt?: string
+}
+
+export interface ExtendedAsset extends Asset {
+  isFavorite?: boolean
+  uploadedBy?: {
+    id?: number
+    username?: string
+    email?: string
+    first_name?: string
+    last_name?: string
+    avatar_url?: string
+  }
+  lastAccessedAt?: string
+  sharedWithMe?: boolean
+  sharedBy?: {
+    id?: number
+    username?: string
+    email?: string
+    first_name?: string
+    last_name?: string
+    avatar_url?: string
+  }
+  sharedAt?: string
+  exif?: Record<string, unknown>
+  usage?: UsageStats
+}
+
 export interface FileDetails {
   filename: string
   size: number

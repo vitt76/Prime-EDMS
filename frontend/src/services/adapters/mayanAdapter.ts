@@ -549,6 +549,8 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
     date_added: date_added,
     thumbnail_url: getThumbnailUrl(backendDoc),
     preview_url: getPreviewUrl(backendDoc),
+    download_url: toAbsoluteUrl(backendDoc.file_latest?.download_url || backendDoc.download_url),
+    file_latest_id: backendDoc.file_latest?.id,
     tags: allTags,
     metadata: {
       ...metadata,

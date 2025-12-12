@@ -75,6 +75,25 @@ services:
       - app.env
     environment:
       MAYAN_MEDIA_ROOT: '/var/lib/mayan'
+      MAYAN_SETTINGS_MODULE: 'mayan.settings'
+      MAYAN_GUNICORN_BIN: '/opt/mayan-edms/bin/gunicorn'
+      MAYAN_GUNICORN_LIMIT_REQUEST_LINE: '4094'
+      MAYAN_GUNICORN_MAX_REQUESTS: '0'
+      MAYAN_GUNICORN_REQUESTS_JITTER: '0'
+      MAYAN_GUNICORN_TEMPORARY_DIRECTORY: ''
+      MAYAN_GUNICORN_WORKER_CLASS: 'sync'
+      MAYAN_GUNICORN_TIMEOUT: '120'
+      MAYAN_GUNICORN_WORKERS: '2'
+      MAYAN_PYTHON_BIN_DIR: '/opt/mayan-edms/bin/'
+      MAYAN_WORKER_A_CONCURRENCY: '1'
+      MAYAN_WORKER_A_MAX_MEMORY_PER_CHILD: ''
+      MAYAN_WORKER_A_MAX_TASKS_PER_CHILD: ''
+      MAYAN_WORKER_B_CONCURRENCY: '1'
+      MAYAN_WORKER_B_MAX_MEMORY_PER_CHILD: ''
+      MAYAN_WORKER_B_MAX_TASKS_PER_CHILD: ''
+      MAYAN_WORKER_C_CONCURRENCY: '1'
+      MAYAN_WORKER_C_MAX_MEMORY_PER_CHILD: ''
+      MAYAN_WORKER_C_MAX_TASKS_PER_CHILD: ''
       MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql','PORT':'5432'}}"
       MAYAN_CELERY_BROKER_URL: amqp://mayan:mayanrabbitpass@rabbitmq:5672/mayan
       MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1

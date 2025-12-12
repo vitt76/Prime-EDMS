@@ -17,6 +17,7 @@ from mayan.apps.headless_api.views.password_views import HeadlessPasswordChangeV
 from mayan.apps.headless_api.views.my_uploads_views import HeadlessMyUploadsView
 from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
 from mayan.apps.headless_api.views.version_views import HeadlessEditView
+from mayan.apps.headless_api.views.conversion_views import HeadlessDocumentConvertView
 from .literals import API_VERSION
 
 # #region agent log
@@ -132,6 +133,11 @@ api_version_urls = [
         regex=r'^headless/documents/(?P<document_id>\d+)/versions/new_from_edit/$',
         view=HeadlessEditView.as_view(),
         name='headless-document-version-new-from-edit'
+    ),
+    url(
+        regex=r'^headless/documents/(?P<document_id>\d+)/convert/$',
+        view=HeadlessDocumentConvertView.as_view(),
+        name='headless-document-convert'
     )
 ]
 
