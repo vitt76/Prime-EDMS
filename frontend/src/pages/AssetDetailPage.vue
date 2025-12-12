@@ -297,12 +297,31 @@
 
         <!-- Sidebar (30%) -->
         <aside class="w-[400px] shrink-0 bg-white dark:bg-neutral-800 border-l border-neutral-200 dark:border-neutral-700 flex flex-col overflow-hidden">
-          <!-- Workflow Widget -->
+          <!-- Workflow Widget (Collapsible) -->
           <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
-            <WorkflowWidget 
-              :asset-id="assetId" 
-              @status-change="handleWorkflowStatusChange"
-            />
+            <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
+                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                  <ArrowPathRoundedSquareIcon class="w-4 h-4 text-neutral-500" />
+                  Статус и согласование
+                </h3>
+                <button
+                  type="button"
+                  class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                  @click="collapsedSections.status = !collapsedSections.status"
+                >
+                  {{ collapsedSections.status ? 'Развернуть' : 'Свернуть' }}
+                </button>
+              </div>
+              <Transition name="fade">
+                <div v-if="!collapsedSections.status" class="p-0">
+                  <WorkflowWidget
+                    :asset-id="assetId"
+                    @status-change="handleWorkflowStatusChange"
+                  />
+                </div>
+              </Transition>
+            </div>
           </div>
 
           <!-- AI Insights Widget -->
@@ -725,6 +744,7 @@ import { useRoute } from 'vue-router'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import {
   ArrowDownTrayIcon,
+  ArrowPathRoundedSquareIcon,
   ChevronDownIcon,
   DocumentIcon,
   DocumentTextIcon,
