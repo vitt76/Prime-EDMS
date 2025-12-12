@@ -452,7 +452,9 @@ export const useAssetStore = defineStore(
         const asset = adaptBackendAsset(response.data)
 
         // If no file information, try to fetch file details separately
+        console.log('[AssetStore] Checking file details:', { hasFileDetails: !!asset.file_details, size: asset.size, fileLatestId: asset.file_latest_id })
         if (!asset.file_details || asset.size === 0) {
+          console.log('[AssetStore] Fetching file details for asset', id)
           try {
             // Try to get file list and take the latest file
             const filesResponse = await axios.get(
@@ -527,6 +529,12 @@ export const useAssetStore = defineStore(
                 uploaded_date: latestFile.timestamp,
                 checksum: latestFile.checksum,
               }
+              console.log('[AssetStore] Updated asset with file details:', {
+                filename: asset.filename,
+                size: asset.size,
+                mime_type: asset.mime_type,
+                date_added: asset.date_added
+              })
               // Use file upload date as the asset date_added if available
               if (latestFile.timestamp) {
                 asset.date_added = latestFile.timestamp
@@ -556,8 +564,9 @@ export const useAssetStore = defineStore(
                 // #endregion agent log
               }
             }
-          } catch (fileError) {
+          } catch (fileError: any) {
             console.warn('[AssetStore] Could not fetch file details:', fileError)
+            console.log('[AssetStore] File details fetch failed, asset remains:', { size: asset.size, hasFileDetails: !!asset.file_details })
             // #region agent log
             try {
               fetch(LOG_ENDPOINT, {

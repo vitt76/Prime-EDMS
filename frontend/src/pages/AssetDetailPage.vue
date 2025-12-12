@@ -768,9 +768,7 @@ import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
 import AIInsightsWidget from '@/components/asset/AIInsightsWidget.vue'
 import MediaEditorModal from '@/components/asset/MediaEditorModal.vue'
 import type { Asset, Comment, Version, ExtendedAsset, UsageStats, AIAnalysis } from '@/types/api'
-
-type WorkflowState = { id: string; label: string; color?: string }
-type AITag = { id?: string | number; label: string }
+import type { WorkflowState } from '@/mocks/workflows'
 
 const route = useRoute()
 const assetStore = useAssetStore()
@@ -886,12 +884,12 @@ async function loadAsset() {
   isLoading.value = true
   error.value = null
   previewError.value = false
-  
+
   try {
     console.log('[AssetDetail] Loading asset:', assetId.value)
-    
-    // First try to load from real API via store (includes DAM/AI data)
-    const storeAsset = await assetStore.getAssetDetail(assetId.value)
+
+    // Always force reload to get fresh file data
+    const storeAsset = await assetStore.getAssetDetail(assetId.value, true)
     
     if (storeAsset) {
       console.log('[AssetDetail] Loaded from real API:', storeAsset)
@@ -911,6 +909,9 @@ async function loadAsset() {
             date_added_type: typeof storeAsset.date_added,
             file_details: storeAsset.file_details,
             file_details_date: storeAsset.file_details?.uploaded_date,
+            file_details_size: storeAsset.file_details?.size,
+            file_details_filename: storeAsset.file_details?.filename,
+            has_file_details: !!storeAsset.file_details,
             allKeys: Object.keys(storeAsset)
           },
           timestamp: Date.now(),
@@ -1063,45 +1064,75 @@ function handleDownload() {
     asset.value.label ||
     `document-${asset.value.id}`
 
-  const url =
-    asset.value.download_url ||
-    (asset.value.file_latest_id
-      ? `/api/v4/documents/${asset.value.id}/files/${asset.value.file_latest_id}/download/`
-      : `/api/v4/documents/${asset.value.id}/files/latest/download/`)
-
   notificationStore.addNotification({
     type: 'info',
     title: 'Загрузка началась',
     message: `Скачивание ${filename}...`,
   })
 
-  try {
-    // Fetch blob via API to avoid SPA HTML fallback and include auth headers
-    const blob = await apiService.get<Blob>(url, {
-      responseType: 'blob'
-    } as any)
+  // Handle async download
+  const performDownload = async () => {
+    try {
+      let downloadUrl = asset.value.download_url
 
-    const objectUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = objectUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(objectUrl)
-  } catch (err) {
-    console.error('[AssetDetail] Download failed', err)
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка загрузки',
-      message: 'Не удалось скачать файл'
-    })
+      // If no download_url, try to get file ID first
+      if (!downloadUrl) {
+        let fileId = asset.value.file_latest_id
+
+        // If no file_latest_id, fetch file list to get latest file ID
+        if (!fileId) {
+          try {
+            const filesResponse = await apiService.get(`/api/v4/documents/${asset.value.id}/files/`)
+            if (filesResponse.results && filesResponse.results.length > 0) {
+              // Sort by timestamp descending and take the latest
+              const latestFile = filesResponse.results
+                .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+              fileId = latestFile.id
+            }
+          } catch (fileError) {
+            console.warn('[AssetDetail] Could not fetch file list:', fileError)
+          }
+        }
+
+        // Construct download URL with file ID
+        if (fileId) {
+          downloadUrl = `/api/v4/documents/${asset.value.id}/files/${fileId}/download/`
+        }
+      }
+
+      if (!downloadUrl) {
+        throw new Error('Could not determine download URL')
+      }
+
+      // Fetch blob via API to avoid SPA HTML fallback and include auth headers
+      const blob = await apiService.get<Blob>(downloadUrl, {
+        responseType: 'blob'
+      } as any)
+
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(objectUrl)
+    } catch (err) {
+      console.error('[AssetDetail] Download failed', err)
+      notificationStore.addNotification({
+        type: 'error',
+        title: 'Ошибка загрузки',
+        message: 'Не удалось скачать файл'
+      })
+    }
   }
+
+  performDownload()
 }
 
 type DownloadFormat = 'original' | 'low_res' | 'high_res' | 'pdf'
 
-async function handleDownloadAs(format: DownloadFormat) {
+function handleDownloadAs(format: DownloadFormat) {
   if (!asset.value) return
   
   const formatLabels: Record<DownloadFormat, string> = {
@@ -1129,42 +1160,47 @@ async function handleDownloadAs(format: DownloadFormat) {
       ? 'png'
       : 'jpeg' // low_res default
 
-  try {
-    const blob = await apiService.get<Blob>(
-      `/api/v4/headless/documents/${asset.value.id}/convert/`,
-      {
-        params: { format: targetFormat },
-        responseType: 'blob'
-      } as any
-    )
+  // Handle async conversion
+  const performConversion = async () => {
+    try {
+      const blob = await apiService.get<Blob>(
+        `/api/v4/headless/documents/${asset.value.id}/convert/`,
+        {
+          params: { format: targetFormat },
+          responseType: 'blob'
+        } as any
+      )
 
-    const objectUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    const baseName =
-      asset.value.file_details?.filename?.split('.')?.[0] ||
-      asset.value.filename?.split('.')?.[0] ||
-      asset.value.label ||
-      `document-${asset.value.id}`
-    link.href = objectUrl
-    link.download = `${baseName}.${targetFormat === 'jpeg' ? 'jpg' : targetFormat}`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(objectUrl)
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const baseName =
+        asset.value.file_details?.filename?.split('.')?.[0] ||
+        asset.value.filename?.split('.')?.[0] ||
+        asset.value.label ||
+        `document-${asset.value.id}`
+      link.href = objectUrl
+      link.download = `${baseName}.${targetFormat === 'jpeg' ? 'jpg' : targetFormat}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(objectUrl)
 
-    notificationStore.addNotification({
-      type: 'success',
-      title: 'Готово',
-      message: `Файл скачан в формате ${formatLabels[format]}`
-    })
-  } catch (err) {
-    console.error('[AssetDetail] Conversion download failed', err)
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка конвертации',
-      message: `Не удалось скачать файл в формате ${formatLabels[format]}`
-    })
+      notificationStore.addNotification({
+        type: 'success',
+        title: 'Готово',
+        message: `Файл скачан в формате ${formatLabels[format]}`
+      })
+    } catch (err) {
+      console.error('[AssetDetail] Conversion download failed', err)
+      notificationStore.addNotification({
+        type: 'error',
+        title: 'Ошибка конвертации',
+        message: `Не удалось скачать файл в формате ${formatLabels[format]}`
+      })
+    }
   }
+
+  performConversion()
 }
 
 function handleShare() {
