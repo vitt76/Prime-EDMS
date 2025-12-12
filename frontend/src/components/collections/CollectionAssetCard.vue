@@ -142,7 +142,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ExtendedAsset } from '@/mocks/assets'
+import type { ExtendedAsset } from '@/types/api'
 
 // ============================================================================
 // PROPS
