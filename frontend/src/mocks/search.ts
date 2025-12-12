@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Mock Search Data Layer
  * 

@@ -230,8 +230,25 @@ function handleUpload() {
 
 function handleFolderSelect(folderId: string) {
   // Navigate to DAM gallery with folder filter
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: `log_sidebar_folder_select_${Date.now()}`,
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'post-fix',
+      hypothesisId: 'H-folder',
+      location: 'Sidebar:handleFolderSelect',
+      message: 'Folder selected from tree',
+      data: { folderId }
+    })
+  }).catch(() => {})
+  // #endregion agent log
+
   router.push({
-    path: '/dam',
+    name: 'dam-gallery',
     query: { folder: folderId }
   })
 }

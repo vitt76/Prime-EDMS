@@ -60,7 +60,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
     }
   }
 
-  const toggleFavorite = async (documentId: number): Promise<boolean> => {
+  const toggleFavorite = async (documentId: number, asset?: Asset): Promise<boolean> => {
     const id = Number(documentId)
     const optimistic = !isFavorite(id)
     setFavorite(id, optimistic)
@@ -71,6 +71,13 @@ export const useFavoritesStore = defineStore('favorites', () => {
         {}
       )
       setFavorite(id, resp.favorited)
+
+      if (resp.favorited && asset) {
+        // Добавляем в список избранных, если ещё нет
+        if (!favoriteAssets.value.find(a => a.id === id)) {
+          favoriteAssets.value = [...favoriteAssets.value, asset]
+        }
+      }
 
       if (resp.favorited === false) {
         favoriteAssets.value = favoriteAssets.value.filter(asset => asset.id !== id)

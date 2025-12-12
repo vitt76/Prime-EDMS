@@ -25,6 +25,7 @@
 import axios, { AxiosProgressEvent } from 'axios'
 import { getToken } from './authService'
 import { getDocumentTypeConfig, validateMetadata } from './documentTypeService'
+const LOG_ENDPOINT = 'http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac'
 
 // ============================================================================
 // CONSTANTS
@@ -73,6 +74,8 @@ export interface UploadOptions {
   label?: string
   /** Optional description */
   description?: string
+  /** Optional tags to attach as Mayan tags */
+  tags?: string[]
   /** Optional folder (cabinet) ID to place the document */
   cabinetId?: number
   /** Optional language (ISO code) */
@@ -145,6 +148,7 @@ interface ChunkedUploadCompleteResponse {
 class UploadService {
   private baseUrl = `${import.meta.env.VITE_API_URL || ''}/api/v4`
   private readonly isBffEnabled = import.meta.env.VITE_BFF_ENABLED === 'true'
+  private readonly defaultTagColor = '#3B82F6'
   
   /**
    * Main upload method - automatically selects strategy based on file size
@@ -166,6 +170,73 @@ class UploadService {
     } else {
       console.log(`[UploadService] File ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) - using simple upload`)
       return this.uploadAsset(file, options)
+    }
+  }
+
+  async attachTagsToDocument(documentId: number, labels: string[], token: string): Promise<void> {
+    if (!labels.length) return
+    const headers = { Authorization: `Token ${token}` }
+    const uniqueLabels = Array.from(new Set(labels.map(l => l.trim()).filter(Boolean)))
+    for (const label of uniqueLabels) {
+      let tagId: number | null = null
+      try {
+        const createResp = await axios.post(
+          `${this.baseUrl.replace('/api/v4', '')}/api/v4/tags/`,
+          { label, color: this.defaultTagColor },
+          { headers }
+        )
+        tagId = createResp.data.id
+      } catch (err: any) {
+        // If tag exists, try to find it
+        try {
+          const listResp = await axios.get(`${this.baseUrl.replace('/api/v4', '')}/api/v4/tags/`, { headers })
+          const found = (listResp.data?.results || listResp.data || []).find((t: any) => t.label === label)
+          tagId = found ? found.id : null
+        } catch (e) {
+          tagId = null
+        }
+      }
+
+      if (tagId) {
+        try {
+          await axios.post(
+            `${this.baseUrl}/documents/${documentId}/tags/attach/`,
+            { tag: tagId },
+            { headers }
+          )
+          // #region agent log
+          fetch(LOG_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'upload-meta',
+              hypothesisId: 'H-upload-tags',
+              location: 'uploadService:attachTagsToDocument',
+              message: 'Tag attached',
+              data: { documentId, tagId, label },
+              timestamp: Date.now()
+            })
+          }).catch(() => {})
+          // #endregion agent log
+        } catch (e) {
+          // #region agent log
+          fetch(LOG_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'upload-meta',
+              hypothesisId: 'H-upload-tags',
+              location: 'uploadService:attachTagsToDocument',
+              message: 'Tag attach failed',
+              data: { documentId, tagId, label, error: String(e) },
+              timestamp: Date.now()
+            })
+          }).catch(() => {})
+          // #endregion agent log
+        }
+      }
     }
   }
   
@@ -193,6 +264,26 @@ class UploadService {
       // =======================================================================
       // STEP 1: Create Document Container
       // =======================================================================
+      // #region agent log
+      fetch(LOG_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'upload-meta',
+          hypothesisId: 'H-upload-service',
+          location: 'uploadService:uploadAsset',
+          message: 'Create document request',
+          data: {
+            label: options.label || file.name,
+            description: options.description || '',
+            metadataKeys: options.metadata ? Object.keys(options.metadata) : []
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion agent log
+
       options.onProgress?.({
         percent: 0,
         loaded: 0,
@@ -218,6 +309,7 @@ class UploadService {
           label: options.label || file.name,
           description: options.description || '',
           language: options.language || 'rus', // Russian by default
+          metadata: options.metadata || {}
         },
         {
           headers: {
@@ -230,6 +322,24 @@ class UploadService {
       
       documentId = createResponse.data.id
       console.log('[UploadService] Document created:', documentId)
+      // #region agent log
+      fetch(LOG_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'upload-meta',
+          hypothesisId: 'H-upload-service',
+          location: 'uploadService:uploadAsset',
+          message: 'Create document response',
+          data: {
+            documentId: createResponse.data.id,
+            label: createResponse.data.label
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion agent log
       
       // =======================================================================
       // STEP 2: Upload File Binary
@@ -317,6 +427,11 @@ class UploadService {
       // If cabinet specified, add document to cabinet
       if (options.cabinetId) {
         await this.addToCabinet(documentId, options.cabinetId, token)
+      }
+
+      // Attach tags if provided
+      if (options.tags && options.tags.length) {
+        await this.attachTagsToDocument(documentId, options.tags, token)
       }
       
       return {
@@ -641,6 +756,11 @@ class UploadService {
       // Add to cabinet if specified
       if (options.cabinetId) {
         await this.addToCabinet(completeResponse.data.document_id, options.cabinetId, token)
+      }
+
+      // Attach tags if provided
+      if (options.tags && options.tags.length) {
+        await this.attachTagsToDocument(completeResponse.data.document_id, options.tags, token)
       }
       
       return {

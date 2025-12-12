@@ -31,7 +31,6 @@ export interface Asset {
   thumbnail_url?: string
   preview_url?: string
   download_url?: string
-  file_latest_id?: number
   tags?: string[]
   metadata?: Record<string, unknown>
   file_details?: FileDetails
@@ -39,6 +38,8 @@ export interface Asset {
   comments?: Comment[]
   version_history?: Version[]
   access_level?: string
+  is_favorite?: boolean
+  isFavorite?: boolean
 }
 
 export interface UsageStats {

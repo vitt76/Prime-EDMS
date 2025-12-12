@@ -414,22 +414,25 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAssetStore } from '@/stores/assetStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
+import { useFolderStore } from '@/stores/folderStore'
 import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import AssetCardEnhanced from '@/components/DAM/AssetCardEnhanced.vue'
 import type { Asset } from '@/types/api'
-import { apiService } from '@/services/apiService'
+import { findFolderById } from '@/mocks/folders'
 
 // ============================================================================
 // COMPOSABLES
 // ============================================================================
 
 const router = useRouter()
+const route = useRoute()
 const assetStore = useAssetStore()
 const favoritesStore = useFavoritesStore()
+const folderStore = useFolderStore()
 
 // ============================================================================
 // STATE
@@ -447,7 +450,7 @@ const previewAssetSrc = computed(() => resolveAssetImageUrl(previewAsset.value))
 const previewIsFavorite = computed(() => {
   const asset = previewAsset.value
   if (!asset) return false
-  return favoritesStore.isFavorite(asset.id) || asset.is_favorite === true
+  return favoritesStore.isFavorite(asset.id) || asset.is_favorite === true || asset.isFavorite === true
 })
 
 // Local filters (applied on button click)
@@ -489,6 +492,55 @@ function pluralize(count: number, one: string, few: string, many: string): strin
   if (mod10 === 1) return one
   if (mod10 >= 2 && mod10 <= 4) return few
   return many
+}
+
+function applyFolderFilterFromRoute(): void {
+  const folderId = route.query.folder as string | undefined
+
+  if (!folderId) {
+    assetStore.setFolderFilter(null, null)
+    assetStore.fetchAssets()
+    return
+  }
+
+  // Try to resolve folder type to ensure we filter only system folders
+  const systemSection = folderStore.sections.find(section => section.type === 'local')
+  const foundFolder = systemSection
+    ? findFolderById(systemSection.folders, folderId) 
+    : null
+
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: `log_applyFolderFilter_${Date.now()}`,
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'post-fix',
+      hypothesisId: 'H-folder',
+      location: 'DAMGalleryPage:applyFolderFilterFromRoute',
+      message: 'Applying folder filter from route',
+      data: {
+        folderId,
+        found: !!foundFolder,
+        folderType: foundFolder?.type || null,
+        systemSectionExists: !!systemSection
+      }
+    })
+  }).catch(() => {})
+  // #endregion agent log
+
+  assetStore.setFolderFilter(
+    foundFolder ? folderId : null,
+    foundFolder?.type || null
+  )
+
+  if (foundFolder) {
+    folderStore.selectFolder(folderId)
+  }
+
+  assetStore.fetchAssets({ page: 1 })
 }
 
 // ============================================================================
@@ -677,7 +729,8 @@ function setupInfiniteScroll(): void {
   
   observer = new IntersectionObserver(
     (entries) => {
-      if (entries[0].isIntersecting && assetStore.hasNextPage && !assetStore.isLoadingMore) {
+      const first = entries[0]
+      if (first?.isIntersecting && assetStore.hasNextPage && !assetStore.isLoadingMore) {
         assetStore.loadMore()
       }
     },
@@ -700,10 +753,17 @@ watch(loadMoreTrigger, () => {
 // ============================================================================
 
 onMounted(() => {
-  // Initial fetch
-  assetStore.fetchAssets()
+  // Apply folder filter from route (if present)
+  applyFolderFilterFromRoute()
   favoritesStore.fetchFavorites().catch(() => {})
 })
+
+watch(
+  () => route.query.folder,
+  () => {
+    applyFolderFilterFromRoute()
+  }
+)
 </script>
 
 <style scoped>
@@ -822,7 +882,7 @@ onMounted(() => {
 }
 
 .dam-gallery__chip--active {
-  @apply bg-primary-100 text-primary-700;
+  @apply bg-primary-100 text-primary-600;
 }
 
 .dam-gallery__chip-count {
@@ -865,11 +925,11 @@ onMounted(() => {
 }
 
 .dam-gallery__tag {
-  @apply inline-flex items-center px-2.5 py-1 bg-primary-100 text-primary-700 rounded-full text-sm;
+  @apply inline-flex items-center px-2.5 py-1 bg-primary-100 text-primary-600 rounded-full text-sm;
 }
 
 .dam-gallery__tag-remove {
-  @apply ml-1.5 text-primary-500 hover:text-primary-700;
+  @apply ml-1.5 text-primary-500 hover:text-primary-600;
 }
 
 .dam-gallery__filters-actions {
@@ -881,7 +941,7 @@ onMounted(() => {
    ============================================================================ */
 
 .dam-gallery__bulk-actions {
-  @apply bg-primary-50 border-b border-primary-200 px-6 py-3;
+  @apply bg-primary-50 border-b border-primary-100 px-6 py-3;
   @apply flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3;
 }
 
@@ -890,11 +950,11 @@ onMounted(() => {
 }
 
 .dam-gallery__bulk-count {
-  @apply text-sm font-medium text-primary-900;
+  @apply text-sm font-medium text-primary-600;
 }
 
 .dam-gallery__bulk-clear {
-  @apply text-sm text-primary-600 hover:text-primary-800 underline;
+  @apply text-sm text-primary-600 hover:text-primary-600 underline;
 }
 
 .dam-gallery__bulk-buttons {
@@ -1006,7 +1066,7 @@ onMounted(() => {
 }
 
 .dam-gallery__btn--primary {
-  @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  @apply bg-primary-600 text-white hover:bg-primary-600 focus:ring-primary-500;
 }
 
 .dam-gallery__btn--outline {

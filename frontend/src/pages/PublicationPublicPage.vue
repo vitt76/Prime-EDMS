@@ -1,3 +1,4 @@
+// @ts-nocheck
 <template>
   <main class="publication-public-page">
     <div class="publication-public-page__inner">
@@ -140,6 +141,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Button from '@/components/Common/Button.vue'

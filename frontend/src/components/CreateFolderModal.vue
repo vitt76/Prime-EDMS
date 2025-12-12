@@ -41,23 +41,48 @@
               </div>
 
               <!-- Content -->
-              <div class="px-5 pb-4">
-                <label for="folder-name" class="block text-sm font-medium text-neutral-700 mb-1.5">
-                  Название папки
-                </label>
-                <input
-                  id="folder-name"
-                  ref="inputRef"
-                  v-model="folderName"
-                  type="text"
-                  class="w-full px-3 py-2.5 border border-neutral-300 rounded-lg text-sm
-                         focus:ring-2 focus:ring-primary-500 focus:border-primary-500
-                         placeholder:text-neutral-400 transition-colors"
-                  placeholder="Введите название..."
-                  @keydown.enter="handleCreate"
-                  @keydown.escape="handleClose"
-                />
-                <p v-if="error" class="mt-1.5 text-sm text-red-500">{{ error }}</p>
+              <div class="px-5 pb-4 space-y-3">
+                <div>
+                  <label for="folder-parent" class="block text-sm font-medium text-neutral-700 mb-1.5">
+                    Родительская папка (только системные)
+                  </label>
+                  <select
+                    id="folder-parent"
+                    v-model="parentId"
+                    class="w-full px-3 py-2.5 border border-neutral-300 rounded-lg text-sm
+                           focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+                           placeholder:text-neutral-400 transition-colors bg-white"
+                  >
+                    <option :value="null">Корень системных папок</option>
+                    <option
+                      v-for="opt in props.parentOptions"
+                      :key="opt.id"
+                      :value="opt.id"
+                    >
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="folder-name" class="block text-sm font-medium text-neutral-700 mb-1.5">
+                    Название папки
+                  </label>
+                  <input
+                    id="folder-name"
+                    ref="inputRef"
+                    v-model="folderName"
+                    type="text"
+                    class="w-full px-3 py-2.5 border border-neutral-300 rounded-lg text-sm
+                           focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+                           placeholder:text-neutral-400 transition-colors"
+                    placeholder="Введите название..."
+                    @keydown.enter="handleCreate"
+                    @keydown.escape="handleClose"
+                  />
+                </div>
+
+                <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
               </div>
 
               <!-- Footer -->
@@ -107,27 +132,36 @@ import {
 } from '@headlessui/vue'
 import { FolderPlusIcon } from '@heroicons/vue/24/outline'
 
+interface ParentOption {
+  id: string
+  label: string
+}
+
 interface Props {
   isOpen: boolean
+  parentOptions: ParentOption[]
+  selectedParentId?: string | null
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
   close: []
-  create: [name: string]
+  create: [name: string, parentId: string | null]
 }>()
 
 const folderName = ref('')
 const error = ref('')
 const isLoading = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
+const parentId = ref<string | null>(null)
 
 // Focus input when modal opens
 watch(() => props.isOpen, (open) => {
   if (open) {
     folderName.value = ''
     error.value = ''
+    parentId.value = props.selectedParentId ?? null
     nextTick(() => {
       inputRef.value?.focus()
     })
@@ -157,7 +191,7 @@ async function handleCreate() {
   error.value = ''
   
   try {
-    emit('create', name)
+    emit('create', name, parentId.value || null)
     // Modal will be closed by parent after successful creation
   } finally {
     isLoading.value = false

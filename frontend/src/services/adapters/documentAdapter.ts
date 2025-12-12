@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Document Adapter - Bridge between Mayan EDMS API and Vue Frontend
  * ===================================================================

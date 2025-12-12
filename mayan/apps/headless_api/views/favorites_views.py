@@ -54,38 +54,138 @@ class HeadlessFavoriteListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Base favorites for user (ordered)
-        favorites_qs = FavoriteDocument.objects.filter(
-            user=request.user
-        ).select_related('document', 'document__document_type').order_by('-datetime_added')
+        try:
+            # Base favorites for user (ordered)
+            favorites_qs = FavoriteDocument.objects.filter(
+                user=request.user
+            ).select_related('document', 'document__document_type').order_by('-datetime_added')
 
-        favorite_doc_ids = list(favorites_qs.values_list('document_id', flat=True))
+            favorite_doc_ids = list(favorites_qs.values_list('document_id', flat=True))
 
-        # Apply ACLs to documents
-        documents_qs = Document.valid.filter(pk__in=favorite_doc_ids)
-        documents_qs = AccessControlList.objects.restrict_queryset(
-            permission=permission_document_view,
-            queryset=documents_qs,
-            user=request.user
-        ).select_related('document_type').prefetch_related('tags')
+            # Apply ACLs to documents
+            documents_qs = Document.valid.filter(pk__in=favorite_doc_ids)
+            documents_qs = AccessControlList.objects.restrict_queryset(
+                permission=permission_document_view,
+                queryset=documents_qs,
+                user=request.user
+            ).select_related('document_type').prefetch_related('tags')
 
-        # Map id -> document for serializer usage
-        document_map: Dict[int, Document] = {doc.pk: doc for doc in documents_qs}
+            # Map id -> document for serializer usage
+            document_map: Dict[int, Document] = {doc.pk: doc for doc in documents_qs}
 
-        # Filter favorites by permitted documents
-        filtered_favorites_qs = favorites_qs.filter(
-            document_id__in=document_map.keys()
-        )
+            # Filter favorites by permitted documents
+            filtered_favorites_qs = favorites_qs.filter(
+                document_id__in=document_map.keys()
+            )
 
-        paginator = HeadlessFavoritesPagination()
-        page = paginator.paginate_queryset(filtered_favorites_qs, request, view=self)
+            paginator = HeadlessFavoritesPagination()
+            page = paginator.paginate_queryset(filtered_favorites_qs, request, view=self)
 
-        serializer = FavoriteDocumentEntrySerializer(
-            page,
-            many=True,
-            context={'request': request, 'document_map': document_map}
-        )
-        return paginator.get_paginated_response(serializer.data)
+            serializer = FavoriteDocumentEntrySerializer(
+                page,
+                many=True,
+                context={'request': request, 'document_map': document_map}
+            )
+
+            # #region agent log
+            try:
+                import json as _json, time as _time
+                with open(r"c:\DAM\Prime-EDMS\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                    _f.write(_json.dumps({
+                        "id": "log_headless_fav_get_ok",
+                        "timestamp": _time.time() * 1000,
+                        "sessionId": "debug-session",
+                        "runId": "post-fix",
+                        "hypothesisId": "H-fav",
+                        "location": "headless_api/views/favorites.py:get",
+                        "message": "Favorites fetched",
+                        "data": {
+                            "favorite_doc_ids": favorite_doc_ids,
+                            "allowed_count": len(document_map),
+                            "page_count": len(page) if page else 0
+                        }
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion agent log
+
+            # #region agent log http
+            try:
+                import json as _json, time as _time, urllib.request as _r
+                _r.urlopen(
+                    _r.Request(
+                        "http://host.docker.internal:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac",
+                        data=_json.dumps({
+                            "id": "log_headless_fav_get_ok_http",
+                            "timestamp": _time.time() * 1000,
+                            "sessionId": "debug-session",
+                            "runId": "post-fix",
+                            "hypothesisId": "H-fav",
+                            "location": "headless_api/views/favorites.py:get",
+                            "message": "Favorites fetched",
+                            "data": {
+                                "favorite_doc_ids": favorite_doc_ids,
+                                "allowed_count": len(document_map),
+                                "page_count": len(page) if page else 0
+                            }
+                        }).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST"
+                    ),
+                    timeout=2
+                )
+            except Exception:
+                pass
+            # #endregion agent log http
+
+            return paginator.get_paginated_response(serializer.data)
+        except Exception as exc:
+            logger.exception('Headless favorites list failed: %s', exc)
+            # #region agent log
+            try:
+                import json as _json, time as _time
+                with open(r"c:\DAM\Prime-EDMS\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                    _f.write(_json.dumps({
+                        "id": "log_headless_fav_get_err",
+                        "timestamp": _time.time() * 1000,
+                        "sessionId": "debug-session",
+                        "runId": "post-fix",
+                        "hypothesisId": "H-fav",
+                        "location": "headless_api/views/favorites.py:get",
+                        "message": "Favorites get failed",
+                        "data": {"error": str(exc)}
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion agent log
+            # #region agent log http
+            try:
+                import json as _json, time as _time, urllib.request as _r
+                _r.urlopen(
+                    _r.Request(
+                        "http://host.docker.internal:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac",
+                        data=_json.dumps({
+                            "id": "log_headless_fav_get_err_http",
+                            "timestamp": _time.time() * 1000,
+                            "sessionId": "debug-session",
+                            "runId": "post-fix",
+                            "hypothesisId": "H-fav",
+                            "location": "headless_api/views/favorites.py:get",
+                            "message": "Favorites get failed",
+                            "data": {"error": str(exc)}
+                        }).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST"
+                    ),
+                    timeout=2
+                )
+            except Exception:
+                pass
+            # #endregion agent log http
+            return Response(
+                {'error': 'favorites_failed', 'detail': str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class HeadlessFavoriteToggleView(APIView):
@@ -140,8 +240,90 @@ class HeadlessFavoriteToggleView(APIView):
             )
 
         if created:
+            # #region agent log
+            try:
+                import json as _json, time as _time
+                with open(r"c:\DAM\Prime-EDMS\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                    _f.write(_json.dumps({
+                        "id": "log_headless_fav_toggle",
+                        "timestamp": _time.time() * 1000,
+                        "sessionId": "debug-session",
+                        "runId": "post-fix",
+                        "hypothesisId": "H-fav",
+                        "location": "headless_api/views/favorites.py:post",
+                        "message": "Favorited",
+                        "data": {"document_id": document_id, "favorited": True}
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion agent log
+            # #region agent log http
+            try:
+                import json as _json, time as _time, urllib.request as _r
+                _r.urlopen(
+                    _r.Request(
+                        "http://host.docker.internal:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac",
+                        data=_json.dumps({
+                            "id": "log_headless_fav_toggle_http",
+                            "timestamp": _time.time() * 1000,
+                            "sessionId": "debug-session",
+                            "runId": "post-fix",
+                            "hypothesisId": "H-fav",
+                            "location": "headless_api/views/favorites.py:post",
+                            "message": "Favorited",
+                            "data": {"document_id": document_id, "favorited": True}
+                        }).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST"
+                    ),
+                    timeout=2
+                )
+            except Exception:
+                pass
+            # #endregion agent log http
             return Response({'favorited': True}, status=status.HTTP_200_OK)
 
         favorite.delete()
+        # #region agent log
+        try:
+            import json as _json, time as _time
+            with open(r"c:\DAM\Prime-EDMS\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                _f.write(_json.dumps({
+                    "id": "log_headless_fav_toggle",
+                    "timestamp": _time.time() * 1000,
+                    "sessionId": "debug-session",
+                    "runId": "post-fix",
+                    "hypothesisId": "H-fav",
+                    "location": "headless_api/views/favorites.py:post",
+                    "message": "Unfavorited",
+                    "data": {"document_id": document_id, "favorited": False}
+                }) + "\n")
+        except Exception:
+            pass
+        # #endregion agent log
+        # #region agent log http
+        try:
+            import json as _json, time as _time, urllib.request as _r
+            _r.urlopen(
+                _r.Request(
+                    "http://host.docker.internal:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac",
+                    data=_json.dumps({
+                        "id": "log_headless_fav_toggle_http",
+                        "timestamp": _time.time() * 1000,
+                        "sessionId": "debug-session",
+                        "runId": "post-fix",
+                        "hypothesisId": "H-fav",
+                        "location": "headless_api/views/favorites.py:post",
+                        "message": "Unfavorited",
+                        "data": {"document_id": document_id, "favorited": False}
+                    }).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST"
+                ),
+                timeout=2
+            )
+        except Exception:
+            pass
+        # #endregion agent log http
         return Response({'favorited': False}, status=status.HTTP_200_OK)
 

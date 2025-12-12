@@ -1,13 +1,5 @@
 <template>
-  <div class="workflow-widget bg-white rounded-xl border border-neutral-200 overflow-hidden">
-    <!-- Header -->
-    <div class="px-4 py-3 border-b border-neutral-100 bg-neutral-50">
-      <h3 class="text-sm font-semibold text-neutral-900 flex items-center gap-2">
-        <ArrowPathRoundedSquareIcon class="w-4 h-4 text-neutral-500" />
-        Статус и согласование
-      </h3>
-    </div>
-
+  <div class="workflow-widget">
     <!-- Loading State -->
     <div v-if="isLoading" class="p-4 flex items-center justify-center">
       <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>

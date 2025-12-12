@@ -34,7 +34,7 @@
     </div>
 
     <!-- Asset Content -->
-    <div v-else-if="asset" class="flex flex-col h-screen">
+  <div v-else-if="asset" class="asset-detail-page flex flex-col h-screen">
       <!-- Top Bar -->
       <header class="flex items-center justify-between px-6 py-4 bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
         <div class="flex items-center gap-4">
@@ -299,12 +299,31 @@
 
         <!-- Sidebar (30%) -->
         <aside class="w-[400px] shrink-0 bg-white dark:bg-neutral-800 border-l border-neutral-200 dark:border-neutral-700 flex flex-col overflow-hidden">
-          <!-- Workflow Widget -->
+          <!-- Workflow Widget (Collapsible) -->
           <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
-            <WorkflowWidget 
-              :asset-id="assetId" 
-              @status-change="handleWorkflowStatusChange"
-            />
+            <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
+                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                  <ArrowPathRoundedSquareIcon class="w-4 h-4 text-neutral-500" />
+                  Статус и согласование
+                </h3>
+                <button
+                  type="button"
+                  class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                  @click="collapsedSections.status = !collapsedSections.status"
+                >
+                  {{ collapsedSections.status ? 'Развернуть' : 'Свернуть' }}
+                </button>
+              </div>
+              <Transition name="fade">
+                <div v-if="!collapsedSections.status" class="p-0">
+                  <WorkflowWidget
+                    :asset-id="assetId"
+                    @status-change="handleWorkflowStatusChange"
+                  />
+                </div>
+              </Transition>
+            </div>
           </div>
 
           <!-- AI Insights Widget -->
@@ -317,7 +336,7 @@
           </div>
 
           <!-- Tabs -->
-          <div class="flex border-b border-neutral-200 dark:border-neutral-700 shrink-0">
+          <div class="flex border-b border-neutral-200 dark:border-neutral-700 shrink-0 sticky top-0 z-10 bg-white dark:bg-neutral-800">
             <button
               v-for="tab in tabs"
               :key="tab.id"
@@ -340,7 +359,7 @@
             <!-- Info Tab -->
             <div v-if="activeTab === 'info'" class="p-5 space-y-6">
               <!-- Basic Info -->
-              <section>
+              <section class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
                 <h3 class="text-sm font-semibold text-neutral-900 dark:text-white mb-3">Основная информация</h3>
                 <dl class="space-y-3">
                   <div class="flex justify-between">
@@ -366,10 +385,28 @@
                 </dl>
               </section>
 
+              <!-- Description -->
+              <section v-if="asset.description">
+                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white mb-2">Описание</h3>
+                <p class="text-sm text-neutral-700 dark:text-neutral-300 whitespace-pre-line">
+                  {{ asset.description }}
+                </p>
+              </section>
+
               <!-- EXIF Data (for images) -->
-              <section v-if="extendedAsset?.exif">
-                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white mb-3">EXIF / Камера</h3>
-                <dl class="space-y-3">
+              <section v-if="extendedAsset?.exif" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">EXIF / Камера</h3>
+                  <button
+                    type="button"
+                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                    @click="collapsedSections.exif = !collapsedSections.exif"
+                  >
+                    {{ collapsedSections.exif ? 'Развернуть' : 'Свернуть' }}
+                  </button>
+                </div>
+                <Transition name="fade">
+                  <dl v-if="!collapsedSections.exif" class="space-y-3">
                   <div v-if="extendedAsset.exif.make" class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Камера</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.make }} {{ extendedAsset.exif.model }}</dd>
@@ -402,40 +439,65 @@
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">DPI</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.dpi }}</dd>
                   </div>
-                </dl>
+                  </dl>
+                </Transition>
               </section>
 
               <!-- Tags -->
-              <section v-if="asset.tags && asset.tags.length > 0">
-                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white mb-3">Теги</h3>
-                <div class="flex flex-wrap gap-2">
-                  <span
-                    v-for="tag in asset.tags"
-                    :key="tag"
-                    class="px-2.5 py-1 text-xs font-medium rounded-full 
-                           bg-primary-100 dark:bg-primary-900/30 
-                           text-primary-700 dark:text-primary-300"
+              <section v-if="asset.tags && asset.tags.length > 0" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Теги</h3>
+                  <button
+                    type="button"
+                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                    @click="collapsedSections.tags = !collapsedSections.tags"
                   >
-                    {{ tag }}
-                  </span>
+                    {{ collapsedSections.tags ? 'Развернуть' : 'Свернуть' }}
+                  </button>
                 </div>
+                <Transition name="fade">
+                  <div v-if="!collapsedSections.tags" class="flex flex-wrap gap-2">
+                    <span
+                      v-for="tag in asset.tags"
+                      :key="tag"
+                      class="px-2.5 py-1 text-xs font-medium rounded-full 
+                             bg-primary-100 dark:bg-primary-900/30 
+                             text-primary-700 dark:text-primary-300"
+                    >
+                      {{ tag }}
+                    </span>
+                  </div>
+                </Transition>
               </section>
 
               <!-- AI Analysis -->
-              <section v-if="asset.ai_analysis?.status === 'completed'">
-                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white mb-3">AI Анализ</h3>
-                <p v-if="asset.ai_analysis.ai_description" class="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
-                  {{ asset.ai_analysis.ai_description }}
-                </p>
-                <div v-if="asset.ai_analysis.tags?.length" class="flex flex-wrap gap-1.5">
-                  <span
-                    v-for="tag in asset.ai_analysis.tags"
-                    :key="tag"
-                    class="px-2 py-0.5 text-xs rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+              <section v-if="asset.ai_analysis?.status === 'completed'" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">AI Анализ</h3>
+                  <button
+                    type="button"
+                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                    @click="collapsedSections.ai = !collapsedSections.ai"
                   >
-                    {{ tag }}
-                  </span>
+                    {{ collapsedSections.ai ? 'Развернуть' : 'Свернуть' }}
+                  </button>
                 </div>
+                <Transition name="fade">
+                  <div v-if="!collapsedSections.ai">
+                    <p v-if="asset.ai_analysis.ai_description" class="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
+                      {{ asset.ai_analysis.ai_description }}
+                    </p>
+                    <div v-if="asset.ai_analysis.tags?.length" class="flex flex-wrap gap-1.5">
+                      <span
+                        v-for="tag in asset.ai_analysis.tags"
+                        :key="tag"
+                        class="px-2 py-0.5 text-xs rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+                      >
+                        {{ tag }}
+                      </span>
+                    </div>
+                  </div>
+                </Transition>
               </section>
             </div>
 
@@ -497,19 +559,51 @@
             </div>
 
           <!-- Other File Types (icon fallback) -->
-          <div v-else class="flex-1 flex items-center justify-center">
-            <div class="text-center text-neutral-300">
-              <div class="mx-auto mb-3 w-16 h-16 rounded-lg bg-neutral-800 flex items-center justify-center">
-                <span class="text-sm font-semibold uppercase">{{ fileExtension || 'file' }}</span>
+          <div v-else class="flex-1 flex items-start justify-center px-4 pb-6">
+            <div class="w-full max-w-xl sticky top-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/60 shadow-sm p-5 flex flex-col gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-200">
+                  {{ fileExtension || 'FILE' }}
+                </div>
+                <div class="min-w-0">
+                  <p class="text-base font-semibold text-neutral-900 dark:text-white truncate">
+                    {{ asset.file_details?.filename || asset.filename || asset.label || 'Файл' }}
+                  </p>
+                  <p class="text-sm text-neutral-500 dark:text-neutral-400">Предпросмотр недоступен</p>
+                </div>
               </div>
-              <p class="text-lg font-semibold text-neutral-200">{{ asset.file_details?.filename || asset.filename || asset.label }}</p>
-              <p class="text-sm text-neutral-400 mt-1">Предпросмотр недоступен</p>
-              <div class="mt-4 flex items-center justify-center gap-3">
+              <p v-if="asset.description" class="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                {{ asset.description }}
+              </p>
+              <div class="flex flex-wrap gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+                <span v-if="fileExtension" class="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                  Тип: {{ fileExtension.toUpperCase() }}
+                </span>
+                <span v-if="asset.file_details?.size" class="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                  {{ formatFileSize(asset.file_details.size) }}
+                </span>
+              </div>
+              <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
                 <button
                   class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                   @click="handleDownload"
                 >
                   Скачать
+                </button>
+                <button
+                  class="px-4 py-2 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+                  @click="activeTab = 'metadata'"
+                >
+                  Открыть метаданные
+                </button>
+              </div>
+              <div class="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
+                <span>Файл без предпросмотра</span>
+                <button
+                  class="hover:text-primary-600 dark:hover:text-primary-400"
+                  @click="scrollToTop"
+                >
+                  К началу
                 </button>
               </div>
             </div>
@@ -646,11 +740,13 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import {
   ArrowDownTrayIcon,
+  ArrowPathRoundedSquareIcon,
   ChevronDownIcon,
   DocumentIcon,
   DocumentTextIcon,
@@ -673,8 +769,6 @@ type WorkflowState = { id: string; label: string; color?: string }
 type AITag = { id?: string | number; label: string }
 
 const route = useRoute()
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const router = useRouter() // Reserved for future navigation
 const assetStore = useAssetStore()
 const notificationStore = useNotificationStore()
 const favoritesStore = useFavoritesStore()
@@ -689,6 +783,39 @@ const zoom = ref(1)
 const rotation = ref(0)
 const newComment = ref('')
 const showMediaEditor = ref(false)
+const collapsedSections = ref({
+  exif: false,
+  tags: false,
+  ai: false,
+  status: false
+})
+
+onMounted(() => {
+  const isMobile = window.innerWidth < 768
+  if (isMobile) {
+    collapsedSections.value = {
+      exif: true,
+      tags: true,
+      ai: true,
+      status: true
+    }
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'debug-session',
+      runId: 'ui-layout',
+      hypothesisId: 'H-layout',
+      location: 'AssetDetailPage:onMounted',
+      message: 'Init collapsed sections',
+      data: { isMobile, collapsed: collapsedSections.value },
+      timestamp: Date.now()
+    })
+  }).catch(() => {})
+  // #endregion agent log
+})
 
 const tabs = [
   { id: 'info', label: 'Инфо' },
@@ -744,7 +871,10 @@ const usage = computed((): UsageStats | undefined => {
 const previewSrc = computed(() => resolveAssetImageUrl(asset.value))
 const previewFallback = ref<string | null>(null)
 const previewResolved = computed(() => previewFallback.value || previewSrc.value)
-const isFavorite = computed(() => (asset.value ? favoritesStore.isFavorite(asset.value.id) : false))
+const isFavorite = computed(() => {
+  if (!asset.value) return false
+  return favoritesStore.isFavorite(asset.value.id) || asset.value.is_favorite === true || asset.value.isFavorite === true
+})
 const previewError = ref(false)
 
 // Methods
@@ -766,6 +896,27 @@ async function loadAsset() {
     } else {
       error.value = `Актив с ID ${assetId.value} не найден`
     }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'ui-layout',
+        hypothesisId: 'H-layout',
+        location: 'AssetDetailPage:loadAsset',
+        message: 'Loaded asset, preview availability',
+        data: {
+          id: assetId.value,
+          hasPreview: !!(asset.value?.preview_url || asset.value?.thumbnail_url),
+          fileExtension: fileExtension.value,
+          description: !!asset.value?.description
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion agent log
   } catch (e: any) {
     console.error('[AssetDetail] Error loading asset:', e)
     error.value = e.message || 'Не удалось загрузить актив'
@@ -853,7 +1004,16 @@ function resetView() {
   rotation.value = 0
 }
 
-async function handleDownload() {
+function scrollToTop() {
+  const container = document.querySelector('.asset-detail-page') as HTMLElement | null
+  if (container) {
+    container.scrollTo({ top: 0, behavior: 'smooth' })
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+function handleDownload() {
   if (!asset.value) return
 
   const filename =

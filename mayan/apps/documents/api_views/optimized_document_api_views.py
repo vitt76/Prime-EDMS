@@ -85,7 +85,10 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
         ).values('pk')[:1]
         
         # Build main queryset with optimizations
-        queryset = Document.valid.select_related(
+        queryset = Document.valid.annotate(
+            latest_file_id=Subquery(latest_file_subquery),
+            active_version_id=Subquery(active_version_subquery)
+        ).select_related(
             'document_type'  # ForeignKey - single JOIN
         ).prefetch_related(
             # Prefetch latest file with all its fields
@@ -94,7 +97,7 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
                 queryset=DocumentFile.objects.annotate(
                     is_latest=Subquery(latest_file_subquery)
                 ).filter(pk=Subquery(latest_file_subquery)),
-                to_attr='_prefetched_file_latest_list'
+                to_attr='_prefetched_latest_file_list'
             ),
             # Prefetch active version
             Prefetch(
@@ -126,6 +129,33 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
             queryset=queryset,
             user=self.request.user
         )
+        
+        # Filter by cabinet if provided
+        cabinet_id = self.request.query_params.get('cabinets__id')
+        if cabinet_id:
+            filtered_queryset = queryset.filter(cabinets__id=cabinet_id).distinct()
+            # #region agent log
+            try:
+                import json
+                from datetime import datetime
+                with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as fp:
+                    fp.write(json.dumps({
+                        'id': f'log_cabinet_filter_{datetime.utcnow().timestamp()}',
+                        'timestamp': datetime.utcnow().timestamp() * 1000,
+                        'sessionId': 'debug-session',
+                        'runId': 'post-fix',
+                        'hypothesisId': 'H-cabinet-backend',
+                        'location': 'optimized_document_api_views:filter',
+                        'message': 'Applied cabinet filter',
+                        'data': {
+                            'cabinet_id': cabinet_id,
+                            'count': filtered_queryset.count()
+                        }
+                    }) + '\n')
+            except Exception:
+                pass
+            # #endregion agent log
+            queryset = filtered_queryset
         
         # Apply ordering
         ordering = self.request.query_params.get('ordering', '-datetime_created')

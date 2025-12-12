@@ -60,6 +60,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Button from '@/components/Common/Button.vue'

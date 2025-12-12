@@ -1,5 +1,12 @@
 <template>
   <div class="folder-tree">
+    <div
+      v-if="folderStore.isLoading"
+      class="px-3 py-2 text-xs text-neutral-400"
+    >
+      Загрузка системных папок...
+    </div>
+
     <!-- Section: Системные папки -->
     <div
       v-for="section in folderStore.allSections"
@@ -75,9 +82,9 @@
       </Transition>
     </div>
     
-    <!-- Create Folder Button (только в развёрнутом режиме) -->
+    <!-- Create Folder Button (только для системных папок, в развёрнутом режиме) -->
     <div 
-      v-if="!isCollapsed" 
+      v-if="!isCollapsed && currentSection?.type === 'local'" 
       class="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-700"
     >
       <button
@@ -90,6 +97,10 @@
                hover:border-primary-400 dark:hover:border-primary-500
                hover:text-primary-600 dark:hover:text-primary-400
                rounded-lg transition-all duration-200"
+        :disabled="folderStore.isLoading"
+        :class="{
+          'opacity-60 cursor-not-allowed': folderStore.isLoading
+        }"
         @click.stop.prevent="showCreateModal = true"
       >
         <FolderPlusIcon class="w-4 h-4" />
@@ -100,6 +111,8 @@
     <!-- Create Folder Modal -->
     <CreateFolderModal
       :is-open="showCreateModal"
+      :parent-options="parentOptions"
+      :selected-parent-id="folderStore.selectedFolder?.type === 'local' ? folderStore.selectedFolder.id : null"
       @close="showCreateModal = false"
       @create="handleCreateFolder"
     />
@@ -107,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { FolderIcon, CloudIcon } from '@heroicons/vue/24/solid'
 import { FolderPlusIcon } from '@heroicons/vue/24/outline'
 import { useFolderStore } from '@/stores/folderStore'
@@ -134,6 +147,22 @@ const assetStore = useAssetStore()
 const notificationStore = useNotificationStore()
 
 const showCreateModal = ref(false)
+const currentSection = ref<FolderTreeSection | null>(null)
+const parentOptions = ref<{ id: string; label: string }[]>([])
+
+onMounted(async () => {
+  await folderStore.refreshFolders()
+  currentSection.value = folderStore.allSections[0] || null
+  parentOptions.value = buildParentOptions(folderStore.systemFolders)
+})
+
+watch(
+  () => folderStore.systemFolders,
+  (val) => {
+    parentOptions.value = buildParentOptions(val)
+  },
+  { deep: true }
+)
 
 function countFolders(folders: FolderNode[]): number {
   let count = folders.length
@@ -144,6 +173,7 @@ function countFolders(folders: FolderNode[]): number {
 }
 
 function handleSectionClick(section: FolderTreeSection) {
+  currentSection.value = section
   if (props.isCollapsed) {
     // В свёрнутом режиме: разворачиваем sidebar и открываем секцию
     emit('expandSidebar')
@@ -176,13 +206,22 @@ async function handleDrop(payload: { folderId: string; assetIds: number[] }) {
   assetStore.clearSelection()
 }
 
-async function handleCreateFolder(folderName: string) {
-  // Определяем тип папки (по умолчанию 'local')
-  const section = folderStore.allSections.find(s => s.expanded) || folderStore.allSections[0]
-  const folderType = section?.type || 'local'
-  
-  // Создаем папку в корне выбранной секции
-  const newFolder = await folderStore.createFolder(null, folderName, folderType)
+function buildParentOptions(folders: FolderNode[], prefix = ''): { id: string; label: string }[] {
+  const result: { id: string; label: string }[] = []
+  folders.forEach(folder => {
+    const label = prefix ? `${prefix} / ${folder.name}` : folder.name
+    result.push({ id: folder.id, label })
+    if (folder.children?.length) {
+      result.push(...buildParentOptions(folder.children, label))
+    }
+  })
+  return result
+}
+
+async function handleCreateFolder(folderName: string, parentId: string | null) {
+
+  // Создаем папку (только системные папки)
+  const newFolder = await folderStore.createFolder(parentId, folderName, 'local')
   
   // Закрываем модальное окно
   showCreateModal.value = false

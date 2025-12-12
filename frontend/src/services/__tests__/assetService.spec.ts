@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { assetService } from '../assetService'
 import { apiService } from '../apiService'

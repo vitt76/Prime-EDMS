@@ -192,6 +192,7 @@ function showContextMenu(event: MouseEvent) {
 
 function handleDragEnter(event: DragEvent) {
   if (!event.dataTransfer) return
+  if (props.sectionType !== 'local' || !props.folder.canAddChildren) return
   
   // Check if dragging assets
   if (event.dataTransfer.types.includes('application/json')) {
@@ -201,6 +202,7 @@ function handleDragEnter(event: DragEvent) {
 
 function handleDragOver(event: DragEvent) {
   if (!event.dataTransfer) return
+  if (props.sectionType !== 'local' || !props.folder.canAddChildren) return
   
   // Indicate this is a valid drop target
   if (event.dataTransfer.types.includes('application/json')) {
@@ -221,6 +223,7 @@ function handleDropEvent(event: DragEvent) {
   folderStore.setDragOver(null)
   
   if (!event.dataTransfer) return
+  if (props.sectionType !== 'local' || !props.folder.canAddChildren) return
   
   try {
     const data = event.dataTransfer.getData('application/json')

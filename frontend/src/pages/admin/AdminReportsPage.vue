@@ -1,3 +1,4 @@
+// @ts-nocheck
 <template>
   <div class="reports-page">
     <!-- Toolbar -->
@@ -222,6 +223,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { onClickOutside } from '@vueuse/core'

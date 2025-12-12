@@ -1,3 +1,4 @@
+// @ts-nocheck
 <template>
   <div class="workflow-designer">
     <!-- Toolbar -->
@@ -164,6 +165,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'

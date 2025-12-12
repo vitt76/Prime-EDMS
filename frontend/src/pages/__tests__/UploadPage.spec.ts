@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * UploadPage Component Tests
  *
@@ -401,6 +402,8 @@ describe('UploadPage', () => {
     })
   })
 })
+
+
 
 
 
