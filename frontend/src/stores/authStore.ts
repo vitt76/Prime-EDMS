@@ -19,6 +19,10 @@ export const useAuthStore = defineStore(
     const twoFactorPending = ref(false)
     const twoFactorSetup = ref<any | null>(null)
 
+    // Prevent concurrent init/login races from overwriting state.
+    let authStateVersion = 0
+    let initializePromise: Promise<boolean> | null = null
+
 
     // Computed
     const isAuthenticated = computed(() => !!token.value && !!user.value)
@@ -43,6 +47,11 @@ export const useAuthStore = defineStore(
     async function login(username: string, password: string) {
       isLoading.value = true
       error.value = null
+      authStateVersion += 1
+      const localVersion = authStateVersion
+      // Clear any previous user immediately to avoid stale UI (e.g. showing "admin" after switch).
+      user.value = null
+      permissions.value = []
 
       try {
         // Step 1: Get token
@@ -52,8 +61,11 @@ export const useAuthStore = defineStore(
 
         // Step 2: Get user info
         const userResponse = await authService.getCurrentUser()
-        user.value = userResponse.user
-        permissions.value = userResponse.permissions || []
+        // Ignore if another auth mutation happened while we were logging in.
+        if (localVersion === authStateVersion) {
+          user.value = userResponse.user
+          permissions.value = userResponse.permissions || []
+        }
 
         return { success: true }
       } catch (err) {
@@ -66,6 +78,7 @@ export const useAuthStore = defineStore(
 
     async function logout() {
       try {
+        authStateVersion += 1
         await authService.logout()
       } finally {
         // Always clear local state
@@ -92,6 +105,15 @@ export const useAuthStore = defineStore(
      */
     async function initialize(): Promise<boolean> {
       console.log('[AuthStore] Initializing auth state...')
+
+      // Deduplicate concurrent initialize() calls (router guards + app mount).
+      if (initializePromise) {
+        return initializePromise
+      }
+
+      const localVersion = authStateVersion
+      const tokenAtStart = localStorage.getItem('auth_token')
+      initializePromise = (async () => {
       
       // Check if we have a real auth token in localStorage
       const hasRealToken = hasToken()
@@ -120,9 +142,13 @@ export const useAuthStore = defineStore(
       try {
         console.log('[AuthStore] Token found, validating...')
         const response = await authService.getCurrentUser()
-        user.value = response.user
-        permissions.value = response.permissions || []
-        lastActivity.value = new Date()
+        // Only apply if auth state hasn't changed and token is still the same.
+        const tokenNow = localStorage.getItem('auth_token')
+        if (localVersion === authStateVersion && tokenAtStart === tokenNow) {
+          user.value = response.user
+          permissions.value = response.permissions || []
+          lastActivity.value = new Date()
+        }
         
         console.log('[AuthStore] ✅ Session restored for:', response.user.username)
         return true
@@ -135,7 +161,14 @@ export const useAuthStore = defineStore(
         clearToken()
         localStorage.removeItem('dev_authenticated')
         return false
+      } finally {
+        // Only clear the promise if this call is still the latest.
+        if (initializePromise) {
+          initializePromise = null
+        }
       }
+      })()
+      return initializePromise
     }
 
     /**

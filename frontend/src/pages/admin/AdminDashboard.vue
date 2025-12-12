@@ -53,10 +53,10 @@
             </svg>
           </div>
         </div>
-        <div class="mt-3 flex items-center text-xs sm:text-sm">
-          <span class="text-emerald-600 font-medium">+12%</span>
-          <span class="text-gray-500 ml-2 truncate">за месяц</span>
-        </div>
+      <div class="mt-3 flex items-center text-xs sm:text-sm">
+        <span class="text-emerald-600 font-medium">{{ assetsGrowthLabel }}</span>
+        <span class="text-gray-500 ml-2 truncate">за месяц</span>
+      </div>
       </div>
 
       <!-- Total Users -->
@@ -74,6 +74,9 @@
         </div>
         <div class="mt-3 flex items-center text-xs sm:text-sm">
           <span class="text-gray-500 truncate">{{ stats.active_users }} активных</span>
+          <span class="text-gray-300 mx-2">•</span>
+          <span class="text-emerald-600 font-medium">{{ usersGrowthLabel }}</span>
+          <span class="text-gray-500 ml-1 truncate">за месяц</span>
         </div>
       </div>
 
@@ -93,12 +96,12 @@
         <div class="mt-3">
           <div class="flex items-center justify-between text-xs sm:text-sm mb-1">
             <span class="text-gray-500">Занято</span>
-            <span class="font-medium text-gray-700">{{ storagePercent }}%</span>
+            <span class="font-medium text-gray-700">{{ storagePercent === null ? '—' : `${storagePercent}%` }}</span>
           </div>
           <div class="h-1.5 sm:h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
               class="h-full bg-amber-500 rounded-full transition-all duration-500"
-              :style="{ width: `${storagePercent}%` }"
+              :style="{ width: `${storagePercent === null ? 0 : storagePercent}%` }"
             />
           </div>
         </div>
@@ -255,6 +258,7 @@
 import { ref, computed, onMounted, h, watch } from 'vue'
 import type { AdminDashboardStats, ActivityEvent, ServiceStatus as ServiceStatusType } from '@/types/admin'
 import { useAdminWebSocket } from '@/composables/useAdminWebSocket'
+import { apiService } from '@/services/apiService'
 
 // Real-time updates
 const { 
@@ -364,89 +368,57 @@ const ActivityItem = {
 // ═══════════════════════════════════════════════════════════════════════════════
 const isRefreshing = ref(false)
 const lastUpdated = ref(new Date().toISOString())
+const assetsGrowthLabel = ref('0%')
+const usersGrowthLabel = ref('0%')
 
-// Mock data
+// Initial data (will be replaced by real data on mount)
 const stats = ref<AdminDashboardStats>({
-  total_assets: 15847,
-  total_users: 24,
-  active_users: 8,
-  storage_used_bytes: 128_000_000_000,
-  storage_total_bytes: 500_000_000_000,
+  total_assets: 0,
+  total_users: 0,
+  active_users: 0,
+  storage_used_bytes: 0,
+  storage_total_bytes: 0,
   ai_queue: {
-    pending: 12,
-    processing: 3,
-    failed: 2,
-    completed_today: 156
+    pending: 0,
+    processing: 0,
+    failed: 0,
+    completed_today: 0
   },
-  recent_activity: [
-    {
-      id: '1',
-      type: 'document_created',
-      actor: { id: 1, username: 'admin' },
-      description: 'Загружено 45 новых файлов в папку "Маркетинг Q4"',
-      metadata: {},
-      timestamp: new Date(Date.now() - 5 * 60000).toISOString()
-    },
-    {
-      id: '2',
-      type: 'user_created',
-      actor: { id: 1, username: 'admin' },
-      description: 'Приглашён новый пользователь maria@company.ru',
-      metadata: {},
-      timestamp: new Date(Date.now() - 25 * 60000).toISOString()
-    },
-    {
-      id: '3',
-      type: 'import_completed',
-      actor: { id: 2, username: 'system' },
-      description: 'Импорт из Яндекс.Диска завершён: 234 файла',
-      metadata: {},
-      timestamp: new Date(Date.now() - 2 * 3600000).toISOString()
-    },
-    {
-      id: '4',
-      type: 'ai_analysis_completed',
-      actor: { id: 2, username: 'system' },
-      description: 'AI-анализ завершён для 89 изображений',
-      metadata: {},
-      timestamp: new Date(Date.now() - 4 * 3600000).toISOString()
-    },
-    {
-      id: '5',
-      type: 'document_deleted',
-      actor: { id: 3, username: 'editor' },
-      description: 'Удалено 12 устаревших документов',
-      metadata: {},
-      timestamp: new Date(Date.now() - 24 * 3600000).toISOString()
-    }
-  ],
+  recent_activity: [],
   system_health: {
-    database: { status: 'healthy', latency_ms: 12, last_check: new Date().toISOString() },
-    redis: { status: 'healthy', latency_ms: 2, last_check: new Date().toISOString() },
+    database: { status: 'unknown', latency_ms: 0, last_check: new Date().toISOString() },
+    redis: { status: 'unknown', latency_ms: 0, last_check: new Date().toISOString() },
     celery: {
-      status: 'healthy',
-      workers: [
-        { name: 'worker_a', status: 'healthy', active_tasks: 3, processed_total: 12450, last_heartbeat: new Date().toISOString() },
-        { name: 'worker_b', status: 'healthy', active_tasks: 2, processed_total: 11890, last_heartbeat: new Date().toISOString() }
-      ],
+      status: 'unknown',
+      workers: [],
       queues: []
     },
     storage: {
-      status: 'healthy',
-      total_bytes: 500_000_000_000,
-      used_bytes: 128_000_000_000,
-      free_bytes: 372_000_000_000,
-      usage_percent: 25.6
+      status: 'unknown',
+      total_bytes: 0,
+      used_bytes: 0,
+      free_bytes: 0,
+      usage_percent: 0
     },
-    search_index: { status: 'healthy', latency_ms: 45, last_check: new Date().toISOString() }
+    search_index: { status: 'unknown', latency_ms: 0, last_check: new Date().toISOString() }
   }
 })
+
+type PaginatedResponse<T> = {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Computed
 // ═══════════════════════════════════════════════════════════════════════════════
 const storagePercent = computed(() => {
-  return Math.round((stats.value.storage_used_bytes / stats.value.storage_total_bytes) * 100)
+  const total = Number(stats.value.storage_total_bytes || 0)
+  const used = Number(stats.value.storage_used_bytes || 0)
+  if (!total || total <= 0) return null
+  return Math.round((used / total) * 100)
 })
 
 const activeWorkers = computed(() => {
@@ -458,6 +430,195 @@ const activeWorkers = computed(() => {
 // ═══════════════════════════════════════════════════════════════════════════════
 function formatNumber(num: number): string {
   return new Intl.NumberFormat('ru-RU').format(num)
+}
+
+async function fetchTotalAssetsCount(): Promise<number | null> {
+  // "Активы" в текущей системе — это документы Mayan, поэтому предпочитаем документы.
+  // Некоторые окружения имеют /assets/ эндпоинт, но он может быть пустым — используем его только как fallback.
+  const candidates = [
+    '/api/v4/documents/optimized/', // Prime-EDMS optimized documents endpoint
+    '/api/v4/documents/', // Mayan standard documents endpoint
+    '/api/v4/assets/' // custom DAM endpoint (if available)
+  ]
+
+  let bestCount: number | null = null
+
+  for (const url of candidates) {
+    try {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'admin-dashboard-1',
+          hypothesisId: 'H_dashboard_assets',
+          location: 'AdminDashboard.fetchTotalAssetsCount',
+          message: 'Trying assets count endpoint',
+          data: { url },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+
+      const response = await apiService.get<PaginatedResponse<unknown>>(
+        url,
+        { params: { page_size: 1 } } as any,
+        false
+      )
+
+      if (typeof response?.count === 'number') {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'debug-session',
+            runId: 'admin-dashboard-1',
+            hypothesisId: 'H_dashboard_assets',
+            location: 'AdminDashboard.fetchTotalAssetsCount',
+            message: 'Assets count endpoint succeeded',
+            data: { url, count: response.count },
+            timestamp: Date.now()
+          })
+        }).catch(() => {})
+        // #endregion
+        bestCount = bestCount === null ? response.count : Math.max(bestCount, response.count)
+        // If we found a non-zero count, we can stop early (real data is present).
+        if (response.count > 0) {
+          return response.count
+        }
+      }
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'admin-dashboard-1',
+          hypothesisId: 'H_dashboard_assets',
+          location: 'AdminDashboard.fetchTotalAssetsCount',
+          message: 'Assets count endpoint failed',
+          data: { url },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+    }
+  }
+
+  return bestCount
+}
+
+async function fetchMonthlyGrowth(): Promise<{ total: number; growth_label: string } | null> {
+  try {
+    const data = await apiService.get<any>(
+      '/api/v4/headless/dashboard/stats/',
+      undefined,
+      false
+    )
+
+    if (typeof data?.documents?.total === 'number') {
+      // Update users too (no mocks)
+      if (typeof data?.users?.total === 'number') {
+        stats.value.total_users = data.users.total
+      }
+      if (typeof data?.users?.active_total === 'number') {
+        stats.value.active_users = data.users.active_total
+      }
+      usersGrowthLabel.value = String(data?.users?.growth_label ?? '0%')
+
+      // Update storage too (no mocks)
+      if (typeof data?.storage?.used_bytes === 'number') {
+        stats.value.storage_used_bytes = data.storage.used_bytes
+      }
+      if (typeof data?.storage?.total_bytes === 'number') {
+        stats.value.storage_total_bytes = data.storage.total_bytes
+      }
+
+      return {
+        total: data.documents.total,
+        growth_label: String(data.documents.growth_label ?? '0%')
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+async function loadRealDashboardStats(): Promise<void> {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'debug-session',
+      runId: 'admin-dashboard-1',
+      hypothesisId: 'H_dashboard_assets',
+      location: 'AdminDashboard.loadRealDashboardStats',
+      message: 'Loading real dashboard stats (partial)',
+      data: {},
+      timestamp: Date.now()
+    })
+  }).catch(() => {})
+  // #endregion
+
+  // Prefer headless dashboard stats (includes growth); fallback to count endpoints.
+  const dash = await fetchMonthlyGrowth()
+  if (dash) {
+    stats.value.total_assets = dash.total
+    assetsGrowthLabel.value = dash.growth_label
+  } else {
+    const totalAssets = await fetchTotalAssetsCount()
+    if (typeof totalAssets === 'number') {
+      stats.value.total_assets = totalAssets
+    }
+    assetsGrowthLabel.value = '0%'
+  }
+
+  lastUpdated.value = new Date().toISOString()
+}
+
+function mapVerbCodeToActivityType(verbCode: string): ActivityEvent['type'] {
+  const mapping: Record<string, ActivityEvent['type']> = {
+    // Documents
+    'documents.document_create': 'document_created',
+    'documents.document_file_created': 'document_created',
+    'documents.document_version_created': 'document_updated',
+    'documents.document_properties_edited': 'document_updated',
+    'documents.document_file_downloaded': 'document_downloaded',
+    'documents.document_deleted': 'document_deleted',
+    // Users / auth
+    'authentication.user_logged_in': 'user_login',
+    'authentication.user_logged_out': 'user_login',
+  }
+  return mapping[verbCode] || 'document_updated'
+}
+
+async function loadRecentActivity(): Promise<void> {
+  try {
+    // Admin sees all, non-admin falls back server-side to my_documents.
+    const data = await apiService.get<any>(
+      '/api/v4/headless/activity/feed/',
+      { params: { filter: 'all', page_size: 4, important: 1 } } as any,
+      false
+    )
+
+    const results = Array.isArray(data?.results) ? data.results : []
+    stats.value.recent_activity = results.map((item: any) => ({
+      id: String(item.id),
+      type: mapVerbCodeToActivityType(String(item.verb_code || '')),
+      actor: item.actor || { id: null, username: 'system' },
+      description: String(item.description || ''),
+      metadata: {},
+      timestamp: String(item.timestamp || new Date().toISOString())
+    }))
+  } catch (err) {
+    console.warn('[AdminDashboard] Failed to load activity feed', err)
+    stats.value.recent_activity = []
+  }
 }
 
 function formatBytes(bytes: number): string {
@@ -482,63 +643,27 @@ function formatTime(iso: string): string {
 
 async function refreshData() {
   isRefreshing.value = true
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  lastUpdated.value = new Date().toISOString()
-  isRefreshing.value = false
+  try {
+    await loadRealDashboardStats()
+    await loadRecentActivity()
+  } finally {
+    isRefreshing.value = false
+  }
 }
 
 onMounted(() => {
   // Initial data load
+  loadRealDashboardStats()
+  loadRecentActivity()
 })
 
-// Watch WebSocket data for real-time updates
-watch(() => wsStats.activeUsers, (val) => {
-  stats.value.active_users = val
-})
+// WebSocket stats are intentionally NOT used to overwrite dashboard numeric KPIs.
+// The admin dashboard must be "no mocks" and sources of truth are backend endpoints.
+// If we later implement a real WS feed from backend, we can re-enable these with strict validation.
 
-watch(() => wsStats.aiQueueSize, (val) => {
-  stats.value.ai_queue_size = val
-})
+// NOTE: Removed broken watcher referencing undefined `services`.
+// This caused the entire dashboard to crash and trip the global ErrorBoundary.
 
-watch(() => wsStats.storageUsedPercent, (val) => {
-  stats.value.storage_used_percent = parseFloat(val.toFixed(1))
-})
-
-watch(() => wsStats.cpuUsage, () => {
-  // Update services status based on CPU usage
-  if (wsStats.cpuUsage > 80) {
-    const web = services.value.find(s => s.label === 'Web Server')
-    if (web) web.status = 'degraded'
-  }
-})
-
-// Merge WebSocket events with existing activity
-watch(recentEvents, (events) => {
-  if (events.length > 0 && events[0]) {
-    const latestEvent = events[0]
-    const newActivity: ActivityEvent = {
-      id: latestEvent.id,
-      type: mapEventType(latestEvent.type),
-      description: latestEvent.description,
-      actor: latestEvent.actor || 'System',
-      timestamp: latestEvent.timestamp
-    }
-    // Add to beginning and keep max 20 items
-    stats.value.recent_activity.unshift(newActivity)
-    if (stats.value.recent_activity.length > 20) {
-      stats.value.recent_activity.pop()
-    }
-  }
-}, { deep: true })
-
-function mapEventType(wsType: string): ActivityEvent['type'] {
-  const mapping: Record<string, ActivityEvent['type']> = {
-    'user_login': 'user_login',
-    'document_upload': 'document_created',
-    'ai_completed': 'ai_analysis_completed',
-    'storage_warning': 'document_deleted',
-    'system_update': 'import_completed'
-  }
-  return mapping[wsType] || 'document_created'
-}
+// Do not merge websocket events into dashboard activity feed.
+// Dashboard activity is sourced from backend and ACL-filtered.
 </script>

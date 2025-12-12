@@ -297,6 +297,34 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
+  // Check admin access
+  if (to.meta.requiresAdmin) {
+    const u = authStore.user as any
+    const perms: string[] = (authStore.permissions as any) || u?.permissions || []
+    const hasAdminPerm =
+      Array.isArray(perms) &&
+      perms.some((p) =>
+        String(p).startsWith('user_management.user_') ||
+        String(p).startsWith('user_management.group_') ||
+        String(p).startsWith('permissions.role_')
+      )
+    const isAdmin = !!u && (u.is_staff === true || u.is_superuser === true || u.can_access_admin_panel === true || hasAdminPerm)
+
+    if (!isAdmin) {
+      console.warn(
+        `Access denied: User ${authStore.user?.id} attempted ${to.path}, requires admin`
+      )
+      next({
+        name: 'forbidden',
+        query: {
+          returnTo: to.fullPath,
+          requiredRole: 'admin'
+        }
+      })
+      return
+    }
+  }
+
   // Check if route requires specific permission
   if (to.meta.requiresPermission) {
     const permission = to.meta.requiresPermission as string

@@ -6,7 +6,9 @@ doesn't provide through its standard API.
 """
 
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth import get_user_model
 from django.core.paginator import EmptyPage, Paginator
+from django.db.models import Q
 from django.utils.translation import ugettext_lazy as _
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication
@@ -14,7 +16,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document
+from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.events.models import Action
 from mayan.apps.headless_api.serializers import ActivityFeedSerializer
 
@@ -67,22 +71,43 @@ class HeadlessActivityFeedView(APIView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
-    # Translation mappings for activity verbs
-    VERB_TRANSLATIONS = {
-        'document_created': _('created document'),
-        'document_edited': _('edited document'),
-        'document_deleted': _('deleted document'),
-        'document_downloaded': _('downloaded document'),
-        'document_viewed': _('viewed document'),
-        'file_uploaded': _('uploaded file'),
-        'tag_attached': _('attached tag'),
-        'tag_removed': _('removed tag'),
-        'metadata_edited': _('edited metadata'),
-        'cabinet_document_added': _('added to collection'),
-        'cabinet_document_removed': _('removed from collection'),
-        'workflow_transition': _('changed status'),
-        'user_logged_in': _('logged in'),
-        'user_logged_out': _('logged out'),
+    # Noise filters: hide internal/system maintenance events by default.
+    IMPORTANT_VERB_PREFIXES = (
+        'documents.',
+        'document_parsing.',
+        'file_metadata.',
+        'ocr.',
+        'authentication.',
+        'user_management.',
+        'document_states.',
+        'tags.',
+        'metadata.',
+        'cabinets.',
+    )
+
+    # System/noisy events that should be hidden by default from UI activity feeds.
+    # Can be enabled via query param `system=1`.
+    SYSTEM_VERB_PREFIXES = (
+        'file_caching.',
+        'logging.',
+        'locks.',
+        'task_manager.',
+    )
+
+    DOCUMENT_VERB_RU = {
+        'documents.document_create': _('загрузил документ'),
+        'documents.document_file_created': _('добавил файл к документу'),
+        'documents.document_version_created': _('создал версию документа'),
+        'documents.document_file_downloaded': _('скачал файл документа'),
+        'documents.document_view': _('открыл документ'),
+        'documents.document_delete': _('удалил документ'),
+        'documents.document_trashed': _('переместил документ в корзину'),
+        'documents.document_properties_edited': _('изменил документ'),
+    }
+
+    AUTH_VERB_RU = {
+        'authentication.user_logged_in': _('вошёл в систему'),
+        'authentication.user_logged_out': _('вышел из системы'),
     }
 
     def get(self, request):
@@ -134,9 +159,59 @@ class HeadlessActivityFeedView(APIView):
         """
         Get actions filtered by type.
         """
+        # Only admins can request full feed.
+        if filter_type == 'all' and not (
+            getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False)
+        ):
+            filter_type = 'my_documents'
+
+        # Action uses generic relations for actor/target/action_object; those cannot
+        # be used with select_related(). We can however select_related the
+        # ContentType FKs to reduce queries.
         queryset = Action.objects.select_related(
-            'actor', 'target_content_type', 'target'
+            'actor_content_type', 'target_content_type', 'action_object_content_type'
         ).order_by('-timestamp')
+
+        # Default behavior: hide noisy internal events unless explicitly asked.
+        # Query param "important" defaults to true.
+        important_only = True
+        try:
+            raw_important = self.request.query_params.get('important', '1')
+            important_only = raw_important not in ('0', 'false', 'False', 'no', 'No')
+        except Exception:
+            important_only = True
+
+        include_system = False
+        try:
+            raw_system = self.request.query_params.get('system', '0')
+            include_system = raw_system in ('1', 'true', 'True', 'yes', 'Yes')
+        except Exception:
+            include_system = False
+
+        if not include_system:
+            # Hide "system" actions by default:
+            # - actions without an actor
+            # - actions whose actor is not a user model instance
+            user_ct = ContentType.objects.get_for_model(get_user_model())
+            system_actor_q = (
+                Q(actor_content_type__isnull=True) |
+                Q(actor_object_id__isnull=True) |
+                ~Q(actor_content_type=user_ct)
+            )
+            queryset = queryset.exclude(system_actor_q)
+
+            # Hide known noisy verb namespaces (even if a user triggered them).
+            if self.SYSTEM_VERB_PREFIXES:
+                system_verb_q = Q()
+                for prefix in self.SYSTEM_VERB_PREFIXES:
+                    system_verb_q |= Q(verb__startswith=prefix)
+                queryset = queryset.exclude(system_verb_q)
+
+        if important_only:
+            prefix_q = Q()
+            for prefix in self.IMPORTANT_VERB_PREFIXES:
+                prefix_q |= Q(verb__startswith=prefix)
+            queryset = queryset.filter(prefix_q)
 
         if filter_type == 'my_actions':
             # Only actions performed by the current user
@@ -144,9 +219,21 @@ class HeadlessActivityFeedView(APIView):
 
         elif filter_type == 'my_documents':
             # Actions related to documents accessible to the user
-            # This is a simplified version - in production, ACL checks would be needed
             document_ct = ContentType.objects.get_for_model(Document)
-            queryset = queryset.filter(target_content_type=document_ct)
+            # ACL-filter documents for the requesting user.
+            # Staff/superusers with direct permission will get full queryset.
+            allowed_documents = AccessControlList.objects.restrict_queryset(
+                permission=permission_document_view,
+                queryset=Document.valid.all(),
+                user=user
+            ).values_list('pk', flat=True)
+
+            # Document-related actions can reference the document either as target
+            # (documents.document_create) or as action_object (version/file processing).
+            queryset = queryset.filter(
+                Q(target_content_type=document_ct, target_object_id__in=allowed_documents)
+                | Q(action_object_content_type=document_ct, action_object_object_id__in=allowed_documents)
+            )
 
         elif filter_type == 'all':
             # All actions (admin view)
@@ -184,10 +271,25 @@ class HeadlessActivityFeedView(APIView):
                 'full_name': _('System')
             }
 
+        username = getattr(actor, 'username', None)
+        if not username:
+            # Some actions might have non-user actors; fallback to a readable identifier.
+            username = (
+                getattr(actor, 'email', None) or
+                getattr(actor, 'label', None) or
+                getattr(actor, 'name', None) or
+                'system'
+            )
+
+        if hasattr(actor, 'get_full_name'):
+            full_name = actor.get_full_name() or str(actor)
+        else:
+            full_name = str(actor)
+
         return {
             'id': actor.pk,
-            'username': getattr(actor, 'username', 'unknown'),
-            'full_name': getattr(actor, 'get_full_name', lambda: _('Unknown User'))()
+            'username': username,
+            'full_name': full_name
         }
 
     def _serialize_target(self, target, content_type):
@@ -217,17 +319,43 @@ class HeadlessActivityFeedView(APIView):
         """
         Translate action verb to user-friendly text.
         """
-        return self.VERB_TRANSLATIONS.get(verb, verb)
+        if verb in self.DOCUMENT_VERB_RU:
+            return self.DOCUMENT_VERB_RU[verb]
+        if verb in self.AUTH_VERB_RU:
+            return self.AUTH_VERB_RU[verb]
+        # Fallback: keep technical verb (frontend may still show it for debugging).
+        return verb
 
     def _build_description(self, action):
         """
         Build a human-readable description of the action.
         """
-        actor_name = getattr(action.actor, 'username', _('System')) if action.actor else _('System')
-        verb = self._translate_verb(action.verb)
-        target_label = str(action.target) if action.target else _('unknown object')
+        actor_name = getattr(action.actor, 'username', _('Система')) if action.actor else _('Система')
+        verb_ru = self._translate_verb(action.verb)
 
-        return _(f"User {actor_name} {verb} '{target_label}'")
+        # Prefer document label when the action references a document as action_object.
+        doc_label = None
+        try:
+            if action.action_object_content_type and action.action_object_content_type.model == 'document':
+                doc_label = str(action.action_object)
+        except Exception:
+            doc_label = None
+
+        target_label = None
+        try:
+            target_label = str(action.target) if action.target else None
+        except Exception:
+            target_label = None
+
+        if doc_label:
+            return _('%(actor)s %(verb)s "%(doc)s"') % {
+                'actor': actor_name, 'verb': verb_ru, 'doc': doc_label
+            }
+        if target_label:
+            return _('%(actor)s %(verb)s "%(target)s"') % {
+                'actor': actor_name, 'verb': verb_ru, 'target': target_label
+            }
+        return _('%(actor)s %(verb)s') % {'actor': actor_name, 'verb': verb_ru}
 
 
 class DashboardActivityView(APIView):

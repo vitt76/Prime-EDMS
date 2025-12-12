@@ -18,12 +18,19 @@ from .views.my_uploads_views import HeadlessMyUploadsView
 from .views.profile_views import HeadlessProfileView
 from .views.version_views import HeadlessEditView
 from .views.conversion_views import HeadlessDocumentConvertView
+from .views.auth_views import HeadlessAuthMeView
+from .views.dashboard_stats_views import HeadlessDashboardStatsView
 
 app_name = 'headless_api'
 
 # API URLs for Mayan REST API integration
 api_urls = [
     url(regex=r'^ping/$', view=lambda request: JsonResponse({'status': 'pong'}), name='api-ping'),
+    url(
+        regex=r'^auth/me/$',
+        view=HeadlessAuthMeView.as_view(),
+        name='api-auth-me'
+    ),
     url(
         regex=r'^password/change/$',
         view=HeadlessPasswordChangeView.as_view(),
@@ -48,6 +55,11 @@ api_urls = [
         regex=r'^dashboard/activity/$',
         view=DashboardActivityView.as_view(),
         name='api-dashboard-activity'
+    ),
+    url(
+        regex=r'^dashboard/stats/$',
+        view=HeadlessDashboardStatsView.as_view(),
+        name='api-dashboard-stats'
     ),
     url(
         regex=r'^favorites/$',

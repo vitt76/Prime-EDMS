@@ -202,12 +202,23 @@ class AuthService {
       throw new Error('Not authenticated')
     }
 
-    const response = await apiService.get<MayanUserResponse>(
-      '/api/v4/users/current/',
-      undefined,
-      false // do not cache current user; ensures fresh user after switch
-    )
-    const user = this.mapMayanUser(response)
+    // Prefer headless "me" endpoint which includes is_staff/is_superuser and groups.
+    try {
+      const me = await apiService.get<any>('/api/v4/headless/auth/me/', undefined, false)
+      const user = (me && me.user) ? me.user : this.mapMayanUser(me)
+      localStorage.setItem(USER_KEY, JSON.stringify(user))
+      return { user, permissions: user.permissions || [] }
+    } catch (_e) {
+      // Fallback to core endpoint
+      const response = await apiService.get<MayanUserResponse>(
+        '/api/v4/users/current/',
+        undefined,
+        false // do not cache current user; ensures fresh user after switch
+      )
+      const user = this.mapMayanUser(response)
+      localStorage.setItem(USER_KEY, JSON.stringify(user))
+      return { user, permissions: user.permissions || [] }
+    }
     
     // Update stored user data
     localStorage.setItem(USER_KEY, JSON.stringify(user))
@@ -229,6 +240,8 @@ class AuthService {
       first_name: data.first_name,
       last_name: data.last_name,
       is_active: data.is_active ?? true,
+      is_staff: data.is_staff ?? false,
+      is_superuser: data.is_superuser ?? false,
       permissions: data.permissions || [],
       role: data.role || (data.groups && data.groups[0]) || undefined,
       two_factor_enabled: data.two_factor_enabled ?? false

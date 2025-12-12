@@ -18,6 +18,8 @@ from mayan.apps.headless_api.views.my_uploads_views import HeadlessMyUploadsView
 from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
 from mayan.apps.headless_api.views.version_views import HeadlessEditView
 from mayan.apps.headless_api.views.conversion_views import HeadlessDocumentConvertView
+from mayan.apps.headless_api.views.dashboard_stats_views import HeadlessDashboardStatsView
+from mayan.apps.headless_api.views.auth_views import HeadlessAuthMeView
 from .literals import API_VERSION
 
 # #region agent log
@@ -90,6 +92,11 @@ api_version_urls = [
         name='headless-config-document-type-detail'
     ),
     url(
+        regex=r'^headless/auth/me/$',
+        view=HeadlessAuthMeView.as_view(),
+        name='headless-auth-me'
+    ),
+    url(
         regex=r'^headless/activity/feed/$',
         view=HeadlessActivityFeedView.as_view(),
         name='headless-activity-feed'
@@ -98,6 +105,11 @@ api_version_urls = [
         regex=r'^headless/dashboard/activity/$',
         view=DashboardActivityView.as_view(),
         name='headless-dashboard-activity'
+    ),
+    url(
+        regex=r'^headless/dashboard/stats/$',
+        view=HeadlessDashboardStatsView.as_view(),
+        name='headless-dashboard-stats'
     ),
     url(
         regex=r'^headless/favorites/$',

@@ -251,9 +251,9 @@
               </svg>
               Профиль
             </router-link>
-          <a
+          <router-link
             v-if="isAdmin"
-            href="http://localhost:5173/admin"
+            to="/admin"
             class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
             @click="closeUserMenu"
           >
@@ -261,7 +261,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
             </svg>
             Админ-панель
-          </a>
+          </router-link>
             <router-link
               to="/settings"
               class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -379,13 +379,19 @@ const userEmail = computed(() => {
 const isAdmin = computed(() => {
   const user = authStore.user as any
   if (!user) return false
-  const perms: string[] = user.permissions || []
+  const perms: string[] = (authStore.permissions as any) || user.permissions || []
+  const hasAdminPerm =
+    Array.isArray(perms) &&
+    perms.some((p) =>
+      String(p).startsWith('user_management.user_') ||
+      String(p).startsWith('user_management.group_') ||
+      String(p).startsWith('permissions.role_')
+    )
   return Boolean(
-    user.is_superuser ||
-    user.role === 'admin' ||
-    user.username === 'admin' ||
-    perms.includes('admin.access') ||
-    perms.includes('mayan.add_user')
+    user.is_staff === true ||
+    user.is_superuser === true ||
+    user.can_access_admin_panel === true ||
+    hasAdminPerm
   )
 })
 
