@@ -195,7 +195,7 @@ class AdminService {
   /**
    * Get paginated list of users
    * 
-   * Endpoint: GET /api/v4/users/
+   * Endpoint: GET /api/v4/headless/users/
    */
   async getUsers(params?: GetUsersParams): Promise<PaginatedResponse<User>> {
     const queryParams: Record<string, string | number> = {}
@@ -217,7 +217,7 @@ class AdminService {
     }
 
     const response = await apiService.get<MayanPaginatedResponse<MayanUser>>(
-      '/api/v4/users/',
+      '/api/v4/headless/users/',
       { params: queryParams },
       false // Don't cache user lists for security
     )
@@ -293,7 +293,7 @@ class AdminService {
    */
   async getUser(id: number): Promise<User> {
     const mayanUser = await apiService.get<MayanUser>(
-      `/api/v4/users/${id}/`,
+      `/api/v4/headless/users/${id}/`,
       undefined,
       false
     )
@@ -307,7 +307,7 @@ class AdminService {
    */
   async createUser(data: CreateUserRequest): Promise<User> {
     const payload = adaptUserForMayan(data)
-    const mayanUser = await apiService.post<MayanUser>('/api/v4/users/', payload)
+    const mayanUser = await apiService.post<MayanUser>('/api/v4/headless/users/', payload)
     return adaptMayanUser(mayanUser)
   }
 
@@ -318,7 +318,7 @@ class AdminService {
    */
   async updateUser(id: number, data: UpdateUserRequest): Promise<User> {
     const payload = adaptUserForMayan(data)
-    const mayanUser = await apiService.patch<MayanUser>(`/api/v4/users/${id}/`, payload)
+    const mayanUser = await apiService.patch<MayanUser>(`/api/v4/headless/users/${id}/`, payload)
     return adaptMayanUser(mayanUser)
   }
 
@@ -328,7 +328,7 @@ class AdminService {
    * Endpoint: DELETE /api/v4/users/{id}/
    */
   async deleteUser(id: number): Promise<void> {
-    return apiService.delete<void>(`/api/v4/users/${id}/`)
+    return apiService.delete<void>(`/api/v4/headless/users/${id}/`)
   }
 
   /**

@@ -132,8 +132,13 @@ class APIUserListView(generics.ListCreateAPIView):
     get: Returns a list of all the users.
     post: Create a new user.
     """
-    mayan_object_permissions = {'GET': (permission_user_view,)}
-    mayan_view_permissions = {'POST': (permission_user_create,)}
+    # Users are managed via global permissions (not per-user ACLs).
+    # Using mayan_object_permissions here causes MayanObjectPermissionsFilter to
+    # apply ACL restriction, which can hide users like `admin` from listings.
+    mayan_view_permissions = {
+        'GET': (permission_user_view,),
+        'POST': (permission_user_create,)
+    }
     ordering_fields = (
         'email', 'first_name', 'last_name', 'has_usable_password',
         'id', 'is_active', 'username'
@@ -160,7 +165,8 @@ class APIUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     put: Edit the selected user.
     """
     lookup_url_kwarg = 'user_id'
-    mayan_object_permissions = {
+    # Users are managed via global permissions (not per-user ACLs).
+    mayan_view_permissions = {
         'GET': (permission_user_view,),
         'PUT': (permission_user_edit,),
         'PATCH': (permission_user_edit,),
@@ -185,7 +191,9 @@ class APIUserGroupListView(
     """
     Returns a list of all the groups to which the user belongings.
     """
-    external_object_queryset = get_user_queryset()
+    # Must include staff/superusers too (e.g. `admin`), otherwise user group
+    # inspection breaks for those accounts.
+    external_object_queryset = get_user_model().objects.all().order_by('username')
     external_object_pk_url_kwarg = 'user_id'
     mayan_external_object_permissions = {'GET': (permission_user_view,)}
     mayan_object_permissions = {'GET': (permission_group_view,)}
