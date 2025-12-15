@@ -2,5 +2,4 @@ common:
   extra_apps:
     - mayan.apps.converter_pipeline_extension
     - mayan.apps.distribution
-    - mayan.apps.image_editor
-    - mayan.apps.dam.apps.DAMApp
+    - mayan.apps.image_editor    - mayan.apps.dam.apps.DAMApp
