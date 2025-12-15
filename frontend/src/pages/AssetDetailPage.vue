@@ -1013,7 +1013,7 @@ function scrollToTop() {
   }
 }
 
-function handleDownload() {
+async function handleDownload() {
   if (!asset.value) return
 
   const filename =

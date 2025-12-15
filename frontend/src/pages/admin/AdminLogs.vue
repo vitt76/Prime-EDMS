@@ -30,26 +30,13 @@
             class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
         </div>
-        <select
-          v-model="levelFilter"
-          class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-        >
-          <option value="">Все уровни</option>
-          <option value="error">Ошибки</option>
-          <option value="warning">Предупреждения</option>
-          <option value="info">Информация</option>
-          <option value="debug">Отладка</option>
-        </select>
-        <select
-          v-model="appFilter"
-          class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-        >
-          <option value="">Все приложения</option>
-          <option value="documents">Документы</option>
-          <option value="dam">DAM</option>
-          <option value="distribution">Распространение</option>
-          <option value="converter">Конвертер</option>
-        </select>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+          <input v-model="showSystemEvents" type="checkbox" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+          Показывать системные события
+        </label>
+        <div class="text-sm text-gray-500">
+          Всего: {{ totalCount }}
+        </div>
       </div>
     </div>
 
@@ -62,46 +49,32 @@
               <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-40">
                 Время
               </th>
-              <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-24">
-                Уровень
-              </th>
               <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-32">
-                Приложение
+                Пользователь
               </th>
               <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Сообщение
+                Событие
               </th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100 font-mono text-sm">
+          <tbody class="divide-y divide-gray-100 text-sm">
             <tr
               v-for="log in filteredLogs"
               :key="log.id"
-              :class="[
-                'hover:bg-gray-50 transition-colors cursor-pointer',
-                log.level === 'error' ? 'bg-red-50/50' :
-                log.level === 'warning' ? 'bg-amber-50/50' : ''
-              ]"
+              class="hover:bg-gray-50 transition-colors cursor-pointer"
               @click="showLogDetail(log)"
             >
               <td class="px-5 py-3 text-gray-500">
                 {{ formatDateTime(log.datetime) }}
               </td>
-              <td class="px-5 py-3">
-                <span
-                  :class="[
-                    'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
-                    levelStyles[log.level]
-                  ]"
-                >
-                  {{ log.level.toUpperCase() }}
-                </span>
+              <td class="px-5 py-3 text-gray-700 font-mono">
+                {{ log.actor?.full_name || log.actor?.username || 'Система' }}
               </td>
-              <td class="px-5 py-3 text-gray-700">
-                {{ log.app_label }}
-              </td>
-              <td class="px-5 py-3 text-gray-900 truncate max-w-md">
-                {{ log.message }}
+              <td class="px-5 py-3 text-gray-900">
+                <div class="font-medium">{{ log.description }}</div>
+                <div class="text-xs text-gray-500 font-mono mt-0.5">
+                  {{ log.verb_code }}<span v-if="log.target?.label"> • {{ log.target.label }}</span>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -116,6 +89,31 @@
       </div>
     </div>
 
+    <!-- Pagination -->
+    <div class="flex items-center justify-between">
+      <div class="text-sm text-gray-500">
+        Страница {{ currentPage }} из {{ totalPages }}
+      </div>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          class="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="!canGoPrev || isLoading"
+          @click="handlePrevPage"
+        >
+          Назад
+        </button>
+        <button
+          type="button"
+          class="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="!canGoNext || isLoading"
+          @click="handleNextPage"
+        >
+          Вперёд
+        </button>
+      </div>
+    </div>
+
     <!-- Log Detail Modal -->
     <Teleport to="body">
       <div
@@ -126,15 +124,9 @@
         <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
           <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <span
-                :class="[
-                  'px-2.5 py-1 rounded text-xs font-medium',
-                  levelStyles[selectedLog.level]
-                ]"
-              >
-                {{ selectedLog.level.toUpperCase() }}
-              </span>
-              <span class="text-sm text-gray-500">{{ selectedLog.app_label }}</span>
+              <span class="text-sm text-gray-500 font-mono">{{ selectedLog.actor?.full_name || selectedLog.actor?.username || 'Система' }}</span>
+              <span class="text-sm text-gray-300">•</span>
+              <span class="text-sm text-gray-500 font-mono">{{ selectedLog.verb_code }}</span>
             </div>
             <button
               type="button"
@@ -154,11 +146,11 @@
             </div>
             <div class="mb-4">
               <p class="text-xs text-gray-500 mb-1">Сообщение</p>
-              <p class="text-sm text-gray-900">{{ selectedLog.message }}</p>
+              <p class="text-sm text-gray-900">{{ selectedLog.description }}</p>
             </div>
-            <div v-if="selectedLog.traceback">
-              <p class="text-xs text-gray-500 mb-1">Traceback</p>
-              <pre class="p-4 bg-gray-900 text-gray-100 rounded-lg text-xs overflow-x-auto">{{ selectedLog.traceback }}</pre>
+            <div v-if="selectedLog.target?.label">
+              <p class="text-xs text-gray-500 mb-1">Объект</p>
+              <p class="text-sm text-gray-900">{{ selectedLog.target.label }}</p>
             </div>
           </div>
         </div>
@@ -168,78 +160,126 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import type { ErrorLogEntry } from '@/types/admin'
+import { ref, computed, onMounted, watch } from 'vue'
+import { apiService } from '@/services/apiService'
 
 // State
 const searchQuery = ref('')
-const levelFilter = ref('')
-const appFilter = ref('')
-const selectedLog = ref<ErrorLogEntry | null>(null)
+const selectedLog = ref<ActivityLogEntry | null>(null)
+const currentPage = ref(1)
+const pageSize = ref(50)
+const totalCount = ref(0)
+const totalPages = ref(1)
+const isLoading = ref(false)
+const showSystemEvents = ref(false)
 
-const levelStyles: Record<string, string> = {
-  error: 'bg-red-100 text-red-700',
-  warning: 'bg-amber-100 text-amber-700',
-  info: 'bg-blue-100 text-blue-700',
-  debug: 'bg-gray-100 text-gray-700',
-  critical: 'bg-red-200 text-red-800'
+type ActivityActor = {
+  id: number | null
+  username: string
+  full_name?: string
 }
 
-// Mock logs
-const logs = ref<ErrorLogEntry[]>([
-  {
-    id: 1,
-    datetime: new Date(Date.now() - 5 * 60000).toISOString(),
-    app_label: 'dam',
-    name: 'ai_analysis',
-    level: 'error',
-    message: 'AI analysis failed for document 1234: Rate limit exceeded',
-    traceback: 'Traceback (most recent call last):\n  File "mayan/apps/dam/tasks.py", line 45, in analyze_document\n    result = provider.analyze(image)\n  File "mayan/apps/dam/providers/gigachat.py", line 78, in analyze\n    raise RateLimitError("Rate limit exceeded")\nRateLimitError: Rate limit exceeded'
-  },
-  {
-    id: 2,
-    datetime: new Date(Date.now() - 15 * 60000).toISOString(),
-    app_label: 'documents',
-    name: 'document_upload',
-    level: 'info',
-    message: 'Document uploaded successfully: product_catalog_2024.pdf'
-  },
-  {
-    id: 3,
-    datetime: new Date(Date.now() - 30 * 60000).toISOString(),
-    app_label: 'distribution',
-    name: 'rendition_generation',
-    level: 'warning',
-    message: 'Slow rendition generation detected: took 45s for document 5678'
-  },
-  {
-    id: 4,
-    datetime: new Date(Date.now() - 60 * 60000).toISOString(),
-    app_label: 'converter',
-    name: 'pdf_conversion',
-    level: 'info',
-    message: 'PDF converted to images: 24 pages processed'
-  },
-  {
-    id: 5,
-    datetime: new Date(Date.now() - 2 * 3600000).toISOString(),
-    app_label: 'dam',
-    name: 'yandex_sync',
-    level: 'info',
-    message: 'Yandex Disk sync completed: 45 new files imported'
+type ActivityTarget = {
+  id: number
+  type: string
+  label: string
+  url?: string | null
+}
+
+type ActivityLogEntry = {
+  id: number
+  datetime: string
+  actor: ActivityActor
+  verb_code: string
+  verb: string
+  target?: ActivityTarget | null
+  description: string
+}
+
+type ActivityFeedResponse = {
+  count: number
+  page: number
+  page_size: number
+  total_pages: number
+  results: Array<{
+    id: number
+    timestamp: string
+    actor: ActivityActor
+    verb: string
+    verb_code: string
+    target?: ActivityTarget | null
+    description: string
+  }>
+}
+
+const logs = ref<ActivityLogEntry[]>([])
+
+async function loadLogs(page = 1): Promise<void> {
+  isLoading.value = true
+  try {
+    const data = await apiService.get<ActivityFeedResponse>(
+      '/api/v4/headless/activity/feed/',
+      {
+        params: {
+          filter: 'all',
+          page,
+          page_size: pageSize.value,
+          // Default (toggle OFF): show only meaningful events and hide system noise.
+          // Toggle ON: show everything (including system/technical events).
+          important: showSystemEvents.value ? 0 : 1,
+          system: showSystemEvents.value ? 1 : 0
+        }
+      } as any,
+      false
+    )
+
+    totalCount.value = data.count || 0
+    currentPage.value = data.page || page
+    totalPages.value = data.total_pages || 1
+    logs.value = (data.results || []).map((r) => ({
+      id: r.id,
+      datetime: r.timestamp,
+      actor: r.actor,
+      verb: r.verb,
+      verb_code: r.verb_code,
+      target: r.target || null,
+      description: r.description
+    }))
+  } catch (err) {
+    console.warn('[AdminLogs] Failed to load activity logs', err)
+    totalCount.value = 0
+    logs.value = []
+  } finally {
+    isLoading.value = false
   }
-])
+}
 
 // Computed
 const filteredLogs = computed(() => {
   return logs.value.filter(log => {
-    const matchesSearch = !searchQuery.value ||
-      log.message.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchesLevel = !levelFilter.value || log.level === levelFilter.value
-    const matchesApp = !appFilter.value || log.app_label === appFilter.value
-    return matchesSearch && matchesLevel && matchesApp
+    const q = searchQuery.value.trim().toLowerCase()
+    if (!q) return true
+    return (
+      log.description.toLowerCase().includes(q) ||
+      log.verb_code.toLowerCase().includes(q) ||
+      (log.actor?.username || '').toLowerCase().includes(q) ||
+      (log.target?.label || '').toLowerCase().includes(q)
+    )
   })
 })
+
+const canGoPrev = computed(() => currentPage.value > 1)
+const canGoNext = computed(() => currentPage.value < totalPages.value)
+
+function handlePrevPage(): void {
+  if (!canGoPrev.value || isLoading.value) return
+  loadLogs(currentPage.value - 1)
+}
+
+function handleNextPage(): void {
+  if (!canGoNext.value || isLoading.value) return
+  loadLogs(currentPage.value + 1)
+}
 
 // Methods
 function formatDateTime(iso: string): string {
@@ -252,8 +292,12 @@ function formatDateTime(iso: string): string {
   })
 }
 
-function showLogDetail(log: ErrorLogEntry): void {
+function showLogDetail(log: ActivityLogEntry): void {
   selectedLog.value = log
 }
+
+watch(pageSize, () => loadLogs(1))
+watch(showSystemEvents, () => loadLogs(1))
+onMounted(() => loadLogs(1))
 </script>
 

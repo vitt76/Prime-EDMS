@@ -18,6 +18,10 @@ from mayan.apps.headless_api.views.my_uploads_views import HeadlessMyUploadsView
 from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
 from mayan.apps.headless_api.views.version_views import HeadlessEditView
 from mayan.apps.headless_api.views.conversion_views import HeadlessDocumentConvertView
+from mayan.apps.headless_api.views.dashboard_stats_views import HeadlessDashboardStatsView
+from mayan.apps.headless_api.views.auth_views import HeadlessAuthMeView
+from mayan.apps.headless_api.views.storage_views import HeadlessS3ConfigView, HeadlessS3StatsView
+from mayan.apps.headless_api.views.users_views import HeadlessUsersDetailView, HeadlessUsersListCreateView
 from .literals import API_VERSION
 
 # #region agent log
@@ -90,6 +94,31 @@ api_version_urls = [
         name='headless-config-document-type-detail'
     ),
     url(
+        regex=r'^headless/auth/me/$',
+        view=HeadlessAuthMeView.as_view(),
+        name='headless-auth-me'
+    ),
+    url(
+        regex=r'^headless/storage/s3/config/$',
+        view=HeadlessS3ConfigView.as_view(),
+        name='headless-storage-s3-config'
+    ),
+    url(
+        regex=r'^headless/storage/s3/stats/$',
+        view=HeadlessS3StatsView.as_view(),
+        name='headless-storage-s3-stats'
+    ),
+    url(
+        regex=r'^headless/users/$',
+        view=HeadlessUsersListCreateView.as_view(),
+        name='headless-users-list'
+    ),
+    url(
+        regex=r'^headless/users/(?P<user_id>\d+)/$',
+        view=HeadlessUsersDetailView.as_view(),
+        name='headless-users-detail'
+    ),
+    url(
         regex=r'^headless/activity/feed/$',
         view=HeadlessActivityFeedView.as_view(),
         name='headless-activity-feed'
@@ -98,6 +127,11 @@ api_version_urls = [
         regex=r'^headless/dashboard/activity/$',
         view=DashboardActivityView.as_view(),
         name='headless-dashboard-activity'
+    ),
+    url(
+        regex=r'^headless/dashboard/stats/$',
+        view=HeadlessDashboardStatsView.as_view(),
+        name='headless-dashboard-stats'
     ),
     url(
         regex=r'^headless/favorites/$',

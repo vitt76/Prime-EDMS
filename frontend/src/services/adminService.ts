@@ -195,7 +195,7 @@ class AdminService {
   /**
    * Get paginated list of users
    * 
-   * Endpoint: GET /api/v4/users/
+   * Endpoint: GET /api/v4/headless/users/
    */
   async getUsers(params?: GetUsersParams): Promise<PaginatedResponse<User>> {
     const queryParams: Record<string, string | number> = {}
@@ -217,7 +217,7 @@ class AdminService {
     }
 
     const response = await apiService.get<MayanPaginatedResponse<MayanUser>>(
-      '/api/v4/users/',
+      '/api/v4/headless/users/',
       { params: queryParams },
       false // Don't cache user lists for security
     )
@@ -293,7 +293,7 @@ class AdminService {
    */
   async getUser(id: number): Promise<User> {
     const mayanUser = await apiService.get<MayanUser>(
-      `/api/v4/users/${id}/`,
+      `/api/v4/headless/users/${id}/`,
       undefined,
       false
     )
@@ -307,7 +307,7 @@ class AdminService {
    */
   async createUser(data: CreateUserRequest): Promise<User> {
     const payload = adaptUserForMayan(data)
-    const mayanUser = await apiService.post<MayanUser>('/api/v4/users/', payload)
+    const mayanUser = await apiService.post<MayanUser>('/api/v4/headless/users/', payload)
     return adaptMayanUser(mayanUser)
   }
 
@@ -318,7 +318,7 @@ class AdminService {
    */
   async updateUser(id: number, data: UpdateUserRequest): Promise<User> {
     const payload = adaptUserForMayan(data)
-    const mayanUser = await apiService.patch<MayanUser>(`/api/v4/users/${id}/`, payload)
+    const mayanUser = await apiService.patch<MayanUser>(`/api/v4/headless/users/${id}/`, payload)
     return adaptMayanUser(mayanUser)
   }
 
@@ -328,7 +328,7 @@ class AdminService {
    * Endpoint: DELETE /api/v4/users/{id}/
    */
   async deleteUser(id: number): Promise<void> {
-    return apiService.delete<void>(`/api/v4/users/${id}/`)
+    return apiService.delete<void>(`/api/v4/headless/users/${id}/`)
   }
 
   /**
@@ -391,6 +391,21 @@ class AdminService {
    */
   async addUserToGroups(userId: number, groupIds: number[]): Promise<void> {
     for (const groupId of groupIds) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'role-assign-1',
+          hypothesisId: 'H1',
+          location: 'adminService.addUserToGroups',
+          message: 'Add user to group',
+          data: { userId, groupId, url: `/api/v4/groups/${groupId}/users/add/` },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
       await apiService.post(`/api/v4/groups/${groupId}/users/add/`, { user: userId })
     }
   }
@@ -525,6 +540,26 @@ class AdminService {
       true
     )
     return response.results || []
+  }
+
+  /**
+   * Add a group to role
+   *
+   * Endpoint: POST /api/v4/roles/{id}/groups/add/
+   * Payload: { "group": <group_id> }
+   */
+  async addRoleGroup(roleId: number, groupId: number): Promise<void> {
+    await apiService.post(`/api/v4/roles/${roleId}/groups/add/`, { group: groupId })
+  }
+
+  /**
+   * Remove a group from role
+   *
+   * Endpoint: POST /api/v4/roles/{id}/groups/remove/
+   * Payload: { "group": <group_id> }
+   */
+  async removeRoleGroup(roleId: number, groupId: number): Promise<void> {
+    await apiService.post(`/api/v4/roles/${roleId}/groups/remove/`, { group: groupId })
   }
 
   /**

@@ -280,7 +280,9 @@
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                   @click="handleLogout"
                 >
-                  <span class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xs font-semibold">Выйти</span>
+                  <span class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xs font-semibold">
+                    ⎋
+                  </span>
                   <span>Выйти</span>
                 </button>
               </div>

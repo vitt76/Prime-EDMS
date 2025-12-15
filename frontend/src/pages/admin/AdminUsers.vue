@@ -80,14 +80,14 @@
               <option value="suspended">Заблокированные</option>
             </select>
 
-            <!-- Role Filter -->
+            <!-- Group Filter -->
             <select
               v-model="roleFilter"
               class="flex-1 sm:flex-none px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
             >
-              <option value="">Роль</option>
-              <option v-for="role in roles" :key="role.id" :value="role.id">
-                {{ role.label }}
+              <option value="">Группа</option>
+              <option v-for="group in groups" :key="group.id" :value="group.id">
+                {{ group.name }}
               </option>
             </select>
           </div>
@@ -103,7 +103,7 @@
                 Пользователь
               </th>
               <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Роль
+                Группы
               </th>
               <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Статус
@@ -148,7 +148,7 @@
                     :key="role.id"
                     class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700"
                   >
-                    {{ roleLabelByGroup[role.id] || role.label }}
+                    {{ role.label }}
                   </span>
                   <span
                     v-if="user.is_superuser"
@@ -398,6 +398,107 @@
       </div>
     </div>
 
+    <!-- Groups Tab -->
+    <div v-if="activeTab === 'groups'" class="bg-white rounded-xl border border-gray-200 shadow-sm">
+      <div class="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+        <div>
+          <h2 class="font-semibold text-gray-900">Группы</h2>
+          <p class="text-sm text-gray-500 mt-0.5">Пользователь → Группа → Роль → Права</p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors"
+          @click="openCreateGroup"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Создать группу
+        </button>
+      </div>
+
+      <div class="px-4 sm:px-5 py-3 border-b border-gray-100">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div class="relative flex-1">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              v-model="groupsSearchQuery"
+              type="text"
+              placeholder="Поиск групп..."
+              class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+            />
+          </div>
+          <div class="text-sm text-gray-500">
+            Всего: {{ groupsCount }}
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-100">
+              <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Группа
+              </th>
+              <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Роли
+              </th>
+              <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Действия
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr v-if="groupsLoading">
+              <td colspan="3" class="px-5 py-6 text-sm text-gray-500">Загрузка…</td>
+            </tr>
+            <tr
+              v-for="group in groups"
+              :key="group.id"
+              class="hover:bg-gray-50 transition-colors"
+            >
+              <td class="px-5 py-4">
+                <div class="text-sm font-medium text-gray-900">{{ group.name }}</div>
+                <div class="text-xs text-gray-500">ID: {{ group.id }}</div>
+              </td>
+              <td class="px-5 py-4">
+                <div class="flex flex-wrap gap-1">
+                  <span
+                    v-for="role in roles.filter((r) => r.groups?.some((g) => g.id === group.id))"
+                    :key="role.id"
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700"
+                  >
+                    {{ role.label }}
+                  </span>
+                  <span
+                    v-if="roles.filter((r) => r.groups?.some((g) => g.id === group.id)).length === 0"
+                    class="text-sm text-gray-400"
+                  >
+                    —
+                  </span>
+                </div>
+              </td>
+              <td class="px-5 py-4 text-right">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                  @click="openEditGroup(group)"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Редактировать
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Roles Tab -->
     <div v-if="activeTab === 'roles'" class="bg-white rounded-xl border border-gray-200">
       <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -494,6 +595,83 @@
       </div>
     </div>
 
+    <!-- Group Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showGroupModal"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+      >
+        <div class="absolute inset-0 bg-black/50" @click="showGroupModal = false" />
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-xl mx-4 overflow-hidden flex flex-col">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900">
+                {{ groupModalMode === 'create' ? 'Создать группу' : 'Редактировать группу' }}
+              </h3>
+              <p class="text-sm text-gray-500 mt-0.5">Привяжите роли к группе</p>
+            </div>
+            <button
+              type="button"
+              class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              @click="showGroupModal = false"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="p-6 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Название группы</label>
+              <input
+                v-model="groupForm.name"
+                type="text"
+                class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                placeholder="Например: Отдел маркетинга"
+              />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Роли</label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label
+                  v-for="role in roles"
+                  :key="role.id"
+                  class="flex items-center gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer"
+                >
+                  <input
+                    v-model="groupForm.roleIds"
+                    :value="role.id"
+                    type="checkbox"
+                    class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                  />
+                  <span class="text-sm text-gray-800">{{ role.label }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="px-6 py-4 border-t border-gray-100 flex gap-3">
+            <button
+              type="button"
+              class="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+              @click="showGroupModal = false"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              class="flex-1 px-4 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
+              @click="saveGroup"
+            >
+              Сохранить
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Invite Modal -->
     <Teleport to="body">
       <div
@@ -541,14 +719,14 @@
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Группа (роль)</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Группа</label>
               <select
-                v-model="inviteForm.roleId"
+                v-model="inviteForm.groupId"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               >
                 <option value="">Без группы</option>
-                <option v-for="role in roles" :key="role.id" :value="role.id">
-                  {{ role.label }}
+                <option v-for="group in groups" :key="group.id" :value="group.id">
+                  {{ group.name }}
                 </option>
               </select>
             </div>
@@ -650,22 +828,17 @@
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Роли</label>
-              <div class="space-y-2">
-                <label
-                  v-for="role in roles"
-                  :key="role.id"
-                  class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="editForm.roleIds.includes(role.id)"
-                    @change="toggleRole(role.id)"
-                    class="w-4 h-4 text-violet-600 border-gray-300 rounded focus:ring-violet-500"
-                  />
-                  <span class="text-sm text-gray-700">{{ role.label }}</span>
-                </label>
-              </div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Группа</label>
+              <select
+                v-model="editForm.groupId"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              >
+                <option value="">Без группы</option>
+                <option v-for="group in groups" :key="group.id" :value="String(group.id)">
+                  {{ group.name }}
+                </option>
+              </select>
+              <p class="mt-1 text-xs text-gray-500">Пользователь может состоять только в одной группе.</p>
             </div>
 
             <div>
@@ -937,7 +1110,7 @@ import { debounce } from '@/utils/debounce'
 // ═══════════════════════════════════════════════════════════════════════════════
 const adminStore = useAdminStore()
 
-const activeTab = ref<'users' | 'roles'>('users')
+const activeTab = ref<'users' | 'roles' | 'groups'>('users')
 const searchQuery = ref('')
 const statusFilter = ref('')
 const roleFilter = ref('')
@@ -954,6 +1127,19 @@ const showEditRoleModal = ref(false)
 const editRoleLoading = ref(false)
 const editRoleId = ref<number | null>(null)
 const editRoleName = ref('')
+
+// Groups tab state (Mayan groups)
+const groups = ref<any[]>([])
+const groupsCount = ref(0)
+const groupsSearchQuery = ref('')
+const groupsLoading = ref(false)
+const showGroupModal = ref(false)
+const groupModalMode = ref<'create' | 'edit'>('create')
+const editingGroup = ref<any | null>(null)
+const groupForm = ref({
+  name: '',
+  roleIds: [] as number[]
+})
 
 // Pagination state
 const currentPage = ref(1)
@@ -980,7 +1166,7 @@ const inviteForm = ref({
   email: '',
   username: '',
   password: '',
-  roleId: '',
+  groupId: '',
   sendEmail: true
 })
 
@@ -990,7 +1176,7 @@ const editForm = ref({
   email: '',
   username: '',
   status: 'active' as string,
-  roleIds: [] as number[],
+  groupId: '' as string,
   is_staff: false,
   is_superuser: false,
   is_active: true
@@ -998,6 +1184,7 @@ const editForm = ref({
 
 const tabs = computed(() => [
   { id: 'users' as const, label: 'Пользователи', count: adminStore.totalUsersCount },
+  { id: 'groups' as const, label: 'Группы', count: groupsCount.value },
   { id: 'roles' as const, label: 'Роли и права' }
 ])
 
@@ -1184,6 +1371,82 @@ async function loadGroups() {
   }
 }
 
+async function loadMayanGroups(page = 1): Promise<void> {
+  groupsLoading.value = true
+  try {
+    const resp = await adminService.getGroups({
+      page,
+      page_size: 200,
+      search: groupsSearchQuery.value || undefined
+    })
+    groups.value = resp.results || []
+    groupsCount.value = resp.count || 0
+  } catch (err) {
+    console.error('[AdminUsers] Failed to load Mayan groups:', err)
+    groups.value = []
+    groupsCount.value = 0
+  } finally {
+    groupsLoading.value = false
+  }
+}
+
+function openCreateGroup(): void {
+  groupModalMode.value = 'create'
+  editingGroup.value = null
+  groupForm.value = { name: '', roleIds: [] }
+  showGroupModal.value = true
+}
+
+function openEditGroup(group: any): void {
+  groupModalMode.value = 'edit'
+  editingGroup.value = group
+  // Derive current role bindings from hydrated roles list.
+  const boundRoleIds = roles.value
+    .filter((r) => Array.isArray(r.groups) && r.groups.some((g: any) => g.id === group.id))
+    .map((r) => r.id)
+  groupForm.value = { name: group.name || '', roleIds: boundRoleIds }
+  showGroupModal.value = true
+}
+
+async function saveGroup(): Promise<void> {
+  const name = String(groupForm.value.name || '').trim()
+  if (!name) return
+
+  try {
+    let group = editingGroup.value
+    if (groupModalMode.value === 'create') {
+      group = await adminService.createGroup({ name })
+    } else if (group?.id) {
+      group = await adminService.updateGroup(group.id, { name })
+    }
+
+    if (!group?.id) {
+      throw new Error('Group ID missing after save')
+    }
+
+    const desiredRoleIds = new Set<number>(groupForm.value.roleIds || [])
+
+    // For each role, ensure group is attached/detached to match desiredRoleIds.
+    for (const role of roles.value) {
+      const roleHasGroup = Array.isArray(role.groups) && role.groups.some((g: any) => g.id === group.id)
+      const shouldHaveGroup = desiredRoleIds.has(role.id)
+
+      if (shouldHaveGroup && !roleHasGroup) {
+        await adminService.addRoleGroup(role.id, group.id)
+      } else if (!shouldHaveGroup && roleHasGroup) {
+        await adminService.removeRoleGroup(role.id, group.id)
+      }
+    }
+
+    await Promise.all([loadMayanGroups(1), loadGroups()])
+    showGroupModal.value = false
+    showToast(groupModalMode.value === 'create' ? 'Группа создана' : 'Группа обновлена')
+  } catch (err) {
+    console.error('[AdminUsers] Failed to save group:', err)
+    showToast('Не удалось сохранить группу', 'error')
+  }
+}
+
 // Debounced search
 const debouncedSearch = debounce(() => {
   loadUsers(1)
@@ -1199,11 +1462,20 @@ watch(statusFilter, () => {
   loadUsers(1)
 })
 
+const debouncedGroupsSearch = debounce(() => {
+  loadMayanGroups(1)
+}, 300)
+
+watch(groupsSearchQuery, () => {
+  debouncedGroupsSearch()
+})
+
 // Initial load
 onMounted(async () => {
   await Promise.all([
     loadUsers(1),
-    loadGroups()
+    loadGroups(),
+    loadMayanGroups(1)
   ])
 })
 
@@ -1301,22 +1573,19 @@ async function inviteUser(): Promise<void> {
     }
     
     const newUser = await adminStore.createUser(userData)
-    if (inviteForm.value.roleId) {
-      const rolePk = Number(inviteForm.value.roleId)
-      const targetGroupId = resolveGroupIdFromRole(rolePk)
+    if (inviteForm.value.groupId) {
+      const targetGroupId = Number(inviteForm.value.groupId)
       if (targetGroupId) {
         try {
           await adminService.addUserToGroups(newUser.id, [targetGroupId])
         } catch (err) {
           console.error('[AdminUsers] Failed to add user to group', err)
         }
-      } else {
-        showToast('Не найдена группа для выбранной роли', 'error')
       }
     }
     
     showInviteModal.value = false
-    inviteForm.value = { email: '', username: '', password: '', roleId: '', sendEmail: true }
+    inviteForm.value = { email: '', username: '', password: '', groupId: '', sendEmail: true }
     showToast('Пользователь создан: ' + userData.email)
     
     // Reload users list
@@ -1337,13 +1606,14 @@ function generateTempPassword(): string {
 
 function editUser(user: AdminUser): void {
   editingUser.value = user
+  const currentGroupId = user.roles?.[0]?.id
   editForm.value = {
     first_name: user.first_name,
     last_name: user.last_name,
     email: user.email,
     username: user.username,
     status: user.status,
-    roleIds: user.roles?.map(r => r.id) || [],
+    groupId: currentGroupId ? String(currentGroupId) : '',
     is_staff: user.is_staff,
     is_superuser: user.is_superuser,
     is_active: user.is_active
@@ -1356,18 +1626,7 @@ function closeEditModal(): void {
   editingUser.value = null
 }
 
-function toggleRole(roleId: number): void {
-  const isSelected = editForm.value.roleIds.includes(roleId)
-  // Разрешаем только одну роль: либо снять, либо выбрать единственную
-  editForm.value.roleIds = isSelected ? [] : [roleId]
-}
-
-function resolveGroupIdFromRole(roleId?: number): number | undefined {
-  if (!roleId) return undefined
-  const role = roles.value.find(r => r.id === roleId)
-  // Берём первую группу, привязанную к роли; если нет — используем сам roleId на всякий случай
-  return role?.groups?.[0]?.id ?? roleId
-}
+// Groups are assigned directly to users. Roles are assigned to groups.
 
 async function saveUser(): Promise<void> {
   if (!editingUser.value) return
@@ -1386,12 +1645,13 @@ async function saveUser(): Promise<void> {
       is_superuser: editForm.value.is_superuser
     })
 
-    // Sync group (role) membership: only one allowed
-    const desiredRoleId = editForm.value.roleIds[0]
-    const desiredGroupId = resolveGroupIdFromRole(desiredRoleId)
+    // Sync group membership (user can have at most one group)
+    const desiredGroupId = editForm.value.groupId ? Number(editForm.value.groupId) : null
     const currentGroupIds = editingUser.value.roles?.map(r => r.id) || []
-    const toRemove = currentGroupIds.filter((id) => desiredGroupId === undefined || id !== desiredGroupId)
-    const toAdd = desiredGroupId && !currentGroupIds.includes(desiredGroupId) ? [desiredGroupId] : []
+
+    const toRemove = currentGroupIds.filter((id) => desiredGroupId === null || id !== desiredGroupId)
+    const toAdd =
+      desiredGroupId !== null && !currentGroupIds.includes(desiredGroupId) ? [desiredGroupId] : []
 
     if (toRemove.length) {
       await adminService.removeUserFromGroups(editingUser.value.id, toRemove)
