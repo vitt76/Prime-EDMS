@@ -24,6 +24,7 @@ export interface ApiError {
 export interface Asset {
   id: number
   label: string
+  description?: string
   filename: string
   size: number
   mime_type: string

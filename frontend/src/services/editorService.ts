@@ -17,20 +17,21 @@ export async function saveEditedImage(
   }
 ): Promise<SaveEditedImageResponse> {
   const formData = new FormData()
+  // The web editor already outputs the desired format. Do NOT ask backend to
+  // reconvert via `format` to avoid BytesIO conversion edge cases.
   const extension = (options?.format || 'jpeg').toLowerCase()
   formData.append('file', blob, `edited.${extension}`)
-  if (options?.format) formData.append('format', options.format)
   formData.append('comment', options?.comment || 'Edited via Web Editor')
 
-  const { data } = await apiService.post(
+  const data = await apiService.post<SaveEditedImageResponse>(
     `/api/v4/headless/documents/${documentId}/versions/new_from_edit/`,
     formData,
     {
       headers: { 'Content-Type': 'multipart/form-data' }
-    }
+    } as any
   )
 
-  return data as SaveEditedImageResponse
+  return data
 }
 
 export async function createAssetFromImage(
@@ -49,8 +50,8 @@ export async function createAssetFromImage(
     description: options?.comment || 'Создано из копии'
   }
 
-  const docResp = await apiService.post('/api/v4/documents/', docPayload)
-  const documentId = docResp.data?.id
+  const docResp: any = await apiService.post('/api/v4/documents/', docPayload)
+  const documentId = docResp?.id || docResp?.data?.id
   if (!documentId) {
     throw new Error('Не удалось создать документ для копии')
   }
@@ -58,20 +59,48 @@ export async function createAssetFromImage(
   // 2) upload file
   const extension = (options?.format || 'jpeg').toLowerCase()
   const formData = new FormData()
-  formData.append('file', blob, filename || `copy.${extension}`)
-  formData.append('action', '1') // DocumentFileActionUseNewPages.backend_id
+  // Mayan expects `file_new` for document file upload.
+  formData.append('file_new', blob, filename || `copy.${extension}`)
+  formData.append('action', '1') // DocumentFileActionUseNewPages.action_id
+  formData.append('filename', filename || `copy.${extension}`)
+  if (options?.comment) formData.append('comment', options.comment)
 
-  const fileResp = await apiService.post(
+  await apiService.post(
     `/api/v4/documents/${documentId}/files/`,
     formData,
     {
       headers: { 'Content-Type': 'multipart/form-data' }
-    }
+    } as any
   )
+
+  // Upload is async (202). Poll until the first file appears.
+  let fileId: number = 0
+  const maxAttempts = 12
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await new Promise((r) => setTimeout(r, 1500))
+    try {
+      const filesResponse: any = await apiService.get(
+        `/api/v4/documents/${documentId}/files/`,
+        { params: { page_size: 5 } } as any,
+        false
+      )
+      const results = Array.isArray(filesResponse?.results)
+        ? filesResponse.results
+        : (Array.isArray(filesResponse) ? filesResponse : [])
+      if (results.length) {
+        // newest first
+        results.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        fileId = Number(results[0]?.id) || 0
+        break
+      }
+    } catch {
+      // keep polling
+    }
+  }
 
   return {
     documentId,
-    fileId: fileResp.data?.id
+    fileId
   }
 }
 

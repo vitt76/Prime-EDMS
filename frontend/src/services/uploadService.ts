@@ -25,7 +25,6 @@
 import axios, { AxiosProgressEvent } from 'axios'
 import { getToken } from './authService'
 import { getDocumentTypeConfig, validateMetadata } from './documentTypeService'
-const LOG_ENDPOINT = 'http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac'
 
 // ============================================================================
 // CONSTANTS
@@ -204,37 +203,9 @@ class UploadService {
             { tag: tagId },
             { headers }
           )
-          // #region agent log
-          fetch(LOG_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'upload-meta',
-              hypothesisId: 'H-upload-tags',
-              location: 'uploadService:attachTagsToDocument',
-              message: 'Tag attached',
-              data: { documentId, tagId, label },
-              timestamp: Date.now()
-            })
-          }).catch(() => {})
-          // #endregion agent log
+          // (debug ingest removed)
         } catch (e) {
-          // #region agent log
-          fetch(LOG_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'upload-meta',
-              hypothesisId: 'H-upload-tags',
-              location: 'uploadService:attachTagsToDocument',
-              message: 'Tag attach failed',
-              data: { documentId, tagId, label, error: String(e) },
-              timestamp: Date.now()
-            })
-          }).catch(() => {})
-          // #endregion agent log
+          // (debug ingest removed)
         }
       }
     }
@@ -264,25 +235,7 @@ class UploadService {
       // =======================================================================
       // STEP 1: Create Document Container
       // =======================================================================
-      // #region agent log
-      fetch(LOG_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'upload-meta',
-          hypothesisId: 'H-upload-service',
-          location: 'uploadService:uploadAsset',
-          message: 'Create document request',
-          data: {
-            label: options.label || file.name,
-            description: options.description || '',
-            metadataKeys: options.metadata ? Object.keys(options.metadata) : []
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion agent log
+      // (debug ingest removed)
 
       options.onProgress?.({
         percent: 0,
@@ -322,24 +275,7 @@ class UploadService {
       
       documentId = createResponse.data.id
       console.log('[UploadService] Document created:', documentId)
-      // #region agent log
-      fetch(LOG_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'upload-meta',
-          hypothesisId: 'H-upload-service',
-          location: 'uploadService:uploadAsset',
-          message: 'Create document response',
-          data: {
-            documentId: createResponse.data.id,
-            label: createResponse.data.label
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion agent log
+      // (debug ingest removed)
       
       // =======================================================================
       // STEP 2: Upload File Binary

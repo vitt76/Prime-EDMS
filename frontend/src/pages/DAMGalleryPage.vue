@@ -509,27 +509,7 @@ function applyFolderFilterFromRoute(): void {
     ? findFolderById(systemSection.folders, folderId) 
     : null
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      id: `log_applyFolderFilter_${Date.now()}`,
-      timestamp: Date.now(),
-      sessionId: 'debug-session',
-      runId: 'post-fix',
-      hypothesisId: 'H-folder',
-      location: 'DAMGalleryPage:applyFolderFilterFromRoute',
-      message: 'Applying folder filter from route',
-      data: {
-        folderId,
-        found: !!foundFolder,
-        folderType: foundFolder?.type || null,
-        systemSectionExists: !!systemSection
-      }
-    })
-  }).catch(() => {})
-  // #endregion agent log
+  // (debug ingest removed)
 
   assetStore.setFolderFilter(
     foundFolder ? folderId : null,

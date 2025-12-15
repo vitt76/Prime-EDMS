@@ -445,30 +445,6 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
   
   // Build metadata
   const metadata = adaptBackendMetadata(backendDoc.metadata, backendDoc.document_type)
-  // #region agent log
-  try {
-    fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'upload-meta',
-        hypothesisId: 'H-adapter',
-        location: 'mayanAdapter:adaptBackendAsset',
-        message: 'Backend metadata snapshot',
-        data: {
-          id: backendDoc.id,
-          description: backendDoc.description,
-          metadataCount: backendDoc.metadata ? backendDoc.metadata.length : 0,
-          tagsCount: backendDoc.tags ? backendDoc.tags.length : 0
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-  } catch (e) {
-    // ignore logging errors
-  }
-  // #endregion agent log
   metadata.type = assetType
   metadata.language = backendDoc.language
   metadata.uuid = backendDoc.uuid

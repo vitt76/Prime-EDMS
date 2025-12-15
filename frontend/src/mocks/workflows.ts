@@ -303,10 +303,10 @@ export const WORKFLOWS: Workflow[] = [
 // ============================================================
 
 const MOCK_USERS = [
-  { id: 1, name: 'Иванов А.А.', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face' },
-  { id: 2, name: 'Петров Б.В.', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=32&h=32&fit=crop&crop=face' },
-  { id: 3, name: 'Сидорова В.Г.', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=32&h=32&fit=crop&crop=face' },
-  { id: 4, name: 'Козлов Д.Е.', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=32&h=32&fit=crop&crop=face' }
+  { id: 1, name: 'Иванов А.А.', avatar: '/assets/placeholder.png' },
+  { id: 2, name: 'Петров Б.В.', avatar: '/assets/placeholder.png' },
+  { id: 3, name: 'Сидорова В.Г.', avatar: '/assets/placeholder.png' },
+  { id: 4, name: 'Козлов Д.Е.', avatar: '/assets/placeholder.png' }
 ]
 
 export const ASSET_WORKFLOW_STATES: Map<number, AssetWorkflowState> = new Map()

@@ -211,30 +211,33 @@ class DocumentFilePage(PagedModelMixin, models.Model):
         cache_filename = 'base_image'
         logger.debug('Page cache filename: %s', cache_filename)
 
+        def _create_base_image_and_return():
+            with self.document_file.get_intermediate_file() as file_object:
+                converter = ConverterBase.get_converter_class()(
+                    file_object=file_object
+                )
+                converter.seek_page(page_number=self.page_number - 1)
+
+                page_image = converter.get_page()
+
+                # Since open "wb+" doesn't create files, create it
+                # explicitly.
+                with self.cache_partition.create_file(filename=cache_filename) as file_object:
+                    file_object.write(page_image.getvalue())
+
+                # Apply runtime transformations.
+                for transformation in transformation_instance_list or ():
+                    converter.transform(transformation=transformation)
+
+                return converter.get_page()
+
         try:
             cache_file = self.cache_partition.get_file(filename=cache_filename)
         except CachePartitionFile.DoesNotExist:
             logger.debug('Page cache file "%s" not found', cache_filename)
 
             try:
-                with self.document_file.get_intermediate_file() as file_object:
-                    converter = ConverterBase.get_converter_class()(
-                        file_object=file_object
-                    )
-                    converter.seek_page(page_number=self.page_number - 1)
-
-                    page_image = converter.get_page()
-
-                    # Since open "wb+" doesn't create files, create it
-                    # explicitly.
-                    with self.cache_partition.create_file(filename=cache_filename) as file_object:
-                        file_object.write(page_image.getvalue())
-
-                    # Apply runtime transformations.
-                    for transformation in transformation_instance_list or ():
-                        converter.transform(transformation=transformation)
-
-                    return converter.get_page()
+                return _create_base_image_and_return()
             except Exception as exception:
                 logger.error(
                     'Error creating document file page cache file from '
@@ -245,21 +248,34 @@ class DocumentFilePage(PagedModelMixin, models.Model):
                 raise
         else:
             logger.debug('Page cache file "%s" found', cache_filename)
+            try:
+                with cache_file.open() as file_object:
+                    converter = ConverterBase.get_converter_class()(
+                        file_object=file_object
+                    )
 
-            with cache_file.open() as file_object:
-                converter = ConverterBase.get_converter_class()(
-                    file_object=file_object
+                    converter.seek_page(page_number=0)
+
+                    # This code is also repeated below to allow using a context
+                    # manager with cache_file.open and close it automatically.
+                    # Apply runtime transformations.
+                    for transformation in transformation_instance_list or ():
+                        converter.transform(transformation=transformation)
+
+                    return converter.get_page()
+            except FileNotFoundError as exception:
+                # Cache DB entry exists but underlying file is missing.
+                # Treat as cache miss and regenerate.
+                logger.warning(
+                    'Cache file record exists but file is missing. Regenerating "%s". Error: %s',
+                    cache_filename, exception
                 )
-
-                converter.seek_page(page_number=0)
-
-                # This code is also repeated below to allow using a context
-                # manager with cache_file.open and close it automatically.
-                # Apply runtime transformations.
-                for transformation in transformation_instance_list or ():
-                    converter.transform(transformation=transformation)
-
-                return converter.get_page()
+                try:
+                    cache_file.delete()
+                except Exception:
+                    # Best effort: regeneration will recreate anyway.
+                    pass
+                return _create_base_image_and_return()
 
     def get_label(self):
         return _(

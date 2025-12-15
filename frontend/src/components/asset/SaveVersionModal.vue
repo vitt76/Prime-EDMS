@@ -125,6 +125,7 @@ interface Props {
   defaultFormat?: string
   errorMessage?: string | null
   disabled?: boolean
+  onSave?: (format: string, comment: string) => Promise<void>
 }
 
 const props = defineProps<Props>()
@@ -160,7 +161,12 @@ async function handleSave() {
   error.value = null
   isSubmitting.value = true
   try {
-    emit('save', localFormat.value, localComment.value.trim())
+    // Prefer async callback prop to allow proper loading/error UI.
+    if (props.onSave) {
+      await props.onSave(localFormat.value, localComment.value.trim())
+    } else {
+      emit('save', localFormat.value, localComment.value.trim())
+    }
   } catch (e: any) {
     error.value = e?.message || 'Не удалось сохранить'
   } finally {

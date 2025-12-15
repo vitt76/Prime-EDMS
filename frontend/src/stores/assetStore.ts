@@ -15,9 +15,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
-import type { Asset, GetAssetsParams, PaginatedResponse } from '@/types/api'
+import type { Asset, GetAssetsParams } from '@/types/api'
 import { formatApiError } from '@/utils/errors'
-import type { AxiosProgressEvent } from 'axios'
 import type { FolderSource } from '@/mocks/folders'
 
 // Import optimized adapter for Mayan API transformation
@@ -28,14 +27,13 @@ import {
   type BackendPaginatedResponse,
 } from '@/services/adapters/mayanAdapter'
 
-import { getToken, clearToken } from '@/services/authService'
+import { getToken } from '@/services/authService'
 import {
   uploadService,
   updateDocumentMetadata,
   deleteDocument as deleteDocumentApi,
   type UploadProgress
 } from '@/services/uploadService'
-const LOG_ENDPOINT = 'http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac'
 
 // Import auth store for logout on 401
 import { useAuthStore } from '@/stores/authStore'
@@ -43,11 +41,6 @@ import { useAuthStore } from '@/stores/authStore'
 // ============================================================================
 // TYPES
 // ============================================================================
-
-interface UploadOptions {
-  onUploadProgress?: (event: AxiosProgressEvent) => void
-  signal?: AbortSignal
-}
 
 interface AssetFilters {
   type?: string[]
@@ -277,27 +270,7 @@ export const useAssetStore = defineStore(
           ? OPTIMIZED_DOCUMENTS_API 
           : STANDARD_DOCUMENTS_API
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: `log_fetchAssets_req_${Date.now()}`,
-            timestamp: Date.now(),
-            sessionId: 'debug-session',
-            runId: 'post-fix',
-            hypothesisId: 'H4',
-            location: 'assetStore:fetchAssets',
-            message: 'Requesting assets',
-            data: {
-              apiEndpoint,
-              query: queryParams.toString(),
-              folderFilterId: folderFilterId.value,
-              folderFilterType: folderFilterType.value
-            }
-          })
-        }).catch(() => {})
-        // #endregion agent log
+        // (debug ingest removed)
         
         console.log(`[AssetStore] Fetching from ${apiEndpoint}?${queryParams.toString()}`)
 
@@ -332,27 +305,7 @@ export const useAssetStore = defineStore(
 
         console.log(`[AssetStore] Loaded ${adapted.results.length} assets from API`)
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: `log_fetchAssets_ok_${Date.now()}`,
-            timestamp: Date.now(),
-            sessionId: 'debug-session',
-            runId: 'post-fix',
-            hypothesisId: 'H4',
-            location: 'assetStore:fetchAssets',
-            message: 'Assets loaded',
-            data: {
-              count: adapted.results.length,
-              total: adapted.count,
-              folderFilterId: folderFilterId.value,
-              folderFilterType: folderFilterType.value
-            }
-          })
-        }).catch(() => {})
-        // #endregion agent log
+        // (debug ingest removed)
         
       } catch (err: any) {
         // If optimized endpoint fails with 404, try standard endpoint
@@ -620,32 +573,7 @@ export const useAssetStore = defineStore(
             .filter((t: string) => !!t)
           asset.tags = Array.from(new Set([...(asset.tags || []), ...tagNames]))
         }
-        // #region agent log
-        try {
-          fetch(LOG_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'upload-meta',
-              hypothesisId: 'H-detail',
-              location: 'assetStore:getAssetDetail',
-              message: 'Detail snapshot',
-              data: {
-                id,
-                description: asset.description || '',
-                tags: asset.tags ? asset.tags.length : 0,
-                metadataKeys: asset.metadata ? Object.keys(asset.metadata).length : 0,
-                metaFetched: meta ? meta.length : 0,
-                tagsFetched: tagList ? tagList.length : 0
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {})
-        } catch (e) {
-          // ignore logging errors
-        }
-        // #endregion agent log
+        // (debug ingest removed)
 
         currentAsset.value = asset
         return asset
@@ -665,25 +593,7 @@ export const useAssetStore = defineStore(
           headers: getAuthHeaders()
         })
         const data = Array.isArray(resp.data) ? resp.data : resp.data?.results || null
-        // #region agent log
-        try {
-          fetch(LOG_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'upload-meta',
-              hypothesisId: 'H-meta-fetch',
-              location: 'assetStore:fetchDocumentMetadata',
-              message: 'Metadata fetched',
-              data: { id, count: data ? data.length : 0 },
-              timestamp: Date.now()
-            })
-          }).catch(() => {})
-        } catch (e) {
-          // ignore logging errors
-        }
-        // #endregion agent log
+        // (debug ingest removed)
         return data
       } catch (err: any) {
         if (err.response?.status === 404) {
@@ -700,25 +610,7 @@ export const useAssetStore = defineStore(
           headers: getAuthHeaders()
         })
         const data = Array.isArray(resp.data) ? resp.data : resp.data?.results || null
-        // #region agent log
-        try {
-          fetch(LOG_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'debug-session',
-              runId: 'upload-meta',
-              hypothesisId: 'H-tags-fetch',
-              location: 'assetStore:fetchDocumentTags',
-              message: 'Tags fetched',
-              data: { id, count: data ? data.length : 0 },
-              timestamp: Date.now()
-            })
-          }).catch(() => {})
-        } catch (e) {
-          // ignore logging errors
-        }
-        // #endregion agent log
+        // (debug ingest removed)
         return data
       } catch (err: any) {
         if (err.response?.status === 404) {
@@ -915,22 +807,7 @@ export const useAssetStore = defineStore(
       folderFilterType.value = folderType
       currentPage.value = 1
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `log_setFolderFilter_${Date.now()}`,
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          runId: 'post-fix',
-          hypothesisId: 'H4',
-          location: 'assetStore:setFolderFilter',
-          message: 'Set folder filter',
-          data: { folderId, folderType }
-        })
-      }).catch(() => {})
-      // #endregion agent log
+      // (debug ingest removed)
     }
     
     function isSelected(id: number): boolean {

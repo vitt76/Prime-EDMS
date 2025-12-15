@@ -69,6 +69,19 @@ class IndexingMetrics:
         """Record a retry operation."""
         self._increment_counter('retry_count')
         self._increment_counter(f'retry_count_{retry_count}')
+
+    def record_cleanup_execution(self):
+        """
+        Record execution of the stale indexing lock cleanup task.
+
+        This method is called by periodic maintenance tasks. It is intentionally
+        lightweight and must never raise.
+        """
+        try:
+            self._increment_counter('cleanup_execution')
+        except Exception:
+            # Best-effort metrics only.
+            return
     
     def _increment_counter(self, key: str):
         """Increment a counter metric."""

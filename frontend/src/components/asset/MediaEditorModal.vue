@@ -164,16 +164,17 @@
                         @load="handleImageLoad"
                       />
                       <div
-                        v-if="imageSrc && !isEditorReady"
-                        class="absolute inset-0 flex items-center justify-center bg-black/40 text-neutral-200 text-sm"
-                      >
-                        Загрузка изображения...
-                      </div>
-                      <div
                         v-else
                         class="w-full h-full flex items-center justify-center text-neutral-400 text-sm"
                       >
                         {{ loadError || 'Изображение не загружено' }}
+                      </div>
+
+                      <div
+                        v-if="imageSrc && !isEditorReady"
+                        class="absolute inset-0 flex items-center justify-center bg-black/40 text-neutral-200 text-sm"
+                      >
+                        Загрузка изображения...
                       </div>
                       
                       <!-- Crop Overlay -->
@@ -755,8 +756,8 @@
                       class="w-full flex items-center justify-center gap-2 px-4 py-3 
                              bg-blue-600 text-white rounded-lg hover:bg-blue-700 
                              transition-colors font-medium text-sm disabled:opacity-50"
-                      :disabled="isProcessing || !isEditorReady || !imageSrc"
-                      @click="openSaveModal"
+                      :disabled="isProcessing"
+                      @click="openSaveModalSafe"
                     >
                       <DocumentDuplicateIcon class="w-5 h-5" />
                       Сохранить как версию
@@ -766,7 +767,7 @@
                         class="flex items-center justify-center gap-2 px-4 py-2.5 
                                bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 
                                transition-colors text-sm disabled:opacity-50"
-                        :disabled="isProcessing || !isEditorReady || !imageSrc"
+                        :disabled="isProcessing"
                         @click="handleSaveAsCopy"
                       >
                         <FolderPlusIcon class="w-4 h-4" />
@@ -776,7 +777,7 @@
                         class="flex items-center justify-center gap-2 px-4 py-2.5 
                                bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 
                                transition-colors text-sm disabled:opacity-50"
-                        :disabled="isProcessing || !isEditorReady || !imageSrc"
+                        :disabled="isProcessing"
                         @click="handleDownload"
                       >
                         <ArrowDownTrayIcon class="w-4 h-4" />
@@ -797,8 +798,8 @@
       :default-format="editorStore.currentState.format"
       :error-message="saveError"
       :disabled="!isEditorReady || !imageSrc"
+      :on-save="handleConfirmSave"
       @close="isSaveModalOpen = false"
-      @save="handleConfirmSave"
     />
   </TransitionRoot>
 </template>
@@ -839,13 +840,14 @@ import type { Asset } from '@/types/api'
 interface Props {
   isOpen: boolean
   asset: Asset | null
+  documentFile?: any | null
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
   close: []
-  saveVersion: [assetId: number, versionId: number]
+  saveVersion: [assetId: number, fileId: number]
   saveCopy: [originalId: number, newAssetId: number]
 }>()
 
@@ -872,40 +874,85 @@ async function prepareImageSrc() {
     return `${base.replace(/\/$/, '')}/${u.replace(/^\//, '')}`
   }
 
-  const url = makeAbsolute(
-    (props.asset as any)?.preview_url ||
-    (props.asset as any)?.thumbnail_url ||
-    (props.asset as any)?.download_url
-  )
+  const tryLoadUrlAsBlob = async (url: string): Promise<boolean> => {
+    try {
+      // IMPORTANT: don't cache blob/image responses; caching can corrupt Blob objects
+      // and cause "Изображение не загружено" even when the endpoint is OK.
+      const response = await apiService.get(url, {
+        responseType: 'blob',
+        headers: { Accept: '*/*' }
+      } as any, false)
+      const candidate = (response as any)?.data ?? response
+      if (!(candidate instanceof Blob)) {
+        return false
+      }
+      if (objectUrl.value) {
+        URL.revokeObjectURL(objectUrl.value)
+      }
+      objectUrl.value = URL.createObjectURL(candidate)
+      imageSrc.value = objectUrl.value
+      loadError.value = null
+      return true
+    } catch {
+      return false
+    }
+  }
 
-  if (!url) {
-    throw new Error('Нет доступного URL изображения для редактора')
+  // Prefer stable sources:
+  // 0) Selected document file (from AssetDetail "Versions" tab)
+  // 1) Latest document file page image (if selected not provided)
+  // 2) Download URL (original file)
+  // 3) Preview/thumbnail (may be temporarily 500 while cache regenerates)
+  const candidates: string[] = []
+
+  // 0) Selected DocumentFile provided by parent (best signal)
+  const selected = props.documentFile
+  if (selected) {
+    const selectedPageImage = makeAbsolute(selected?.pages_first?.image_url)
+    const selectedDownload = makeAbsolute(selected?.download_url || selected?.file_download_url)
+    if (selectedPageImage) candidates.push(selectedPageImage)
+    if (selectedDownload) candidates.push(selectedDownload)
   }
 
   try {
-    const response = await apiService.get(url, {
-      responseType: 'blob',
-      headers: {
-        Accept: '*/*'
-      }
-    } as any)
-    const candidate = (response as any)?.data ?? response
-    if (!(candidate instanceof Blob)) {
-      console.error('[Editor] Expected Blob, got:', candidate)
-      throw new Error('Invalid response type for image')
-    }
-    if (objectUrl.value) {
-      URL.revokeObjectURL(objectUrl.value)
-    }
-    objectUrl.value = URL.createObjectURL(candidate)
-    imageSrc.value = objectUrl.value
-    loadError.value = null
-  } catch (e) {
-    console.error('[Editor] Authenticated image load failed:', e)
-    loadError.value = 'Не удалось загрузить изображение (auth)'
-    isEditorReady.value = false
-    throw e
+    const filesResponse: any = await apiService.get(
+      `/api/v4/documents/${props.asset.id}/files/`,
+      { params: { page_size: 5 } } as any,
+      false
+    )
+    const results = Array.isArray(filesResponse?.results)
+      ? filesResponse.results
+      : (Array.isArray(filesResponse) ? filesResponse : [])
+    const latest = results[0]
+    const pageImage = makeAbsolute(latest?.pages_first?.image_url)
+    const fileDownload = makeAbsolute(latest?.download_url || latest?.file_download_url)
+    if (pageImage) candidates.push(pageImage)
+    if (fileDownload) candidates.push(fileDownload)
+  } catch {
+    // ignore, fall back to asset URLs below
   }
+
+  const assetDownload = makeAbsolute((props.asset as any)?.download_url)
+  const assetPreview = makeAbsolute((props.asset as any)?.preview_url)
+  const assetThumb = makeAbsolute((props.asset as any)?.thumbnail_url)
+  if (assetDownload) candidates.push(assetDownload)
+  if (assetPreview) candidates.push(assetPreview)
+  if (assetThumb) candidates.push(assetThumb)
+
+  const uniqueCandidates = Array.from(new Set(candidates)).filter(Boolean)
+  if (!uniqueCandidates.length) {
+    loadError.value = 'Нет доступного URL изображения для редактора'
+    isEditorReady.value = false
+    return
+  }
+
+  for (const url of uniqueCandidates) {
+    const ok = await tryLoadUrlAsBlob(url)
+    if (ok) return
+  }
+
+  loadError.value = 'Не удалось загрузить изображение (проверьте превью/права доступа)'
+  isEditorReady.value = false
 }
 
 // Local State
@@ -1273,6 +1320,18 @@ function openSaveModal() {
   isSaveModalOpen.value = true
 }
 
+function openSaveModalSafe() {
+  if (!isEditorReady.value || !imageSrc.value) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Изображение не загружено',
+      message: 'Дождитесь загрузки превью в редакторе (или попробуйте обновить страницу).'
+    })
+    return
+  }
+  openSaveModal()
+}
+
 function mapFormatToMime(format: string): string {
   const fmt = format.toLowerCase()
   if (fmt === 'jpg' || fmt === 'jpeg') return 'image/jpeg'
@@ -1320,17 +1379,34 @@ async function buildBlobFromImage(format: string): Promise<Blob> {
 }
 
 async function handleConfirmSave(format: string, comment: string) {
-  if (!props.asset) return
+  if (!props.asset) {
+    const message = 'Не удалось сохранить: документ не загружен'
+    saveError.value = message
+    throw new Error(message)
+  }
   if (!isEditorReady.value || !imageSrc.value) {
-    saveError.value = 'Изображение ещё загружается'
-    return
+    const message = 'Изображение ещё загружается'
+    saveError.value = message
+    throw new Error(message)
   }
   isProcessing.value = true
   processingMessage.value = 'Создание новой версии...'
   saveError.value = null
 
   try {
+    if (localStorage.getItem('maddam_debug') === '1') {
+      // eslint-disable-next-line no-console
+      console.log('[Editor] Saving new version...', {
+        documentId: props.asset.id,
+        format,
+        commentLength: (comment || '').length
+      })
+    }
     const blob = await buildBlobFromImage(format)
+    if (localStorage.getItem('maddam_debug') === '1') {
+      // eslint-disable-next-line no-console
+      console.log('[Editor] Blob ready', { size: blob.size, type: blob.type })
+    }
     const result = await saveEditedImage(
       props.asset.id,
       blob,
@@ -1339,14 +1415,18 @@ async function handleConfirmSave(format: string, comment: string) {
         comment: comment || 'Edited via Web Editor'
       }
     )
+    if (localStorage.getItem('maddam_debug') === '1') {
+      // eslint-disable-next-line no-console
+      console.log('[Editor] Saved', result)
+    }
 
     notificationStore.addNotification({
       type: 'success',
       title: 'Версия создана',
-      message: `Версия #${result.version_id ?? ''} сохранена`
+      message: `Файл #${result.file_id ?? ''} сохранён как новая версия`
     })
 
-    emit('saveVersion', props.asset.id, result.version_id || Date.now())
+    emit('saveVersion', props.asset.id, Number(result.file_id) || Date.now())
     isSaveModalOpen.value = false
     emit('close')
   } catch (error: any) {
@@ -1356,12 +1436,13 @@ async function handleConfirmSave(format: string, comment: string) {
       error?.message ||
       'Не удалось сохранить изменения'
     saveError.value = message
-    console.error('[Editor] Save version failed:', error)
     notificationStore.addNotification({
       type: 'error',
       title: 'Ошибка',
       message
     })
+    // Propagate to SaveVersionModal (it will show the error and stop spinner).
+    throw new Error(message)
   } finally {
     isProcessing.value = false
     processingMessage.value = ''
@@ -1574,6 +1655,20 @@ watch(() => props.asset, (newAsset) => {
     })
   }
 })
+
+// If user changes selected version while editor is open, reload source.
+watch(
+  () => props.documentFile,
+  () => {
+    if (props.isOpen && props.asset) {
+      isEditorReady.value = false
+      loadError.value = null
+      prepareImageSrc().catch(() => {
+        // ignore; will show toast on save
+      })
+    }
+  }
+)
 </script>
 
 <style scoped>
