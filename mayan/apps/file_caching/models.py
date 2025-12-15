@@ -286,7 +286,35 @@ class CachePartition(models.Model):
         return super().delete(*args, **kwargs)
 
     def get_file(self, filename):
-        return self.files.get(filename=filename)
+        """
+        Return the cache partition file entry for `filename`.
+
+        Defensive behavior:
+        In some cases (container restarts, manual cache cleanup, storage races)
+        the DB row can exist while the underlying storage file is missing.
+        When that happens, treat it as a cache miss by deleting the stale row
+        and raising `CachePartitionFile.DoesNotExist` so callers can regenerate.
+        """
+        partition_file = self.files.get(filename=filename)
+
+        try:
+            exists = self.cache.storage.exists(name=partition_file.full_filename)
+        except Exception:
+            # If storage cannot answer existence checks, fall back to the
+            # original behavior and let callers handle open() errors.
+            return partition_file
+
+        if not exists:
+            logger.warning(
+                'Stale cache entry detected (missing storage file). '
+                'partition=%s filename=%s full_filename=%s',
+                self.pk, filename, partition_file.full_filename
+            )
+            # Delete the stale DB row so subsequent calls regenerate cache.
+            CachePartitionFile.objects.filter(pk=partition_file.pk).delete()
+            raise CachePartitionFile.DoesNotExist
+
+        return partition_file
 
     def get_file_lock_name(self, filename):
         return 'cache_partition-file-{}-{}-{}'.format(
@@ -419,6 +447,16 @@ class CachePartitionFile(models.Model):
                 self._storage_object = self.partition.cache.storage.open(
                     mode='rb', name=self.full_filename
                 )
+            except FileNotFoundError:
+                # Storage file missing while DB row exists. Convert to a cache
+                # miss so callers regenerate the cache.
+                logger.warning(
+                    'Cache storage file missing for existing DB row. '
+                    'cache_partition_file_id=%s full_filename=%s',
+                    self.pk, self.full_filename
+                )
+                CachePartitionFile.objects.filter(pk=self.pk).delete()
+                raise CachePartitionFile.DoesNotExist
             except Exception as exception:
                 logger.error(
                     'Unexpected exception opening the cache file; %s', exception,

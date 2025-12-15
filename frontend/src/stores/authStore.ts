@@ -104,7 +104,8 @@ export const useAuthStore = defineStore(
      * This is the primary entry point for auth initialization.
      */
     async function initialize(): Promise<boolean> {
-      console.log('[AuthStore] Initializing auth state...')
+      const shouldDebugLog = import.meta.env.DEV && localStorage.getItem('maddam_debug') === '1'
+      if (shouldDebugLog) console.log('[AuthStore] Initializing auth state...')
 
       // Deduplicate concurrent initialize() calls (router guards + app mount).
       if (initializePromise) {
@@ -122,7 +123,7 @@ export const useAuthStore = defineStore(
       
       // If we have persisted auth state but no real token and no mock flag, clear it
       if (isAuthenticated.value && !hasRealToken && !hasMockAuth) {
-        console.warn('[AuthStore] Persisted auth but no token/mock flag, clearing state')
+        if (shouldDebugLog) console.warn('[AuthStore] Persisted auth but no token/mock flag, clearing state')
         user.value = null
         permissions.value = []
         lastActivity.value = null
@@ -131,7 +132,7 @@ export const useAuthStore = defineStore(
       
       // No token found - user is not authenticated
       if (!hasRealToken && !hasMockAuth) {
-        console.log('[AuthStore] No token found, user not authenticated')
+        if (shouldDebugLog) console.log('[AuthStore] No token found, user not authenticated')
         user.value = null
         permissions.value = []
         lastActivity.value = null
@@ -140,7 +141,7 @@ export const useAuthStore = defineStore(
 
       // Token found - validate it by fetching current user
       try {
-        console.log('[AuthStore] Token found, validating...')
+        if (shouldDebugLog) console.log('[AuthStore] Token found, validating...')
         const response = await authService.getCurrentUser()
         // Only apply if auth state hasn't changed and token is still the same.
         const tokenNow = localStorage.getItem('auth_token')
@@ -150,10 +151,10 @@ export const useAuthStore = defineStore(
           lastActivity.value = new Date()
         }
         
-        console.log('[AuthStore] ✅ Session restored for:', response.user.username)
+        if (shouldDebugLog) console.log('[AuthStore] ✅ Session restored for:', response.user.username)
         return true
       } catch (error) {
-        console.warn('[AuthStore] ❌ Token validation failed:', error)
+        if (shouldDebugLog) console.warn('[AuthStore] ❌ Token validation failed:', error)
         // Clear auth state on failure
         user.value = null
         permissions.value = []

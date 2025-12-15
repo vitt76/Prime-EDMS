@@ -391,21 +391,7 @@ class AdminService {
    */
   async addUserToGroups(userId: number, groupIds: number[]): Promise<void> {
     for (const groupId of groupIds) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'role-assign-1',
-          hypothesisId: 'H1',
-          location: 'adminService.addUserToGroups',
-          message: 'Add user to group',
-          data: { userId, groupId, url: `/api/v4/groups/${groupId}/users/add/` },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
+      // (debug ingest removed)
       await apiService.post(`/api/v4/groups/${groupId}/users/add/`, { user: userId })
     }
   }

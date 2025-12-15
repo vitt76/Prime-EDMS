@@ -12,7 +12,6 @@
  * - GET /api/v4/users/current/ - Get current user info
  */
 
-import axios from 'axios'
 import { apiService } from './apiService'
 import { cacheService } from './cacheService'
 import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
@@ -33,6 +32,17 @@ const BFF_ENABLED = true
  */
 const TOKEN_KEY = 'auth_token'
 const USER_KEY = 'auth_user'
+
+interface TokenObtainResponse {
+  token: string
+}
+
+type MayanUserResponse = any
+
+export interface GetCurrentUserResponse {
+  user: User
+  permissions: string[]
+}
 
 
 // ============================================================================
@@ -77,11 +87,6 @@ class AuthService {
    * Obtain auth token from backend or return mock token
    */
   async obtainToken(username: string, password: string): Promise<{ token: string }> {
-    if (!USE_REAL_API) {
-      console.log('[Auth] Using mock login (DEV mode)')
-      return this.mockLogin(username, password)
-    }
-
     // PRODUCTION: Real Django Token authentication
     console.log('[Auth] Attempting real login for:', username)
 
@@ -97,7 +102,7 @@ class AuthService {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         }
-      }
+      } as any
     )
 
     const token = tokenResponse.token || (tokenResponse as any).data?.token
@@ -172,30 +177,6 @@ class AuthService {
    * Get current authenticated user
    */
   async getCurrentUser(): Promise<GetCurrentUserResponse> {
-    // DEV MODE: Return stored mock user
-    if (!USE_REAL_API) {
-      const userData = localStorage.getItem(USER_KEY)
-      if (userData) {
-        const user = JSON.parse(userData)
-        return { user, permissions: user.permissions || [] }
-      }
-
-      // Default mock user
-      return {
-        user: {
-          id: 1,
-          email: 'admin@example.com',
-          first_name: 'Admin',
-          last_name: 'User',
-          username: 'admin',
-          is_active: true,
-          permissions: ['admin.access', 'documents.view'],
-          role: 'admin'
-        },
-        permissions: ['admin.access', 'documents.view']
-      }
-    }
-
     // PRODUCTION: Fetch from API
     const token = getToken()
     if (!token) {
@@ -219,11 +200,6 @@ class AuthService {
       localStorage.setItem(USER_KEY, JSON.stringify(user))
       return { user, permissions: user.permissions || [] }
     }
-    
-    // Update stored user data
-    localStorage.setItem(USER_KEY, JSON.stringify(user))
-
-    return { user, permissions: user.permissions || [] }
   }
 
   /**
@@ -258,6 +234,31 @@ class AuthService {
     // Backend logout not required for token auth; endpoint may be absent (404)
   }
 
+  // --------------------------------------------------------------------------
+  // 2FA (not implemented in backend yet)
+  // These methods exist to satisfy the frontend store typing.
+  // --------------------------------------------------------------------------
+
+  async getTwoFactorStatus(): Promise<TwoFactorStatus> {
+    return { enabled: false }
+  }
+
+  async enableTwoFactor(): Promise<TwoFactorSetup> {
+    throw new Error('2FA is not implemented on the backend yet')
+  }
+
+  async verifyTwoFactor(_token: string, _method: 'totp' | 'backup_code' = 'totp'): Promise<any> {
+    throw new Error('2FA is not implemented on the backend yet')
+  }
+
+  async disableTwoFactor(): Promise<any> {
+    throw new Error('2FA is not implemented on the backend yet')
+  }
+
+  async regenerateBackupCodes(): Promise<{ backup_codes: string[] }> {
+    throw new Error('2FA is not implemented on the backend yet')
+  }
+
   /**
    * Get CSRF token from cookies or meta tag
    */
@@ -267,7 +268,7 @@ class AuthService {
     for (const cookie of cookies) {
       const [name, value] = cookie.trim().split('=')
       if (name === 'csrftoken') {
-        return decodeURIComponent(value)
+        return value ? decodeURIComponent(value) : ''
       }
     }
 

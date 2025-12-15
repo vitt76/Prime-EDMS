@@ -11,9 +11,17 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 const MAX_RETRIES = 3
 const RETRY_DELAY = 1000 // 1 second
 
+const shouldDebugLog = (): boolean => {
+  try {
+    return import.meta.env.DEV && localStorage.getItem('maddam_debug') === '1'
+  } catch {
+    return false
+  }
+}
+
 // Request logging
 const logRequest = (config: InternalAxiosRequestConfig): void => {
-  if (import.meta.env.DEV) {
+  if (shouldDebugLog()) {
     console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
       params: config.params,
       data: config.data
@@ -22,13 +30,13 @@ const logRequest = (config: InternalAxiosRequestConfig): void => {
 }
 
 const logResponse = (response: unknown): void => {
-  if (import.meta.env.DEV) {
+  if (shouldDebugLog()) {
     console.log('[API Response]', response)
   }
 }
 
 const logError = (error: unknown): void => {
-  if (import.meta.env.DEV) {
+  if (shouldDebugLog()) {
     console.error('[API Error]', error)
   }
 }
@@ -99,7 +107,7 @@ class ApiService {
         logResponse(response.data)
         return response
       },
-      async (error: AxiosError<ApiError>) => {
+      async (error: AxiosError<any>) => {
         logError(error)
 
         const config = error.config as InternalAxiosRequestConfig & {
@@ -122,7 +130,7 @@ class ApiService {
           const apiError: ApiError = {
             code: 'FORBIDDEN',
             message: 'Доступ запрещен',
-            details: error.response.data
+            details: (error.response.data as unknown as Record<string, unknown>)
           }
           return Promise.reject(apiError)
         }
@@ -158,11 +166,12 @@ class ApiService {
         }
 
         // Handle structured errors
-        if (error.response?.data?.error) {
+        const errorData: any = error.response?.data
+        if (errorData?.error) {
           const apiError: ApiError = {
-            code: error.response.data.error.code || 'UNKNOWN_ERROR',
-            message: error.response.data.error.message || 'Произошла ошибка',
-            details: error.response.data.error.details
+            code: errorData.error.code || 'UNKNOWN_ERROR',
+            message: errorData.error.message || 'Произошла ошибка',
+            details: errorData.error.details
           }
           return Promise.reject(apiError)
         }
@@ -285,7 +294,7 @@ class ApiService {
   private getCSRFToken(): string | null {
     // Try cookie first
     const cookieMatch = document.cookie.match(/csrftoken=([^;]+)/)
-    if (cookieMatch) return cookieMatch[1]
+    if (cookieMatch) return cookieMatch[1] ?? null
 
     // Fallback to meta tag
     return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || null

@@ -445,21 +445,7 @@ async function fetchTotalAssetsCount(): Promise<number | null> {
 
   for (const url of candidates) {
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'admin-dashboard-1',
-          hypothesisId: 'H_dashboard_assets',
-          location: 'AdminDashboard.fetchTotalAssetsCount',
-          message: 'Trying assets count endpoint',
-          data: { url },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
+      // (debug ingest removed)
 
       const response = await apiService.get<PaginatedResponse<unknown>>(
         url,
@@ -468,21 +454,7 @@ async function fetchTotalAssetsCount(): Promise<number | null> {
       )
 
       if (typeof response?.count === 'number') {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'admin-dashboard-1',
-            hypothesisId: 'H_dashboard_assets',
-            location: 'AdminDashboard.fetchTotalAssetsCount',
-            message: 'Assets count endpoint succeeded',
-            data: { url, count: response.count },
-            timestamp: Date.now()
-          })
-        }).catch(() => {})
-        // #endregion
+        // (debug ingest removed)
         bestCount = bestCount === null ? response.count : Math.max(bestCount, response.count)
         // If we found a non-zero count, we can stop early (real data is present).
         if (response.count > 0) {
@@ -490,21 +462,7 @@ async function fetchTotalAssetsCount(): Promise<number | null> {
         }
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'admin-dashboard-1',
-          hypothesisId: 'H_dashboard_assets',
-          location: 'AdminDashboard.fetchTotalAssetsCount',
-          message: 'Assets count endpoint failed',
-          data: { url },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
+      // (debug ingest removed)
     }
   }
 
@@ -549,21 +507,7 @@ async function fetchMonthlyGrowth(): Promise<{ total: number; growth_label: stri
 }
 
 async function loadRealDashboardStats(): Promise<void> {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/e9967d14-fa88-4de6-b92b-27a3200ee650', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: 'debug-session',
-      runId: 'admin-dashboard-1',
-      hypothesisId: 'H_dashboard_assets',
-      location: 'AdminDashboard.loadRealDashboardStats',
-      message: 'Loading real dashboard stats (partial)',
-      data: {},
-      timestamp: Date.now()
-    })
-  }).catch(() => {})
-  // #endregion
+  // (debug ingest removed)
 
   // Prefer headless dashboard stats (includes growth); fallback to count endpoints.
   const dash = await fetchMonthlyGrowth()

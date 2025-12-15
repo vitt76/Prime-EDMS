@@ -201,7 +201,7 @@
             </button>
             <img
               v-if="!previewError"
-              :key="asset?.id || previewSrc"
+              :key="previewResolved"
               :src="previewResolved"
               :alt="asset.label"
               class="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-transform duration-200"
@@ -522,11 +522,25 @@
                 </button>
               </div>
               
-              <div class="space-y-3">
+              <input
+                ref="newVersionFileInput"
+                type="file"
+                class="hidden"
+                @change="handleNewVersionFileSelected"
+              />
+
+              <div v-if="!versions.length" class="text-sm text-neutral-500 dark:text-neutral-400">
+                Версий нет или они недоступны.
+              </div>
+
+              <div v-else class="space-y-3">
                 <div
                   v-for="version in versions"
                   :key="version.id"
                   class="p-3 rounded-xl border transition-colors"
+                  role="button"
+                  tabindex="0"
+                  @click="handleSelectDocumentFile((version as any)?._file)"
                   :class="version.is_current 
                     ? 'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' 
                     : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50'"
@@ -790,6 +804,11 @@ const collapsedSections = ref({
   status: false
 })
 
+// Document files (real "versions" in Mayan are represented by DocumentFile list)
+const documentFiles = ref<any[]>([])
+const selectedDocumentFileId = ref<number | null>(null)
+const newVersionFileInput = ref<HTMLInputElement | null>(null)
+
 onMounted(() => {
   const isMobile = window.innerWidth < 768
   if (isMobile) {
@@ -800,21 +819,6 @@ onMounted(() => {
       status: true
     }
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: 'debug-session',
-      runId: 'ui-layout',
-      hypothesisId: 'H-layout',
-      location: 'AssetDetailPage:onMounted',
-      message: 'Init collapsed sections',
-      data: { isMobile, collapsed: collapsedSections.value },
-      timestamp: Date.now()
-    })
-  }).catch(() => {})
-  // #endregion agent log
 })
 
 const tabs = [
@@ -848,7 +852,11 @@ const isDocument = computed(() =>
 const isAudio = computed(() => asset.value?.mime_type?.startsWith('audio/'))
 
 const hasPreviewUrl = computed(() => !!(asset.value?.preview_url || asset.value?.thumbnail_url))
-const showPreview = computed(() => isImage.value || (hasPreviewUrl.value && !isVideo.value))
+const showPreview = computed(() => {
+  // If a specific version is selected, force preview area to render.
+  if (previewOverride.value || previewFallback.value) return true
+  return isImage.value || (hasPreviewUrl.value && !isVideo.value)
+})
 
 const documentType = computed(() => {
   if (isImage.value) return 'image'
@@ -858,7 +866,24 @@ const documentType = computed(() => {
   return 'image' // default
 })
 
-const versions = computed((): Version[] => asset.value?.version_history || [])
+const versions = computed((): any[] => {
+  const files = documentFiles.value || []
+  if (!files.length) return []
+
+  const currentId = selectedDocumentFileId.value || files[0]?.id
+
+  return files.map((f: any) => {
+    return {
+      id: f.id,
+      filename: f.filename,
+      uploaded_by: 'Система',
+      uploaded_date: f.timestamp,
+      is_current: currentId ? f.id === currentId : false,
+      size: f.size,
+      _file: f
+    }
+  })
+})
 
 const comments = computed((): Comment[] => {
   return asset.value?.comments || []
@@ -870,7 +895,9 @@ const usage = computed((): UsageStats | undefined => {
 
 const previewSrc = computed(() => resolveAssetImageUrl(asset.value))
 const previewFallback = ref<string | null>(null)
-const previewResolved = computed(() => previewFallback.value || previewSrc.value)
+const previewOverride = ref<string | null>(null)
+const previewOverrideObjectUrl = ref<string | null>(null)
+const previewResolved = computed(() => previewOverride.value || previewFallback.value || previewSrc.value)
 const isFavorite = computed(() => {
   if (!asset.value) return false
   return favoritesStore.isFavorite(asset.value.id) || asset.value.is_favorite === true || asset.value.isFavorite === true
@@ -893,30 +920,37 @@ async function loadAsset() {
       console.log('[AssetDetail] Loaded from real API:', storeAsset)
       asset.value = storeAsset as Asset
       extendedAsset.value = storeAsset as ExtendedAsset
+
+      // Load all document files (Mayan: /documents/{id}/files/)
+      try {
+        const documentId = Number(asset.value?.id || assetId.value)
+        if (Number.isFinite(documentId) && documentId > 0) {
+          const filesResponse: any = await apiService.get(
+            `/api/v4/documents/${documentId}/files/`,
+            { params: { page_size: 200 } } as any,
+            false
+          )
+          const results = Array.isArray(filesResponse?.results)
+            ? filesResponse.results
+            : (Array.isArray(filesResponse) ? filesResponse : [])
+          documentFiles.value = results.sort(
+            (a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          )
+          selectedDocumentFileId.value = documentFiles.value[0]?.id ?? null
+        } else {
+          documentFiles.value = []
+          selectedDocumentFileId.value = null
+        }
+      } catch (filesErr) {
+        console.warn('[AssetDetail] Failed to load document files:', filesErr)
+        documentFiles.value = []
+        selectedDocumentFileId.value = null
+      }
     } else {
       error.value = `Актив с ID ${assetId.value} не найден`
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'ui-layout',
-        hypothesisId: 'H-layout',
-        location: 'AssetDetailPage:loadAsset',
-        message: 'Loaded asset, preview availability',
-        data: {
-          id: assetId.value,
-          hasPreview: !!(asset.value?.preview_url || asset.value?.thumbnail_url),
-          fileExtension: fileExtension.value,
-          description: !!asset.value?.description
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion agent log
+    // (debug ingest removed)
   } catch (e: any) {
     console.error('[AssetDetail] Error loading asset:', e)
     error.value = e.message || 'Не удалось загрузить актив'
@@ -942,11 +976,60 @@ async function toggleFavorite(): Promise<void> {
 function handlePreviewImageError(): void {
   // First failure: try placeholder
   if (!previewFallback.value) {
+    // If override is invalid, clear it so we can fall back.
+    if (previewOverrideObjectUrl.value) {
+      try {
+        URL.revokeObjectURL(previewOverrideObjectUrl.value)
+      } catch {
+        // ignore
+      }
+      previewOverrideObjectUrl.value = null
+    }
+    previewOverride.value = null
     previewFallback.value = '/assets/placeholder.png'
     previewError.value = false
     return
   }
   previewError.value = true
+}
+
+async function handleSelectDocumentFile(file: any): Promise<void> {
+  if (!file) return
+  selectedDocumentFileId.value = file.id
+
+  // Clear previous override
+  if (previewOverrideObjectUrl.value) {
+    try {
+      URL.revokeObjectURL(previewOverrideObjectUrl.value)
+    } catch {
+      // ignore
+    }
+    previewOverrideObjectUrl.value = null
+  }
+  previewOverride.value = null
+  previewFallback.value = null
+  previewError.value = false
+
+  const imageUrl: string | undefined = file?.pages_first?.image_url
+  if (!imageUrl) {
+    // No page image available → keep default preview pipeline.
+    return
+  }
+
+  try {
+    const blob = await apiService.get<Blob>(
+      imageUrl,
+      { responseType: 'blob' } as any,
+      false
+    )
+    const objectUrl = URL.createObjectURL(blob)
+    previewOverrideObjectUrl.value = objectUrl
+    previewOverride.value = objectUrl
+  } catch (err) {
+    console.warn('[AssetDetail] Failed to load selected version preview:', err)
+    // Keep existing preview, but show placeholder if it fails too.
+    previewFallback.value = '/assets/placeholder.png'
+  }
 }
 
 function formatFileSize(bytes: number): string {
@@ -1182,11 +1265,93 @@ function handleSaveAsCopy(_originalId: number, newAssetId: number) {
 }
 
 function handleUploadNewVersion() {
-  notificationStore.addNotification({
-    type: 'info',
-    title: 'Загрузка версии',
-    message: 'Функция загрузки новой версии в разработке',
-  })
+  newVersionFileInput.value?.click()
+}
+
+async function handleNewVersionFileSelected(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+
+  const documentId = Number(asset.value?.id || assetId.value)
+  if (!Number.isFinite(documentId) || documentId <= 0) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось определить документ для загрузки версии'
+    })
+    return
+  }
+
+  const beforeCount = documentFiles.value?.length || 0
+
+  try {
+    const formData = new FormData()
+    formData.append('file_new', file, file.name)
+    formData.append('action', '1') // Replace. Create a new version and use the new file pages.
+    formData.append('filename', file.name)
+    formData.append('comment', 'Uploaded via DAM UI')
+
+    await apiService.post(
+      `/api/v4/documents/${documentId}/files/`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } } as any
+    )
+
+    notificationStore.addNotification({
+      type: 'info',
+      title: 'Загрузка запущена',
+      message: 'Новая версия обрабатывается. Сейчас обновим список версий...'
+    })
+
+    const maxAttempts = 12
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      await new Promise((r) => setTimeout(r, 1500))
+      try {
+        const filesResponse: any = await apiService.get(
+          `/api/v4/documents/${documentId}/files/`,
+          { params: { page_size: 200 } } as any,
+          false
+        )
+        const results = Array.isArray(filesResponse?.results)
+          ? filesResponse.results
+          : (Array.isArray(filesResponse) ? filesResponse : [])
+        documentFiles.value = results.sort(
+          (a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+
+        if ((documentFiles.value?.length || 0) > beforeCount) {
+          selectedDocumentFileId.value = documentFiles.value[0]?.id ?? null
+          notificationStore.addNotification({
+            type: 'success',
+            title: 'Версия добавлена',
+            message: 'Новая версия появилась в списке'
+          })
+          return
+        }
+      } catch {
+        // ignore and keep polling
+      }
+    }
+
+    notificationStore.addNotification({
+      type: 'warning',
+      title: 'Загрузка ещё выполняется',
+      message: 'Версия ещё обрабатывается. Обновите список через несколько секунд.'
+    })
+  } catch (err: any) {
+    const message =
+      err?.response?.data?.detail ||
+      err?.response?.data?.error ||
+      err?.message ||
+      'Не удалось загрузить новую версию'
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message
+    })
+  }
 }
 
 function handleRevertVersion(version: Version) {
