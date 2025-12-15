@@ -302,27 +302,27 @@
           <!-- Workflow Widget (Collapsible) -->
           <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
             <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
-              <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
-                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
-                  <ArrowPathRoundedSquareIcon class="w-4 h-4 text-neutral-500" />
-                  Статус и согласование
-                </h3>
-                <button
-                  type="button"
-                  class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                  @click="collapsedSections.status = !collapsedSections.status"
+              <Disclosure v-slot="{ open }" :default-open="!collapsedSections.status">
+                <DisclosureButton
+                  class="w-full flex items-center justify-between px-4 py-3 text-left border-b border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                  @click="collapsedSections.status = !open"
                 >
-                  {{ collapsedSections.status ? 'Развернуть' : 'Свернуть' }}
-                </button>
-              </div>
-              <Transition name="fade">
-                <div v-if="!collapsedSections.status" class="p-0">
+                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                    <ArrowPathRoundedSquareIcon class="w-4 h-4 text-neutral-500" />
+                    Статус и согласование
+                  </h3>
+                  <ChevronDownIcon
+                    :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                  />
+                </DisclosureButton>
+
+                <DisclosurePanel class="p-0">
                   <WorkflowWidget
                     :asset-id="assetId"
                     @status-change="handleWorkflowStatusChange"
                   />
-                </div>
-              </Transition>
+                </DisclosurePanel>
+              </Disclosure>
             </div>
           </div>
 
@@ -376,7 +376,7 @@
                   </div>
                   <div class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Добавлен</dt>
-                    <dd class="text-sm text-neutral-900 dark:text-white">{{ formatDate(asset.date_added) }}</dd>
+                    <dd class="text-sm text-neutral-900 dark:text-white">{{ formatDate(asset.file_details?.uploaded_date || asset.date_added) }}</dd>
                   </div>
                   <div v-if="asset.metadata?.width && asset.metadata?.height" class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Размеры</dt>
@@ -394,19 +394,20 @@
               </section>
 
               <!-- EXIF Data (for images) -->
-              <section v-if="extendedAsset?.exif" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">EXIF / Камера</h3>
-                  <button
-                    type="button"
-                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                    @click="collapsedSections.exif = !collapsedSections.exif"
+              <section v-if="extendedAsset?.exif" class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+                <Disclosure v-slot="{ open }" :default-open="!collapsedSections.exif">
+                  <DisclosureButton
+                    class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    @click="collapsedSections.exif = !open"
                   >
-                    {{ collapsedSections.exif ? 'Развернуть' : 'Свернуть' }}
-                  </button>
-                </div>
-                <Transition name="fade">
-                  <dl v-if="!collapsedSections.exif" class="space-y-3">
+                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">EXIF / Камера</h3>
+                    <ChevronDownIcon
+                      :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                    />
+                  </DisclosureButton>
+
+                  <DisclosurePanel class="px-4 pb-4">
+                    <dl class="space-y-3">
                   <div v-if="extendedAsset.exif.make" class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Камера</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.make }} {{ extendedAsset.exif.model }}</dd>
@@ -439,24 +440,26 @@
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">DPI</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.dpi }}</dd>
                   </div>
-                  </dl>
-                </Transition>
+                    </dl>
+                  </DisclosurePanel>
+                </Disclosure>
               </section>
 
               <!-- Tags -->
-              <section v-if="asset.tags && asset.tags.length > 0" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Теги</h3>
-                  <button
-                    type="button"
-                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                    @click="collapsedSections.tags = !collapsedSections.tags"
+              <section v-if="asset.tags && asset.tags.length > 0" class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+                <Disclosure v-slot="{ open }" :default-open="!collapsedSections.tags">
+                  <DisclosureButton
+                    class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    @click="collapsedSections.tags = !open"
                   >
-                    {{ collapsedSections.tags ? 'Развернуть' : 'Свернуть' }}
-                  </button>
-                </div>
-                <Transition name="fade">
-                  <div v-if="!collapsedSections.tags" class="flex flex-wrap gap-2">
+                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Теги</h3>
+                    <ChevronDownIcon
+                      :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                    />
+                  </DisclosureButton>
+
+                  <DisclosurePanel class="px-4 pb-4">
+                    <div class="flex flex-wrap gap-2">
                     <span
                       v-for="tag in asset.tags"
                       :key="tag"
@@ -466,24 +469,25 @@
                     >
                       {{ tag }}
                     </span>
-                  </div>
-                </Transition>
+                    </div>
+                  </DisclosurePanel>
+                </Disclosure>
               </section>
 
               <!-- AI Analysis -->
-              <section v-if="asset.ai_analysis?.status === 'completed'" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">AI Анализ</h3>
-                  <button
-                    type="button"
-                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                    @click="collapsedSections.ai = !collapsedSections.ai"
+              <section v-if="asset.ai_analysis?.status === 'completed'" class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+                <Disclosure v-slot="{ open }" :default-open="!collapsedSections.ai">
+                  <DisclosureButton
+                    class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    @click="collapsedSections.ai = !open"
                   >
-                    {{ collapsedSections.ai ? 'Развернуть' : 'Свернуть' }}
-                  </button>
-                </div>
-                <Transition name="fade">
-                  <div v-if="!collapsedSections.ai">
+                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">AI Анализ</h3>
+                    <ChevronDownIcon
+                      :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                    />
+                  </DisclosureButton>
+
+                  <DisclosurePanel class="px-4 pb-4">
                     <p v-if="asset.ai_analysis.ai_description" class="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
                       {{ asset.ai_analysis.ai_description }}
                     </p>
@@ -496,8 +500,8 @@
                         {{ tag }}
                       </span>
                     </div>
-                  </div>
-                </Transition>
+                  </DisclosurePanel>
+                </Disclosure>
               </section>
             </div>
 
@@ -743,7 +747,7 @@
 // @ts-nocheck
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import { Menu, MenuButton, MenuItem, MenuItems, Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 import {
   ArrowDownTrayIcon,
   ArrowPathRoundedSquareIcon,
@@ -764,9 +768,7 @@ import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
 import AIInsightsWidget from '@/components/asset/AIInsightsWidget.vue'
 import MediaEditorModal from '@/components/asset/MediaEditorModal.vue'
 import type { Asset, Comment, Version, ExtendedAsset, UsageStats, AIAnalysis } from '@/types/api'
-
-type WorkflowState = { id: string; label: string; color?: string }
-type AITag = { id?: string | number; label: string }
+import type { WorkflowState } from '@/mocks/workflows'
 
 const route = useRoute()
 const assetStore = useAssetStore()
@@ -882,17 +884,54 @@ async function loadAsset() {
   isLoading.value = true
   error.value = null
   previewError.value = false
-  
+
   try {
     console.log('[AssetDetail] Loading asset:', assetId.value)
-    
-    // First try to load from real API via store (includes DAM/AI data)
-    const storeAsset = await assetStore.getAssetDetail(assetId.value)
+
+    // Always force reload to get fresh file data
+    const storeAsset = await assetStore.getAssetDetail(assetId.value, true)
     
     if (storeAsset) {
       console.log('[AssetDetail] Loaded from real API:', storeAsset)
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          location:'AssetDetailPage:loadAsset',
+          message:'Asset data analysis for info card',
+          data: {
+            id: storeAsset.id,
+            filename: storeAsset.filename,
+            size: storeAsset.size,
+            mime_type: storeAsset.mime_type,
+            date_added: storeAsset.date_added,
+            date_added_type: typeof storeAsset.date_added,
+            file_details: storeAsset.file_details,
+            file_details_date: storeAsset.file_details?.uploaded_date,
+            file_details_size: storeAsset.file_details?.size,
+            file_details_filename: storeAsset.file_details?.filename,
+            has_file_details: !!storeAsset.file_details,
+            allKeys: Object.keys(storeAsset)
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'info-card-debug',
+          hypothesisId: 'H-info-fields'
+        })
+      }).catch(() => {})
+      // #endregion agent log
       asset.value = storeAsset as Asset
-      extendedAsset.value = storeAsset as ExtendedAsset
+      
+      // If asset has AI analysis, set it as extended data
+      if (storeAsset.ai_analysis) {
+        extendedAsset.value = {
+          ...storeAsset,
+          ai_analysis: storeAsset.ai_analysis
+        } as ExtendedAsset
+      } else {
+        extendedAsset.value = storeAsset as ExtendedAsset
+      }
     } else {
       error.value = `Актив с ID ${assetId.value} не найден`
     }
@@ -957,8 +996,11 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('ru-RU', {
+function formatDate(dateString: string | undefined): string {
+  if (!dateString) return '--'
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return '--'
+  return date.toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -1022,45 +1064,75 @@ async function handleDownload() {
     asset.value.label ||
     `document-${asset.value.id}`
 
-  const url =
-    asset.value.download_url ||
-    (asset.value.file_latest_id
-      ? `/api/v4/documents/${asset.value.id}/files/${asset.value.file_latest_id}/download/`
-      : `/api/v4/documents/${asset.value.id}/files/latest/download/`)
-
   notificationStore.addNotification({
     type: 'info',
     title: 'Загрузка началась',
     message: `Скачивание ${filename}...`,
   })
 
-  try {
-    // Fetch blob via API to avoid SPA HTML fallback and include auth headers
-    const blob = await apiService.get<Blob>(url, {
-      responseType: 'blob'
-    } as any)
+  // Handle async download
+  const performDownload = async () => {
+    try {
+      let downloadUrl = asset.value.download_url
 
-    const objectUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = objectUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(objectUrl)
-  } catch (err) {
-    console.error('[AssetDetail] Download failed', err)
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка загрузки',
-      message: 'Не удалось скачать файл'
-    })
+      // If no download_url, try to get file ID first
+      if (!downloadUrl) {
+        let fileId = asset.value.file_latest_id
+
+        // If no file_latest_id, fetch file list to get latest file ID
+        if (!fileId) {
+          try {
+            const filesResponse = await apiService.get(`/api/v4/documents/${asset.value.id}/files/`)
+            if (filesResponse.results && filesResponse.results.length > 0) {
+              // Sort by timestamp descending and take the latest
+              const latestFile = filesResponse.results
+                .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+              fileId = latestFile.id
+            }
+          } catch (fileError) {
+            console.warn('[AssetDetail] Could not fetch file list:', fileError)
+          }
+        }
+
+        // Construct download URL with file ID
+        if (fileId) {
+          downloadUrl = `/api/v4/documents/${asset.value.id}/files/${fileId}/download/`
+        }
+      }
+
+      if (!downloadUrl) {
+        throw new Error('Could not determine download URL')
+      }
+
+      // Fetch blob via API to avoid SPA HTML fallback and include auth headers
+      const blob = await apiService.get<Blob>(downloadUrl, {
+        responseType: 'blob'
+      } as any)
+
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(objectUrl)
+    } catch (err) {
+      console.error('[AssetDetail] Download failed', err)
+      notificationStore.addNotification({
+        type: 'error',
+        title: 'Ошибка загрузки',
+        message: 'Не удалось скачать файл'
+      })
+    }
   }
+
+  performDownload()
 }
 
 type DownloadFormat = 'original' | 'low_res' | 'high_res' | 'pdf'
 
-async function handleDownloadAs(format: DownloadFormat) {
+function handleDownloadAs(format: DownloadFormat) {
   if (!asset.value) return
   
   const formatLabels: Record<DownloadFormat, string> = {
@@ -1088,42 +1160,47 @@ async function handleDownloadAs(format: DownloadFormat) {
       ? 'png'
       : 'jpeg' // low_res default
 
-  try {
-    const blob = await apiService.get<Blob>(
-      `/api/v4/headless/documents/${asset.value.id}/convert/`,
-      {
-        params: { format: targetFormat },
-        responseType: 'blob'
-      } as any
-    )
+  // Handle async conversion
+  const performConversion = async () => {
+    try {
+      const blob = await apiService.get<Blob>(
+        `/api/v4/headless/documents/${asset.value.id}/convert/`,
+        {
+          params: { format: targetFormat },
+          responseType: 'blob'
+        } as any
+      )
 
-    const objectUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    const baseName =
-      asset.value.file_details?.filename?.split('.')?.[0] ||
-      asset.value.filename?.split('.')?.[0] ||
-      asset.value.label ||
-      `document-${asset.value.id}`
-    link.href = objectUrl
-    link.download = `${baseName}.${targetFormat === 'jpeg' ? 'jpg' : targetFormat}`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(objectUrl)
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const baseName =
+        asset.value.file_details?.filename?.split('.')?.[0] ||
+        asset.value.filename?.split('.')?.[0] ||
+        asset.value.label ||
+        `document-${asset.value.id}`
+      link.href = objectUrl
+      link.download = `${baseName}.${targetFormat === 'jpeg' ? 'jpg' : targetFormat}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(objectUrl)
 
-    notificationStore.addNotification({
-      type: 'success',
-      title: 'Готово',
-      message: `Файл скачан в формате ${formatLabels[format]}`
-    })
-  } catch (err) {
-    console.error('[AssetDetail] Conversion download failed', err)
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка конвертации',
-      message: `Не удалось скачать файл в формате ${formatLabels[format]}`
-    })
+      notificationStore.addNotification({
+        type: 'success',
+        title: 'Готово',
+        message: `Файл скачан в формате ${formatLabels[format]}`
+      })
+    } catch (err) {
+      console.error('[AssetDetail] Conversion download failed', err)
+      notificationStore.addNotification({
+        type: 'error',
+        title: 'Ошибка конвертации',
+        message: `Не удалось скачать файл в формате ${formatLabels[format]}`
+      })
+    }
   }
+
+  performConversion()
 }
 
 function handleShare() {
