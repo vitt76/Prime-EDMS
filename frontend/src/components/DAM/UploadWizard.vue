@@ -484,7 +484,6 @@ import { useAssetStore } from '@/stores/assetStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { uploadService, type UploadResult } from '@/services/uploadService'
 import type { Asset } from '@/types/api'
-const LOG_ENDPOINT = 'http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac'
 
 interface Props {
   isOpen: boolean
@@ -600,21 +599,7 @@ function addFiles(newFiles: File[]) {
   
   files.value = [...files.value, ...validFiles]
   validFiles.forEach(file => ensureFileMeta(file))
-  // #region agent log
-  fetch(LOG_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: 'debug-session',
-      runId: 'upload-meta',
-      hypothesisId: 'H-upload-files',
-      location: 'UploadWizard:addFiles',
-      message: 'Files added',
-      data: { added: validFiles.length, total: files.value.length },
-      timestamp: Date.now()
-    })
-  }).catch(() => {})
-  // #endregion agent log
+  // (debug ingest removed)
   
   // Generate previews for images
   validFiles.forEach(file => {
@@ -702,29 +687,8 @@ async function handleUpload() {
     for (let i = 0; i < files.value.length; i++) {
       const file = files.value[i] as File
       uploadProgress.value[i] = 0
-      const key = getFileKey(file)
       const meta = ensureFileMeta(file)
-      // #region agent log
-      fetch(LOG_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'upload-meta',
-          hypothesisId: 'H-upload-meta',
-          location: 'UploadWizard:handleUpload',
-          message: 'Uploading with meta',
-          data: {
-            key,
-            title: meta.title,
-            enableAI: meta.enableAI,
-            tags: meta.tags,
-            description: meta.description
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion agent log
+      // (debug ingest removed)
 
       const result: UploadResult = await uploadService.uploadFile(file, {
         documentTypeId: 1,

@@ -15,9 +15,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
-import type { Asset, GetAssetsParams, PaginatedResponse } from '@/types/api'
+import type { Asset, GetAssetsParams } from '@/types/api'
 import { formatApiError } from '@/utils/errors'
-import type { AxiosProgressEvent } from 'axios'
 import type { FolderSource } from '@/mocks/folders'
 
 // Import optimized adapter for Mayan API transformation
@@ -28,7 +27,7 @@ import {
   type BackendPaginatedResponse,
 } from '@/services/adapters/mayanAdapter'
 
-import { getToken, clearToken } from '@/services/authService'
+import { getToken } from '@/services/authService'
 import {
   uploadService,
   updateDocumentMetadata,
@@ -42,11 +41,6 @@ import { useAuthStore } from '@/stores/authStore'
 // ============================================================================
 // TYPES
 // ============================================================================
-
-interface UploadOptions {
-  onUploadProgress?: (event: AxiosProgressEvent) => void
-  signal?: AbortSignal
-}
 
 interface AssetFilters {
   type?: string[]

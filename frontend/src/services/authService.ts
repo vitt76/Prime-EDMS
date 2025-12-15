@@ -259,28 +259,6 @@ class AuthService {
     throw new Error('2FA is not implemented on the backend yet')
   }
 
-  /**
-   * Get CSRF token from cookies or meta tag
-   */
-  private getCsrfToken(): string {
-    // Try to get from cookies
-    const cookies = document.cookie.split(';')
-    for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=')
-      if (name === 'csrftoken') {
-        return value ? decodeURIComponent(value) : ''
-      }
-    }
-
-    // Try to get from meta tag
-    const metaToken = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement
-    if (metaToken) {
-      return metaToken.content
-    }
-
-    // Fallback for real API mode: return empty string if not found
-    return ''
-  }
 }
 
 // ============================================================================

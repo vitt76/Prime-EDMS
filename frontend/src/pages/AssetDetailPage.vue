@@ -745,6 +745,7 @@
       <MediaEditorModal
         :is-open="showMediaEditor"
         :asset="asset"
+        :document-file="selectedDocumentFile"
         @close="showMediaEditor = false"
         @save-version="handleSaveAsVersion"
         @save-copy="handleSaveAsCopy"
@@ -808,6 +809,13 @@ const collapsedSections = ref({
 const documentFiles = ref<any[]>([])
 const selectedDocumentFileId = ref<number | null>(null)
 const newVersionFileInput = ref<HTMLInputElement | null>(null)
+
+const selectedDocumentFile = computed(() => {
+  const files = documentFiles.value || []
+  if (!files.length) return null
+  const id = selectedDocumentFileId.value ?? files[0]?.id
+  return files.find((f: any) => Number(f?.id) === Number(id)) || files[0] || null
+})
 
 onMounted(() => {
   const isMobile = window.innerWidth < 768
@@ -1249,10 +1257,68 @@ function handleAnalysisComplete(analysis: AIAnalysis) {
   })
 }
 
-function handleSaveAsVersion(_assetId: number, versionId: number) {
-  console.log('Saved as new version:', versionId)
-  // Reload asset to show new version
-  loadAsset()
+async function handleSaveAsVersion(_assetId: number, fileId: number) {
+  const documentId = Number(asset.value?.id || assetId.value)
+  if (!Number.isFinite(documentId) || documentId <= 0) {
+    await loadAsset()
+    return
+  }
+
+  activeTab.value = 'versions'
+  const beforeCount = documentFiles.value?.length || 0
+
+  notificationStore.addNotification({
+    type: 'info',
+    title: 'Версия в обработке',
+    message: 'Файл сохранён, ожидаем появления версии в списке...'
+  })
+
+  const maxAttempts = 14
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await new Promise((r) => setTimeout(r, 1500))
+    try {
+      const filesResponse: any = await apiService.get(
+        `/api/v4/documents/${documentId}/files/`,
+        { params: { page_size: 200 } } as any,
+        false
+      )
+      const results = Array.isArray(filesResponse?.results)
+        ? filesResponse.results
+        : (Array.isArray(filesResponse) ? filesResponse : [])
+
+      documentFiles.value = results.sort(
+        (a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )
+
+      const found = fileId
+        ? documentFiles.value.find((f: any) => Number(f?.id) === Number(fileId))
+        : null
+
+      if (found || (documentFiles.value?.length || 0) > beforeCount) {
+        const selected = found || documentFiles.value[0]
+        selectedDocumentFileId.value = selected?.id ?? null
+        if (selected) {
+          await handleSelectDocumentFile(selected)
+        }
+        notificationStore.addNotification({
+          type: 'success',
+          title: 'Версия добавлена',
+          message: 'Новая версия появилась в списке'
+        })
+        return
+      }
+    } catch {
+      // ignore and keep polling
+    }
+  }
+
+  // Fallback: reload full asset (keeps UI consistent even if processing is slow)
+  await loadAsset()
+  notificationStore.addNotification({
+    type: 'warning',
+    title: 'Версия ещё обрабатывается',
+    message: 'Если версия не появилась — подождите несколько секунд и откройте вкладку «Версии» снова.'
+  })
 }
 
 function handleSaveAsCopy(_originalId: number, newAssetId: number) {
