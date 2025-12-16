@@ -97,9 +97,16 @@ export const useDashboardStore = defineStore(
         const data = await dashboardService.getStorageMetrics()
         storageMetrics.value = data
       } catch (err) {
-        // Storage metrics are optional, fallback to mock data if API fails
-        console.warn('Failed to fetch storage metrics, using fallback:', err)
-        storageMetrics.value = mockStorage
+        // Storage metrics are optional, return zeros if API fails
+        // (dashboardService already handles errors and returns zeros)
+        console.warn('Failed to fetch storage metrics:', err)
+        storageMetrics.value = {
+          total_size: 0,
+          used_size: 0,
+          available_size: 0,
+          usage_percentage: 0,
+          by_type: []
+        }
       }
     }
 
