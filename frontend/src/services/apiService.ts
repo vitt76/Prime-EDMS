@@ -83,7 +83,12 @@ class ApiService {
 
         // Add Authorization Token header (DRF Token authentication)
         const token = getToken()
-        if (token && config.headers) {
+        if (token) {
+          // Ensure headers object exists (blob requests may pass config without headers).
+          if (!config.headers) {
+            // eslint-disable-next-line no-param-reassign
+            config.headers = {} as any
+          }
           config.headers['Authorization'] = `Token ${token}`
         }
 

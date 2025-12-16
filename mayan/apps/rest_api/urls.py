@@ -22,6 +22,13 @@ from mayan.apps.headless_api.views.dashboard_stats_views import HeadlessDashboar
 from mayan.apps.headless_api.views.auth_views import HeadlessAuthMeView
 from mayan.apps.headless_api.views.storage_views import HeadlessS3ConfigView, HeadlessS3StatsView
 from mayan.apps.headless_api.views.users_views import HeadlessUsersDetailView, HeadlessUsersListCreateView
+from mayan.apps.headless_api.views.image_editor_views import (
+    HeadlessImageEditorCommitView,
+    HeadlessImageEditorPreviewView,
+    HeadlessImageEditorSessionCreateView,
+    HeadlessImageEditorSessionDetailView,
+    HeadlessImageEditorWatermarkListView
+)
 from .literals import API_VERSION
 
 # #region agent log
@@ -172,6 +179,32 @@ api_version_urls = [
         regex=r'^headless/documents/(?P<document_id>\d+)/convert/$',
         view=HeadlessDocumentConvertView.as_view(),
         name='headless-document-convert'
+    ),
+    # Headless image editor endpoints (server-side render + version commit)
+    url(
+        regex=r'^headless/image-editor/sessions/$',
+        view=HeadlessImageEditorSessionCreateView.as_view(),
+        name='headless-image-editor-session-create'
+    ),
+    url(
+        regex=r'^headless/image-editor/sessions/(?P<session_id>\d+)/$',
+        view=HeadlessImageEditorSessionDetailView.as_view(),
+        name='headless-image-editor-session-detail'
+    ),
+    url(
+        regex=r'^headless/image-editor/sessions/(?P<session_id>\d+)/preview/$',
+        view=HeadlessImageEditorPreviewView.as_view(),
+        name='headless-image-editor-preview'
+    ),
+    url(
+        regex=r'^headless/image-editor/sessions/(?P<session_id>\d+)/commit/$',
+        view=HeadlessImageEditorCommitView.as_view(),
+        name='headless-image-editor-commit'
+    ),
+    url(
+        regex=r'^headless/image-editor/watermarks/$',
+        view=HeadlessImageEditorWatermarkListView.as_view(),
+        name='headless-image-editor-watermarks'
     )
 ]
 

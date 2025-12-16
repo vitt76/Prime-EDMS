@@ -50,6 +50,7 @@ export interface WatermarkSettings {
   fontFamily: string
   fontSize: number
   color: string
+  assetId: number | null
   imageUrl: string | null
   imageFile: File | null
   position: WatermarkPosition
@@ -85,6 +86,7 @@ const DEFAULT_WATERMARK: WatermarkSettings = {
   fontFamily: 'Arial',
   fontSize: 24,
   color: '#ffffff',
+  assetId: null,
   imageUrl: null,
   imageFile: null,
   position: 'bottom-right',

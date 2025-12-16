@@ -41,6 +41,10 @@ class ImageEditSession(models.Model):
     )
     created = models.DateTimeField(auto_now_add=True, verbose_name=_('Создано'))
     modified = models.DateTimeField(auto_now=True, verbose_name=_('Изменено'))
+    state = models.JSONField(
+        blank=True, default=dict,
+        verbose_name=_('Состояние редактора')
+    )
 
     class Meta:
         verbose_name = _('Сессия редактирования изображения')

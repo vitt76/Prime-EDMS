@@ -9,3 +9,8 @@ from mayan.apps.headless_api.serializers.favorites import (  # noqa: F401
 from mayan.apps.headless_api.serializers.version import (  # noqa: F401
     HeadlessDocumentVersionSerializer,
 )
+from mayan.apps.headless_api.serializers.image_editor import (  # noqa: F401
+    HeadlessImageEditorSessionCreateSerializer,
+    HeadlessImageEditorSessionStateSerializer,
+    HeadlessWatermarkListSerializer,
+)

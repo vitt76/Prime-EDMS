@@ -184,30 +184,7 @@
                         :style="cropOverlayStyle"
                       />
 
-                      <!-- Watermark Preview Overlay -->
-                      <div 
-                        v-if="editorStore.currentState.watermark.enabled"
-                        class="absolute pointer-events-none"
-                        :style="watermarkPreviewStyle"
-                      >
-                        <!-- Text Watermark -->
-                        <span 
-                          v-if="editorStore.currentState.watermark.type === 'text'"
-                          class="whitespace-nowrap select-none"
-                          :style="watermarkTextStyle"
-                        >
-                          {{ editorStore.currentState.watermark.text || 'Водяной знак' }}
-                        </span>
-                        
-                        <!-- Image Watermark -->
-                        <img
-                          v-else-if="watermarkImagePreview"
-                          :src="watermarkImagePreview"
-                          alt="Watermark"
-                          class="max-w-[150px] max-h-[80px] object-contain"
-                          :style="{ opacity: editorStore.currentState.watermark.opacity / 100 }"
-                        />
-                      </div>
+                      <!-- Watermark preview is rendered server-side in headless mode -->
                     </div>
 
                     <!-- Processing Overlay -->
@@ -599,36 +576,27 @@
                           </div>
                         </div>
 
-                        <!-- Image Upload -->
+                        <!-- Image watermark (server assets) -->
                         <div v-else>
-                          <label class="block text-sm font-medium text-neutral-300 mb-2">Изображение логотипа</label>
-                          <div 
-                            class="border-2 border-dashed border-neutral-600 rounded-lg p-4 text-center
-                                   hover:border-neutral-500 transition-colors cursor-pointer"
-                            @click="triggerWatermarkUpload"
-                            @drop.prevent="handleWatermarkDrop"
-                            @dragover.prevent
+                          <label class="block text-sm font-medium text-neutral-300 mb-2">Водяной знак (Asset)</label>
+                          <select
+                            class="w-full px-3 py-2 bg-neutral-700 border border-neutral-600 rounded-lg text-white text-sm
+                                   focus:ring-2 focus:ring-blue-500"
+                            :value="editorStore.currentState.watermark.assetId || ''"
+                            @change="handleWatermarkAssetSelect"
                           >
-                            <input
-                              ref="watermarkInput"
-                              type="file"
-                              accept="image/png,image/svg+xml"
-                              class="hidden"
-                              @change="handleWatermarkUpload"
-                            />
-                            <template v-if="watermarkImagePreview">
-                              <img 
-                                :src="watermarkImagePreview" 
-                                alt="Watermark preview"
-                                class="max-h-16 mx-auto mb-2"
-                              />
-                              <p class="text-xs text-neutral-400">Кликните для замены</p>
-                            </template>
-                            <template v-else>
-                              <PhotoIcon class="w-8 h-8 mx-auto text-neutral-500 mb-2" />
-                              <p class="text-sm text-neutral-400">PNG или SVG</p>
-                            </template>
-                          </div>
+                            <option value="">— Не выбран —</option>
+                            <option
+                              v-for="wm in availableWatermarks"
+                              :key="wm.id"
+                              :value="wm.id"
+                            >
+                              {{ wm.label }}
+                            </option>
+                          </select>
+                          <p class="mt-2 text-xs text-neutral-500">
+                            Чтобы добавить новый watermark, создайте Asset в Mayan (категория <code>watermark</code>).
+                          </p>
                         </div>
 
                         <!-- Position Grid -->
@@ -832,7 +800,14 @@ import {
 } from '@heroicons/vue/24/outline'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useEditorStore, type WatermarkPosition } from '@/stores/editorStore'
-import { saveEditedImage, createAssetFromImage } from '@/services/editorService'
+import {
+  commitImageEditorSession,
+  createAssetFromImage,
+  createImageEditorSession,
+  fetchImageEditorPreviewBlob,
+  listWatermarks,
+  updateImageEditorSessionState
+} from '@/services/editorService'
 import { apiService } from '@/services/apiService'
 import SaveVersionModal from '@/components/asset/SaveVersionModal.vue'
 import type { Asset } from '@/types/api'
@@ -856,103 +831,86 @@ const editorStore = useEditorStore()
 
 // Refs
 const imageRef = ref<HTMLImageElement | null>(null)
-const watermarkInput = ref<HTMLInputElement | null>(null)
 const imageSrc = ref<string | null>(null)
 const objectUrl = ref<string | null>(null)
 const loadError = ref<string | null>(null)
 const isEditorReady = ref(false)
+const sessionId = ref<number | null>(null)
+const previewTimer = ref<number | null>(null)
+const availableWatermarks = ref<Array<{ id: number; label: string }>>([])
 
-async function prepareImageSrc() {
+function mapFormatToPreviewFormat(format: string): string {
+  const fmt = (format || '').toLowerCase()
+  if (fmt === 'original') return mapFormatToPreviewFormat(editorStore.currentState.format)
+  if (fmt === 'jpg' || fmt === 'jpeg') return 'jpeg'
+  if (fmt === 'png') return 'png'
+  if (fmt === 'webp') return 'webp'
+  if (fmt === 'tiff') return 'tiff'
+  if (fmt === 'gif') return 'gif'
+  return 'jpeg'
+}
+
+async function refreshServerPreview(options?: { maxW?: number; maxH?: number }) {
+  if (!sessionId.value) return
+  const blob = await fetchImageEditorPreviewBlob(sessionId.value, {
+    maxW: options?.maxW ?? 1600,
+    maxH: options?.maxH ?? 900
+  })
+  if (objectUrl.value) URL.revokeObjectURL(objectUrl.value)
+  objectUrl.value = URL.createObjectURL(blob)
+  imageSrc.value = objectUrl.value
+  loadError.value = null
+}
+
+async function syncStateAndPreview() {
+  if (!sessionId.value) return
+  await updateImageEditorSessionState(sessionId.value, editorStore.currentState)
+  await refreshServerPreview()
+}
+
+async function initHeadlessSession() {
   isEditorReady.value = false
   loadError.value = null
   if (!props.asset) return
-  const makeAbsolute = (u?: string | null) => {
-    if (!u) return null
-    if (u.startsWith('http://') || u.startsWith('https://')) return u
-    const base = import.meta.env.VITE_API_URL || ''
-    if (!base) return u
-    return `${base.replace(/\/$/, '')}/${u.replace(/^\//, '')}`
-  }
-
-  const tryLoadUrlAsBlob = async (url: string): Promise<boolean> => {
+  let fileId = Number((props.documentFile as any)?.id) || 0
+  if (!fileId) {
+    // Fallback: use latest document file
     try {
-      // IMPORTANT: don't cache blob/image responses; caching can corrupt Blob objects
-      // and cause "Изображение не загружено" even when the endpoint is OK.
-      const response = await apiService.get(url, {
-        responseType: 'blob',
-        headers: { Accept: '*/*' }
-      } as any, false)
-      const candidate = (response as any)?.data ?? response
-      if (!(candidate instanceof Blob)) {
-        return false
-      }
-      if (objectUrl.value) {
-        URL.revokeObjectURL(objectUrl.value)
-      }
-      objectUrl.value = URL.createObjectURL(candidate)
-      imageSrc.value = objectUrl.value
-      loadError.value = null
-      return true
+      const filesResponse: any = await apiService.get(
+        `/api/v4/documents/${props.asset.id}/files/`,
+        { params: { page_size: 5 } } as any
+      )
+      const results = Array.isArray(filesResponse?.results)
+        ? filesResponse.results
+        : (Array.isArray(filesResponse) ? filesResponse : [])
+      fileId = Number(results?.[0]?.id) || 0
     } catch {
-      return false
+      fileId = 0
     }
   }
-
-  // Prefer stable sources:
-  // 0) Selected document file (from AssetDetail "Versions" tab)
-  // 1) Latest document file page image (if selected not provided)
-  // 2) Download URL (original file)
-  // 3) Preview/thumbnail (may be temporarily 500 while cache regenerates)
-  const candidates: string[] = []
-
-  // 0) Selected DocumentFile provided by parent (best signal)
-  const selected = props.documentFile
-  if (selected) {
-    const selectedPageImage = makeAbsolute(selected?.pages_first?.image_url)
-    const selectedDownload = makeAbsolute(selected?.download_url || selected?.file_download_url)
-    if (selectedPageImage) candidates.push(selectedPageImage)
-    if (selectedDownload) candidates.push(selectedDownload)
-  }
-
-  try {
-    const filesResponse: any = await apiService.get(
-      `/api/v4/documents/${props.asset.id}/files/`,
-      { params: { page_size: 5 } } as any,
-      false
-    )
-    const results = Array.isArray(filesResponse?.results)
-      ? filesResponse.results
-      : (Array.isArray(filesResponse) ? filesResponse : [])
-    const latest = results[0]
-    const pageImage = makeAbsolute(latest?.pages_first?.image_url)
-    const fileDownload = makeAbsolute(latest?.download_url || latest?.file_download_url)
-    if (pageImage) candidates.push(pageImage)
-    if (fileDownload) candidates.push(fileDownload)
-  } catch {
-    // ignore, fall back to asset URLs below
-  }
-
-  const assetDownload = makeAbsolute((props.asset as any)?.download_url)
-  const assetPreview = makeAbsolute((props.asset as any)?.preview_url)
-  const assetThumb = makeAbsolute((props.asset as any)?.thumbnail_url)
-  if (assetDownload) candidates.push(assetDownload)
-  if (assetPreview) candidates.push(assetPreview)
-  if (assetThumb) candidates.push(assetThumb)
-
-  const uniqueCandidates = Array.from(new Set(candidates)).filter(Boolean)
-  if (!uniqueCandidates.length) {
-    loadError.value = 'Нет доступного URL изображения для редактора'
-    isEditorReady.value = false
+  if (!fileId) {
+    loadError.value = 'Не удалось определить версию (document file) для редактирования'
     return
   }
 
-  for (const url of uniqueCandidates) {
-    const ok = await tryLoadUrlAsBlob(url)
-    if (ok) return
+  const session = await createImageEditorSession(fileId)
+  sessionId.value = session.session_id
+
+  editorStore.initialize(
+    { id: props.asset.id, label: props.asset.label, size: session.original.file_size },
+    session.original.width,
+    session.original.height
+  )
+  // Pinia unwrap: assignment updates the internal ref value.
+  ;(editorStore as any).currentState = session.state
+
+  try {
+    availableWatermarks.value = await listWatermarks()
+  } catch {
+    availableWatermarks.value = []
   }
 
-  loadError.value = 'Не удалось загрузить изображение (проверьте превью/права доступа)'
-  isEditorReady.value = false
+  await syncStateAndPreview()
 }
 
 // Local State
@@ -960,7 +918,6 @@ const activeToolId = ref<'crop' | 'resize' | 'format' | 'watermark' | 'adjust'>(
 const isProcessing = ref(false)
 const processingMessage = ref('')
 const cropPreview = ref(false)
-const watermarkImagePreview = ref<string | null>(null)
 const isSaveModalOpen = ref(false)
 const saveError = ref<string | null>(null)
 
@@ -1028,10 +985,8 @@ const dpiDescription = computed(() => {
 })
 
 const imagePreviewStyle = computed(() => {
-  return {
-    transform: editorStore.previewTransform,
-    filter: editorStore.previewFilter
-  }
+  // Server already renders transforms & filters in headless mode.
+  return {}
 })
 
 const cropOverlayStyle = computed(() => {
@@ -1050,32 +1005,7 @@ const cropOverlayStyle = computed(() => {
   }
 })
 
-const watermarkPreviewStyle = computed(() => {
-  const { position, offsetX, offsetY } = editorStore.currentState.watermark
-  const posMap: Record<WatermarkPosition, { top?: string; bottom?: string; left?: string; right?: string; transform?: string }> = {
-    'top-left': { top: `${offsetY}px`, left: `${offsetX}px` },
-    'top-center': { top: `${offsetY}px`, left: '50%', transform: 'translateX(-50%)' },
-    'top-right': { top: `${offsetY}px`, right: `${offsetX}px` },
-    'middle-left': { top: '50%', left: `${offsetX}px`, transform: 'translateY(-50%)' },
-    'middle-center': { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' },
-    'middle-right': { top: '50%', right: `${offsetX}px`, transform: 'translateY(-50%)' },
-    'bottom-left': { bottom: `${offsetY}px`, left: `${offsetX}px` },
-    'bottom-center': { bottom: `${offsetY}px`, left: '50%', transform: 'translateX(-50%)' },
-    'bottom-right': { bottom: `${offsetY}px`, right: `${offsetX}px` }
-  }
-  
-  return posMap[position] || {}
-})
-
-const watermarkTextStyle = computed(() => {
-  const { fontSize, color, opacity } = editorStore.currentState.watermark
-  return {
-    fontSize: `${fontSize}px`,
-    color: color,
-    opacity: opacity / 100,
-    textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
-  }
-})
+// Watermark preview is rendered server-side in headless mode.
 
 const fileSizeChangeClass = computed(() => {
   const original = editorStore.originalFileSize
@@ -1119,17 +1049,8 @@ function handleClose() {
 }
 
 function handleImageLoad() {
-  if (imageRef.value && props.asset) {
-    const width = imageRef.value.naturalWidth || 1920
-    const height = imageRef.value.naturalHeight || 1080
-    
-    editorStore.initialize(
-      { id: props.asset.id, label: props.asset.label, size: props.asset.size || 0 },
-      width,
-      height
-    )
-    isEditorReady.value = true
-  }
+  // In headless mode the editor state is initialized from the backend session.
+  isEditorReady.value = true
 }
 
 // Keyboard shortcuts
@@ -1267,31 +1188,17 @@ function updateFilter(filter: 'brightness' | 'contrast' | 'saturation' | 'blur',
 }
 
 // Watermark methods
-function triggerWatermarkUpload() {
-  watermarkInput.value?.click()
-}
-
-function handleWatermarkUpload(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = () => {
-      watermarkImagePreview.value = reader.result as string
-      editorStore.setWatermarkImage(file, reader.result as string)
-    }
-    reader.readAsDataURL(file)
-  }
-}
-
-function handleWatermarkDrop(e: DragEvent) {
-  const file = e.dataTransfer?.files?.[0]
-  if (file && file.type.startsWith('image/')) {
-    const reader = new FileReader()
-    reader.onload = () => {
-      watermarkImagePreview.value = reader.result as string
-      editorStore.setWatermarkImage(file, reader.result as string)
-    }
-    reader.readAsDataURL(file)
+function handleWatermarkAssetSelect(e: Event) {
+  const raw = (e.target as HTMLSelectElement).value
+  const id = raw ? Number(raw) : null
+  editorStore.setWatermark({
+    type: 'image',
+    assetId: id,
+    imageFile: null,
+    imageUrl: null
+  } as any)
+  if (id) {
+    editorStore.enableWatermark(true)
   }
 }
 
@@ -1332,49 +1239,22 @@ function openSaveModalSafe() {
   openSaveModal()
 }
 
-function mapFormatToMime(format: string): string {
-  const fmt = format.toLowerCase()
-  if (fmt === 'jpg' || fmt === 'jpeg') return 'image/jpeg'
-  if (fmt === 'png') return 'image/png'
-  if (fmt === 'webp') return 'image/webp'
-  return 'image/jpeg'
-}
-
 async function buildBlobFromImage(format: string): Promise<Blob> {
-  if (!isEditorReady.value || !imageRef.value || !imageSrc.value) {
-    throw new Error('Редактор не инициализирован: изображение не загружено')
+  if (!sessionId.value) {
+    throw new Error('Редактор не инициализирован (нет session_id)')
+  }
+  if (!isEditorReady.value) {
+    throw new Error('Изображение ещё загружается')
   }
 
-  const canvas = document.createElement('canvas')
-  const { width, height } = editorStore.currentState.resize
-  canvas.width = width || imageRef.value.naturalWidth
-  canvas.height = height || imageRef.value.naturalHeight
+  // Ensure backend has the latest state before exporting.
+  await updateImageEditorSessionState(sessionId.value, editorStore.currentState)
 
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    throw new Error('Canvas не поддерживается')
-  }
-
-  // Рисуем только из локального blob-URL (imageSrc), чтобы избежать tainted canvas.
-  const sourceForDraw = imageSrc.value
-  const img = new Image()
-  img.crossOrigin = 'anonymous'
-  img.src = sourceForDraw
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      resolve()
-    }
-    img.onerror = () => reject(new Error('Не удалось загрузить изображение для отрисовки'))
-  })
-
-  const mime = format === 'original' ? mapFormatToMime(editorStore.currentState.format) : mapFormatToMime(format)
-
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) return reject(new Error('Не удалось сформировать файл'))
-      resolve(blob)
-    }, mime, editorStore.currentState.quality / 100)
+  const previewFormat = mapFormatToPreviewFormat(format)
+  return await fetchImageEditorPreviewBlob(sessionId.value, {
+    format: previewFormat,
+    // no maxW/maxH -> full resolution output
+    quality: editorStore.currentState.quality
   })
 }
 
@@ -1394,31 +1274,19 @@ async function handleConfirmSave(format: string, comment: string) {
   saveError.value = null
 
   try {
-    if (localStorage.getItem('maddam_debug') === '1') {
-      // eslint-disable-next-line no-console
-      console.log('[Editor] Saving new version...', {
-        documentId: props.asset.id,
-        format,
-        commentLength: (comment || '').length
-      })
+    if (!sessionId.value) {
+      throw new Error('Редактор не инициализирован (нет session_id)')
     }
-    const blob = await buildBlobFromImage(format)
-    if (localStorage.getItem('maddam_debug') === '1') {
-      // eslint-disable-next-line no-console
-      console.log('[Editor] Blob ready', { size: blob.size, type: blob.type })
+
+    // If user picked a different export format, reflect it in state before commit.
+    if (format && format !== 'original' && editorStore.currentState.format !== format) {
+      editorStore.setFormat(format as any)
     }
-    const result = await saveEditedImage(
-      props.asset.id,
-      blob,
-      {
-        format: format === 'original' ? undefined : format,
-        comment: comment || 'Edited via Web Editor'
-      }
-    )
-    if (localStorage.getItem('maddam_debug') === '1') {
-      // eslint-disable-next-line no-console
-      console.log('[Editor] Saved', result)
-    }
+    await updateImageEditorSessionState(sessionId.value, editorStore.currentState)
+
+    const result = await commitImageEditorSession(sessionId.value, {
+      comment: comment || 'Edited via Image Editor'
+    })
 
     notificationStore.addNotification({
       type: 'success',
@@ -1602,22 +1470,19 @@ async function handleDownload() {
 // Lifecycle
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
-  // загрузить изображение для редактора
-  prepareImageSrc().catch(() => {
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка загрузки',
-      message: 'Не удалось загрузить изображение с авторизацией'
-    })
-  })
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  if (previewTimer.value) {
+    window.clearTimeout(previewTimer.value)
+    previewTimer.value = null
+  }
   if (objectUrl.value) {
     URL.revokeObjectURL(objectUrl.value)
     objectUrl.value = null
   }
+  sessionId.value = null
 })
 
 // Reload when modal reopened with same asset
@@ -1627,15 +1492,36 @@ watch(
     if (open && props.asset) {
       isEditorReady.value = false
       loadError.value = null
-      prepareImageSrc().catch(() => {
-        notificationStore.addNotification({
-          type: 'error',
-          title: 'Ошибка загрузки',
-          message: 'Не удалось загрузить изображение с авторизацией'
-        })
+      initHeadlessSession().catch((e: any) => {
+        loadError.value = e?.message || 'Не удалось инициализировать редактор'
       })
+    } else if (!open) {
+      // cleanup per close
+      if (previewTimer.value) {
+        window.clearTimeout(previewTimer.value)
+        previewTimer.value = null
+      }
+      sessionId.value = null
+      isEditorReady.value = false
     }
   }
+)
+
+// Auto-sync state -> server preview (debounced)
+watch(
+  () => editorStore.currentState,
+  () => {
+    if (!props.isOpen || !sessionId.value) return
+    if (previewTimer.value) window.clearTimeout(previewTimer.value)
+    previewTimer.value = window.setTimeout(async () => {
+      try {
+        await syncStateAndPreview()
+      } catch (e: any) {
+        loadError.value = e?.message || 'Не удалось обновить превью'
+      }
+    }, 250)
+  },
+  { deep: true }
 )
 
 // Watch for asset changes
@@ -1643,16 +1529,13 @@ watch(() => props.asset, (newAsset) => {
   if (newAsset) {
     activeToolId.value = 'crop'
     cropPreview.value = false
-    watermarkImagePreview.value = null
     isEditorReady.value = false
     loadError.value = null
-    prepareImageSrc().catch(() => {
-      notificationStore.addNotification({
-        type: 'error',
-        title: 'Ошибка загрузки',
-        message: 'Не удалось загрузить изображение с авторизацией'
+    if (props.isOpen) {
+      initHeadlessSession().catch((e: any) => {
+        loadError.value = e?.message || 'Не удалось инициализировать редактор'
       })
-    })
+    }
   }
 })
 
@@ -1663,8 +1546,8 @@ watch(
     if (props.isOpen && props.asset) {
       isEditorReady.value = false
       loadError.value = null
-      prepareImageSrc().catch(() => {
-        // ignore; will show toast on save
+      initHeadlessSession().catch(() => {
+        // ignore; will show error on save
       })
     }
   }
