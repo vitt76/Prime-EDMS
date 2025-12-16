@@ -76,7 +76,7 @@ export const useDashboardStore = defineStore(
       }
     }
 
-    async function fetchActivityFeed(limit = 20) {
+    async function fetchActivityFeed(limit = 10) {
       try {
         activityFeed.value = await getDashboardActivityNormalized(limit)
       } catch (err) {
