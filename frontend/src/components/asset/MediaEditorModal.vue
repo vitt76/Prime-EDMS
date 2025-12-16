@@ -765,7 +765,7 @@
       :is-open="isSaveModalOpen"
       :default-format="editorStore.currentState.format"
       :error-message="saveError"
-      :disabled="!isEditorReady || !imageSrc"
+      :disabled="isProcessing"
       :on-save="handleConfirmSave"
       @close="isSaveModalOpen = false"
     />
@@ -1264,8 +1264,19 @@ async function handleConfirmSave(format: string, comment: string) {
     saveError.value = message
     throw new Error(message)
   }
-  if (!isEditorReady.value || !imageSrc.value) {
-    const message = 'Изображение ещё загружается'
+  // Ensure we have a valid session. In rare cases (например, если сессия была
+  // обнулена из-за повторного монтирования), попытаться переинициализировать.
+  if (!sessionId.value) {
+    try {
+      await initHeadlessSession()
+    } catch (e: any) {
+      const message = e?.message || 'Редактор не инициализирован (нет session_id)'
+      saveError.value = message
+      throw new Error(message)
+    }
+  }
+  if (!sessionId.value) {
+    const message = 'Редактор не инициализирован (нет session_id)'
     saveError.value = message
     throw new Error(message)
   }
