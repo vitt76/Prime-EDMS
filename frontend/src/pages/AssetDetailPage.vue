@@ -540,9 +540,6 @@
                   :class="version.is_current 
                     ? 'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' 
                     : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50'"
-                  role="button"
-                  tabindex="0"
-                  @click="handleSelectDocumentFile(version._file)"
                 >
                   <div class="flex items-start justify-between">
                     <div class="flex items-center gap-3">
@@ -562,7 +559,7 @@
                     <button
                       v-if="!version.is_current"
                       class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                      @click="handleRevertVersion(version)"
+                      @click.stop="handleRevertVersion(version)"
                     >
                       Откатить
                     </button>
@@ -902,6 +899,10 @@ const usage = computed((): UsageStats | undefined => {
 })
 
 const previewSrc = computed(() => resolveAssetImageUrl(asset.value))
+// When user selects a specific document file version, we override the preview src.
+const previewOverride = ref<string | null>(null)
+// Track object URL to revoke and avoid memory leaks.
+const previewOverrideObjectUrl = ref<string | null>(null)
 const previewFallback = ref<string | null>(null)
 const previewResolved = computed(() => previewOverride.value || previewFallback.value || previewSrc.value)
 const isFavorite = computed(() => {
@@ -924,34 +925,6 @@ async function loadAsset() {
     
     if (storeAsset) {
       console.log('[AssetDetail] Loaded from real API:', storeAsset)
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          location:'AssetDetailPage:loadAsset',
-          message:'Asset data analysis for info card',
-          data: {
-            id: storeAsset.id,
-            filename: storeAsset.filename,
-            size: storeAsset.size,
-            mime_type: storeAsset.mime_type,
-            date_added: storeAsset.date_added,
-            date_added_type: typeof storeAsset.date_added,
-            file_details: storeAsset.file_details,
-            file_details_date: storeAsset.file_details?.uploaded_date,
-            file_details_size: storeAsset.file_details?.size,
-            file_details_filename: storeAsset.file_details?.filename,
-            has_file_details: !!storeAsset.file_details,
-            allKeys: Object.keys(storeAsset)
-          },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          runId: 'info-card-debug',
-          hypothesisId: 'H-info-fields'
-        })
-      }).catch(() => {})
-      // #endregion agent log
       asset.value = storeAsset as Asset
       
       // If asset has AI analysis, set it as extended data
@@ -994,6 +967,14 @@ async function loadAsset() {
             : (documentFiles.value[0]?.id ?? null)
 
         // Do NOT override preview by default; keep existing preview logic.
+        if (previewOverrideObjectUrl.value) {
+          try {
+            window.URL.revokeObjectURL(previewOverrideObjectUrl.value)
+          } catch {
+            // ignore
+          }
+          previewOverrideObjectUrl.value = null
+        }
         previewOverride.value = null
       } catch (filesErr) {
         console.warn('[AssetDetail] Failed to load document files:', filesErr)
@@ -1001,27 +982,6 @@ async function loadAsset() {
         selectedDocumentFileId.value = null
       }
     }
-
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'ui-layout',
-        hypothesisId: 'H-layout',
-        location: 'AssetDetailPage:loadAsset',
-        message: 'Loaded asset, preview availability',
-        data: {
-          id: assetId.value,
-          hasPreview: !!(asset.value?.preview_url || asset.value?.thumbnail_url),
-          fileExtension: fileExtension.value,
-          description: !!asset.value?.description
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion agent log
   } catch (e: any) {
     console.error('[AssetDetail] Error loading asset:', e)
     error.value = e.message || 'Не удалось загрузить актив'
@@ -1113,45 +1073,6 @@ function handlePreviewImageError(): void {
     return
   }
   previewError.value = true
-}
-
-async function handleSelectDocumentFile(file: any): Promise<void> {
-  if (!file) return
-  selectedDocumentFileId.value = file.id
-
-  // Clear previous override
-  if (previewOverrideObjectUrl.value) {
-    try {
-      URL.revokeObjectURL(previewOverrideObjectUrl.value)
-    } catch {
-      // ignore
-    }
-    previewOverrideObjectUrl.value = null
-  }
-  previewOverride.value = null
-  previewFallback.value = null
-  previewError.value = false
-
-  const imageUrl: string | undefined = file?.pages_first?.image_url
-  if (!imageUrl) {
-    // No page image available → keep default preview pipeline.
-    return
-  }
-
-  try {
-    const blob = await apiService.get<Blob>(
-      imageUrl,
-      { responseType: 'blob' } as any,
-      false
-    )
-    const objectUrl = URL.createObjectURL(blob)
-    previewOverrideObjectUrl.value = objectUrl
-    previewOverride.value = objectUrl
-  } catch (err) {
-    console.warn('[AssetDetail] Failed to load selected version preview:', err)
-    // Keep existing preview, but show placeholder if it fails too.
-    previewFallback.value = '/assets/placeholder.png'
-  }
 }
 
 function formatFileSize(bytes: number): string {
