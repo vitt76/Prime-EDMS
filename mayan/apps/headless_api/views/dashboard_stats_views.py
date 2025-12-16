@@ -32,7 +32,7 @@ class HeadlessDashboardStatsView(APIView):
     Notes:
     - Uses the last 30 days vs previous 30 days windows.
     - Restricts access to staff/superusers.
-    - Counts use Document.valid to avoid including trashed/invalid documents.
+    - Counts use Document.objects.all() to include all documents (including trashed) for admin overview.
     """
 
     authentication_classes = [SessionAuthentication, TokenAuthentication]
@@ -52,7 +52,7 @@ class HeadlessDashboardStatsView(APIView):
         start_prev = now - (window * 2)
 
         # Documents
-        documents_qs = Document.valid.all()
+        documents_qs = Document.objects.all()
         documents_total = documents_qs.count()
         documents_last_30 = documents_qs.filter(datetime_created__gte=start_current).count()
         documents_prev_30 = documents_qs.filter(

@@ -67,26 +67,16 @@ export const useDashboardStore = defineStore(
       error.value = null
 
       try {
-        // In dev mode, use mock data
-        if (import.meta.env.DEV) {
-          await new Promise(resolve => setTimeout(resolve, 300))
-          stats.value = mockStats
-          lastUpdated.value = new Date()
-          return
-        }
+        // Always try to fetch real data from API
         const data = await dashboardService.getDashboardStats()
         stats.value = data
         lastUpdated.value = new Date()
       } catch (err) {
-        // In dev mode, fallback to mock data
-        if (import.meta.env.DEV) {
-          console.warn('[Dev] Using mock dashboard stats')
-          stats.value = mockStats
-          lastUpdated.value = new Date()
-          return
-        }
+        // Fallback to mock data only if API fails
+        console.warn('[DashboardStore] Failed to fetch dashboard stats, using fallback:', err)
+        stats.value = mockStats
+        lastUpdated.value = new Date()
         error.value = formatApiError(err)
-        throw err
       } finally {
         isLoading.value = false
       }
@@ -103,22 +93,13 @@ export const useDashboardStore = defineStore(
 
     async function fetchStorageMetrics() {
       try {
-        // In dev mode, use mock data
-        if (import.meta.env.DEV) {
-          await new Promise(resolve => setTimeout(resolve, 250))
-          storageMetrics.value = mockStorage
-          return
-        }
+        // Always try to fetch real data from API
         const data = await dashboardService.getStorageMetrics()
         storageMetrics.value = data
       } catch (err) {
-        // Storage metrics are optional, don't throw
-        console.warn('Failed to fetch storage metrics:', err)
-        if (import.meta.env.DEV) {
-          storageMetrics.value = mockStorage
-        } else {
-          storageMetrics.value = null
-        }
+        // Storage metrics are optional, fallback to mock data if API fails
+        console.warn('Failed to fetch storage metrics, using fallback:', err)
+        storageMetrics.value = mockStorage
       }
     }
 

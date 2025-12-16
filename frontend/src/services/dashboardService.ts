@@ -47,7 +47,7 @@ class DashboardService {
    */
   async getDashboardStats(): Promise<DashboardStats> {
     return apiService.get<DashboardStats>(
-      '/v4/dam/dashboard-stats/',
+      '/api/v4/dashboard-stats/',
       undefined,
       true // Cache for 5 minutes
     )
