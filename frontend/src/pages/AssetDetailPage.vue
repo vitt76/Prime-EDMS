@@ -569,7 +569,7 @@
             </div>
 
           <!-- Other File Types (icon fallback) -->
-          <div v-else class="flex-1 flex items-start justify-center px-4 pb-6">
+          <div v-else-if="activeTab !== 'metadata' && activeTab !== 'comments' && activeTab !== 'usage'" class="flex-1 flex items-start justify-center px-4 pb-6">
             <div class="w-full max-w-xl sticky top-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/60 shadow-sm p-5 flex flex-col gap-3">
               <div class="flex items-center gap-3">
                 <div class="w-12 h-12 rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-200">
