@@ -901,8 +901,10 @@ async function initHeadlessSession() {
     session.original.width,
     session.original.height
   )
-  // Pinia unwrap: assignment updates the internal ref value.
-  ;(editorStore as any).currentState = session.state
+  // Применяем состояние сессии, не ломая ref внутри Pinia store.
+  if (session.state && typeof session.state === 'object') {
+    Object.assign(editorStore.currentState, session.state)
+  }
 
   try {
     availableWatermarks.value = await listWatermarks()
@@ -920,6 +922,7 @@ const processingMessage = ref('')
 const cropPreview = ref(false)
 const isSaveModalOpen = ref(false)
 const saveError = ref<string | null>(null)
+const pendingSaveState = ref<any | null>(null)
 
 // Tool definitions
 const tools = [
@@ -1224,6 +1227,13 @@ function updateWatermarkOpacity(e: Event) {
 
 function openSaveModal() {
   saveError.value = null
+  // Зафиксируем снимок состояния редактора на момент открытия модалки сохранения,
+  // чтобы любые последующие перерисовки/реинициализации не сбросили его.
+  try {
+    pendingSaveState.value = JSON.parse(JSON.stringify(editorStore.currentState))
+  } catch {
+    pendingSaveState.value = editorStore.currentState
+  }
   isSaveModalOpen.value = true
 }
 
@@ -1293,10 +1303,24 @@ async function handleConfirmSave(format: string, comment: string) {
     if (format && format !== 'original' && editorStore.currentState.format !== format) {
       editorStore.setFormat(format as any)
     }
-    await updateImageEditorSessionState(sessionId.value, editorStore.currentState)
+    // Логируем текущее состояние трансформации перед сохранением.
+    const stateForLog = pendingSaveState.value || editorStore.currentState
+    console.log(
+      '[MediaEditor] handleConfirmSave before PATCH/commit, transform=',
+      stateForLog.transform
+    )
 
+    const stateToSave = pendingSaveState.value || editorStore.currentState
+
+    // Обновляем состояние сессии на бэке (для совместимости)...
+    await updateImageEditorSessionState(sessionId.value, stateToSave)
+
+    // ...и дополнительно отправляем актуальное состояние прямо в commit,
+    // чтобы точно избежать рассинхрона между preview и финальным файлом.
+    const plainState = JSON.parse(JSON.stringify(stateToSave))
     const result = await commitImageEditorSession(sessionId.value, {
-      comment: comment || 'Edited via Image Editor'
+      comment: comment || 'Edited via Image Editor',
+      state: plainState
     })
 
     notificationStore.addNotification({

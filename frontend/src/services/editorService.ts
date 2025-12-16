@@ -89,12 +89,17 @@ export async function fetchImageEditorPreviewBlob(
 
 export async function commitImageEditorSession(
   sessionId: number,
-  options?: { comment?: string; actionId?: number }
+  options?: { comment?: string; actionId?: number; state?: any }
 ): Promise<SaveEditedImageResponse> {
   const payload: any = {
     comment: options?.comment || 'Edited via Image Editor'
   }
   if (options?.actionId) payload.action_id = options.actionId
+  if (options?.state) {
+    // Send full editor state so backend can apply the latest transformations
+    // even if a previous PATCH has not yet been persisted.
+    payload.state = options.state
+  }
 
   const data = await apiService.post<SaveEditedImageResponse>(
     `/api/v4/headless/image-editor/sessions/${sessionId}/commit/`,

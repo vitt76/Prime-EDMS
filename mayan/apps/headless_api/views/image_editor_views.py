@@ -102,6 +102,11 @@ def _apply_transformations(image: Image.Image, state: Dict[str, Any]) -> Image.I
 
 def _apply_crop(image: Image.Image, state: Dict[str, Any]) -> Image.Image:
     crop = state.get('crop') or {}
+
+    # Не обрезаем изображение, пока фронтенд явно не включил crop (crop.enabled),
+    # иначе при одном лишь повороте можно непреднамеренно отрезать часть кадра.
+    if not bool(crop.get('enabled')):
+        return image
     x = _coerce_int(crop.get('x'), 0)
     y = _coerce_int(crop.get('y'), 0)
     w = _coerce_int(crop.get('width'), image.width)
@@ -118,6 +123,12 @@ def _apply_crop(image: Image.Image, state: Dict[str, Any]) -> Image.Image:
 
 def _apply_resize(image: Image.Image, state: Dict[str, Any]) -> Image.Image:
     resize = state.get('resize') or {}
+
+    # По умолчанию resize выключен. Включаем его только если фронтенд
+    # явно установил флаг enabled. Это позволяет не портить пропорции
+    # при простом повороте изображения без изменения размера.
+    if not bool(resize.get('enabled')):
+        return image
     target_w = _coerce_int(resize.get('width'), image.width)
     target_h = _coerce_int(resize.get('height'), image.height)
 
@@ -497,7 +508,9 @@ class HeadlessImageEditorCommitView(APIView):
     def post(self, request, session_id: int):
         session = _get_session_for_request(request=request, session_id=session_id)
 
-        document = get_object_or_404(Document.valid.all(), pk=session.document_file.document_id)
+        document = get_object_or_404(
+            Document.valid.all(), pk=session.document_file.document_id
+        )
         # Ensure permission failure returns 403 (not 404), so SPA can show proper error.
         AccessControlList.objects.check_access(
             obj=document,
@@ -508,7 +521,17 @@ class HeadlessImageEditorCommitView(APIView):
         comment = request.data.get('comment') or _('Edited via Image Editor')
         action_id = request.data.get('action_id') or DocumentFileActionUseNewPages.backend_id
 
-        state = session.state or {}
+        # Allow frontend to send the latest state explicitly to avoid any race
+        # conditions with async PATCH calls. If provided and valid, persist it
+        # and use it for rendering; otherwise fall back to the stored session state.
+        request_state = request.data.get('state')
+        if isinstance(request_state, dict):
+            state = request_state
+            session.state = state
+            session.save(update_fields=('state', 'modified'))
+        else:
+            state = session.state or {}
+
         fmt = state.get('format') or 'jpg'
         quality = _coerce_int(state.get('quality'), 85)
         dpi = _coerce_int(((state.get('resize') or {}).get('dpi')), 0) or None
@@ -533,7 +556,9 @@ class HeadlessImageEditorCommitView(APIView):
         )
 
         version = document.versions.order_by('-timestamp').first()
-        serializer = HeadlessDocumentVersionSerializer(version, context={'request': request})
+        serializer = HeadlessDocumentVersionSerializer(
+            version, context={'request': request}
+        )
 
         session.status = 'saved'
         session.edited_checksum = new_file.checksum
@@ -545,7 +570,8 @@ class HeadlessImageEditorCommitView(APIView):
                 'document_id': document.pk,
                 'file_id': new_file.pk,
                 'version_id': version.pk if version else None,
-                'version': serializer.data
+                'version': serializer.data,
+                'state': state,
             },
             status=status.HTTP_201_CREATED
         )
