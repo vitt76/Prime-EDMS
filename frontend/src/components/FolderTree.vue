@@ -9,7 +9,7 @@
 
     <!-- Create Folder Button (только для системных папок, в развёрнутом режиме) -->
     <button
-      v-if="!isCollapsed && currentSection?.type === 'local'"
+      v-if="!isCollapsed && hasLocalSection"
       type="button"
       class="w-full flex items-center justify-center gap-2 px-3 py-2.5 
              text-sm font-medium text-neutral-600 dark:text-neutral-300
@@ -116,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch, computed } from 'vue'
 import { FolderIcon, CloudIcon } from '@heroicons/vue/24/solid'
 import { FolderPlusIcon } from '@heroicons/vue/24/outline'
 import { useFolderStore } from '@/stores/folderStore'
@@ -145,6 +145,11 @@ const notificationStore = useNotificationStore()
 const showCreateModal = ref(false)
 const currentSection = ref<FolderTreeSection | null>(null)
 const parentOptions = ref<{ id: string; label: string }[]>([])
+
+// Стабильная проверка наличия секции типа 'local'
+const hasLocalSection = computed(() => {
+  return folderStore.allSections.some(s => s.type === 'local')
+})
 
 onMounted(async () => {
   await folderStore.refreshFolders()
