@@ -201,7 +201,7 @@
             </button>
             <img
               v-if="!previewError"
-              :key="previewResolved"
+              :key="`${asset?.id || 'asset'}:${previewResolved}`"
               :src="previewResolved"
               :alt="asset.label"
               class="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-transform duration-200"
@@ -302,27 +302,27 @@
           <!-- Workflow Widget (Collapsible) -->
           <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
             <div class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
-              <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
-                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
-                  <ArrowPathRoundedSquareIcon class="w-4 h-4 text-neutral-500" />
-                  Статус и согласование
-                </h3>
-                <button
-                  type="button"
-                  class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                  @click="collapsedSections.status = !collapsedSections.status"
+              <Disclosure v-slot="{ open }" :default-open="!collapsedSections.status">
+                <DisclosureButton
+                  class="w-full flex items-center justify-between px-4 py-3 text-left border-b border-neutral-100 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                  @click="collapsedSections.status = !open"
                 >
-                  {{ collapsedSections.status ? 'Развернуть' : 'Свернуть' }}
-                </button>
-              </div>
-              <Transition name="fade">
-                <div v-if="!collapsedSections.status" class="p-0">
+                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                    <ArrowPathRoundedSquareIcon class="w-4 h-4 text-neutral-500" />
+                    Статус и согласование
+                  </h3>
+                  <ChevronDownIcon
+                    :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                  />
+                </DisclosureButton>
+
+                <DisclosurePanel class="p-0">
                   <WorkflowWidget
                     :asset-id="assetId"
                     @status-change="handleWorkflowStatusChange"
                   />
-                </div>
-              </Transition>
+                </DisclosurePanel>
+              </Disclosure>
             </div>
           </div>
 
@@ -376,7 +376,7 @@
                   </div>
                   <div class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Добавлен</dt>
-                    <dd class="text-sm text-neutral-900 dark:text-white">{{ formatDate(asset.date_added) }}</dd>
+                    <dd class="text-sm text-neutral-900 dark:text-white">{{ formatDate(asset.file_details?.uploaded_date || asset.date_added) }}</dd>
                   </div>
                   <div v-if="asset.metadata?.width && asset.metadata?.height" class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Размеры</dt>
@@ -394,19 +394,20 @@
               </section>
 
               <!-- EXIF Data (for images) -->
-              <section v-if="extendedAsset?.exif" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">EXIF / Камера</h3>
-                  <button
-                    type="button"
-                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                    @click="collapsedSections.exif = !collapsedSections.exif"
+              <section v-if="extendedAsset?.exif" class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+                <Disclosure v-slot="{ open }" :default-open="!collapsedSections.exif">
+                  <DisclosureButton
+                    class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    @click="collapsedSections.exif = !open"
                   >
-                    {{ collapsedSections.exif ? 'Развернуть' : 'Свернуть' }}
-                  </button>
-                </div>
-                <Transition name="fade">
-                  <dl v-if="!collapsedSections.exif" class="space-y-3">
+                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">EXIF / Камера</h3>
+                    <ChevronDownIcon
+                      :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                    />
+                  </DisclosureButton>
+
+                  <DisclosurePanel class="px-4 pb-4">
+                    <dl class="space-y-3">
                   <div v-if="extendedAsset.exif.make" class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Камера</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.make }} {{ extendedAsset.exif.model }}</dd>
@@ -439,24 +440,26 @@
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">DPI</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.dpi }}</dd>
                   </div>
-                  </dl>
-                </Transition>
+                    </dl>
+                  </DisclosurePanel>
+                </Disclosure>
               </section>
 
               <!-- Tags -->
-              <section v-if="asset.tags && asset.tags.length > 0" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Теги</h3>
-                  <button
-                    type="button"
-                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                    @click="collapsedSections.tags = !collapsedSections.tags"
+              <section v-if="asset.tags && asset.tags.length > 0" class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+                <Disclosure v-slot="{ open }" :default-open="!collapsedSections.tags">
+                  <DisclosureButton
+                    class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    @click="collapsedSections.tags = !open"
                   >
-                    {{ collapsedSections.tags ? 'Развернуть' : 'Свернуть' }}
-                  </button>
-                </div>
-                <Transition name="fade">
-                  <div v-if="!collapsedSections.tags" class="flex flex-wrap gap-2">
+                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Теги</h3>
+                    <ChevronDownIcon
+                      :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                    />
+                  </DisclosureButton>
+
+                  <DisclosurePanel class="px-4 pb-4">
+                    <div class="flex flex-wrap gap-2">
                     <span
                       v-for="tag in asset.tags"
                       :key="tag"
@@ -466,24 +469,25 @@
                     >
                       {{ tag }}
                     </span>
-                  </div>
-                </Transition>
+                    </div>
+                  </DisclosurePanel>
+                </Disclosure>
               </section>
 
               <!-- AI Analysis -->
-              <section v-if="asset.ai_analysis?.status === 'completed'" class="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 bg-white dark:bg-neutral-900/40 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">AI Анализ</h3>
-                  <button
-                    type="button"
-                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                    @click="collapsedSections.ai = !collapsedSections.ai"
+              <section v-if="asset.ai_analysis?.status === 'completed'" class="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/40 shadow-sm overflow-hidden">
+                <Disclosure v-slot="{ open }" :default-open="!collapsedSections.ai">
+                  <DisclosureButton
+                    class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                    @click="collapsedSections.ai = !open"
                   >
-                    {{ collapsedSections.ai ? 'Развернуть' : 'Свернуть' }}
-                  </button>
-                </div>
-                <Transition name="fade">
-                  <div v-if="!collapsedSections.ai">
+                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">AI Анализ</h3>
+                    <ChevronDownIcon
+                      :class="['w-4 h-4 text-neutral-500 transition-transform', open ? 'rotate-180' : '']"
+                    />
+                  </DisclosureButton>
+
+                  <DisclosurePanel class="px-4 pb-4">
                     <p v-if="asset.ai_analysis.ai_description" class="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
                       {{ asset.ai_analysis.ai_description }}
                     </p>
@@ -496,8 +500,8 @@
                         {{ tag }}
                       </span>
                     </div>
-                  </div>
-                </Transition>
+                  </DisclosurePanel>
+                </Disclosure>
               </section>
             </div>
 
@@ -522,17 +526,9 @@
                 </button>
               </div>
               
-              <input
-                ref="newVersionFileInput"
-                type="file"
-                class="hidden"
-                @change="handleNewVersionFileSelected"
-              />
-
               <div v-if="!versions.length" class="text-sm text-neutral-500 dark:text-neutral-400">
                 Версий нет или они недоступны.
               </div>
-
               <div v-else class="space-y-3">
                 <div
                   v-for="version in versions"
@@ -544,6 +540,9 @@
                   :class="version.is_current 
                     ? 'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' 
                     : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50'"
+                  role="button"
+                  tabindex="0"
+                  @click="handleSelectDocumentFile(version._file)"
                 >
                   <div class="flex items-start justify-between">
                     <div class="flex items-center gap-3">
@@ -758,7 +757,7 @@
 // @ts-nocheck
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import { Menu, MenuButton, MenuItem, MenuItems, Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 import {
   ArrowDownTrayIcon,
   ArrowPathRoundedSquareIcon,
@@ -779,9 +778,7 @@ import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
 import AIInsightsWidget from '@/components/asset/AIInsightsWidget.vue'
 import MediaEditorModal from '@/components/asset/MediaEditorModal.vue'
 import type { Asset, Comment, Version, ExtendedAsset, UsageStats, AIAnalysis } from '@/types/api'
-
-type WorkflowState = { id: string; label: string; color?: string }
-type AITag = { id?: string | number; label: string }
+import type { WorkflowState } from '@/mocks/workflows'
 
 const route = useRoute()
 const assetStore = useAssetStore()
@@ -860,8 +857,10 @@ const isDocument = computed(() =>
 const isAudio = computed(() => asset.value?.mime_type?.startsWith('audio/'))
 
 const hasPreviewUrl = computed(() => !!(asset.value?.preview_url || asset.value?.thumbnail_url))
+// IMPORTANT: do not break the current preview pipeline.
+// If a user selects a specific document file version, we set `previewOverride`,
+// which should force the preview area to render even for non-image MIME types.
 const showPreview = computed(() => {
-  // If a specific version is selected, force preview area to render.
   if (previewOverride.value || previewFallback.value) return true
   return isImage.value || (hasPreviewUrl.value && !isVideo.value)
 })
@@ -874,12 +873,13 @@ const documentType = computed(() => {
   return 'image' // default
 })
 
+// Versions UI should reflect Mayan document files (multiple files per document).
+// Keep the UI shape similar to Version[] used by the template.
 const versions = computed((): any[] => {
   const files = documentFiles.value || []
   if (!files.length) return []
 
-  const currentId = selectedDocumentFileId.value || files[0]?.id
-
+  const currentId = selectedDocumentFileId.value
   return files.map((f: any) => {
     return {
       id: f.id,
@@ -888,7 +888,7 @@ const versions = computed((): any[] => {
       uploaded_date: f.timestamp,
       is_current: currentId ? f.id === currentId : false,
       size: f.size,
-      _file: f
+      _file: f,
     }
   })
 })
@@ -903,8 +903,6 @@ const usage = computed((): UsageStats | undefined => {
 
 const previewSrc = computed(() => resolveAssetImageUrl(asset.value))
 const previewFallback = ref<string | null>(null)
-const previewOverride = ref<string | null>(null)
-const previewOverrideObjectUrl = ref<string | null>(null)
 const previewResolved = computed(() => previewOverride.value || previewFallback.value || previewSrc.value)
 const isFavorite = computed(() => {
   if (!asset.value) return false
@@ -917,53 +915,169 @@ async function loadAsset() {
   isLoading.value = true
   error.value = null
   previewError.value = false
-  
+
   try {
     console.log('[AssetDetail] Loading asset:', assetId.value)
-    
-    // First try to load from real API via store (includes DAM/AI data)
-    const storeAsset = await assetStore.getAssetDetail(assetId.value)
+
+    // Always force reload to get fresh file data
+    const storeAsset = await assetStore.getAssetDetail(assetId.value, true)
     
     if (storeAsset) {
       console.log('[AssetDetail] Loaded from real API:', storeAsset)
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          location:'AssetDetailPage:loadAsset',
+          message:'Asset data analysis for info card',
+          data: {
+            id: storeAsset.id,
+            filename: storeAsset.filename,
+            size: storeAsset.size,
+            mime_type: storeAsset.mime_type,
+            date_added: storeAsset.date_added,
+            date_added_type: typeof storeAsset.date_added,
+            file_details: storeAsset.file_details,
+            file_details_date: storeAsset.file_details?.uploaded_date,
+            file_details_size: storeAsset.file_details?.size,
+            file_details_filename: storeAsset.file_details?.filename,
+            has_file_details: !!storeAsset.file_details,
+            allKeys: Object.keys(storeAsset)
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'info-card-debug',
+          hypothesisId: 'H-info-fields'
+        })
+      }).catch(() => {})
+      // #endregion agent log
       asset.value = storeAsset as Asset
-      extendedAsset.value = storeAsset as ExtendedAsset
-
-      // Load all document files (Mayan: /documents/{id}/files/)
-      try {
-        const documentId = Number(asset.value?.id || assetId.value)
-        if (Number.isFinite(documentId) && documentId > 0) {
-          const filesResponse: any = await apiService.get(
-            `/api/v4/documents/${documentId}/files/`,
-            { params: { page_size: 200 } } as any,
-            false
-          )
-          const results = Array.isArray(filesResponse?.results)
-            ? filesResponse.results
-            : (Array.isArray(filesResponse) ? filesResponse : [])
-          documentFiles.value = results.sort(
-            (a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          )
-          selectedDocumentFileId.value = documentFiles.value[0]?.id ?? null
-        } else {
-          documentFiles.value = []
-          selectedDocumentFileId.value = null
-        }
-      } catch (filesErr) {
-        console.warn('[AssetDetail] Failed to load document files:', filesErr)
-        documentFiles.value = []
-        selectedDocumentFileId.value = null
+      
+      // If asset has AI analysis, set it as extended data
+      if (storeAsset.ai_analysis) {
+        extendedAsset.value = {
+          ...storeAsset,
+          ai_analysis: storeAsset.ai_analysis
+        } as ExtendedAsset
+      } else {
+        extendedAsset.value = storeAsset as ExtendedAsset
       }
     } else {
       error.value = `Актив с ID ${assetId.value} не найден`
     }
 
-    // (debug ingest removed)
+    // Load all document files (versions) for sidebar "История версий"
+    // IMPORTANT: always use numeric route id as fallback, since some adapters can
+    // temporarily return partial asset objects.
+    const documentId = Number(asset.value?.id || assetId.value)
+    if (Number.isFinite(documentId) && documentId > 0) {
+      try {
+        const filesResponse: any = await apiService.get(
+          `/api/v4/documents/${documentId}/files/`,
+          { params: { page_size: 200 } } as any,
+          false
+        )
+        const results = Array.isArray(filesResponse?.results)
+          ? filesResponse.results
+          : (Array.isArray(filesResponse) ? filesResponse : [])
+        // Sort newest first
+        documentFiles.value = results.sort(
+          (a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+
+        // Default selected file: latest file id (if available), otherwise newest by timestamp
+        const latestId = (asset.value as any)?.file_latest_id
+        selectedDocumentFileId.value =
+          typeof latestId === 'number'
+            ? latestId
+            : (documentFiles.value[0]?.id ?? null)
+
+        // Do NOT override preview by default; keep existing preview logic.
+        previewOverride.value = null
+      } catch (filesErr) {
+        console.warn('[AssetDetail] Failed to load document files:', filesErr)
+        documentFiles.value = []
+        selectedDocumentFileId.value = null
+      }
+    }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'ui-layout',
+        hypothesisId: 'H-layout',
+        location: 'AssetDetailPage:loadAsset',
+        message: 'Loaded asset, preview availability',
+        data: {
+          id: assetId.value,
+          hasPreview: !!(asset.value?.preview_url || asset.value?.thumbnail_url),
+          fileExtension: fileExtension.value,
+          description: !!asset.value?.description
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion agent log
   } catch (e: any) {
     console.error('[AssetDetail] Error loading asset:', e)
     error.value = e.message || 'Не удалось загрузить актив'
   } finally {
     isLoading.value = false
+  }
+}
+
+function _toRelativeApiPath(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.pathname}${parsed.search}`
+  } catch (e) {
+    // Already relative
+    return url
+  }
+}
+
+async function handleSelectDocumentFile(file: any): Promise<void> {
+  if (!file) return
+  selectedDocumentFileId.value = file.id
+  previewError.value = false
+  previewFallback.value = null
+
+  // Cleanup previous object URL, if any
+  if (previewOverrideObjectUrl.value) {
+    try {
+      window.URL.revokeObjectURL(previewOverrideObjectUrl.value)
+    } catch (e) {
+      // ignore
+    }
+    previewOverrideObjectUrl.value = null
+  }
+
+  // Prefer API-provided first-page image URL.
+  const imageUrl: string | null = file?.pages_first?.image_url || null
+  if (!imageUrl) {
+    previewOverride.value = null
+    return
+  }
+
+  // IMPORTANT: Keep existing preview pipeline, but for selected versions
+  // fetch the image as blob via apiService to include auth headers and
+  // avoid <img> 401s. If this fails, fallback to direct URL.
+  try {
+    const relative = _toRelativeApiPath(imageUrl)
+    const blob = await apiService.get<Blob>(
+      relative,
+      { responseType: 'blob' } as any,
+      false
+    )
+    const objectUrl = window.URL.createObjectURL(blob)
+    previewOverrideObjectUrl.value = objectUrl
+    previewOverride.value = objectUrl
+  } catch (e) {
+    previewOverride.value = _toRelativeApiPath(imageUrl)
   }
 }
 
@@ -1048,8 +1162,11 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('ru-RU', {
+function formatDate(dateString: string | undefined): string {
+  if (!dateString) return '--'
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return '--'
+  return date.toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -1113,45 +1230,80 @@ async function handleDownload() {
     asset.value.label ||
     `document-${asset.value.id}`
 
-  const url =
-    asset.value.download_url ||
-    (asset.value.file_latest_id
-      ? `/api/v4/documents/${asset.value.id}/files/${asset.value.file_latest_id}/download/`
-      : `/api/v4/documents/${asset.value.id}/files/latest/download/`)
-
   notificationStore.addNotification({
     type: 'info',
     title: 'Загрузка началась',
     message: `Скачивание ${filename}...`,
   })
 
-  try {
-    // Fetch blob via API to avoid SPA HTML fallback and include auth headers
-    const blob = await apiService.get<Blob>(url, {
-      responseType: 'blob'
-    } as any)
+  // Handle async download
+  const performDownload = async () => {
+    try {
+      // Prefer selected document file download URL (when user picked a version)
+      const selectedFile = selectedDocumentFileId.value
+        ? documentFiles.value.find((f: any) => f.id === selectedDocumentFileId.value)
+        : null
 
-    const objectUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = objectUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(objectUrl)
-  } catch (err) {
-    console.error('[AssetDetail] Download failed', err)
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка загрузки',
-      message: 'Не удалось скачать файл'
-    })
+      let downloadUrl = selectedFile?.download_url || asset.value.download_url
+
+      // If no download_url, try to get file ID first
+      if (!downloadUrl) {
+        let fileId = selectedFile?.id || asset.value.file_latest_id
+
+        // If no file_latest_id, fetch file list to get latest file ID
+        if (!fileId) {
+          try {
+            const filesResponse = await apiService.get(`/api/v4/documents/${asset.value.id}/files/`)
+            if (filesResponse.results && filesResponse.results.length > 0) {
+              // Sort by timestamp descending and take the latest
+              const latestFile = filesResponse.results
+                .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+              fileId = latestFile.id
+            }
+          } catch (fileError) {
+            console.warn('[AssetDetail] Could not fetch file list:', fileError)
+          }
+        }
+
+        // Construct download URL with file ID
+        if (fileId) {
+          downloadUrl = `/api/v4/documents/${asset.value.id}/files/${fileId}/download/`
+        }
+      }
+
+      if (!downloadUrl) {
+        throw new Error('Could not determine download URL')
+      }
+
+      // Fetch blob via API to avoid SPA HTML fallback and include auth headers
+      const blob = await apiService.get<Blob>(downloadUrl, {
+        responseType: 'blob'
+      } as any)
+
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(objectUrl)
+    } catch (err) {
+      console.error('[AssetDetail] Download failed', err)
+      notificationStore.addNotification({
+        type: 'error',
+        title: 'Ошибка загрузки',
+        message: 'Не удалось скачать файл'
+      })
+    }
   }
+
+  performDownload()
 }
 
 type DownloadFormat = 'original' | 'low_res' | 'high_res' | 'pdf'
 
-async function handleDownloadAs(format: DownloadFormat) {
+function handleDownloadAs(format: DownloadFormat) {
   if (!asset.value) return
   
   const formatLabels: Record<DownloadFormat, string> = {
@@ -1179,42 +1331,47 @@ async function handleDownloadAs(format: DownloadFormat) {
       ? 'png'
       : 'jpeg' // low_res default
 
-  try {
-    const blob = await apiService.get<Blob>(
-      `/api/v4/headless/documents/${asset.value.id}/convert/`,
-      {
-        params: { format: targetFormat },
-        responseType: 'blob'
-      } as any
-    )
+  // Handle async conversion
+  const performConversion = async () => {
+    try {
+      const blob = await apiService.get<Blob>(
+        `/api/v4/headless/documents/${asset.value.id}/convert/`,
+        {
+          params: { format: targetFormat },
+          responseType: 'blob'
+        } as any
+      )
 
-    const objectUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    const baseName =
-      asset.value.file_details?.filename?.split('.')?.[0] ||
-      asset.value.filename?.split('.')?.[0] ||
-      asset.value.label ||
-      `document-${asset.value.id}`
-    link.href = objectUrl
-    link.download = `${baseName}.${targetFormat === 'jpeg' ? 'jpg' : targetFormat}`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(objectUrl)
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const baseName =
+        asset.value.file_details?.filename?.split('.')?.[0] ||
+        asset.value.filename?.split('.')?.[0] ||
+        asset.value.label ||
+        `document-${asset.value.id}`
+      link.href = objectUrl
+      link.download = `${baseName}.${targetFormat === 'jpeg' ? 'jpg' : targetFormat}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(objectUrl)
 
-    notificationStore.addNotification({
-      type: 'success',
-      title: 'Готово',
-      message: `Файл скачан в формате ${formatLabels[format]}`
-    })
-  } catch (err) {
-    console.error('[AssetDetail] Conversion download failed', err)
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка конвертации',
-      message: `Не удалось скачать файл в формате ${formatLabels[format]}`
-    })
+      notificationStore.addNotification({
+        type: 'success',
+        title: 'Готово',
+        message: `Файл скачан в формате ${formatLabels[format]}`
+      })
+    } catch (err) {
+      console.error('[AssetDetail] Conversion download failed', err)
+      notificationStore.addNotification({
+        type: 'error',
+        title: 'Ошибка конвертации',
+        message: `Не удалось скачать файл в формате ${formatLabels[format]}`
+      })
+    }
   }
+
+  performConversion()
 }
 
 function handleShare() {

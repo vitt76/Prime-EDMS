@@ -403,6 +403,149 @@ export const useAssetStore = defineStore(
         }
 
         const asset = adaptBackendAsset(response.data)
+
+        // If no file information, try to fetch file details separately
+        console.log('[AssetStore] Checking file details:', { hasFileDetails: !!asset.file_details, size: asset.size, fileLatestId: asset.file_latest_id })
+        if (!asset.file_details || asset.size === 0) {
+          console.log('[AssetStore] Fetching file details for asset', id)
+          try {
+            // Try to get file list and take the latest file
+            const filesResponse = await axios.get(
+              `/api/v4/documents/${id}/files/`,
+              { headers: getAuthHeaders() }
+            )
+
+            // #region agent log
+            try {
+              fetch(LOG_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: 'debug-session',
+                  runId: 'info-card-debug',
+                  hypothesisId: 'H-info-fields',
+                  location: 'assetStore:getAssetDetail',
+                  message: 'Files list API response',
+                  data: {
+                    documentId: id,
+                    filesCount: filesResponse.data?.results?.length || 0,
+                    filesData: filesResponse.data?.results,
+                    hasResults: !!filesResponse.data?.results
+                  },
+                  timestamp: Date.now()
+                })
+              }).catch(() => {})
+            } catch (e) {
+              // ignore logging errors
+            }
+            // #endregion agent log
+
+            if (filesResponse.data?.results && filesResponse.data.results.length > 0) {
+              // Sort by timestamp descending and take the latest file
+              const latestFile = filesResponse.data.results
+                .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+
+              // #region agent log
+              try {
+                fetch(LOG_ENDPOINT, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    sessionId: 'debug-session',
+                    runId: 'info-card-debug',
+                    hypothesisId: 'H-info-fields',
+                    location: 'assetStore:getAssetDetail',
+                    message: 'Latest file selected',
+                    data: {
+                      documentId: id,
+                      latestFileId: latestFile.id,
+                      latestFilename: latestFile.filename,
+                      latestSize: latestFile.size,
+                      latestMimetype: latestFile.mimetype,
+                      latestTimestamp: latestFile.timestamp
+                    },
+                    timestamp: Date.now()
+                  })
+                }).catch(() => {})
+              } catch (e) {
+                // ignore logging errors
+              }
+              // #endregion agent log
+
+              asset.filename = latestFile.filename || asset.filename
+              asset.size = latestFile.size || asset.size
+              asset.mime_type = latestFile.mimetype || asset.mime_type
+              asset.file_details = {
+                filename: latestFile.filename,
+                size: latestFile.size,
+                mime_type: latestFile.mimetype,
+                uploaded_date: latestFile.timestamp,
+                checksum: latestFile.checksum,
+              }
+              console.log('[AssetStore] Updated asset with file details:', {
+                filename: asset.filename,
+                size: asset.size,
+                mime_type: asset.mime_type,
+                date_added: asset.date_added
+              })
+              // Use file upload date as the asset date_added if available
+              if (latestFile.timestamp) {
+                asset.date_added = latestFile.timestamp
+                // #region agent log
+                try {
+                  fetch(LOG_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      sessionId: 'debug-session',
+                      runId: 'info-card-debug',
+                      hypothesisId: 'H-info-fields',
+                      location: 'assetStore:getAssetDetail',
+                      message: 'Updated asset date_added from file',
+                      data: {
+                        documentId: id,
+                        originalDate: asset.date_added,
+                        fileTimestamp: latestFile.timestamp,
+                        finalDate: asset.date_added
+                      },
+                      timestamp: Date.now()
+                    })
+                  }).catch(() => {})
+                } catch (e) {
+                  // ignore logging errors
+                }
+                // #endregion agent log
+              }
+            }
+          } catch (fileError: any) {
+            console.warn('[AssetStore] Could not fetch file details:', fileError)
+            console.log('[AssetStore] File details fetch failed, asset remains:', { size: asset.size, hasFileDetails: !!asset.file_details })
+            // #region agent log
+            try {
+              fetch(LOG_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: 'debug-session',
+                  runId: 'info-card-debug',
+                  hypothesisId: 'H-info-fields',
+                  location: 'assetStore:getAssetDetail',
+                  message: 'File details API error',
+                  data: {
+                    documentId: id,
+                    error: fileError.message,
+                    status: fileError.response?.status
+                  },
+                  timestamp: Date.now()
+                })
+              }).catch(() => {})
+            } catch (e) {
+              // ignore logging errors
+            }
+            // #endregion agent log
+          }
+        }
+
         // Fetch metadata separately (optimized endpoint may omit it)
         const meta = await fetchDocumentMetadata(id)
         if (meta) {
