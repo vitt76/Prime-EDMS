@@ -30,25 +30,6 @@ export const useDashboardStore = defineStore(
       return formatBytes(storageMetrics.value.total_size)
     })
 
-    // Mock data for dev mode (matches DashboardStats interface)
-    const mockStats: DashboardStats = {
-      documents: {
-        total: 1250,
-        with_analysis: 890,
-        without_analysis: 360
-      },
-      analyses: {
-        completed: 890,
-        processing: 15,
-        pending: 47,
-        failed: 3
-      },
-      providers: [
-        { provider: 'yandexgpt', count: 650 },
-        { provider: 'gigachat', count: 240 }
-      ]
-    }
-
     const mockStorage: StorageMetrics = {
       total_size: 107374182400,
       used_size: 16890000000,
@@ -72,9 +53,22 @@ export const useDashboardStore = defineStore(
         stats.value = data
         lastUpdated.value = new Date()
       } catch (err) {
-        // Fallback to mock data only if API fails
-        console.warn('[DashboardStore] Failed to fetch dashboard stats, using fallback:', err)
-        stats.value = mockStats
+        // Return zeros instead of mock data if API fails
+        console.warn('[DashboardStore] Failed to fetch dashboard stats, using zeros:', err)
+        stats.value = {
+          documents: {
+            total: 0,
+            with_analysis: 0,
+            without_analysis: 0
+          },
+          analyses: {
+            completed: 0,
+            processing: 0,
+            pending: 0,
+            failed: 0
+          },
+          providers: []
+        }
         lastUpdated.value = new Date()
         error.value = formatApiError(err)
       } finally {
