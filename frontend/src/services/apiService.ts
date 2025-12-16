@@ -13,7 +13,17 @@ const RETRY_DELAY = 1000 // 1 second
 
 const shouldDebugLog = (): boolean => {
   try {
-    return import.meta.env.DEV && localStorage.getItem('maddam_debug') === '1'
+    // Auto-enable debug logging in dev mode if not explicitly disabled
+    if (import.meta.env.DEV) {
+      const debugFlag = localStorage.getItem('maddam_debug')
+      if (debugFlag === null) {
+        // Auto-enable if not set
+        localStorage.setItem('maddam_debug', '1')
+        return true
+      }
+      return debugFlag === '1'
+    }
+    return false
   } catch {
     return false
   }
@@ -221,16 +231,58 @@ class ApiService {
       }
     }
 
-    const response = await this.client.get<ApiResponse<T>>(url, config)
-    const data = response.data.data || (response.data as unknown as T)
-
-    // Cache GET responses
-    if (useCache && config?.method === undefined) {
-      const cacheKey = this.getCacheKey(url, config?.params)
-      cacheService.set(cacheKey, data)
+    if (import.meta.env.DEV) {
+      console.log(`[API Request] GET ${url}`, { config, useCache })
     }
 
-    return data
+    try {
+      const response = await this.client.get<ApiResponse<T>>(url, config)
+      
+      if (import.meta.env.DEV) {
+        console.log(`[API Response] GET ${url}`, {
+          status: response.status,
+          statusText: response.statusText,
+          hasData: !!response.data,
+          dataKeys: response.data ? Object.keys(response.data) : [],
+          dataType: typeof response.data,
+          isDataArray: Array.isArray(response.data),
+          rawData: response.data
+        })
+      }
+      
+      const data = response.data.data || (response.data as unknown as T)
+      
+      if (import.meta.env.DEV) {
+        console.log(`[API Processed] GET ${url}`, {
+          extractedData: data,
+          dataType: typeof data,
+          isDataArray: Array.isArray(data),
+          hasDataField: 'data' in (response.data || {}),
+          usedFallback: !response.data.data
+        })
+      }
+
+      // Cache GET responses
+      if (useCache && config?.method === undefined) {
+        const cacheKey = this.getCacheKey(url, config?.params)
+        cacheService.set(cacheKey, data)
+      }
+
+      return data
+    } catch (error: any) {
+      if (import.meta.env.DEV) {
+        console.error(`[API Error] GET ${url}`, {
+          error,
+          message: error?.message,
+          response: error?.response,
+          status: error?.response?.status,
+          statusText: error?.response?.statusText,
+          data: error?.response?.data,
+          config: error?.config
+        })
+      }
+      throw error
+    }
   }
 
   /**

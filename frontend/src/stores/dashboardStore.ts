@@ -78,9 +78,15 @@ export const useDashboardStore = defineStore(
 
     async function fetchActivityFeed(limit = 10) {
       try {
+        console.log('[DashboardStore] Starting activity feed fetch, limit:', limit)
         activityFeed.value = await getDashboardActivityNormalized(limit)
-      } catch (err) {
-        console.warn('Failed to fetch activity feed:', err)
+        console.log('[DashboardStore] Activity feed fetched successfully, items:', activityFeed.value.length)
+      } catch (err: any) {
+        console.error('[DashboardStore] Failed to fetch activity feed:', {
+          error: err,
+          message: err?.message,
+          stack: err?.stack
+        })
         activityFeed.value = []
       }
     }

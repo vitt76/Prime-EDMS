@@ -131,26 +131,82 @@ export async function getDashboardActivityNormalized(
     }
     
     // Fetch data from HeadlessActivityFeedView
-    const response = await apiService.get<HeadlessActivityFeedResponse>(
-      url,
-      undefined,
-      false // Don't cache activity feed
-    )
+    let response: HeadlessActivityFeedResponse
+    try {
+      response = await apiService.get<HeadlessActivityFeedResponse>(
+        url,
+        undefined,
+        false // Don't cache activity feed
+      )
+      
+      // DEBUG: Log raw response
+      console.log('[ActivityService] Raw response received:', {
+        response,
+        type: typeof response,
+        isArray: Array.isArray(response),
+        hasResults: 'results' in response,
+        resultsType: typeof response?.results,
+        resultsIsArray: Array.isArray(response?.results),
+        responseKeys: response ? Object.keys(response) : [],
+        fullResponse: JSON.stringify(response, null, 2)
+      })
+    } catch (fetchErr: any) {
+      console.error('[ActivityService] Error during apiService.get():', {
+        error: fetchErr,
+        message: fetchErr?.message,
+        response: fetchErr?.response,
+        status: fetchErr?.response?.status,
+        statusText: fetchErr?.response?.statusText,
+        data: fetchErr?.response?.data,
+        url: url
+      })
+      throw fetchErr
+    }
     
     // Validate response structure
-    if (!response || !Array.isArray(response.results)) {
-      console.warn('[ActivityService] Invalid response format:', response)
-      throw new Error('Invalid response format from activity feed API')
+    if (!response) {
+      console.warn('[ActivityService] Response is null/undefined:', response)
+      throw new Error('Response is null or undefined')
+    }
+    
+    if (!Array.isArray(response.results)) {
+      console.warn('[ActivityService] Invalid response format - results is not an array:', {
+        response,
+        results: response.results,
+        resultsType: typeof response.results,
+        isArray: Array.isArray(response.results)
+      })
+      throw new Error('Invalid response format from activity feed API: results is not an array')
     }
     
     // Map HeadlessActivityItem[] to ActivityItem[]
-    return response.results.map(mapHeadlessToActivityItem)
+    const mappedItems = response.results.map(mapHeadlessToActivityItem)
     
-  } catch (err) {
-    console.warn('[ActivityService] Failed to fetch activity feed:', err)
+    if (import.meta.env.DEV) {
+      console.log(`[ActivityService] Successfully mapped ${mappedItems.length} activity items`)
+    }
+    
+    return mappedItems
+    
+  } catch (err: any) {
+    console.error('[ActivityService] Failed to fetch activity feed:', {
+      error: err,
+      message: err?.message,
+      stack: err?.stack,
+      response: err?.response,
+      status: err?.response?.status,
+      statusText: err?.response?.statusText,
+      data: err?.response?.data,
+      code: err?.code,
+      name: err?.name,
+      url: url
+    })
+    
     // Fallback: try old endpoint if new one fails
+    console.log('[ActivityService] Attempting fallback to old endpoint...')
     try {
       const items = await getDashboardActivity(limit)
+      console.log('[ActivityService] Fallback succeeded, mapped items:', items.length)
       return items.map((item) => ({
         id: item.id,
         user: item.user,
@@ -160,8 +216,13 @@ export async function getDashboardActivityNormalized(
         object_name: item.object_name,
         icon: item.icon || 'upload'
       }))
-    } catch (fallbackErr) {
-      console.warn('[ActivityService] Fallback also failed:', fallbackErr)
+    } catch (fallbackErr: any) {
+      console.error('[ActivityService] Fallback also failed:', {
+        error: fallbackErr,
+        message: fallbackErr?.message,
+        response: fallbackErr?.response,
+        status: fallbackErr?.response?.status
+      })
       return []
     }
   }
