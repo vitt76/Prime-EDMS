@@ -141,13 +141,6 @@
                       Сбросить
                     </button>
 
-                    <!-- Rotation indicator -->
-                    <span 
-                      v-if="editorStore.currentState.transform.rotation !== 0"
-                      class="ml-2 px-2 py-1 text-xs bg-blue-600/20 text-blue-400 rounded"
-                    >
-                      {{ editorStore.currentState.transform.rotation }}°
-                    </span>
                   </div>
 
                   <!-- Image Preview Container -->
@@ -178,11 +171,30 @@
                       </div>
                       
                       <!-- Crop Overlay -->
-                      <div 
-                        v-if="activeToolId === 'crop' && cropPreview"
-                        class="absolute border-2 border-blue-500 bg-blue-500/10 pointer-events-none"
-                        :style="cropOverlayStyle"
-                      />
+                      <div
+                        v-if="
+                          imageSrc &&
+                          activeToolId === 'crop' &&
+                          (cropPreview || isCropDragging)
+                        "
+                        class="absolute inset-0"
+                      >
+                        <div
+                          class="absolute border-2 border-blue-500 bg-blue-500/10 cursor-move"
+                          :style="cropOverlayStyle"
+                          @mousedown="startCropDrag('move', null, $event)"
+                        >
+                          <!-- Handles -->
+                          <div
+                            v-for="handle in cropHandles"
+                            :key="handle.key"
+                            class="absolute w-3 h-3 bg-blue-500 rounded-sm border border-white"
+                            :class="handle.class"
+                            :style="{ cursor: handle.cursor }"
+                            @mousedown.stop="startCropDrag('resize', handle.key as any, $event)"
+                          ></div>
+                        </div>
+                      </div>
 
                       <!-- Watermark preview is rendered server-side in headless mode -->
                     </div>
@@ -267,8 +279,9 @@
                         <div>
                           <label class="block text-xs font-medium text-neutral-400 mb-1">Ширина</label>
                           <input
-                            :value="editorStore.currentState.crop.width"
+                            :value="Math.round(editorStore.currentState.crop.width)"
                             type="number"
+                            step="1"
                             min="1"
                             class="w-full px-3 py-2 bg-neutral-700 border border-neutral-600 rounded-lg
                                    text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -278,8 +291,9 @@
                         <div>
                           <label class="block text-xs font-medium text-neutral-400 mb-1">Высота</label>
                           <input
-                            :value="editorStore.currentState.crop.height"
+                            :value="Math.round(editorStore.currentState.crop.height)"
                             type="number"
+                            step="1"
                             min="1"
                             class="w-full px-3 py-2 bg-neutral-700 border border-neutral-600 rounded-lg
                                    text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -923,6 +937,15 @@ const cropPreview = ref(false)
 const isSaveModalOpen = ref(false)
 const saveError = ref<string | null>(null)
 const pendingSaveState = ref<any | null>(null)
+const isCropDragging = ref(false)
+const cropDragMode = ref<'move' | 'resize' | null>(null)
+const cropDragHandle = ref<
+  'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw' | null
+>(null)
+const cropDragStart = ref<{ mouseX: number; mouseY: number; crop: any } | null>(
+  null
+)
+const lastAppliedCrop = ref<{ x: number; y: number; width: number; height: number } | null>(null)
 
 // Tool definitions
 const tools = [
@@ -941,6 +964,17 @@ const aspectRatios = [
   { value: '3:2' as const, label: '3:2' },
   { value: 'free' as const, label: 'Свободно' }
 ]
+
+const cropHandles = [
+  { key: 'nw', cursor: 'nwse-resize', class: '-top-1 -left-1' },
+  { key: 'n', cursor: 'ns-resize', class: '-top-1 left-1/2 -translate-x-1/2' },
+  { key: 'ne', cursor: 'nesw-resize', class: '-top-1 -right-1' },
+  { key: 'e', cursor: 'ew-resize', class: 'top-1/2 -right-1 -translate-y-1/2' },
+  { key: 'se', cursor: 'nwse-resize', class: '-bottom-1 -right-1' },
+  { key: 's', cursor: 'ns-resize', class: '-bottom-1 left-1/2 -translate-x-1/2' },
+  { key: 'sw', cursor: 'nesw-resize', class: '-bottom-1 -left-1' },
+  { key: 'w', cursor: 'ew-resize', class: 'top-1/2 -left-1 -translate-y-1/2' }
+] as const
 
 const formats = [
   { value: 'jpg' as const, label: 'JPEG', icon: '📷', description: 'Оптимально для фото' },
@@ -994,15 +1028,16 @@ const imagePreviewStyle = computed(() => {
 
 const cropOverlayStyle = computed(() => {
   if (!imageRef.value) return {}
-  
+  const bounds = getCropBounds()
   const { x, y, width, height } = editorStore.currentState.crop
-  const { width: origW, height: origH } = editorStore.originalDimensions
-  const scaleX = (imageRef.value.clientWidth || 1) / origW
-  const scaleY = (imageRef.value.clientHeight || 1) / origH
-  
+  const displayW = imageRef.value.clientWidth || bounds.width || 1
+  const displayH = imageRef.value.clientHeight || bounds.height || 1
+  const scaleX = displayW / bounds.width
+  const scaleY = displayH / bounds.height
+
   return {
-    left: `${x * scaleX}px`,
-    top: `${y * scaleY}px`,
+    left: `${(x - bounds.x) * scaleX}px`,
+    top: `${(y - bounds.y) * scaleY}px`,
     width: `${width * scaleX}px`,
     height: `${height * scaleY}px`
   }
@@ -1045,6 +1080,7 @@ function handleClose() {
     objectUrl.value = null
     imageSrc.value = null
   }
+    lastAppliedCrop.value = null
     isEditorReady.value = false
   if (!isProcessing.value) {
     emit('close')
@@ -1091,25 +1127,117 @@ function handleRedo() {
   }
 }
 
-// Crop methods
-function setAspectRatio(ratio: typeof aspectRatios[0]['value']) {
-  editorStore.setCrop({ aspectRatio: ratio })
-  cropPreview.value = true
-  
-  if (ratio === 'free') return
-  
-  const { width } = editorStore.originalDimensions
-  const ratioMap: Record<string, number> = {
+// Crop helpers
+function aspectRatioValue(ratio: typeof aspectRatios[0]['value']): number | null {
+  const map: Record<string, number> = {
     '1:1': 1,
-    '4:3': 3 / 4,
-    '16:9': 9 / 16,
-    '9:16': 16 / 9,
-    '3:2': 2 / 3,
-    '2:3': 3 / 2
+    '4:3': 4 / 3,
+    '16:9': 16 / 9,
+    '9:16': 9 / 16,
+    '3:2': 3 / 2,
+    '2:3': 2 / 3
   }
-  
-  const newHeight = Math.round(width * (ratioMap[ratio] || 1))
-  editorStore.setCrop({ width, height: newHeight })
+  return ratio === 'free' ? null : map[ratio] || null
+}
+
+// Bounds: либо уже применённый crop, либо вся картинка.
+function getCropBounds() {
+  const crop = editorStore.currentState.crop
+  if (crop.enabled) {
+    return {
+      // Для отображения используем локальные координаты уже обрезанного изображения:
+      // результирующий превью содержит только область crop, поэтому origin считаем (0,0).
+      x: crop.x,
+      y: crop.y,
+      width: crop.width,
+      height: crop.height
+    }
+  }
+  if (lastAppliedCrop.value) {
+    return { ...lastAppliedCrop.value }
+  }
+  const { width, height } = editorStore.originalDimensions
+  return { x: 0, y: 0, width, height }
+}
+
+function clampCropToBounds(crop: any, bounds = getCropBounds()) {
+  const minSize = 10
+  // Работаем в координатах внутри bounds
+  let rx = crop.x - bounds.x
+  let ry = crop.y - bounds.y
+  let width = crop.width
+  let height = crop.height
+
+  const ar = aspectRatioValue(crop.aspectRatio)
+  if (ar) {
+    // Поддерживаем ratio строго. При необходимости уменьшаем размер так,
+    // чтобы прямоугольник с текущим ratio влез в bounds, без изменения ratio.
+    const maxW = bounds.width
+    const maxH = bounds.height
+    const scale = Math.min(1, maxW / Math.max(width, minSize), maxH / Math.max(height, minSize))
+    width = Math.max(minSize, width * scale)
+    height = Math.max(minSize, height * scale)
+    // Обеспечиваем точное ratio после масштабирования
+    if (width / height !== ar) {
+      if (width / height > ar) {
+        width = height * ar
+      } else {
+        height = width / ar
+      }
+    }
+  } else {
+    // Свободный режим — просто кламп по доступному месту
+    width = Math.max(minSize, Math.min(width, bounds.width))
+    height = Math.max(minSize, Math.min(height, bounds.height))
+  }
+
+  // 1) Кламп позиции с учётом итоговых размеров
+  rx = Math.max(0, Math.min(rx, bounds.width - width))
+  ry = Math.max(0, Math.min(ry, bounds.height - height))
+
+  return {
+    x: Math.round(bounds.x + rx),
+    y: Math.round(bounds.y + ry),
+    width: Math.max(minSize, Math.round(width)),
+    height: Math.max(minSize, Math.round(height))
+  }
+}
+
+function setAspectRatio(ratio: typeof aspectRatios[0]['value']) {
+  const bounds = getCropBounds()
+  const { width: baseW, height: baseH, x: baseX, y: baseY } = bounds
+  const ar = aspectRatioValue(ratio)
+
+  if (ar) {
+    // Максимальный прямоугольник с нужным ratio, вписанный в текущие bounds.
+    let cropW = baseW
+    let cropH = cropW / ar
+    if (cropH > baseH) {
+      cropH = baseH
+      cropW = cropH * ar
+    }
+    const x = Math.round(baseX + (baseW - cropW) / 2)
+    const y = Math.round(baseY + (baseH - cropH) / 2)
+    editorStore.setCrop({
+      aspectRatio: ratio,
+      enabled: false,
+      x,
+      y,
+      width: Math.round(cropW),
+      height: Math.round(cropH)
+    })
+  } else {
+    // Свободный режим: весь текущий bounds.
+    editorStore.setCrop({
+      aspectRatio: ratio,
+      enabled: false,
+      x: baseX,
+      y: baseY,
+      width: baseW,
+      height: baseH
+    })
+  }
+  cropPreview.value = true
 }
 
 function updateCropWidth(e: Event) {
@@ -1123,13 +1251,180 @@ function updateCropHeight(e: Event) {
 }
 
 function applyCrop() {
+  const clamped = clampCropToBounds(editorStore.currentState.crop)
+  editorStore.setCrop({ ...clamped, enabled: true })
+  lastAppliedCrop.value = { ...clamped }
   editorStore.applyCrop()
   notificationStore.addNotification({
     type: 'success',
     title: 'Обрезка применена',
-    message: `${editorStore.currentState.crop.width}×${editorStore.currentState.crop.height}`
+    message: `${clamped.width}×${clamped.height}`
   })
   cropPreview.value = false
+}
+
+function getImageScale() {
+  const bounds = getCropBounds()
+  const displayW = imageRef.value?.clientWidth || bounds.width || 1
+  const displayH = imageRef.value?.clientHeight || bounds.height || 1
+  return {
+    scaleX: bounds.width / displayW,
+    scaleY: bounds.height / displayH
+  }
+}
+
+function startCropDrag(
+  mode: 'move' | 'resize',
+  handle: 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw' | null,
+  event: MouseEvent
+) {
+  if (!imageRef.value) return
+  event.preventDefault()
+  cropDragMode.value = mode
+  cropDragHandle.value = handle
+  cropDragStart.value = {
+    mouseX: event.clientX,
+    mouseY: event.clientY,
+    crop: { ...editorStore.currentState.crop }
+  }
+  isCropDragging.value = true
+  window.addEventListener('mousemove', handleCropDrag)
+  window.addEventListener('mouseup', stopCropDrag)
+}
+
+function handleCropDrag(event: MouseEvent) {
+  if (!isCropDragging.value || !cropDragStart.value) return
+  const { scaleX, scaleY } = getImageScale()
+  const dx = (event.clientX - cropDragStart.value.mouseX) * scaleX
+  const dy = (event.clientY - cropDragStart.value.mouseY) * scaleY
+
+  const startCrop = cropDragStart.value.crop
+  let { x, y, width, height } = startCrop
+  const ratio = aspectRatioValue(startCrop.aspectRatio)
+
+  const handle = cropDragHandle.value
+  const mode = cropDragMode.value
+  const minSize = 10
+  const bounds = getCropBounds()
+  const maxX = bounds.x + bounds.width - minSize
+  const maxY = bounds.y + bounds.height - minSize
+
+  const clampValues = () => {
+    x = Math.max(bounds.x, Math.min(x, maxX))
+    y = Math.max(bounds.y, Math.min(y, maxY))
+    width = Math.max(minSize, Math.min(width, bounds.x + bounds.width - x))
+    height = Math.max(minSize, Math.min(height, bounds.y + bounds.height - y))
+  }
+
+  if (mode === 'move') {
+    x = startCrop.x + dx
+    y = startCrop.y + dy
+    clampValues()
+    editorStore.setCrop({ x, y, width, height })
+    return
+  }
+
+  // Resize
+  if (!handle) return
+
+  const applyCornerResize = (anchorX: number, anchorY: number, newW: number, newH: number) => {
+    width = newW
+    height = newH
+    x = anchorX - width
+    y = anchorY - height
+  }
+
+  switch (handle) {
+    case 'e': {
+      width = startCrop.width + dx
+      if (ratio) {
+        height = width / ratio
+        y = startCrop.y + (startCrop.height - height) / 2
+      }
+      break
+    }
+    case 'w': {
+      width = startCrop.width - dx
+      if (ratio) {
+        height = width / ratio
+        x = startCrop.x + startCrop.width - width
+        y = startCrop.y + (startCrop.height - height) / 2
+      } else {
+        x = startCrop.x + dx
+      }
+      break
+    }
+    case 's': {
+      height = startCrop.height + dy
+      if (ratio) {
+        width = height * ratio
+        x = startCrop.x + (startCrop.width - width) / 2
+      }
+      break
+    }
+    case 'n': {
+      height = startCrop.height - dy
+      if (ratio) {
+        width = height * ratio
+        x = startCrop.x + (startCrop.width - width) / 2
+        y = startCrop.y + startCrop.height - height
+      } else {
+        y = startCrop.y + dy
+      }
+      break
+    }
+    case 'se': {
+      width = startCrop.width + dx
+      height = ratio ? width / ratio : startCrop.height + dy
+      break
+    }
+    case 'ne': {
+      width = startCrop.width + dx
+      height = ratio ? width / ratio : startCrop.height - dy
+      if (ratio) {
+        y = startCrop.y + startCrop.height - height
+      } else {
+        y = startCrop.y + dy
+      }
+      break
+    }
+    case 'sw': {
+      width = startCrop.width - dx
+      height = ratio ? width / ratio : startCrop.height + dy
+      if (ratio) {
+        x = startCrop.x + startCrop.width - width
+      } else {
+        x = startCrop.x + dx
+      }
+      break
+    }
+    case 'nw': {
+      width = startCrop.width - dx
+      height = ratio ? width / ratio : startCrop.height - dy
+      if (ratio) {
+        x = startCrop.x + startCrop.width - width
+        y = startCrop.y + startCrop.height - height
+      } else {
+        x = startCrop.x + dx
+        y = startCrop.y + dy
+      }
+      break
+    }
+    default:
+      break
+  }
+
+  clampValues()
+  editorStore.setCrop({ x, y, width, height })
+}
+
+function stopCropDrag() {
+  isCropDragging.value = false
+  cropDragMode.value = null
+  cropDragHandle.value = null
+  cropDragStart.value = null
+  window.removeEventListener('mousemove', handleCropDrag)
+  window.removeEventListener('mouseup', stopCropDrag)
 }
 
 // Resize methods

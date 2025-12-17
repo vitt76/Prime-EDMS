@@ -392,11 +392,12 @@ export const useEditorStore = defineStore('editor', () => {
     currentState.value.crop = {
       ...currentState.value.crop,
       ...crop,
-      enabled: true
+      enabled: crop.enabled ?? currentState.value.crop.enabled
     }
   }
   
   function applyCrop() {
+    currentState.value.crop.enabled = true
     pushHistory(`Обрезка ${currentState.value.crop.width}×${currentState.value.crop.height}`)
   }
   
