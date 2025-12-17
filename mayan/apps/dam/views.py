@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import messages
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
@@ -40,6 +42,8 @@ from .settings import (
 )
 from .tasks import analyze_document_with_ai, import_yandex_disk
 
+logger = logging.getLogger(__name__)
+
 
 class DocumentAIAnalysisDetailView(SimpleView):
     """
@@ -53,10 +57,11 @@ class DocumentAIAnalysisDetailView(SimpleView):
         """Get AI analysis object."""
         ai_analysis_id = self.kwargs.get('ai_analysis_id')
         
-        # Get object with related document
+        # Get object with related document and prefetch files to avoid N+1 queries
         # view_permission is already checked by SimpleView via ViewPermissionCheckViewMixin
         ai_analysis = get_object_or_404(
-            DocumentAIAnalysis.objects.select_related('document'),
+            DocumentAIAnalysis.objects.select_related('document')
+                .prefetch_related('document__files'),
             pk=ai_analysis_id
         )
         
@@ -64,18 +69,36 @@ class DocumentAIAnalysisDetailView(SimpleView):
 
     def get_extra_context(self):
         """Add context data for template."""
-        ai_analysis = self.get_object()
-
-        return {
-            'object': ai_analysis,
-            'document': ai_analysis.document,
-            'latest_file': ai_analysis.document.files.order_by('-timestamp').first(),
-            'can_reanalyze': ai_analysis.analysis_status in ['completed', 'failed'],
-            'can_edit': ai_analysis.analysis_status == 'completed',
-            'formatted_tags': ai_analysis.get_ai_tags_list(),
-            'formatted_colors': ai_analysis.get_dominant_colors_list(),
-            'title': _('AI Analysis: %s') % ai_analysis.document.label,
-        }
+        try:
+            ai_analysis = self.get_object()
+            
+            # Безопасное получение последнего файла
+            latest_file = None
+            try:
+                latest_file = ai_analysis.document.files.order_by('-timestamp').first()
+            except Exception as e:
+                logger.warning(
+                    f'Failed to get latest file for analysis {ai_analysis.id}: {e}',
+                    extra={'ai_analysis_id': ai_analysis.id}
+                )
+            
+            return {
+                'object': ai_analysis,
+                'document': ai_analysis.document,
+                'latest_file': latest_file,
+                'can_reanalyze': ai_analysis.analysis_status in ['completed', 'failed'],
+                'can_edit': ai_analysis.analysis_status == 'completed',
+                'formatted_tags': ai_analysis.get_ai_tags_list(),
+                'formatted_colors': ai_analysis.get_dominant_colors_list(),
+                'title': _('AI Analysis: %s') % ai_analysis.document.label,
+            }
+        except Exception as e:
+            ai_analysis_id = self.kwargs.get('ai_analysis_id')
+            logger.exception(
+                f'Error in get_extra_context for analysis {ai_analysis_id}: {e}',
+                extra={'ai_analysis_id': ai_analysis_id}
+            )
+            raise
 
 
 class DocumentAIAnalysisEditView(UpdateView):

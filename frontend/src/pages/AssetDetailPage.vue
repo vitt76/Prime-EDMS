@@ -330,7 +330,7 @@
           <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0 max-h-[400px] overflow-y-auto">
             <AIInsightsWidget 
               :analysis="aiAnalysis"
-              :is-loading="isLoadingAIAnalysis"
+              :is-loading="isLoadingAIAnalysis || isRunningAIAnalysis"
               :error="aiAnalysisError"
               @run-analysis="handleRunAIAnalysis"
               @run-ocr="handleRunOCR"
@@ -827,7 +827,7 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Menu, MenuButton, MenuItem, MenuItems, Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 import {
@@ -885,6 +885,12 @@ const collapsedSections = ref({
   ai: false,
   status: false
 })
+
+// Polling interval management
+const aiAnalysisPollInterval = ref<NodeJS.Timeout | null>(null)
+const ocrPollInterval = ref<NodeJS.Timeout | null>(null)
+const isRunningAIAnalysis = ref(false)
+const isRunningOCR = ref(false)
 
 // Document files (real "versions" in Mayan are represented by DocumentFile list)
 const documentFiles = ref<any[]>([])
@@ -1460,14 +1466,56 @@ async function loadAIAnalysis() {
   }
 }
 
+// Clear all polling intervals
+function clearAllPollIntervals() {
+  if (aiAnalysisPollInterval.value) {
+    if (import.meta.env.DEV) {
+      console.log('[AssetDetail] Clearing AI analysis polling interval')
+    }
+    clearInterval(aiAnalysisPollInterval.value)
+    aiAnalysisPollInterval.value = null
+  }
+  
+  if (ocrPollInterval.value) {
+    if (import.meta.env.DEV) {
+      console.log('[AssetDetail] Clearing OCR polling interval')
+    }
+    clearInterval(ocrPollInterval.value)
+    ocrPollInterval.value = null
+  }
+  
+  // Reset flags
+  isRunningAIAnalysis.value = false
+  isRunningOCR.value = false
+}
+
 // Handle AI analysis actions
 async function handleRunAIAnalysis() {
   if (!asset.value?.id) return
+  
+  // Prevent multiple simultaneous calls
+  if (isRunningAIAnalysis.value) {
+    if (import.meta.env.DEV) {
+      console.warn('[AssetDetail] AI analysis already running, ignoring duplicate call')
+    }
+    return
+  }
   
   const documentId = Number(asset.value.id)
   if (!Number.isFinite(documentId) || documentId <= 0) {
     return
   }
+  
+  // Clear any existing polling intervals
+  if (aiAnalysisPollInterval.value) {
+    if (import.meta.env.DEV) {
+      console.log('[AssetDetail] Clearing existing AI analysis polling interval')
+    }
+    clearInterval(aiAnalysisPollInterval.value)
+    aiAnalysisPollInterval.value = null
+  }
+  
+  isRunningAIAnalysis.value = true
   
   try {
     await aiAnalysisService.runAIAnalysis(documentId)
@@ -1475,22 +1523,136 @@ async function handleRunAIAnalysis() {
     notificationStore.addNotification({
       type: 'info',
       title: 'AI анализ запущен',
-      message: 'Анализ выполняется, обновление данных через несколько секунд...'
+      message: 'Анализ выполняется, данные будут обновлены автоматически...'
     })
     
-    // Reload after a delay
-    setTimeout(() => {
-      loadAIAnalysis()
+    // Set analysis status to processing
+    if (aiAnalysis.value) {
+      aiAnalysis.value.status = 'processing'
+    }
+    
+    // Store current document ID to detect document changes during polling
+    const currentDocumentId = documentId
+    
+    // Poll for updates every 3 seconds, max 20 attempts (1 minute)
+    let attempts = 0
+    const maxAttempts = 20
+    
+    if (import.meta.env.DEV) {
+      console.log('[AssetDetail] Starting AI analysis polling for document', currentDocumentId)
+    }
+    
+    aiAnalysisPollInterval.value = setInterval(async () => {
+      // Check if document changed
+      if (asset.value?.id !== currentDocumentId) {
+        if (import.meta.env.DEV) {
+          console.log('[AssetDetail] Document changed during polling, stopping AI analysis polling')
+        }
+        clearInterval(aiAnalysisPollInterval.value!)
+        aiAnalysisPollInterval.value = null
+        isRunningAIAnalysis.value = false
+        return
+      }
+      
+      attempts++
+      
+      if (import.meta.env.DEV) {
+        console.log(`[AssetDetail] AI analysis polling attempt ${attempts}/${maxAttempts}`)
+      }
+      
+      try {
+        await loadAIAnalysis()
+        
+        // Stop polling if analysis is completed or failed
+        if (aiAnalysis.value && 
+            (aiAnalysis.value.status === 'completed' || aiAnalysis.value.status === 'failed')) {
+          if (import.meta.env.DEV) {
+            console.log('[AssetDetail] AI analysis completed, stopping polling. Status:', aiAnalysis.value.status)
+          }
+          
+          clearInterval(aiAnalysisPollInterval.value!)
+          aiAnalysisPollInterval.value = null
+          isRunningAIAnalysis.value = false
+          
+          if (aiAnalysis.value.status === 'completed') {
+            notificationStore.addNotification({
+              type: 'success',
+              title: 'Анализ завершён',
+              message: 'AI анализ успешно выполнен'
+            })
+          } else {
+            notificationStore.addNotification({
+              type: 'warning',
+              title: 'Анализ не удался',
+              message: 'AI анализ завершился с ошибкой'
+            })
+          }
+        } else if (attempts >= maxAttempts) {
+          if (import.meta.env.DEV) {
+            console.log('[AssetDetail] AI analysis polling timeout after', maxAttempts, 'attempts')
+          }
+          
+          clearInterval(aiAnalysisPollInterval.value!)
+          aiAnalysisPollInterval.value = null
+          isRunningAIAnalysis.value = false
+          
+          notificationStore.addNotification({
+            type: 'warning',
+            title: 'Таймаут',
+            message: 'Анализ выполняется дольше обычного. Обновите страницу позже.'
+          })
+        }
+      } catch (err) {
+        // Continue polling on error, but log it
+        if (import.meta.env.DEV) {
+          console.warn('[AssetDetail] AI analysis polling error:', err)
+        }
+        
+        // Stop polling after max attempts even on errors
+        if (attempts >= maxAttempts) {
+          clearInterval(aiAnalysisPollInterval.value!)
+          aiAnalysisPollInterval.value = null
+          isRunningAIAnalysis.value = false
+        }
+      }
     }, 3000)
+    
+    // Also do an initial reload after 2 seconds
+    setTimeout(() => {
+      if (asset.value?.id === currentDocumentId) {
+        loadAIAnalysis()
+      }
+    }, 2000)
   } catch (err: any) {
+    // Clear polling interval on error
+    if (aiAnalysisPollInterval.value) {
+      clearInterval(aiAnalysisPollInterval.value)
+      aiAnalysisPollInterval.value = null
+    }
+    
+    isRunningAIAnalysis.value = false
+    
+    // Detailed error logging
+    if (import.meta.env.DEV) {
+      console.error('[AssetDetail] Failed to run AI analysis:', {
+        documentId,
+        error: err,
+        status: err?.response?.status,
+        statusText: err?.response?.statusText,
+        data: err?.response?.data,
+        message: err?.message
+      })
+    }
+    
     const errorMessage = err?.response?.data?.detail || 
                         err?.response?.data?.error || 
+                        err?.response?.data?.error_code ||
                         err?.message || 
                         'Не удалось запустить AI анализ'
     
     notificationStore.addNotification({
       type: 'error',
-      title: 'Ошибка',
+      title: 'Ошибка запуска анализа',
       message: errorMessage
     })
   }
@@ -1499,10 +1661,29 @@ async function handleRunAIAnalysis() {
 async function handleRunOCR() {
   if (!asset.value?.id) return
   
+  // Prevent multiple simultaneous calls
+  if (isRunningOCR.value) {
+    if (import.meta.env.DEV) {
+      console.warn('[AssetDetail] OCR already running, ignoring duplicate call')
+    }
+    return
+  }
+  
   const documentId = Number(asset.value.id)
   if (!Number.isFinite(documentId) || documentId <= 0) {
     return
   }
+  
+  // Clear any existing polling intervals
+  if (ocrPollInterval.value) {
+    if (import.meta.env.DEV) {
+      console.log('[AssetDetail] Clearing existing OCR polling interval')
+    }
+    clearInterval(ocrPollInterval.value)
+    ocrPollInterval.value = null
+  }
+  
+  isRunningOCR.value = true
   
   try {
     await aiAnalysisService.runOCR(documentId)
@@ -1510,22 +1691,145 @@ async function handleRunOCR() {
     notificationStore.addNotification({
       type: 'info',
       title: 'OCR запущен',
-      message: 'Распознавание текста выполняется, обновление данных через несколько секунд...'
+      message: 'Распознавание текста выполняется, данные будут обновлены автоматически...'
     })
     
-    // Reload after a delay
-    setTimeout(() => {
-      loadAIAnalysis()
+    // Set OCR status to processing
+    if (aiAnalysis.value && aiAnalysis.value.ocr) {
+      aiAnalysis.value.ocr.status = 'processing'
+    }
+    
+    // Store current document ID to detect document changes during polling
+    const currentDocumentId = documentId
+    
+    // Poll for updates every 3 seconds, max 20 attempts (1 minute)
+    let attempts = 0
+    const maxAttempts = 20
+    
+    if (import.meta.env.DEV) {
+      console.log('[AssetDetail] Starting OCR polling for document', currentDocumentId)
+    }
+    
+    ocrPollInterval.value = setInterval(async () => {
+      // Check if document changed
+      if (asset.value?.id !== currentDocumentId) {
+        if (import.meta.env.DEV) {
+          console.log('[AssetDetail] Document changed during polling, stopping OCR polling')
+        }
+        clearInterval(ocrPollInterval.value!)
+        ocrPollInterval.value = null
+        isRunningOCR.value = false
+        return
+      }
+      
+      attempts++
+      
+      if (import.meta.env.DEV) {
+        console.log(`[AssetDetail] OCR polling attempt ${attempts}/${maxAttempts}`)
+      }
+      
+      try {
+        await loadAIAnalysis()
+        
+        // Stop polling if OCR is completed or failed
+        if (aiAnalysis.value && aiAnalysis.value.ocr && 
+            (aiAnalysis.value.ocr.status === 'completed' || aiAnalysis.value.ocr.status === 'failed')) {
+          if (import.meta.env.DEV) {
+            console.log('[AssetDetail] OCR completed, stopping polling. Status:', aiAnalysis.value.ocr.status)
+          }
+          
+          clearInterval(ocrPollInterval.value!)
+          ocrPollInterval.value = null
+          isRunningOCR.value = false
+          
+          if (aiAnalysis.value.ocr.status === 'completed') {
+            const wordCount = aiAnalysis.value.ocr.wordCount || 0
+            if (wordCount === 0 || !aiAnalysis.value.ocr.text || aiAnalysis.value.ocr.text.trim() === '') {
+              notificationStore.addNotification({
+                type: 'info',
+                title: 'OCR завершён',
+                message: 'Текст на изображении отсутствует'
+              })
+            } else {
+              notificationStore.addNotification({
+                type: 'success',
+                title: 'OCR завершён',
+                message: `Распознано ${wordCount} слов`
+              })
+            }
+          } else {
+            notificationStore.addNotification({
+              type: 'warning',
+              title: 'OCR не удался',
+              message: 'Не удалось распознать текст. Попробуйте снова.'
+            })
+          }
+        } else if (attempts >= maxAttempts) {
+          if (import.meta.env.DEV) {
+            console.log('[AssetDetail] OCR polling timeout after', maxAttempts, 'attempts')
+          }
+          
+          clearInterval(ocrPollInterval.value!)
+          ocrPollInterval.value = null
+          isRunningOCR.value = false
+          
+          notificationStore.addNotification({
+            type: 'warning',
+            title: 'Таймаут',
+            message: 'OCR выполняется дольше обычного. Обновите страницу позже.'
+          })
+        }
+      } catch (err) {
+        // Continue polling on error, but log it
+        if (import.meta.env.DEV) {
+          console.warn('[AssetDetail] OCR polling error:', err)
+        }
+        
+        // Stop polling after max attempts even on errors
+        if (attempts >= maxAttempts) {
+          clearInterval(ocrPollInterval.value!)
+          ocrPollInterval.value = null
+          isRunningOCR.value = false
+        }
+      }
     }, 3000)
+    
+    // Also do an initial reload after 2 seconds
+    setTimeout(() => {
+      if (asset.value?.id === currentDocumentId) {
+        loadAIAnalysis()
+      }
+    }, 2000)
   } catch (err: any) {
+    // Clear polling interval on error
+    if (ocrPollInterval.value) {
+      clearInterval(ocrPollInterval.value)
+      ocrPollInterval.value = null
+    }
+    
+    isRunningOCR.value = false
+    
+    // Detailed error logging
+    if (import.meta.env.DEV) {
+      console.error('[AssetDetail] Failed to run OCR:', {
+        documentId,
+        error: err,
+        status: err?.response?.status,
+        statusText: err?.response?.statusText,
+        data: err?.response?.data,
+        message: err?.message
+      })
+    }
+    
     const errorMessage = err?.response?.data?.detail || 
                         err?.response?.data?.error || 
+                        err?.response?.data?.error_code ||
                         err?.message || 
                         'Не удалось запустить OCR'
     
     notificationStore.addNotification({
       type: 'error',
-      title: 'Ошибка',
+      title: 'Ошибка запуска OCR',
       message: errorMessage
     })
   }
@@ -1950,6 +2254,9 @@ function canDeleteComment(comment: Comment): boolean {
 
 // Watch route changes
 watch(() => route.params.id, () => {
+  // Clear all polling intervals when document changes
+  clearAllPollIntervals()
+  
   if (route.params.id) {
     loadAsset()
   }
@@ -1963,7 +2270,15 @@ watch(() => activeTab.value, (tab) => {
 })
 
 // Load AI analysis when asset is loaded
-watch(() => asset.value?.id, (assetId) => {
+watch(() => asset.value?.id, (assetId, oldAssetId) => {
+  // Clear polling intervals if asset ID changed
+  if (oldAssetId && assetId !== oldAssetId) {
+    if (import.meta.env.DEV) {
+      console.log('[AssetDetail] Asset ID changed, clearing polling intervals')
+    }
+    clearAllPollIntervals()
+  }
+  
   if (assetId) {
     // Load AI analysis when asset is available
     loadAIAnalysis()
@@ -1977,5 +2292,13 @@ onMounted(() => {
   if (activeTab.value === 'comments' && asset.value?.id) {
     loadComments()
   }
+})
+
+// Cleanup on unmount
+onUnmounted(() => {
+  if (import.meta.env.DEV) {
+    console.log('[AssetDetail] Component unmounting, clearing all polling intervals')
+  }
+  clearAllPollIntervals()
 })
 </script>

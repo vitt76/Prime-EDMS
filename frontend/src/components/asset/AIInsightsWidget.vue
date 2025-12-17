@@ -16,16 +16,35 @@
       </div>
     </div>
 
+    <!-- Run Analysis Button (always visible at top) -->
+    <div class="p-4 border-b border-neutral-100">
+      <button
+        class="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium
+               text-white bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg
+               hover:from-purple-700 hover:to-blue-700 transition-all
+               disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+        :disabled="isAnalyzing || isLoading"
+        @click="handleRunAnalysis"
+      >
+        <SparklesIcon v-if="!isAnalyzing && !isLoading" class="w-5 h-5" />
+        <ArrowPathIcon v-else class="w-5 h-5 animate-spin" />
+        <span v-if="isAnalyzing || isLoading">Анализируем...</span>
+        <span v-else-if="props.analysis && props.analysis.status === 'completed'">Сделать анализ повторно</span>
+        <span v-else>Запустить AI анализ</span>
+      </button>
+    </div>
+
     <!-- Loading State -->
     <div v-if="isLoading" class="p-6 flex flex-col items-center justify-center gap-3">
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-      <p class="text-sm text-neutral-500">Анализируем контент...</p>
+      <p class="text-sm text-neutral-500">Загрузка данных анализа...</p>
     </div>
 
     <!-- Error State -->
     <div v-else-if="error" class="p-6 flex flex-col items-center justify-center gap-3">
       <ExclamationCircleIcon class="w-8 h-8 text-red-500" />
       <p class="text-sm text-red-600">{{ error }}</p>
+      <p class="text-xs text-neutral-500 mt-2">Попробуйте запустить анализ снова</p>
     </div>
 
     <!-- Content -->
@@ -258,7 +277,8 @@
             <p class="text-sm text-neutral-500 mb-3">Текст ещё не распознан</p>
             <button
               class="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg
-                     hover:bg-teal-700 transition-colors"
+                     hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isLoading"
               @click="handleRunOCR"
             >
               Извлечь текст
@@ -274,47 +294,67 @@
 
           <!-- Completed State -->
           <div v-else-if="props.analysis.ocr.status === 'completed'" class="space-y-3">
-            <!-- Stats -->
-            <div class="flex items-center justify-between text-xs text-neutral-500">
-              <span v-if="props.analysis.ocr.confidence">Точность: {{ props.analysis.ocr.confidence }}%</span>
-              <span v-if="props.analysis.ocr.wordCount">{{ props.analysis.ocr.wordCount }} слов</span>
-            </div>
-
-            <!-- Text Result -->
-            <div v-if="props.analysis.ocr.text" class="relative">
-              <pre 
-                class="p-3 bg-neutral-50 rounded-lg text-xs text-neutral-700 
-                       overflow-auto max-h-[200px] whitespace-pre-wrap font-mono"
-              >{{ props.analysis.ocr.text }}</pre>
+            <!-- No Text Found -->
+            <div v-if="!props.analysis.ocr.text || !props.analysis.ocr.text.trim() || (props.analysis.ocr.wordCount !== undefined && props.analysis.ocr.wordCount === 0)" class="text-center py-4">
+              <DocumentMagnifyingGlassIcon class="w-10 h-10 mx-auto text-neutral-300 mb-3" />
+              <p class="text-sm text-neutral-600 font-medium mb-1">Текст отсутствует</p>
+              <p class="text-xs text-neutral-500">На изображении не обнаружен текст</p>
               <button
-                class="absolute top-2 right-2 p-1.5 bg-white rounded shadow-sm
-                       text-neutral-500 hover:text-neutral-700 transition-colors"
-                title="Копировать текст"
-                @click="copyToClipboard(props.analysis.ocr.text!, 'Распознанный текст')"
+                class="mt-3 px-4 py-2 text-sm font-medium text-teal-600 bg-teal-50 rounded-lg
+                       hover:bg-teal-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="isLoading"
+                @click="handleRunOCR"
               >
-                <ClipboardDocumentIcon class="w-4 h-4" />
+                <ArrowPathIcon class="w-4 h-4 inline mr-1" />
+                Попробовать снова
               </button>
             </div>
 
-            <!-- Actions -->
-            <div class="flex items-center gap-2">
+            <!-- Text Found -->
+            <div v-else class="space-y-3">
+              <!-- Stats -->
+              <div class="flex items-center justify-between text-xs text-neutral-500">
+                <span v-if="props.analysis.ocr.confidence">Точность: {{ props.analysis.ocr.confidence }}%</span>
+                <span v-if="props.analysis.ocr.wordCount">{{ props.analysis.ocr.wordCount }} слов</span>
+              </div>
+
+              <!-- Text Result -->
+              <div class="relative">
+                <pre 
+                  class="p-3 bg-neutral-50 rounded-lg text-xs text-neutral-700 
+                         overflow-auto max-h-[200px] whitespace-pre-wrap font-mono"
+                >{{ props.analysis.ocr.text }}</pre>
+                <button
+                  class="absolute top-2 right-2 p-1.5 bg-white rounded shadow-sm
+                         text-neutral-500 hover:text-neutral-700 transition-colors"
+                  title="Копировать текст"
+                  @click="copyToClipboard(props.analysis.ocr.text!, 'Распознанный текст')"
+                >
+                  <ClipboardDocumentIcon class="w-4 h-4" />
+                </button>
+              </div>
+
+              <!-- Actions -->
+              <div class="flex items-center gap-2">
               <button
                 class="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm
-                       text-teal-600 bg-teal-50 rounded-lg hover:bg-teal-100 transition-colors"
+                       text-teal-600 bg-teal-50 rounded-lg hover:bg-teal-100 transition-colors
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="isLoading"
                 @click="handleRunOCR"
               >
                 <ArrowPathIcon class="w-4 h-4" />
                 Повторить
               </button>
-              <button
-                v-if="props.analysis.ocr.text"
-                class="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm
-                       text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
-                @click="copyToClipboard(props.analysis.ocr.text!, 'Распознанный текст')"
-              >
-                <ClipboardDocumentIcon class="w-4 h-4" />
-                Копировать
-              </button>
+                <button
+                  class="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm
+                         text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
+                  @click="copyToClipboard(props.analysis.ocr.text!, 'Распознанный текст')"
+                >
+                  <ClipboardDocumentIcon class="w-4 h-4" />
+                  Копировать
+                </button>
+              </div>
             </div>
           </div>
 
@@ -324,7 +364,8 @@
             <p class="text-sm text-neutral-500 mb-3">Не удалось распознать текст</p>
             <button
               class="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg
-                     hover:bg-teal-700 transition-colors"
+                     hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isLoading"
               @click="handleRunOCR"
             >
               Попробовать снова
@@ -383,20 +424,11 @@
       </Disclosure>
     </div>
 
-    <!-- Run Analysis Button (if no analysis) -->
-    <div v-if="!props.analysis || props.analysis.status === 'pending'" class="p-4">
-      <button
-        class="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium
-               text-white bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg
-               hover:from-purple-700 hover:to-blue-700 transition-all
-               disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-        :disabled="isAnalyzing"
-        @click="handleRunAnalysis"
-      >
-        <SparklesIcon v-if="!isAnalyzing" class="w-5 h-5" />
-        <ArrowPathIcon v-else class="w-5 h-5 animate-spin" />
-        {{ isAnalyzing ? 'Анализируем...' : 'Запустить AI анализ' }}
-      </button>
+    <!-- Empty State (if no analysis data) -->
+    <div v-else class="p-6 text-center">
+      <SparklesIcon class="w-12 h-12 mx-auto text-neutral-300 mb-3" />
+      <p class="text-sm text-neutral-500 mb-2">AI анализ ещё не выполнен</p>
+      <p class="text-xs text-neutral-400">Нажмите кнопку выше, чтобы запустить анализ</p>
     </div>
   </div>
 </template>

@@ -530,20 +530,84 @@ class AnalyzeDocumentSerializer(serializers.Serializer):
 
     Validates document instance, AI service and analysis type.
     """
-    document_instance = serializers.PrimaryKeyRelatedField(
-        queryset=Document.objects.all(),
-        help_text="Document to analyze"
+    document_instance = serializers.IntegerField(
+        help_text="Document ID to analyze",
+        required=True
     )
     ai_service = serializers.ChoiceField(
         choices=['openai', 'claude', 'azure', 'local'],
         default='openai',
+        required=False,
         help_text="AI service to use for analysis"
     )
     analysis_type = serializers.ChoiceField(
         choices=['classification', 'extraction', 'summary', 'tagging'],
         default='classification',
+        required=False,
         help_text="Type of analysis to perform"
     )
+    
+    def validate_document_instance(self, value):
+        """Validate that document exists, is accessible, and has files."""
+        if not value:
+            raise serializers.ValidationError("Document instance is required")
+        
+        # Get request context for access control
+        request = self.context.get('request')
+        if not request or not hasattr(request, 'user') or not request.user.is_authenticated:
+            raise serializers.ValidationError("User authentication required")
+        
+        user = request.user
+        
+        # Load document with access control check
+        try:
+            # Use restricted queryset to ensure user has access
+            queryset = AccessControlList.objects.restrict_queryset(
+                permission=permission_document_view,
+                queryset=Document.objects.all(),
+                user=user
+            )
+            
+            try:
+                document = queryset.get(pk=value)
+            except Document.DoesNotExist:
+                logger.warning(
+                    f'Document {value} not found or not accessible',
+                    extra={'document_id': value, 'user_id': user.id}
+                )
+                raise serializers.ValidationError(
+                    f"Document {value} not found or you don't have access to it"
+                )
+        except PermissionDenied:
+            logger.warning(
+                f'Permission denied for document {value}',
+                extra={'document_id': value, 'user_id': user.id}
+            )
+            raise serializers.ValidationError(
+                f"Permission denied: You don't have access to document {value}"
+            )
+        except Exception as e:
+            logger.exception(
+                f'Error loading document {value}',
+                extra={'document_id': value, 'user_id': user.id, 'error': str(e)}
+            )
+            raise serializers.ValidationError(
+                f"Error loading document: {str(e)}" if settings.DEBUG else "Error loading document"
+            )
+        
+        # Check if document has files with error handling
+        try:
+            if not document.files.exists():
+                raise serializers.ValidationError("Document has no files to analyze")
+        except Exception as e:
+            logger.warning(
+                f'Error checking document files for document {document.pk}: {e}',
+                extra={'document_id': document.pk, 'user_id': user.id}
+            )
+            raise serializers.ValidationError(f"Error checking document files: {str(e)}")
+        
+        # Return document instance instead of ID
+        return document
 
 
 class BulkAnalyzeDocumentsSerializer(serializers.Serializer):
