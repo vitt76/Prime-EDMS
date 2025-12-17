@@ -7,6 +7,28 @@
       Загрузка системных папок...
     </div>
 
+    <!-- Create Folder Button (только для системных папок, в развёрнутом режиме) -->
+    <button
+      v-if="!isCollapsed && hasLocalSection"
+      type="button"
+      class="w-full flex items-center justify-center gap-2 px-3 py-2.5 
+             text-sm font-medium text-neutral-600 dark:text-neutral-300
+             bg-neutral-50 dark:bg-neutral-800
+             hover:bg-neutral-100 dark:hover:bg-neutral-700
+             border border-dashed border-neutral-300 dark:border-neutral-600
+             hover:border-primary-400 dark:hover:border-primary-500
+             hover:text-primary-600 dark:hover:text-primary-400
+             rounded-lg transition-all duration-200"
+      :disabled="folderStore.isLoading"
+      :class="{
+        'opacity-60 cursor-not-allowed': folderStore.isLoading
+      }"
+      @click.stop.prevent="showCreateModal = true"
+    >
+      <FolderPlusIcon class="w-4 h-4" />
+      <span>Создать папку</span>
+    </button>
+
     <!-- Section: Системные папки -->
     <div
       v-for="section in folderStore.allSections"
@@ -82,32 +104,6 @@
       </Transition>
     </div>
     
-    <!-- Create Folder Button (только для системных папок, в развёрнутом режиме) -->
-    <div 
-      v-if="!isCollapsed && currentSection?.type === 'local'" 
-      class="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-700"
-    >
-      <button
-        type="button"
-        class="w-full flex items-center justify-center gap-2 px-3 py-2.5 
-               text-sm font-medium text-neutral-600 dark:text-neutral-300
-               bg-neutral-50 dark:bg-neutral-800
-               hover:bg-neutral-100 dark:hover:bg-neutral-700
-               border border-dashed border-neutral-300 dark:border-neutral-600
-               hover:border-primary-400 dark:hover:border-primary-500
-               hover:text-primary-600 dark:hover:text-primary-400
-               rounded-lg transition-all duration-200"
-        :disabled="folderStore.isLoading"
-        :class="{
-          'opacity-60 cursor-not-allowed': folderStore.isLoading
-        }"
-        @click.stop.prevent="showCreateModal = true"
-      >
-        <FolderPlusIcon class="w-4 h-4" />
-        <span>Создать папку</span>
-      </button>
-    </div>
-    
     <!-- Create Folder Modal -->
     <CreateFolderModal
       :is-open="showCreateModal"
@@ -120,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch, computed } from 'vue'
 import { FolderIcon, CloudIcon } from '@heroicons/vue/24/solid'
 import { FolderPlusIcon } from '@heroicons/vue/24/outline'
 import { useFolderStore } from '@/stores/folderStore'
@@ -149,6 +145,11 @@ const notificationStore = useNotificationStore()
 const showCreateModal = ref(false)
 const currentSection = ref<FolderTreeSection | null>(null)
 const parentOptions = ref<{ id: string; label: string }[]>([])
+
+// Стабильная проверка наличия секции типа 'local'
+const hasLocalSection = computed(() => {
+  return folderStore.allSections.some(s => s.type === 'local')
+})
 
 onMounted(async () => {
   await folderStore.refreshFolders()

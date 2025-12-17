@@ -537,9 +537,6 @@
                   :class="version.is_current 
                     ? 'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' 
                     : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50'"
-                  role="button"
-                  tabindex="0"
-                  @click="handleSelectDocumentFile(version._file)"
                 >
                   <div class="flex items-start justify-between">
                     <div class="flex items-center gap-3">
@@ -559,7 +556,7 @@
                     <button
                       v-if="!version.is_current"
                       class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                      @click="handleRevertVersion(version)"
+                      @click.stop="handleRevertVersion(version)"
                     >
                       Откатить
                     </button>
@@ -569,7 +566,7 @@
             </div>
 
           <!-- Other File Types (icon fallback) -->
-          <div v-else class="flex-1 flex items-start justify-center px-4 pb-6">
+          <div v-else-if="activeTab !== 'metadata' && activeTab !== 'comments' && activeTab !== 'usage'" class="flex-1 flex items-start justify-center px-4 pb-6">
             <div class="w-full max-w-xl sticky top-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/60 shadow-sm p-5 flex flex-col gap-3">
               <div class="flex items-center gap-3">
                 <div class="w-12 h-12 rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-200">
@@ -904,6 +901,10 @@ const usage = computed((): UsageStats | undefined => {
 })
 
 const previewSrc = computed(() => resolveAssetImageUrl(asset.value))
+// When user selects a specific document file version, we override the preview src.
+const previewOverride = ref<string | null>(null)
+// Track object URL to revoke and avoid memory leaks.
+const previewOverrideObjectUrl = ref<string | null>(null)
 const previewFallback = ref<string | null>(null)
 const previewResolved = computed(() => previewOverride.value || previewFallback.value || previewSrc.value)
 const isFavorite = computed(() => {
@@ -968,6 +969,14 @@ async function loadAsset() {
             : (documentFiles.value[0]?.id ?? null)
 
         // Do NOT override preview by default; keep existing preview logic.
+        if (previewOverrideObjectUrl.value) {
+          try {
+            window.URL.revokeObjectURL(previewOverrideObjectUrl.value)
+          } catch {
+            // ignore
+          }
+          previewOverrideObjectUrl.value = null
+        }
         previewOverride.value = null
       } catch (filesErr) {
         console.warn('[AssetDetail] Failed to load document files:', filesErr)
