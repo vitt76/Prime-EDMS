@@ -534,9 +534,6 @@
                   v-for="version in versions"
                   :key="version.id"
                   class="p-3 rounded-xl border transition-colors"
-                  role="button"
-                  tabindex="0"
-                  @click="handleSelectDocumentFile((version as any)?._file)"
                   :class="version.is_current 
                     ? 'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' 
                     : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50'"
@@ -854,6 +851,11 @@ const isDocument = computed(() =>
 const isAudio = computed(() => asset.value?.mime_type?.startsWith('audio/'))
 
 const hasPreviewUrl = computed(() => !!(asset.value?.preview_url || asset.value?.thumbnail_url))
+// When user selects a specific document file version, we use these refs
+// to override the main preview image with that version's first page.
+const previewOverride = ref<string | null>(null)
+const previewOverrideObjectUrl = ref<string | null>(null)
+
 // IMPORTANT: do not break the current preview pipeline.
 // If a user selects a specific document file version, we set `previewOverride`,
 // which should force the preview area to render even for non-image MIME types.
@@ -982,6 +984,7 @@ async function loadAsset() {
         selectedDocumentFileId.value = null
       }
     }
+
   } catch (e: any) {
     console.error('[AssetDetail] Error loading asset:', e)
     error.value = e.message || 'Не удалось загрузить актив'

@@ -20,6 +20,7 @@ export interface CropSettings {
   width: number
   height: number
   aspectRatio: AspectRatio
+  enabled: boolean
 }
 
 export interface ResizeSettings {
@@ -27,6 +28,7 @@ export interface ResizeSettings {
   height: number
   maintainAspect: boolean
   dpi: number
+  enabled: boolean
 }
 
 export interface FilterSettings {
@@ -50,6 +52,7 @@ export interface WatermarkSettings {
   fontFamily: string
   fontSize: number
   color: string
+  assetId: number | null
   imageUrl: string | null
   imageFile: File | null
   position: WatermarkPosition
@@ -85,6 +88,7 @@ const DEFAULT_WATERMARK: WatermarkSettings = {
   fontFamily: 'Arial',
   fontSize: 24,
   color: '#ffffff',
+  assetId: null,
   imageUrl: null,
   imageFile: null,
   position: 'bottom-right',
@@ -115,13 +119,15 @@ function createDefaultState(width = 1920, height = 1080): EditorState {
       y: 0,
       width,
       height,
-      aspectRatio: 'free'
+      aspectRatio: 'free',
+      enabled: false
     },
     resize: {
       width,
       height,
       maintainAspect: true,
-      dpi: 72
+      dpi: 72,
+      enabled: false
     },
     format: 'jpg',
     quality: 85,
@@ -208,7 +214,7 @@ export const useEditorStore = defineStore('editor', () => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
   })
-  
+
   // CSS Transform string for preview
   const previewTransform = computed(() => {
     const { transform, filters } = currentState.value
@@ -305,18 +311,64 @@ export const useEditorStore = defineStore('editor', () => {
   
   // Transform actions
   function rotateLeft() {
+    console.log('[EditorStore] rotateLeft before', currentState.value.transform)
+    const oldRotation = currentState.value.transform.rotation
     currentState.value.transform.rotation = (currentState.value.transform.rotation - 90 + 360) % 360
     if (currentState.value.transform.rotation > 180) {
       currentState.value.transform.rotation -= 360
     }
+    // При повороте на 90/270 градусов меняем местами width/height в resize,
+    // но только если resize равен исходным размерам (пользователь не менял вручную)
+    const newRotation = currentState.value.transform.rotation
+    const wasQuarterTurn = [90, 270].includes(((oldRotation % 360) + 360) % 360)
+    const isQuarterTurn = [90, 270].includes(((newRotation % 360) + 360) % 360)
+    if (wasQuarterTurn !== isQuarterTurn) {
+      const origW = originalDimensions.value.width
+      const origH = originalDimensions.value.height
+      const resize = currentState.value.resize
+      // Меняем местами только если resize равен исходным размерам
+      if (resize.width === origW && resize.height === origH) {
+        // Было исходное, меняем местами
+        currentState.value.resize.width = origH
+        currentState.value.resize.height = origW
+      } else if (resize.width === origH && resize.height === origW) {
+        // Было уже поменяно местами, возвращаем обратно
+        currentState.value.resize.width = origW
+        currentState.value.resize.height = origH
+      }
+    }
+    console.log('[EditorStore] rotateLeft after', currentState.value.transform)
     pushHistory('Поворот влево')
   }
   
   function rotateRight() {
+    console.log('[EditorStore] rotateRight before', currentState.value.transform)
+    const oldRotation = currentState.value.transform.rotation
     currentState.value.transform.rotation = (currentState.value.transform.rotation + 90) % 360
     if (currentState.value.transform.rotation > 180) {
       currentState.value.transform.rotation -= 360
     }
+    // При повороте на 90/270 градусов меняем местами width/height в resize,
+    // но только если resize равен исходным размерам (пользователь не менял вручную)
+    const newRotation = currentState.value.transform.rotation
+    const wasQuarterTurn = [90, 270].includes(((oldRotation % 360) + 360) % 360)
+    const isQuarterTurn = [90, 270].includes(((newRotation % 360) + 360) % 360)
+    if (wasQuarterTurn !== isQuarterTurn) {
+      const origW = originalDimensions.value.width
+      const origH = originalDimensions.value.height
+      const resize = currentState.value.resize
+      // Меняем местами только если resize равен исходным размерам
+      if (resize.width === origW && resize.height === origH) {
+        // Было исходное, меняем местами
+        currentState.value.resize.width = origH
+        currentState.value.resize.height = origW
+      } else if (resize.width === origH && resize.height === origW) {
+        // Было уже поменяно местами, возвращаем обратно
+        currentState.value.resize.width = origW
+        currentState.value.resize.height = origH
+      }
+    }
+    console.log('[EditorStore] rotateRight after', currentState.value.transform)
     pushHistory('Поворот вправо')
   }
   
@@ -337,7 +389,11 @@ export const useEditorStore = defineStore('editor', () => {
   
   // Crop actions
   function setCrop(crop: Partial<CropSettings>) {
-    currentState.value.crop = { ...currentState.value.crop, ...crop }
+    currentState.value.crop = {
+      ...currentState.value.crop,
+      ...crop,
+      enabled: true
+    }
   }
   
   function applyCrop() {
@@ -346,10 +402,15 @@ export const useEditorStore = defineStore('editor', () => {
   
   // Resize actions
   function setResize(resize: Partial<ResizeSettings>) {
-    currentState.value.resize = { ...currentState.value.resize, ...resize }
+    currentState.value.resize = {
+      ...currentState.value.resize,
+      ...resize,
+      enabled: true
+    }
   }
   
   function applyResize() {
+    currentState.value.resize.enabled = true
     pushHistory(`Размер ${currentState.value.resize.width}×${currentState.value.resize.height}`)
   }
   

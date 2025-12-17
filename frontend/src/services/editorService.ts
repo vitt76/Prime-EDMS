@@ -8,6 +8,20 @@ interface SaveEditedImageResponse {
   version?: any
 }
 
+export interface ImageEditorSessionResponse {
+  session_id: number
+  document_id: number
+  document_file_id: number
+  original: {
+    width: number
+    height: number
+    file_size: number
+    mimetype: string
+    filename: string
+  }
+  state: any
+}
+
 export async function saveEditedImage(
   documentId: number,
   blob: Blob,
@@ -32,6 +46,71 @@ export async function saveEditedImage(
   )
 
   return data
+}
+
+export async function createImageEditorSession(
+  documentFileId: number
+): Promise<ImageEditorSessionResponse> {
+  const data = await apiService.post<ImageEditorSessionResponse>(
+    '/api/v4/headless/image-editor/sessions/',
+    { document_file_id: documentFileId }
+  )
+  return data
+}
+
+export async function updateImageEditorSessionState(
+  sessionId: number,
+  state: any
+): Promise<{ success: boolean; session_id: number; state: any }> {
+  const data = await apiService.patch(
+    `/api/v4/headless/image-editor/sessions/${sessionId}/`,
+    { state }
+  )
+  return data as any
+}
+
+export async function fetchImageEditorPreviewBlob(
+  sessionId: number,
+  options?: { maxW?: number; maxH?: number }
+): Promise<Blob> {
+  const params: any = {}
+  if (options?.maxW) params.max_w = options.maxW
+  if (options?.maxH) params.max_h = options.maxH
+
+  const resp: any = await apiService.get(
+    `/api/v4/headless/image-editor/sessions/${sessionId}/preview/`,
+    { params, responseType: 'blob' } as any,
+    false
+  )
+
+  // apiService returns data; for responseType blob, axios returns Blob directly.
+  return resp as Blob
+}
+
+export async function commitImageEditorSession(
+  sessionId: number,
+  options?: { comment?: string; actionId?: number; state?: any }
+): Promise<SaveEditedImageResponse> {
+  const payload: any = {
+    comment: options?.comment || 'Edited via Image Editor'
+  }
+  if (options?.actionId) payload.action_id = options.actionId
+  if (options?.state) {
+    // Send full editor state so backend can apply the latest transformations
+    // even if a previous PATCH has not yet been persisted.
+    payload.state = options.state
+  }
+
+  const data = await apiService.post<SaveEditedImageResponse>(
+    `/api/v4/headless/image-editor/sessions/${sessionId}/commit/`,
+    payload
+  )
+  return data
+}
+
+export async function listWatermarks(): Promise<Array<{ id: number; label: string }>> {
+  const data: any = await apiService.get('/api/v4/headless/image-editor/watermarks/')
+  return Array.isArray(data?.results) ? data.results : []
 }
 
 export async function createAssetFromImage(
@@ -106,6 +185,11 @@ export async function createAssetFromImage(
 
 export default {
   saveEditedImage,
+  createImageEditorSession,
+  updateImageEditorSessionState,
+  fetchImageEditorPreviewBlob,
+  commitImageEditorSession,
+  listWatermarks,
   createAssetFromImage
 }
 
