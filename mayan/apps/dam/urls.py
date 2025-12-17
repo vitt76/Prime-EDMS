@@ -11,7 +11,8 @@ from .api_views import (
     DAMDocumentDetailView,
     DAMDocumentListView,
     DAMDashboardStatsView,
-    DocumentProcessingStatusView
+    DocumentProcessingStatusView,
+    DocumentOCRExtractView
 )
 from .views import (
     DAMDashboardView,
@@ -38,6 +39,8 @@ api_urlpatterns = [
     path('dashboard-stats/', DAMDashboardStatsView.as_view(), name='dashboard-stats'),
     # Phase B4: Processing Status API
     path('documents/<int:pk>/processing_status/', DocumentProcessingStatusView.as_view(), name='processing-status'),
+    # OCR extraction endpoint
+    path('documents/<int:document_id>/ocr/extract/', DocumentOCRExtractView.as_view(), name='document-ocr-extract'),
 ]
 
 # Alias for REST API auto-discovery

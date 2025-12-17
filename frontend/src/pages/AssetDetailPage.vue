@@ -329,8 +329,14 @@
           <!-- AI Insights Widget -->
           <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0 max-h-[400px] overflow-y-auto">
             <AIInsightsWidget 
-              :asset-id="assetId"
-              @tags-updated="handleTagsUpdated"
+              :analysis="aiAnalysis"
+              :is-loading="isLoadingAIAnalysis"
+              :error="aiAnalysisError"
+              @run-analysis="handleRunAIAnalysis"
+              @run-ocr="handleRunOCR"
+              @regenerate-seo="handleRegenerateSEO"
+              @tag-accepted="handleTagAccepted"
+              @tag-rejected="handleTagRejected"
               @analysis-complete="handleAnalysisComplete"
             />
           </div>
@@ -840,12 +846,14 @@ import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useAuthStore } from '@/stores/authStore'
 import { apiService } from '@/services/apiService'
 import { commentService } from '@/services/commentService'
+import { aiAnalysisService } from '@/services/aiAnalysisService'
 import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import MetadataEditor from '@/components/asset/MetadataEditor.vue'
 import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
 import AIInsightsWidget from '@/components/asset/AIInsightsWidget.vue'
 import MediaEditorModal from '@/components/asset/MediaEditorModal.vue'
-import type { Asset, Comment, Version, ExtendedAsset, UsageStats, AIAnalysis } from '@/types/api'
+import type { Asset, Comment, Version, ExtendedAsset, UsageStats } from '@/types/api'
+import type { AIAnalysis } from '@/mocks/ai'
 import type { WorkflowState } from '@/mocks/workflows'
 
 const route = useRoute()
@@ -868,6 +876,9 @@ const comments = ref<Comment[]>([])
 const isLoadingComments = ref(false)
 const editingCommentId = ref<number | null>(null)
 const editingCommentText = ref('')
+const aiAnalysis = ref<AIAnalysis | null>(null)
+const isLoadingAIAnalysis = ref(false)
+const aiAnalysisError = ref<string | null>(null)
 const collapsedSections = ref({
   exif: false,
   tags: false,
@@ -1400,13 +1411,195 @@ function handleTagsUpdated(tags: AITag[]) {
   }
 }
 
+// Load AI analysis from API
+async function loadAIAnalysis() {
+  if (!asset.value?.id) return
+  
+  isLoadingAIAnalysis.value = true
+  aiAnalysisError.value = null
+  
+  try {
+    const documentId = Number(asset.value.id)
+    if (!Number.isFinite(documentId) || documentId <= 0) {
+      console.warn('[AssetDetail] Invalid document ID for AI analysis:', asset.value.id)
+      return
+    }
+    
+    const result = await aiAnalysisService.getAIAnalysis(documentId)
+    if (import.meta.env.DEV) {
+      console.log('[AssetDetail] AI analysis loaded:', result)
+    }
+    aiAnalysis.value = result
+  } catch (err: any) {
+    console.error('[AssetDetail] Failed to load AI analysis:', err)
+    if (import.meta.env.DEV) {
+      console.error('[AssetDetail] Error details:', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message
+      })
+    }
+    
+    const errorMessage = err?.response?.status === 403
+      ? 'Нет прав доступа для просмотра AI анализа'
+      : err?.response?.status === 404
+      ? 'AI анализ не найден'
+      : 'Не удалось загрузить AI анализ'
+    
+    aiAnalysisError.value = errorMessage
+    
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка загрузки',
+      message: errorMessage
+    })
+    
+    aiAnalysis.value = null
+  } finally {
+    isLoadingAIAnalysis.value = false
+  }
+}
+
+// Handle AI analysis actions
+async function handleRunAIAnalysis() {
+  if (!asset.value?.id) return
+  
+  const documentId = Number(asset.value.id)
+  if (!Number.isFinite(documentId) || documentId <= 0) {
+    return
+  }
+  
+  try {
+    await aiAnalysisService.runAIAnalysis(documentId)
+    
+    notificationStore.addNotification({
+      type: 'info',
+      title: 'AI анализ запущен',
+      message: 'Анализ выполняется, обновление данных через несколько секунд...'
+    })
+    
+    // Reload after a delay
+    setTimeout(() => {
+      loadAIAnalysis()
+    }, 3000)
+  } catch (err: any) {
+    const errorMessage = err?.response?.data?.detail || 
+                        err?.response?.data?.error || 
+                        err?.message || 
+                        'Не удалось запустить AI анализ'
+    
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: errorMessage
+    })
+  }
+}
+
+async function handleRunOCR() {
+  if (!asset.value?.id) return
+  
+  const documentId = Number(asset.value.id)
+  if (!Number.isFinite(documentId) || documentId <= 0) {
+    return
+  }
+  
+  try {
+    await aiAnalysisService.runOCR(documentId)
+    
+    notificationStore.addNotification({
+      type: 'info',
+      title: 'OCR запущен',
+      message: 'Распознавание текста выполняется, обновление данных через несколько секунд...'
+    })
+    
+    // Reload after a delay
+    setTimeout(() => {
+      loadAIAnalysis()
+    }, 3000)
+  } catch (err: any) {
+    const errorMessage = err?.response?.data?.detail || 
+                        err?.response?.data?.error || 
+                        err?.message || 
+                        'Не удалось запустить OCR'
+    
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: errorMessage
+    })
+  }
+}
+
+async function handleRegenerateSEO() {
+  if (!asset.value?.id) return
+  
+  const documentId = Number(asset.value.id)
+  if (!Number.isFinite(documentId) || documentId <= 0) {
+    return
+  }
+  
+  try {
+    await aiAnalysisService.regenerateSEO(documentId)
+    
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'SEO описание обновлено',
+      message: 'Новое SEO описание сгенерировано'
+    })
+    
+    // Reload to get updated data
+    await loadAIAnalysis()
+  } catch (err: any) {
+    const errorMessage = err?.response?.data?.detail || 
+                        err?.response?.data?.error || 
+                        err?.message || 
+                        'Не удалось пересгенерировать SEO описание'
+    
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: errorMessage
+    })
+  }
+}
+
+function handleTagAccepted(tagId: string) {
+  if (!asset.value?.id) return
+  
+  aiAnalysisService.acceptTag(Number(asset.value.id), tagId)
+    .then(() => {
+      // Reload to get updated data
+      loadAIAnalysis()
+    })
+    .catch((err) => {
+      console.error('[AssetDetail] Failed to accept tag:', err)
+    })
+}
+
+function handleTagRejected(tagId: string) {
+  if (!asset.value?.id) return
+  
+  aiAnalysisService.rejectTag(Number(asset.value.id), tagId)
+    .then(() => {
+      // Reload to get updated data
+      loadAIAnalysis()
+    })
+    .catch((err) => {
+      console.error('[AssetDetail] Failed to reject tag:', err)
+    })
+}
+
 function handleAnalysisComplete(analysis: AIAnalysis) {
   console.log('AI Analysis complete:', analysis)
   notificationStore.addNotification({
     type: 'success',
     title: 'AI анализ завершён',
-    message: `Найдено ${analysis.tags.length} тегов`
+    message: `Найдено ${analysis.tags?.length || 0} тегов`
   })
+  
+  // Reload to get updated data
+  loadAIAnalysis()
 }
 
 async function handleSaveAsVersion(_assetId: number, fileId: number) {
@@ -1768,6 +1961,14 @@ watch(() => activeTab.value, (tab) => {
     loadComments()
   }
 })
+
+// Load AI analysis when asset is loaded
+watch(() => asset.value?.id, (assetId) => {
+  if (assetId) {
+    // Load AI analysis when asset is available
+    loadAIAnalysis()
+  }
+}, { immediate: true })
 
 // Load on mount
 onMounted(() => {

@@ -570,7 +570,9 @@ class DAMDocumentDetailView(generics.RetrieveAPIView):
     lookup_url_kwarg = 'document_id'  # URL uses document_id, not pk
 
     def get_queryset(self):
-        queryset = Document.objects.select_related('document_type').prefetch_related(
+        queryset = Document.objects.select_related(
+            'document_type', 'ai_analysis'
+        ).prefetch_related(
             'files', 'metadata__metadata_type', 'versions', 'tags'
         )
 
@@ -744,6 +746,92 @@ class DocumentProcessingStatusView(generics.RetrieveAPIView):
             return False
         except Exception:
             return False
+
+
+class DocumentOCRExtractView(mayan_generics.GenericAPIView):
+    """
+    API endpoint for extracting OCR text from a document.
+    
+    POST /api/v4/documents/{document_id}/ocr/extract/
+    """
+    permission_classes = (IsAuthenticated,)
+    renderer_classes = (JSONRenderer,)
+    
+    def post(self, request, document_id):
+        """
+        Start OCR extraction for a document.
+        """
+        try:
+            document = Document.objects.get(pk=document_id)
+        except Document.DoesNotExist:
+            return Response(
+                {'error': 'Document not found', 'error_code': 'NOT_FOUND'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check permissions
+        try:
+            AccessControlList.objects.check_access(
+                obj=document,
+                permissions=(permission_document_view,),
+                user=request.user
+            )
+        except PermissionDenied:
+            return Response(
+                {'error': 'Access denied', 'error_code': 'PERMISSION_DENIED'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get latest version
+        latest_version = document.versions.order_by('-timestamp').first()
+        if not latest_version:
+            return Response(
+                {'error': 'Document has no versions', 'error_code': 'NO_VERSIONS'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Start OCR task
+        try:
+            from mayan.apps.ocr.tasks import task_document_version_ocr_process
+            
+            task = task_document_version_ocr_process.delay(
+                document_version_id=latest_version.pk,
+                user_id=request.user.pk if request.user.is_authenticated else None
+            )
+            
+            logger.info(
+                'OCR extraction requested',
+                extra={
+                    'user_id': request.user.id,
+                    'document_id': document_id,
+                    'version_id': latest_version.pk,
+                    'task_id': task.id
+                }
+            )
+            
+            return Response(
+                {
+                    'success': True,
+                    'task_id': task.id,
+                    'status': 'processing',
+                    'document_id': document_id,
+                    'version_id': latest_version.pk
+                },
+                status=status.HTTP_202_ACCEPTED
+            )
+        except Exception as e:
+            logger.error(
+                f'Failed to start OCR extraction: {e}',
+                extra={'user_id': request.user.id, 'document_id': document_id}
+            )
+            return Response(
+                {
+                    'error': 'Failed to start OCR extraction',
+                    'error_code': 'OCR_START_FAILED',
+                    'detail': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class DAMDashboardStatsView(mayan_generics.GenericAPIView):

@@ -8,10 +8,10 @@
           AI Анализ
         </h3>
         <span 
-          v-if="analysis?.status === 'completed'"
+          v-if="props.analysis?.status === 'completed' && props.analysis.analyzedAt"
           class="text-xs text-neutral-500"
         >
-          {{ formatRelativeTime(analysis.analyzedAt) }}
+          {{ formatRelativeTime(props.analysis.analyzedAt) }}
         </span>
       </div>
     </div>
@@ -22,8 +22,14 @@
       <p class="text-sm text-neutral-500">Анализируем контент...</p>
     </div>
 
+    <!-- Error State -->
+    <div v-else-if="error" class="p-6 flex flex-col items-center justify-center gap-3">
+      <ExclamationCircleIcon class="w-8 h-8 text-red-500" />
+      <p class="text-sm text-red-600">{{ error }}</p>
+    </div>
+
     <!-- Content -->
-    <div v-else-if="analysis" class="divide-y divide-neutral-100">
+    <div v-else-if="props.analysis" class="divide-y divide-neutral-100">
       <!-- Auto-Tagging Section -->
       <Disclosure v-slot="{ open }" default-open>
         <DisclosureButton
@@ -47,6 +53,7 @@
             <button
               class="mt-2 text-sm text-purple-600 hover:text-purple-700"
               @click="regenerateTags"
+              :disabled="isAnalyzing"
             >
               Сгенерировать теги
             </button>
@@ -141,7 +148,7 @@
         </DisclosureButton>
         
         <DisclosurePanel class="px-4 pb-4">
-          <div v-if="!analysis.seo" class="text-center py-4">
+          <div v-if="!props.analysis?.seo" class="text-center py-4">
             <p class="text-sm text-neutral-500">Описание не сгенерировано</p>
             <button
               class="mt-2 text-sm text-purple-600 hover:text-purple-700"
@@ -152,13 +159,13 @@
             </button>
           </div>
 
-          <div v-else class="space-y-4">
+          <div v-else-if="props.analysis?.seo" class="space-y-4">
             <!-- Alt Text -->
             <div>
               <label class="block text-xs font-medium text-neutral-500 mb-1">Alt-текст</label>
               <div class="relative">
                 <input
-                  :value="analysis.seo.altText"
+                  :value="props.analysis.seo.altText"
                   class="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg
                          focus:ring-2 focus:ring-purple-500 focus:border-purple-500 pr-8"
                   readonly
@@ -166,7 +173,7 @@
                 <button
                   class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600"
                   title="Копировать"
-                  @click="copyToClipboard(analysis.seo.altText, 'Alt-текст')"
+                  @click="copyToClipboard(props.analysis.seo.altText, 'Alt-текст')"
                 >
                   <ClipboardDocumentIcon class="w-4 h-4" />
                 </button>
@@ -178,7 +185,7 @@
               <label class="block text-xs font-medium text-neutral-500 mb-1">Описание</label>
               <div class="relative">
                 <textarea
-                  :value="analysis.seo.description"
+                  :value="props.analysis.seo.description"
                   rows="3"
                   class="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg
                          focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none pr-8"
@@ -187,7 +194,7 @@
                 <button
                   class="absolute right-2 top-2 p-1 text-neutral-400 hover:text-neutral-600"
                   title="Копировать"
-                  @click="copyToClipboard(analysis.seo.description, 'Описание')"
+                  @click="copyToClipboard(props.analysis.seo.description, 'Описание')"
                 >
                   <ClipboardDocumentIcon class="w-4 h-4" />
                 </button>
@@ -199,7 +206,7 @@
               <label class="block text-xs font-medium text-neutral-500 mb-1">Ключевые слова</label>
               <div class="flex flex-wrap gap-1">
                 <span
-                  v-for="keyword in analysis.seo.keywords"
+                  v-for="keyword in props.analysis.seo.keywords"
                   :key="keyword"
                   class="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-700"
                 >
@@ -233,10 +240,10 @@
             <DocumentMagnifyingGlassIcon class="w-4 h-4 text-teal-500" />
             <span class="text-sm font-medium text-neutral-900">OCR (Распознавание текста)</span>
             <span 
-              v-if="analysis.ocr.status === 'completed'"
+              v-if="props.analysis?.ocr?.status === 'completed' && props.analysis.ocr.wordCount"
               class="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-teal-100 text-teal-700"
             >
-              {{ analysis.ocr.wordCount }} слов
+              {{ props.analysis.ocr.wordCount }} слов
             </span>
           </div>
           <ChevronDownIcon 
@@ -246,7 +253,7 @@
         
         <DisclosurePanel class="px-4 pb-4">
           <!-- Not Run State -->
-          <div v-if="analysis.ocr.status === 'not_run'" class="text-center py-4">
+          <div v-if="!props.analysis?.ocr || props.analysis.ocr.status === 'not_run'" class="text-center py-4">
             <DocumentMagnifyingGlassIcon class="w-10 h-10 mx-auto text-neutral-300 mb-3" />
             <p class="text-sm text-neutral-500 mb-3">Текст ещё не распознан</p>
             <button
@@ -259,31 +266,31 @@
           </div>
 
           <!-- Processing State -->
-          <div v-else-if="analysis.ocr.status === 'processing'" class="text-center py-6">
+          <div v-else-if="props.analysis.ocr.status === 'processing'" class="text-center py-6">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-3"></div>
             <p class="text-sm text-neutral-500">Распознавание текста...</p>
             <p class="text-xs text-neutral-400 mt-1">Это может занять несколько секунд</p>
           </div>
 
           <!-- Completed State -->
-          <div v-else-if="analysis.ocr.status === 'completed'" class="space-y-3">
+          <div v-else-if="props.analysis.ocr.status === 'completed'" class="space-y-3">
             <!-- Stats -->
             <div class="flex items-center justify-between text-xs text-neutral-500">
-              <span>Точность: {{ analysis.ocr.confidence }}%</span>
-              <span>{{ analysis.ocr.wordCount }} слов</span>
+              <span v-if="props.analysis.ocr.confidence">Точность: {{ props.analysis.ocr.confidence }}%</span>
+              <span v-if="props.analysis.ocr.wordCount">{{ props.analysis.ocr.wordCount }} слов</span>
             </div>
 
             <!-- Text Result -->
-            <div class="relative">
+            <div v-if="props.analysis.ocr.text" class="relative">
               <pre 
                 class="p-3 bg-neutral-50 rounded-lg text-xs text-neutral-700 
                        overflow-auto max-h-[200px] whitespace-pre-wrap font-mono"
-              >{{ analysis.ocr.text }}</pre>
+              >{{ props.analysis.ocr.text }}</pre>
               <button
                 class="absolute top-2 right-2 p-1.5 bg-white rounded shadow-sm
                        text-neutral-500 hover:text-neutral-700 transition-colors"
                 title="Копировать текст"
-                @click="copyToClipboard(analysis.ocr.text!, 'Распознанный текст')"
+                @click="copyToClipboard(props.analysis.ocr.text!, 'Распознанный текст')"
               >
                 <ClipboardDocumentIcon class="w-4 h-4" />
               </button>
@@ -300,9 +307,10 @@
                 Повторить
               </button>
               <button
+                v-if="props.analysis.ocr.text"
                 class="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm
                        text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
-                @click="copyToClipboard(analysis.ocr.text!, 'Распознанный текст')"
+                @click="copyToClipboard(props.analysis.ocr.text!, 'Распознанный текст')"
               >
                 <ClipboardDocumentIcon class="w-4 h-4" />
                 Копировать
@@ -311,7 +319,7 @@
           </div>
 
           <!-- Failed State -->
-          <div v-else-if="analysis.ocr.status === 'failed'" class="text-center py-4">
+          <div v-else-if="props.analysis.ocr.status === 'failed'" class="text-center py-4">
             <ExclamationCircleIcon class="w-10 h-10 mx-auto text-red-300 mb-3" />
             <p class="text-sm text-neutral-500 mb-3">Не удалось распознать текст</p>
             <button
@@ -326,7 +334,7 @@
       </Disclosure>
 
       <!-- Color Palette (if available) -->
-      <Disclosure v-if="analysis.colorPalette?.length" v-slot="{ open }">
+      <Disclosure v-if="props.analysis?.colorPalette?.length" v-slot="{ open }">
         <DisclosureButton
           class="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-neutral-50 transition-colors"
         >
@@ -342,7 +350,7 @@
         <DisclosurePanel class="px-4 pb-4">
           <div class="space-y-2">
             <div
-              v-for="color in analysis.colorPalette"
+              v-for="color in props.analysis.colorPalette"
               :key="color.hex"
               class="flex items-center gap-3"
             >
@@ -376,7 +384,7 @@
     </div>
 
     <!-- Run Analysis Button (if no analysis) -->
-    <div v-if="!analysis || analysis.status === 'pending'" class="p-4">
+    <div v-if="!props.analysis || props.analysis.status === 'pending'" class="p-4">
       <button
         class="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium
                text-white bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg
@@ -394,7 +402,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 import {
   SparklesIcon,
@@ -410,53 +418,42 @@ import {
   ExclamationCircleIcon
 } from '@heroicons/vue/24/outline'
 import { useNotificationStore } from '@/stores/notificationStore'
-import {
-  getAssetAIAnalysis,
-  runAIAnalysis,
-  runOCR,
-  regenerateSEO,
-  setTagStatus,
-  type AIAnalysis,
-  type AITag
-} from '@/mocks/ai'
+import type { AIAnalysis, AITag } from '@/mocks/ai'
 
 interface Props {
-  assetId: number
+  analysis: AIAnalysis | null
+  isLoading?: boolean
+  error?: string | null
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  isLoading: false,
+  error: null
+})
 
 const emit = defineEmits<{
-  tagsUpdated: [tags: AITag[]]
+  runAnalysis: []
+  runOcr: []
+  regenerateSeo: []
+  tagAccepted: [tagId: string]
+  tagRejected: [tagId: string]
   analysisComplete: [analysis: AIAnalysis]
 }>()
 
 const notificationStore = useNotificationStore()
 
 // State
-const isLoading = ref(true)
 const isAnalyzing = ref(false)
 const isRegeneratingSEO = ref(false)
-const analysis = ref<AIAnalysis | null>(null)
 
 // Computed
 const pendingTags = computed(() => 
-  analysis.value?.tags.filter(t => !t.accepted && !t.rejected) || []
+  props.analysis?.tags?.filter(t => !t.accepted && !t.rejected) || []
 )
 
 const acceptedTags = computed(() => 
-  analysis.value?.tags.filter(t => t.accepted) || []
+  props.analysis?.tags?.filter(t => t.accepted) || []
 )
-
-// Methods
-function loadAnalysis() {
-  isLoading.value = true
-  
-  setTimeout(() => {
-    analysis.value = getAssetAIAnalysis(props.assetId) || null
-    isLoading.value = false
-  }, 300)
-}
 
 function getConfidenceClass(confidence: number): string {
   if (confidence >= 90) return 'bg-green-100 text-green-700'
@@ -483,99 +480,39 @@ function formatRelativeTime(dateString: string | null): string {
   return date.toLocaleDateString('ru-RU')
 }
 
-async function handleRunAnalysis() {
+function handleRunAnalysis() {
   isAnalyzing.value = true
-  
-  try {
-    const result = await runAIAnalysis(props.assetId)
-    analysis.value = result
-    
-    notificationStore.addNotification({
-      type: 'success',
-      title: 'AI анализ завершён',
-      message: `Найдено ${result.tags.length} тегов`
-    })
-    
-    emit('analysisComplete', result)
-  } catch (error) {
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка анализа',
-      message: 'Не удалось выполнить AI анализ'
-    })
-  } finally {
+  emit('runAnalysis')
+  // Parent will handle the actual API call and reload
+  setTimeout(() => {
     isAnalyzing.value = false
-  }
+  }, 1000)
 }
 
-async function handleRunOCR() {
-  if (!analysis.value) return
-  
-  analysis.value.ocr.status = 'processing'
-  
-  try {
-    const result = await runOCR(props.assetId)
-    analysis.value.ocr = result
-    
-    notificationStore.addNotification({
-      type: 'success',
-      title: 'Текст распознан',
-      message: `Найдено ${result.wordCount} слов`
-    })
-  } catch (error) {
-    analysis.value.ocr.status = 'failed'
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка OCR',
-      message: 'Не удалось распознать текст'
-    })
-  }
+function handleRunOCR() {
+  if (!props.analysis) return
+  emit('runOcr')
+  // Parent will handle the actual API call and reload
 }
 
-async function handleRegenerateSEO() {
-  if (!analysis.value) return
-  
+function handleRegenerateSEO() {
+  if (!props.analysis) return
   isRegeneratingSEO.value = true
-  
-  try {
-    const result = await regenerateSEO(props.assetId)
-    analysis.value.seo = result
-    
-    notificationStore.addNotification({
-      type: 'success',
-      title: 'Описание обновлено',
-      message: 'Новое SEO описание сгенерировано'
-    })
-  } catch (error) {
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка',
-      message: 'Не удалось сгенерировать описание'
-    })
-  } finally {
+  emit('regenerateSeo')
+  // Parent will handle the actual API call and reload
+  setTimeout(() => {
     isRegeneratingSEO.value = false
-  }
+  }, 1000)
 }
 
 function acceptTag(tagId: string) {
-  const tag = setTagStatus(props.assetId, tagId, 'accepted')
-  if (tag && analysis.value) {
-    const idx = analysis.value.tags.findIndex(t => t.id === tagId)
-    if (idx !== -1) {
-      analysis.value.tags[idx] = tag
-    }
-    emit('tagsUpdated', acceptedTags.value)
-  }
+  emit('tagAccepted', tagId)
+  // Parent will handle the actual API call and reload
 }
 
 function rejectTag(tagId: string) {
-  const tag = setTagStatus(props.assetId, tagId, 'rejected')
-  if (tag && analysis.value) {
-    const idx = analysis.value.tags.findIndex(t => t.id === tagId)
-    if (idx !== -1) {
-      analysis.value.tags[idx] = tag
-    }
-  }
+  emit('tagRejected', tagId)
+  // Parent will handle the actual API call and reload
 }
 
 function acceptAllTags() {
@@ -598,8 +535,8 @@ function rejectAllTags() {
   })
 }
 
-async function regenerateTags() {
-  await handleRunAnalysis()
+function regenerateTags() {
+  handleRunAnalysis()
 }
 
 async function copyToClipboard(text: string, label: string) {
@@ -619,13 +556,6 @@ async function copyToClipboard(text: string, label: string) {
   }
 }
 
-// Lifecycle
-onMounted(() => {
-  loadAnalysis()
-})
-
-watch(() => props.assetId, () => {
-  loadAnalysis()
-})
+// No lifecycle hooks needed - data comes from props
 </script>
 

@@ -28,6 +28,8 @@ class DocumentAIAnalysisSerializer(serializers.ModelSerializer):
     """
     document_title = serializers.CharField(source='document.label', read_only=True)
     document_filename = serializers.SerializerMethodField()
+    ocr_text = serializers.SerializerMethodField()
+    ocr_status = serializers.SerializerMethodField()
 
     class Meta:
         model = DocumentAIAnalysis
@@ -36,7 +38,8 @@ class DocumentAIAnalysisSerializer(serializers.ModelSerializer):
             'ai_description', 'ai_tags', 'dominant_colors', 'alt_text',
             'categories', 'language', 'people', 'locations',
             'copyright_notice', 'usage_rights', 'rights_expiry',
-            'ai_provider', 'analysis_status', 'created', 'updated', 'analysis_completed'
+            'ai_provider', 'analysis_status', 'created', 'updated', 'analysis_completed',
+            'ocr_text', 'ocr_status'
         ]
         read_only_fields = ['id', 'created', 'updated', 'analysis_completed']
 
@@ -44,6 +47,128 @@ class DocumentAIAnalysisSerializer(serializers.ModelSerializer):
         """Get the filename of the latest document file."""
         latest_file = obj.document.files.order_by('-timestamp').first()
         return latest_file.filename if latest_file else None
+
+    def get_ocr_text(self, obj):
+        """Get OCR text from all document version pages."""
+        try:
+            from mayan.apps.ocr.models import DocumentVersionPageOCRContent
+            
+            # Get latest version
+            latest_version = obj.document.versions.order_by('-timestamp').first()
+            if not latest_version:
+                return None
+            
+            # Get all pages with OCR content
+            ocr_texts = []
+            for page in latest_version.version_pages.all():
+                try:
+                    ocr_content = page.ocr_content
+                    if ocr_content and ocr_content.content:
+                        ocr_texts.append(ocr_content.content)
+                except DocumentVersionPageOCRContent.DoesNotExist:
+                    continue
+            
+            if ocr_texts:
+                return '\n\n'.join(ocr_texts)
+            return None
+        except Exception as e:
+            logger.warning(f"Error getting OCR text: {e}")
+            return None
+
+    def get_ocr_status(self, obj):
+        """Determine OCR status for the document."""
+        try:
+            from mayan.apps.ocr.models import DocumentVersionPageOCRContent
+            
+            latest_version = obj.document.versions.order_by('-timestamp').first()
+            if not latest_version:
+                return 'not_run'
+            
+            # Check if any page has OCR content
+            has_ocr = False
+            for page in latest_version.version_pages.all():
+                try:
+                    ocr_content = page.ocr_content
+                    if ocr_content and ocr_content.content:
+                        has_ocr = True
+                        break
+                except DocumentVersionPageOCRContent.DoesNotExist:
+                    continue
+            
+            return 'completed' if has_ocr else 'not_run'
+        except Exception as e:
+            logger.warning(f"Error getting OCR status: {e}")
+            return 'not_run'
+
+
+class DocumentAIAnalysisFrontendSerializer(DocumentAIAnalysisSerializer):
+    """
+    Extended serializer for frontend with normalized data format.
+    
+    Adds tags_with_confidence, colors_with_percentage, and seo_keywords
+    for easier frontend consumption.
+    """
+    tags_with_confidence = serializers.SerializerMethodField()
+    colors_with_percentage = serializers.SerializerMethodField()
+    seo_keywords = serializers.SerializerMethodField()
+
+    class Meta(DocumentAIAnalysisSerializer.Meta):
+        fields = DocumentAIAnalysisSerializer.Meta.fields + [
+            'tags_with_confidence', 'colors_with_percentage', 'seo_keywords'
+        ]
+
+    def get_tags_with_confidence(self, obj):
+        """Transform ai_tags (string[]) into format with confidence for frontend."""
+        tags = obj.get_ai_tags_list()
+        if not tags:
+            return []
+        
+        return [
+            {
+                'id': f'tag-{idx}',
+                'label': tag,
+                'confidence': 80,  # Fixed confidence value
+                'category': 'object',  # Default category
+                'source': obj.ai_provider or 'unknown'
+            }
+            for idx, tag in enumerate(tags)
+        ]
+
+    def get_colors_with_percentage(self, obj):
+        """Transform dominant_colors into format with percentage."""
+        colors = obj.get_dominant_colors_list()
+        if not colors:
+            return []
+        
+        # Calculate percentage evenly
+        total = len(colors)
+        percentage_per_color = round(100 / total, 1) if total > 0 else 0
+        
+        result = []
+        for color in colors:
+            if isinstance(color, dict):
+                # Already has hex and possibly rgb
+                result.append({
+                    'hex': color.get('hex', ''),
+                    'percentage': percentage_per_color
+                })
+            elif isinstance(color, str):
+                # String format, treat as hex
+                result.append({
+                    'hex': color,
+                    'percentage': percentage_per_color
+                })
+        
+        return result
+
+    def get_seo_keywords(self, obj):
+        """Extract SEO keywords from ai_tags."""
+        tags = obj.get_ai_tags_list()
+        if not tags:
+            return []
+        
+        # Return first 5-10 tags as keywords
+        return tags[:10]
 
 
 class DAMMetadataPresetSerializer(serializers.ModelSerializer):
@@ -396,7 +521,7 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
         if not analysis:
             return None
 
-        return DocumentAIAnalysisSerializer(analysis, context=self.context).data
+        return DocumentAIAnalysisFrontendSerializer(analysis, context=self.context).data
 
 
 class AnalyzeDocumentSerializer(serializers.Serializer):
