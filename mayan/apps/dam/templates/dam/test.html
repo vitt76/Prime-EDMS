@@ -177,6 +177,22 @@
         detail: '/digital-assets/api/document-detail/'
     };
 
+    // Throttle redundant template/menu requests to avoid 429 storm.
+    (function throttleMenus() {
+        const menuThrottleMs = 10000; // 10s минимум между вызовами
+        let lastMenuHit = 0;
+        $.ajaxPrefilter(function(options, originalOptions, jqXHR) {
+            if (/api\/v4\/templates\/menu_(main|topbar)\//.test(options.url)) {
+                const now = Date.now();
+                if (now - lastMenuHit < menuThrottleMs) {
+                    jqXHR.abort();
+                    return;
+                }
+                lastMenuHit = now;
+            }
+        });
+    })();
+
     const state = {
         documents: [],
         selectedDocumentId: null,
@@ -415,7 +431,54 @@
 
         return $.get(`${endpoints.detail}${documentId}/`)
             .done(response => {
-                $('#analysisDetail').html(response.html);
+                // API может вернуть либо HTML (response.html), либо JSON с ai_analysis.
+                if (response && response.html) {
+                    $('#analysisDetail').html(response.html);
+                    return;
+                }
+                if (response && response.ai_analysis) {
+                    const ai = response.ai_analysis;
+                    const desc = ai.ai_description || '{% trans "Описание отсутствует" %}';
+                    const tags = Array.isArray(ai.ai_tags) ? ai.ai_tags : [];
+                    const cats = Array.isArray(ai.categories) ? ai.categories : [];
+                    const people = Array.isArray(ai.people) ? ai.people : [];
+                    const locations = Array.isArray(ai.locations) ? ai.locations : [];
+                    const provider = ai.ai_provider || '{% trans "Неизвестен" %}';
+                    const completed = ai.analysis_completed
+                        ? new Date(ai.analysis_completed).toLocaleString()
+                        : '';
+
+                    const renderList = (items, title, badgeClass) => {
+                        if (!items.length) return '';
+                        const badges = items.map(t => `<span class="badge badge-${badgeClass} mr-1 mb-1">${t}</span>`).join('');
+                        return `<div class="mb-3"><strong>${title}</strong><div class="mt-2">${badges}</div></div>`;
+                    };
+
+                    const html = `
+                        <div class="alert alert-success mb-3">
+                            <i class="fas fa-check-circle mr-2"></i>
+                            <strong>{% trans "Анализ завершен" %}</strong>
+                        </div>
+                        <div class="mb-3">
+                            <strong>{% trans "Описание:" %}</strong>
+                            <p class="mb-2">${desc}</p>
+                        </div>
+                        ${renderList(tags, '{% trans "Метки:" %}', 'primary')}
+                        ${renderList(cats, '{% trans "Категории:" %}', 'info')}
+                        ${renderList(people, '{% trans "Люди:" %}', 'success')}
+                        ${renderList(locations, '{% trans "Места:" %}', 'warning')}
+                        <div class="mt-3 pt-3 border-top">
+                            <small class="text-muted">
+                                {% trans "Провайдер" %}: ${provider}
+                                ${completed ? ' | {% trans "Завершено" %}: ' + completed : ''}
+                            </small>
+                        </div>
+                    `;
+                    $('#analysisDetail').html(html);
+                    return;
+                }
+                // Fallback: показать текст ответа
+                $('#analysisDetail').html(`<pre class="text-left small">${JSON.stringify(response, null, 2)}</pre>`);
             })
             .fail(() => {
                 $('#analysisDetail').html(`
