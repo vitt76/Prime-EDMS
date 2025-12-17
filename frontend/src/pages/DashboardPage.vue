@@ -104,14 +104,14 @@
           </p>
         </Card>
 
-        <!-- Pending Analyses -->
+        <!-- Comments -->
         <Card class="p-6">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-medium text-neutral-600 dark:text-neutral-600">
-              Ожидающих анализа
+              Комментарии
             </h3>
             <svg
-              class="w-8 h-8 text-warning"
+              class="w-8 h-8 text-primary-500"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -121,15 +121,15 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 stroke-width="2"
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
               />
             </svg>
           </div>
           <p class="text-3xl font-bold text-neutral-900 dark:text-neutral-900">
-            {{ dashboardStore.stats.analyses.pending.toLocaleString() }}
+            {{ (dashboardStore.stats?.comments?.last_7_days ?? 0).toLocaleString() }}
           </p>
           <p class="text-sm text-neutral-600 dark:text-neutral-600 mt-2">
-            {{ dashboardStore.stats.analyses.failed }} ошибок
+            {{ dashboardStore.stats?.comments?.last_24_hours ?? 0 }} за 24 часа
           </p>
         </Card>
 

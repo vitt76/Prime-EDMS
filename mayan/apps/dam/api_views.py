@@ -17,6 +17,7 @@ from rest_framework.viewsets import ModelViewSet
 from mayan.apps.documents.models import Document
 from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.acls.models import AccessControlList
+from mayan.apps.document_comments.models import Comment
 from mayan.apps.rest_api import generics as mayan_generics
 from mayan.apps.rest_api.pagination import MayanPageNumberPagination
 
@@ -779,6 +780,25 @@ class DAMDashboardStatsView(mayan_generics.GenericAPIView):
             for entry in analyses_queryset.values('ai_provider').annotate(count=Count('ai_provider')).order_by('-count')
         ]
 
+        # Comments statistics for current user
+        now = timezone.now()
+        last_7_days = now - timedelta(days=7)
+        last_24_hours = now - timedelta(hours=24)
+        
+        # Get comments for documents user has access to
+        # Count all comments to accessible documents (not just user's own comments)
+        comments_queryset = Comment.objects.filter(
+            document__in=documents_queryset
+        )
+        
+        comments_last_7_days = comments_queryset.filter(
+            submit_date__gte=last_7_days
+        ).count()
+        
+        comments_last_24_hours = comments_queryset.filter(
+            submit_date__gte=last_24_hours
+        ).count()
+
         return Response({
             'documents': {
                 'total': total_documents,
@@ -791,5 +811,9 @@ class DAMDashboardStatsView(mayan_generics.GenericAPIView):
                 'pending': pending_analyses,
                 'failed': failed_analyses
             },
-            'providers': provider_breakdown
+            'providers': provider_breakdown,
+            'comments': {
+                'last_7_days': comments_last_7_days,
+                'last_24_hours': comments_last_24_hours
+            }
         })
