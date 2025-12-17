@@ -117,9 +117,6 @@ export interface Comment {
   text: string
   created_date: string
   updated_date?: string
-  replies?: Comment[]
-  parent_id?: number
-  mentions?: string[] // Array of mentioned usernames
   edited?: boolean
 }
 
@@ -213,8 +210,6 @@ export interface CacheEntry<T> {
 // Comment API types
 export interface CreateCommentRequest {
   text: string
-  parent_id?: number
-  mentions?: string[]
 }
 
 export interface UpdateCommentRequest {

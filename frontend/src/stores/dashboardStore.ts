@@ -30,25 +30,6 @@ export const useDashboardStore = defineStore(
       return formatBytes(storageMetrics.value.total_size)
     })
 
-    // Mock data for dev mode (matches DashboardStats interface)
-    const mockStats: DashboardStats = {
-      documents: {
-        total: 1250,
-        with_analysis: 890,
-        without_analysis: 360
-      },
-      analyses: {
-        completed: 890,
-        processing: 15,
-        pending: 47,
-        failed: 3
-      },
-      providers: [
-        { provider: 'yandexgpt', count: 650 },
-        { provider: 'gigachat', count: 240 }
-      ]
-    }
-
     const mockStorage: StorageMetrics = {
       total_size: 107374182400,
       used_size: 16890000000,
@@ -67,57 +48,64 @@ export const useDashboardStore = defineStore(
       error.value = null
 
       try {
-        // In dev mode, use mock data
-        if (import.meta.env.DEV) {
-          await new Promise(resolve => setTimeout(resolve, 300))
-          stats.value = mockStats
-          lastUpdated.value = new Date()
-          return
-        }
+        // Always try to fetch real data from API
         const data = await dashboardService.getDashboardStats()
         stats.value = data
         lastUpdated.value = new Date()
       } catch (err) {
-        // In dev mode, fallback to mock data
-        if (import.meta.env.DEV) {
-          console.warn('[Dev] Using mock dashboard stats')
-          stats.value = mockStats
-          lastUpdated.value = new Date()
-          return
+        // Return zeros instead of mock data if API fails
+        console.warn('[DashboardStore] Failed to fetch dashboard stats, using zeros:', err)
+        stats.value = {
+          documents: {
+            total: 0,
+            with_analysis: 0,
+            without_analysis: 0
+          },
+          analyses: {
+            completed: 0,
+            processing: 0,
+            pending: 0,
+            failed: 0
+          },
+          providers: []
         }
+        lastUpdated.value = new Date()
         error.value = formatApiError(err)
-        throw err
       } finally {
         isLoading.value = false
       }
     }
 
-    async function fetchActivityFeed(limit = 20) {
+    async function fetchActivityFeed(limit = 10) {
       try {
+        console.log('[DashboardStore] Starting activity feed fetch, limit:', limit)
         activityFeed.value = await getDashboardActivityNormalized(limit)
-      } catch (err) {
-        console.warn('Failed to fetch activity feed:', err)
+        console.log('[DashboardStore] Activity feed fetched successfully, items:', activityFeed.value.length)
+      } catch (err: any) {
+        console.error('[DashboardStore] Failed to fetch activity feed:', {
+          error: err,
+          message: err?.message,
+          stack: err?.stack
+        })
         activityFeed.value = []
       }
     }
 
     async function fetchStorageMetrics() {
       try {
-        // In dev mode, use mock data
-        if (import.meta.env.DEV) {
-          await new Promise(resolve => setTimeout(resolve, 250))
-          storageMetrics.value = mockStorage
-          return
-        }
+        // Always try to fetch real data from API
         const data = await dashboardService.getStorageMetrics()
         storageMetrics.value = data
       } catch (err) {
-        // Storage metrics are optional, don't throw
+        // Storage metrics are optional, return zeros if API fails
+        // (dashboardService already handles errors and returns zeros)
         console.warn('Failed to fetch storage metrics:', err)
-        if (import.meta.env.DEV) {
-          storageMetrics.value = mockStorage
-        } else {
-          storageMetrics.value = null
+        storageMetrics.value = {
+          total_size: 0,
+          used_size: 0,
+          available_size: 0,
+          usage_percentage: 0,
+          by_type: []
         }
       }
     }

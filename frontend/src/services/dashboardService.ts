@@ -47,7 +47,7 @@ class DashboardService {
    */
   async getDashboardStats(): Promise<DashboardStats> {
     return apiService.get<DashboardStats>(
-      '/v4/dam/dashboard-stats/',
+      '/api/v4/dashboard-stats/',
       undefined,
       true // Cache for 5 minutes
     )
@@ -75,13 +75,35 @@ class DashboardService {
    * Get storage metrics
    */
   async getStorageMetrics(): Promise<StorageMetrics> {
-    // TODO: Replace with actual storage endpoint when available
-    return apiService.get<StorageMetrics>(
-      '/v4/dam/storage-metrics/',
-      undefined,
-      true // Cache for 5 minutes
-    ).catch(() => {
-      // Fallback to calculated metrics from assets
+    try {
+      // Try to get storage data from headless dashboard stats (same as admin panel)
+      const data = await apiService.get<any>(
+        '/api/v4/headless/dashboard/stats/',
+        undefined,
+        false // Don't cache, as storage can change
+      )
+      
+      // Extract storage metrics from response
+      const used_bytes = data?.storage?.used_bytes || 0
+      const total_bytes = data?.storage?.total_bytes || 0
+      
+      return {
+        total_size: total_bytes,
+        used_size: used_bytes,
+        available_size: Math.max(0, total_bytes - used_bytes),
+        usage_percentage: total_bytes > 0 
+          ? Math.round((used_bytes / total_bytes) * 100 * 100) / 100 
+          : 0,
+        by_type: [] // Not provided by headless endpoint
+      }
+    } catch (err: any) {
+      // For 403 (access denied for non-staff users) or other errors, return zeros
+      // This is expected behavior - regular users don't have access to system-wide storage stats
+      if (import.meta.env.DEV) {
+        console.warn('[DashboardService] Storage metrics unavailable:', err?.response?.status === 403 
+          ? 'Access denied (non-staff user)' 
+          : err)
+      }
       return {
         total_size: 0,
         used_size: 0,
@@ -89,7 +111,7 @@ class DashboardService {
         usage_percentage: 0,
         by_type: []
       }
-    })
+    }
   }
 }
 

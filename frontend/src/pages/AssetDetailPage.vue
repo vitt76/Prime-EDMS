@@ -619,17 +619,28 @@
             <!-- Comments Tab -->
             <div v-if="activeTab === 'comments'" class="flex flex-col h-full">
               <div class="flex-1 overflow-y-auto p-5 space-y-4">
-                <div v-if="comments.length === 0" class="text-center py-8">
+                <!-- Loading State -->
+                <div v-if="isLoadingComments" class="flex items-center justify-center py-8">
+                  <svg class="w-6 h-6 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                  </svg>
+                  <span class="ml-2 text-sm text-neutral-500 dark:text-neutral-400">Загрузка комментариев...</span>
+                </div>
+
+                <!-- Empty State -->
+                <div v-else-if="!isLoadingComments && comments.length === 0" class="text-center py-8">
                   <svg class="w-12 h-12 mx-auto text-neutral-300 dark:text-neutral-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
                   <p class="text-sm text-neutral-500 dark:text-neutral-400">Нет комментариев</p>
                 </div>
 
+                <!-- Comments List -->
                 <div
                   v-for="comment in comments"
                   :key="comment.id"
-                  class="flex gap-3"
+                  class="flex gap-3 group"
                 >
                   <img
                     :src="comment.author_avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(comment.author)"
@@ -637,12 +648,70 @@
                     class="w-8 h-8 rounded-full object-cover shrink-0"
                   />
                   <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-1">
-                      <span class="text-sm font-medium text-neutral-900 dark:text-white">{{ comment.author }}</span>
-                      <span class="text-xs text-neutral-500 dark:text-neutral-400">{{ formatRelativeTime(comment.created_date) }}</span>
-                      <span v-if="comment.edited" class="text-xs text-neutral-400">(изменено)</span>
+                    <div class="flex items-center justify-between mb-1">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-sm font-medium text-neutral-900 dark:text-white">{{ comment.author }}</span>
+                        <span class="text-xs text-neutral-500 dark:text-neutral-400">{{ formatRelativeTime(comment.created_date) }}</span>
+                        <span v-if="comment.edited" class="text-xs text-neutral-400">(изменено)</span>
+                      </div>
+                      <!-- Action Buttons (only for comment author) -->
+                      <div v-if="canEditComment(comment)" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          v-if="editingCommentId !== comment.id"
+                          @click="startEditComment(comment)"
+                          class="p-1.5 text-neutral-500 hover:text-primary-600 dark:hover:text-primary-400 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                          title="Редактировать"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          v-if="editingCommentId !== comment.id"
+                          @click="deleteComment(comment.id)"
+                          class="p-1.5 text-neutral-500 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                          title="Удалить"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
-                    <p class="text-sm text-neutral-700 dark:text-neutral-300">{{ comment.text }}</p>
+                    
+                    <!-- Edit Mode -->
+                    <div v-if="editingCommentId === comment.id" class="space-y-2">
+                      <textarea
+                        v-model="editingCommentText"
+                        rows="3"
+                        class="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600
+                               bg-white dark:bg-neutral-900
+                               text-neutral-900 dark:text-white
+                               placeholder-neutral-400
+                               focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                               transition-all text-sm resize-none"
+                        placeholder="Редактировать комментарий..."
+                        @keydown.ctrl.enter="saveEditComment"
+                        @keydown.esc="cancelEditComment"
+                      ></textarea>
+                      <div class="flex gap-2">
+                        <button
+                          @click="saveEditComment"
+                          class="px-3 py-1.5 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 transition-colors"
+                        >
+                          Сохранить
+                        </button>
+                        <button
+                          @click="cancelEditComment"
+                          class="px-3 py-1.5 bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-sm rounded-lg hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors"
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <!-- View Mode -->
+                    <p v-else class="text-sm text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap">{{ comment.text }}</p>
                   </div>
                 </div>
               </div>
@@ -765,7 +834,9 @@ import {
 import { useAssetStore } from '@/stores/assetStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
+import { useAuthStore } from '@/stores/authStore'
 import { apiService } from '@/services/apiService'
+import { commentService } from '@/services/commentService'
 import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import MetadataEditor from '@/components/asset/MetadataEditor.vue'
 import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
@@ -778,6 +849,7 @@ const route = useRoute()
 const assetStore = useAssetStore()
 const notificationStore = useNotificationStore()
 const favoritesStore = useFavoritesStore()
+const authStore = useAuthStore()
 
 // State
 const isLoading = ref(true)
@@ -789,6 +861,10 @@ const zoom = ref(1)
 const rotation = ref(0)
 const newComment = ref('')
 const showMediaEditor = ref(false)
+const comments = ref<Comment[]>([])
+const isLoadingComments = ref(false)
+const editingCommentId = ref<number | null>(null)
+const editingCommentText = ref('')
 const collapsedSections = ref({
   exif: false,
   tags: false,
@@ -892,9 +968,7 @@ const versions = computed((): any[] => {
   })
 })
 
-const comments = computed((): Comment[] => {
-  return asset.value?.comments || []
-})
+// Comments are now loaded from API, not from asset
 
 const usage = computed((): UsageStats | undefined => {
   return extendedAsset.value?.usage
@@ -1509,31 +1583,179 @@ function handleRevertVersion(version: Version) {
   })
 }
 
-function submitComment() {
-  if (!newComment.value.trim()) return
+// Load comments from API
+async function loadComments() {
+  if (!asset.value?.id) return
   
-  const comment: Comment = {
-    id: Date.now(),
-    author: 'Вы',
-    author_avatar: 'https://ui-avatars.com/api/?name=You',
-    text: newComment.value.trim(),
-    created_date: new Date().toISOString(),
-  }
-  
-  if (asset.value) {
-    if (!asset.value.comments) {
-      asset.value.comments = []
+  isLoadingComments.value = true
+  try {
+    const documentId = Number(asset.value.id)
+    if (!Number.isFinite(documentId) || documentId <= 0) {
+      console.warn('[AssetDetail] Invalid document ID for comments:', asset.value.id)
+      return
     }
-    asset.value.comments.push(comment)
+    
+    comments.value = await commentService.getComments(documentId)
+  } catch (err: any) {
+    console.error('[AssetDetail] Failed to load comments:', err)
+    
+    const errorMessage = err?.response?.status === 403
+      ? 'Нет прав доступа для просмотра комментариев'
+      : err?.response?.status === 404
+      ? 'Документ не найден'
+      : 'Не удалось загрузить комментарии'
+    
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка загрузки',
+      message: errorMessage
+    })
+    
+    comments.value = []
+  } finally {
+    isLoadingComments.value = false
+  }
+}
+
+// Create new comment
+async function submitComment() {
+  if (!newComment.value.trim() || !asset.value?.id) return
+  
+  const documentId = Number(asset.value.id)
+  if (!Number.isFinite(documentId) || documentId <= 0) {
+    console.warn('[AssetDetail] Invalid document ID for comment creation:', asset.value.id)
+    return
   }
   
-  newComment.value = ''
+  const commentText = newComment.value.trim()
+  newComment.value = '' // Clear input immediately for better UX
   
-  notificationStore.addNotification({
-    type: 'success',
-    title: 'Комментарий добавлен',
-    message: 'Ваш комментарий успешно опубликован',
-  })
+  try {
+    await commentService.createComment(documentId, commentText)
+    await loadComments() // Reload comments to get the new one with proper data
+    
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Комментарий добавлен',
+      message: 'Ваш комментарий успешно опубликован',
+    })
+  } catch (err: any) {
+    newComment.value = commentText // Restore text on error
+    
+    const errorMessage = err?.response?.status === 403
+      ? 'Нет прав доступа для создания комментариев'
+      : err?.response?.status === 400
+      ? err?.response?.data?.text?.[0] || 'Неверный формат комментария'
+      : 'Не удалось создать комментарий'
+    
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: errorMessage
+    })
+  }
+}
+
+// Start editing a comment
+function startEditComment(comment: Comment) {
+  editingCommentId.value = comment.id
+  editingCommentText.value = comment.text
+}
+
+// Save edited comment
+async function saveEditComment() {
+  if (!editingCommentId.value || !asset.value?.id) return
+  
+  const documentId = Number(asset.value.id)
+  const commentId = editingCommentId.value
+  const commentText = editingCommentText.value.trim()
+  
+  if (!commentText) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Комментарий не может быть пустым'
+    })
+    return
+  }
+  
+  try {
+    await commentService.updateComment(documentId, commentId, commentText)
+    await loadComments() // Reload to get updated comment
+    
+    editingCommentId.value = null
+    editingCommentText.value = ''
+    
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Комментарий обновлен',
+      message: 'Изменения сохранены'
+    })
+  } catch (err: any) {
+    const errorMessage = err?.response?.status === 403
+      ? 'Нет прав доступа для редактирования комментария'
+      : err?.response?.status === 404
+      ? 'Комментарий не найден'
+      : err?.response?.status === 400
+      ? err?.response?.data?.text?.[0] || 'Неверный формат комментария'
+      : 'Не удалось обновить комментарий'
+    
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: errorMessage
+    })
+  }
+}
+
+// Cancel editing
+function cancelEditComment() {
+  editingCommentId.value = null
+  editingCommentText.value = ''
+}
+
+// Delete comment
+async function deleteComment(commentId: number) {
+  if (!asset.value?.id) return
+  
+  if (!confirm('Удалить комментарий? Это действие нельзя отменить.')) {
+    return
+  }
+  
+  const documentId = Number(asset.value.id)
+  
+  try {
+    await commentService.deleteComment(documentId, commentId)
+    await loadComments() // Reload to remove deleted comment
+    
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Комментарий удален',
+      message: 'Комментарий успешно удален'
+    })
+  } catch (err: any) {
+    const errorMessage = err?.response?.status === 403
+      ? 'Нет прав доступа для удаления комментария'
+      : err?.response?.status === 404
+      ? 'Комментарий не найден'
+      : 'Не удалось удалить комментарий'
+    
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: errorMessage
+    })
+  }
+}
+
+// Check if current user can edit comment
+function canEditComment(comment: Comment): boolean {
+  return comment.author_id === authStore.user?.id
+}
+
+// Check if current user can delete comment
+function canDeleteComment(comment: Comment): boolean {
+  return comment.author_id === authStore.user?.id
 }
 
 // Watch route changes
@@ -1543,8 +1765,19 @@ watch(() => route.params.id, () => {
   }
 })
 
+// Watch active tab to load comments when comments tab is opened
+watch(() => activeTab.value, (tab) => {
+  if (tab === 'comments' && asset.value?.id) {
+    loadComments()
+  }
+})
+
 // Load on mount
 onMounted(() => {
   loadAsset()
+  // Load comments if comments tab is active
+  if (activeTab.value === 'comments' && asset.value?.id) {
+    loadComments()
+  }
 })
 </script>
