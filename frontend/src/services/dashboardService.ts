@@ -16,6 +16,10 @@ export interface DashboardStats {
     provider: string
     count: number
   }>
+  comments: {
+    last_7_days: number
+    last_24_hours: number
+  }
 }
 
 export interface ActivityItem {
@@ -49,7 +53,7 @@ class DashboardService {
     return apiService.get<DashboardStats>(
       '/api/v4/dashboard-stats/',
       undefined,
-      true // Cache for 5 minutes
+      false // Don't cache - data should be up-to-date
     )
   }
 

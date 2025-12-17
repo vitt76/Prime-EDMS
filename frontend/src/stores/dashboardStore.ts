@@ -67,7 +67,11 @@ export const useDashboardStore = defineStore(
             pending: 0,
             failed: 0
           },
-          providers: []
+          providers: [],
+          comments: {
+            last_7_days: 0,
+            last_24_hours: 0
+          }
         }
         lastUpdated.value = new Date()
         error.value = formatApiError(err)
