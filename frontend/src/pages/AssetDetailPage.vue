@@ -901,10 +901,6 @@ const usage = computed((): UsageStats | undefined => {
 })
 
 const previewSrc = computed(() => resolveAssetImageUrl(asset.value))
-// When user selects a specific document file version, we override the preview src.
-const previewOverride = ref<string | null>(null)
-// Track object URL to revoke and avoid memory leaks.
-const previewOverrideObjectUrl = ref<string | null>(null)
 const previewFallback = ref<string | null>(null)
 const previewResolved = computed(() => previewOverride.value || previewFallback.value || previewSrc.value)
 const isFavorite = computed(() => {
