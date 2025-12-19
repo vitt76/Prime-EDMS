@@ -33,6 +33,14 @@ from .throttles import AIAnalysisThrottle
 
 logger = logging.getLogger(__name__)
 
+# Try to import Celery app for worker availability check
+try:
+    from celery import current_app
+    CELERY_AVAILABLE = True
+except ImportError:
+    CELERY_AVAILABLE = False
+    current_app = None
+
 
 class DocumentAIAnalysisViewSet(ModelViewSet):
     """
@@ -69,20 +77,231 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
             user=self.request.user
         )
 
+    def _check_celery_available(self):
+        """Check if Celery worker is available."""
+        if not CELERY_AVAILABLE:
+            return False, 'Celery is not installed or configured'
+        
+        try:
+            # Try to inspect active workers
+            inspect = current_app.control.inspect()
+            active_workers = inspect.active()
+            
+            if active_workers is None:
+                return False, 'No Celery workers are currently active'
+            
+            # Check if 'tools' queue has workers (the queue used by analyze_document_with_ai)
+            # We'll assume workers are available if we can get the inspect response
+            return True, None
+        except Exception as e:
+            logger.error(f'Failed to check Celery worker availability: {e}')
+            # Return False to prevent task execution when Celery is unavailable
+            return False, f'Celery worker check failed: {str(e)}'
+
     @action(detail=False, methods=['post'])
     def analyze(self, request):
-        serializer = AnalyzeDocumentSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        document_instance = serializer.validated_data['document_instance']
-        document_id = document_instance.pk
-        ai_service = serializer.validated_data.get('ai_service', 'openai')
-        analysis_type = serializer.validated_data.get('analysis_type', 'classification')
-
+        """
+        Start AI analysis for a document.
+        
+        Validates document, permissions, and starts Celery task.
+        """
+        # Log method entry for debugging
+        logger.info(
+            'AI analysis endpoint called',
+            extra={
+                'user_id': request.user.id if request.user else None,
+                'method': request.method,
+                'path': request.path,
+                'data_keys': list(request.data.keys()) if hasattr(request, 'data') else None
+            }
+        )
+        
+        document_id = None
+        
         try:
-            document = self.get_document(document_id)
-            self._assert_analysis_permission(document)
-
+            # Step 1: Validate serializer
+            logger.debug(
+                'Starting AI analysis request',
+                extra={'user_id': request.user.id, 'request_data': request.data}
+            )
+            
+            # Pass request context to serializer for access control checks
+            try:
+                serializer = AnalyzeDocumentSerializer(
+                    data=request.data,
+                    context={'request': request}
+                )
+            except Exception as serializer_init_error:
+                logger.exception(
+                    'Failed to create serializer for AI analysis',
+                    extra={
+                        'user_id': request.user.id,
+                        'error': str(serializer_init_error),
+                        'error_type': type(serializer_init_error).__name__
+                    }
+                )
+                return Response(
+                    {
+                        'error': 'Failed to process request',
+                        'error_code': 'SERIALIZER_INIT_ERROR',
+                        'detail': str(serializer_init_error) if settings.DEBUG else 'Failed to initialize request validator'
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            try:
+                if not serializer.is_valid():
+                    logger.warning(
+                        'AI analysis request validation failed',
+                        extra={
+                            'user_id': request.user.id,
+                            'errors': serializer.errors
+                        }
+                    )
+                    return Response(
+                        {
+                            'error': 'Invalid request data',
+                            'error_code': 'VALIDATION_ERROR',
+                            'detail': serializer.errors
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Exception as validation_error:
+                logger.exception(
+                    'Exception during serializer validation',
+                    extra={
+                        'user_id': request.user.id,
+                        'error': str(validation_error),
+                        'error_type': type(validation_error).__name__
+                    }
+                )
+                return Response(
+                    {
+                        'error': 'Validation error',
+                        'error_code': 'VALIDATION_EXCEPTION',
+                        'detail': str(validation_error) if settings.DEBUG else 'An error occurred during request validation'
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            try:
+                document_instance = serializer.validated_data['document_instance']
+                document_id = document_instance.pk
+            except (KeyError, AttributeError) as e:
+                logger.error(
+                    'Failed to get document_instance from validated_data',
+                    extra={
+                        'user_id': request.user.id,
+                        'error': str(e),
+                        'validated_data_keys': list(serializer.validated_data.keys()) if hasattr(serializer, 'validated_data') else None
+                    }
+                )
+                return Response(
+                    {
+                        'error': 'Invalid request data',
+                        'error_code': 'MISSING_DOCUMENT_INSTANCE',
+                        'detail': 'Document instance not found in validated data'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            ai_service = serializer.validated_data.get('ai_service', 'openai')
+            analysis_type = serializer.validated_data.get('analysis_type', 'classification')
+            
+            logger.info(
+                'AI analysis request validated',
+                extra={
+                    'user_id': request.user.id,
+                    'document_id': document_id,
+                    'ai_service': ai_service,
+                    'analysis_type': analysis_type
+                }
+            )
+            
+            # Step 2: Use document from serializer (already validated with access control)
+            # document_instance is already a Document object with access checked
+            document = document_instance
+            logger.debug(
+                'Document retrieved from serializer (access already validated)',
+                extra={'user_id': request.user.id, 'document_id': document_id}
+            )
+            
+            # Additional validation step - check document access again for extra safety
+            try:
+                # Verify access one more time (defense in depth)
+                AccessControlList.objects.check_access(
+                    obj=document,
+                    permissions=(permission_document_view,),
+                    user=request.user
+                )
+                logger.debug(
+                    'Document access verified',
+                    extra={'user_id': request.user.id, 'document_id': document_id}
+                )
+            except PermissionDenied:
+                logger.warning(
+                    'Permission denied to view document for AI analysis',
+                    extra={'user_id': request.user.id, 'document_id': document_id}
+                )
+                return Response(
+                    {
+                        'error': 'Permission denied to access document',
+                        'error_code': 'PERMISSION_DENIED'
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            except Exception as access_error:
+                logger.exception(
+                    'Error verifying document access',
+                    extra={
+                        'user_id': request.user.id,
+                        'document_id': document_id,
+                        'error': str(access_error),
+                        'error_type': type(access_error).__name__
+                    }
+                )
+                return Response(
+                    {
+                        'error': 'Error verifying document access',
+                        'error_code': 'ACCESS_VERIFICATION_ERROR',
+                        'detail': str(access_error) if settings.DEBUG else 'Error verifying document access'
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            # Step 3: Check analysis permission
+            try:
+                self._assert_analysis_permission(document)
+                logger.debug(
+                    'Analysis permission verified',
+                    extra={'user_id': request.user.id, 'document_id': document_id}
+                )
+            except PermissionDenied:
+                logger.warning(
+                    'Permission denied for AI analysis',
+                    extra={'user_id': request.user.id, 'document_id': document_id}
+                )
+                return Response(
+                    {
+                        'error': 'Permission denied to perform AI analysis',
+                        'error_code': 'PERMISSION_DENIED'
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Step 4: Check if document is analyzable
             if not self._is_analyzable(document):
+                # Get latest file for logging
+                latest_file = document.files.order_by('-timestamp').first()
+                document_type = latest_file.mimetype if latest_file and latest_file.mimetype else 'unknown'
+                
+                logger.warning(
+                    'Document type not supported for AI analysis',
+                    extra={
+                        'user_id': request.user.id,
+                        'document_id': document_id,
+                        'document_type': document_type
+                    }
+                )
                 return Response(
                     {
                         'error': 'Document type not supported for AI analysis',
@@ -91,39 +310,81 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
-            result = analyze_document_with_ai.delay(document.id)
-
-            logger.info(
-                'AI analysis requested',
-                extra={
-                    'user_id': request.user.id,
-                    'document_id': document_id,
-                    'task_id': result.id,
-                    'ai_service': ai_service,
-                    'analysis_type': analysis_type
-                }
-            )
-
-            return Response(
-                {
-                    'success': True,
-                    'analysis_id': result.id,
-                    'status': 'pending',
-                    'document_id': document_id,
-                    'created_at': timezone.now().isoformat()
-                },
-                status=status.HTTP_202_ACCEPTED
-            )
-
-        except Document.DoesNotExist:
-            return Response(
-                {
-                    'error': 'Document not found',
-                    'error_code': 'NOT_FOUND'
-                },
-                status=status.HTTP_404_NOT_FOUND
-            )
+            
+            # Step 5: Check Celery availability
+            celery_available, celery_error = self._check_celery_available()
+            if not celery_available:
+                logger.error(
+                    'Celery worker not available for AI analysis',
+                    extra={
+                        'user_id': request.user.id,
+                        'document_id': document_id,
+                        'error': celery_error
+                    }
+                )
+                return Response(
+                    {
+                        'error': 'AI analysis service is temporarily unavailable',
+                        'error_code': 'SERVICE_UNAVAILABLE',
+                        'detail': celery_error or 'Celery worker is not running'
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+            
+            # Step 6: Start Celery task
+            try:
+                logger.info(
+                    'Starting Celery task for AI analysis',
+                    extra={
+                        'user_id': request.user.id,
+                        'document_id': document_id
+                    }
+                )
+                
+                result = analyze_document_with_ai.delay(document.id)
+                
+                logger.info(
+                    'AI analysis task started successfully',
+                    extra={
+                        'user_id': request.user.id,
+                        'document_id': document_id,
+                        'task_id': result.id,
+                        'ai_service': ai_service,
+                        'analysis_type': analysis_type
+                    }
+                )
+                
+                return Response(
+                    {
+                        'success': True,
+                        'analysis_id': result.id,
+                        'task_id': result.id,
+                        'status': 'pending',
+                        'document_id': document_id,
+                        'created_at': timezone.now().isoformat()
+                    },
+                    status=status.HTTP_202_ACCEPTED
+                )
+                
+            except Exception as celery_exc:
+                logger.exception(
+                    'Failed to start Celery task for AI analysis',
+                    extra={
+                        'user_id': request.user.id,
+                        'document_id': document_id,
+                        'error': str(celery_exc),
+                        'error_type': type(celery_exc).__name__
+                    }
+                )
+                return Response(
+                    {
+                        'error': 'Failed to start AI analysis task',
+                        'error_code': 'TASK_START_FAILED',
+                        'detail': str(celery_exc) if settings.DEBUG else 'Failed to queue analysis task. Please ensure Celery worker is running.'
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        
         except PermissionDenied:
             logger.warning(
                 'Permission denied during AI analysis request',
@@ -139,13 +400,19 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
         except Exception as exc:
             logger.exception(
                 'Unhandled error while starting AI analysis',
-                extra={'user_id': request.user.id, 'document_id': document_id, 'error': str(exc)}
+                extra={
+                    'user_id': request.user.id,
+                    'document_id': document_id,
+                    'error': str(exc),
+                    'error_type': type(exc).__name__,
+                    'traceback': True
+                }
             )
             return Response(
                 {
                     'error': 'Analysis failed',
                     'error_code': 'ANALYSIS_ERROR',
-                    'detail': str(exc) if settings.DEBUG else 'An error occurred'
+                    'detail': str(exc) if settings.DEBUG else 'An unexpected error occurred while starting AI analysis'
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -312,13 +579,41 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
 
     @staticmethod
     def _is_analyzable(document):
+        """
+        Check if document can be analyzed by AI.
+        
+        Args:
+            document: Document instance to check
+            
+        Returns:
+            bool: True if document type is supported for AI analysis
+        """
         analyzable_types = ['pdf', 'image', 'docx', 'doc', 'txt']
-        latest_file = document.files.order_by('-timestamp').first()
-        if not latest_file or not latest_file.mimetype:
-            return False
+        
+        try:
+            latest_file = document.files.order_by('-timestamp').first()
+            if not latest_file:
+                logger.debug(f'Document {document.id} has no files')
+                return False
+            
+            if not latest_file.mimetype:
+                logger.debug(f'Document {document.id} file has no mimetype')
+                return False
 
-        mime_type = latest_file.mimetype.lower()
-        return any(token in mime_type for token in analyzable_types)
+            mime_type = latest_file.mimetype.lower()
+            is_analyzable = any(token in mime_type for token in analyzable_types)
+            
+            if not is_analyzable:
+                logger.debug(
+                    f'Document {document.id} type {mime_type} is not analyzable'
+                )
+            
+            return is_analyzable
+        except Exception as e:
+            logger.warning(
+                f'Error checking if document {document.id} is analyzable: {e}'
+            )
+            return False
 
     @staticmethod
     def _can_reanalyze(analysis):

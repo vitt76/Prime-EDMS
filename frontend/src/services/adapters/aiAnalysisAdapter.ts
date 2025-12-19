@@ -85,13 +85,18 @@ function adaptOCR(backendAnalysis: BackendAIAnalysis): OCRData {
   const text = backendAnalysis.ocr_text || undefined
 
   let wordCount: number | undefined
-  if (text) {
-    wordCount = text.split(/\s+/).filter(word => word.length > 0).length
+  if (text && text.trim()) {
+    // Count words only if text is not empty
+    const words = text.split(/\s+/).filter(word => word.length > 0)
+    wordCount = words.length
+  } else if (status === 'completed') {
+    // If status is completed but no text, set wordCount to 0
+    wordCount = 0
   }
 
   return {
     status: status as 'not_run' | 'processing' | 'completed' | 'failed',
-    text,
+    text: text?.trim() || undefined, // Normalize empty strings to undefined
     wordCount,
     confidence: undefined // Backend doesn't provide OCR confidence
   }

@@ -71,9 +71,15 @@ class AIAnalysisService {
    */
   async runOCR(assetId: number): Promise<OCRData> {
     try {
-      const response = await apiService.post<{ task_id: string; status: string }>(
-        `/api/v4/documents/${assetId}/ocr/extract/`
+      // Use the standard OCR submit endpoint from OCR module
+      // This endpoint submits the document for OCR processing
+      const response = await apiService.post<{ task_id?: string; status?: string }>(
+        `/api/v4/documents/${assetId}/ocr/submit/`
       )
+
+      if (import.meta.env.DEV) {
+        console.log('[AIAnalysisService] OCR submit response:', response)
+      }
 
       // Return processing status - frontend should poll for completion
       return {
