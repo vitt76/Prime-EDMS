@@ -47,12 +47,20 @@
                                         <small class="form-text text-muted">{% trans "AI-generated metadata and asset management information" %}</small>
 
                                         {% if dam_analysis_data %}
-                                            {% if dam_analysis_data.status == 'completed' %}
+                                            {% if dam_analysis_data.status == 'completed' or dam_analysis_data.description or dam_analysis_data.tags_html or dam_analysis_data.categories_html or dam_analysis_data.status == 'completed' %}
                                                 <div class="dam-analysis-content">
+                                                    {% if dam_analysis_data.status == 'completed' %}
                                                     <div class="alert alert-success mb-3">
                                                         <i class="fas fa-check-circle mr-2"></i>
                                                         <strong>Анализ завершен</strong>
                                                     </div>
+                                                    {% elif dam_analysis_data.original_status %}
+                                                    <div class="alert alert-info mb-3">
+                                                        <i class="fas fa-info-circle mr-2"></i>
+                                                        <strong>Данные анализа доступны</strong>
+                                                        <small class="d-block mt-1">Статус: {{ dam_analysis_data.original_status }}</small>
+                                                    </div>
+                                                    {% endif %}
 
                                                     {% if dam_analysis_data.description %}
                                                     <div class="mb-3">
