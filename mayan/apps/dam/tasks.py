@@ -233,6 +233,7 @@ def analyze_document_with_ai(self, document_id: int):
         ai_analysis.current_step = 'Reading document file'
         ai_analysis.error_message = None
         ai_analysis.save()
+        logger.info(f"✅ Set status to 'processing' for document {document_id}, task_id={self.request.id}")
 
         # Progress: 10% - File reading
         _update_analysis_progress(ai_analysis, 10, 'Reading document file from storage')
@@ -246,7 +247,18 @@ def analyze_document_with_ai(self, document_id: int):
         # Progress: 30% - Sending to AI provider
         _update_analysis_progress(ai_analysis, 30, 'Sending to AI provider')
         
-        analysis_results = perform_ai_analysis(document_file)
+        try:
+            analysis_results = perform_ai_analysis(document_file)
+            logger.info(f"✅ perform_ai_analysis completed for document {document_id}, provider={analysis_results.get('provider', 'unknown')}")
+        except Exception as analysis_error:
+            logger.error(f"❌ perform_ai_analysis failed for document {document_id}: {analysis_error}", exc_info=True)
+            # Update status to failed immediately
+            ai_analysis.analysis_status = 'failed'
+            ai_analysis.error_message = str(analysis_error)[:1000]
+            error_preview = str(analysis_error)[:70]  # Leave room for prefix
+            ai_analysis.current_step = f'Failed: {error_preview}'[:100]  # Ensure max_length=100
+            ai_analysis.save()
+            raise  # Re-raise to trigger retry logic
         
         # Progress: 80% - Processing results
         _update_analysis_progress(ai_analysis, 80, 'Processing AI results')

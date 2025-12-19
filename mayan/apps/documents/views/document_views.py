@@ -242,27 +242,49 @@ class DocumentPropertiesView(SingleObjectDetailView):
                 logger.error(f"Error formatting completed date: {date_error}")
                 completed_date = None
 
+            # Get tags and categories
+            tags_list = []
+            if hasattr(ai_analysis, 'get_ai_tags_list'):
+                tags_list = ai_analysis.get_ai_tags_list()
+                logger.info(f"Tags: {tags_list}")
+            else:
+                logger.warning("No get_ai_tags_list method")
+
+            categories_list = []
+            if ai_analysis.categories:
+                categories_list = ai_analysis.categories if isinstance(ai_analysis.categories, list) else []
+                logger.info(f"Categories: {categories_list}")
+
+            # Check if we have actual data (description, tags, or categories)
+            has_data = bool(
+                ai_analysis.ai_description or
+                tags_list or
+                categories_list
+            )
+
+            # If we have data but status is not 'completed', treat it as completed for display
+            display_status = ai_analysis.analysis_status
+            if has_data and display_status != 'completed':
+                logger.info(f"Found data but status is '{display_status}', treating as 'completed' for display")
+                display_status = 'completed'
+
             dam_data = {
-                'status': ai_analysis.analysis_status,
+                'status': display_status,
+                'original_status': ai_analysis.analysis_status,  # Keep original for reference
                 'description': ai_analysis.ai_description,
                 'provider': ai_analysis.ai_provider or 'Неизвестен',
                 'completed_date': completed_date,
             }
 
-            # Get tags and categories
-            if hasattr(ai_analysis, 'get_ai_tags_list'):
-                tags_list = ai_analysis.get_ai_tags_list()
-                dam_data['tags_html'] = "".join([f'<span class="badge badge-primary mr-1 mb-1">{tag}</span>' for tag in tags_list]) if tags_list else ''
-                logger.info(f"Tags: {tags_list}")
-            else:
-                dam_data['tags_html'] = ''
-                logger.warning("No get_ai_tags_list method")
+            dam_data['tags_html'] = "".join([f'<span class="badge badge-primary mr-1 mb-1">{tag}</span>' for tag in tags_list]) if tags_list else ''
+            dam_data['categories_html'] = "".join([f'<span class="badge badge-info mr-1 mb-1">{cat}</span>' for cat in categories_list]) if categories_list else ''
 
-            dam_data['categories_html'] = ""
-            if ai_analysis.categories:
-                dam_data['categories_html'] = "".join([f'<span class="badge badge-info mr-1 mb-1">{cat}</span>' for cat in ai_analysis.categories])
-                logger.info(f"Categories: {ai_analysis.categories}")
-
+            # Log all data being passed to template
+            logger.info(f"DAM data for document {self.object.id}: status={dam_data['status']}, "
+                       f"has_description={bool(dam_data['description'])}, "
+                       f"has_tags={bool(dam_data['tags_html'])}, "
+                       f"has_categories={bool(dam_data['categories_html'])}, "
+                       f"description_length={len(dam_data['description']) if dam_data['description'] else 0}")
 
             context['dam_analysis_data'] = dam_data
             logger.info(f"Successfully set dam_analysis_data for document {self.object.id}")
