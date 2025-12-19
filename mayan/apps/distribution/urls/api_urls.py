@@ -9,6 +9,7 @@ from ..views import (
     APIRecipientListListView, APIRecipientListView, APIRenditionPresetDetailView,
     APIRenditionPresetListView, APIShareLinkDetailView, APIShareLinkListView
 )
+from ..views.share_link_views import create_share_link_simple
 
 # API URLs для distribution
 print("DEBUG: api_urls.py loaded, creating urlpatterns")
@@ -77,6 +78,11 @@ distribution_api_patterns = [
         route='share_links/',
         view=APIShareLinkListView.as_view(),
         name='sharelink-list'
+    ),
+    path(
+        route='share_links/create_simple/',
+        view=create_share_link_simple,
+        name='sharelink-create-simple'
     ),
     path(
         route='share_links/<int:pk>/',

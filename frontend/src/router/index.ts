@@ -271,7 +271,15 @@ router.beforeEach(async (to, _from, next) => {
   // Check authentication status
   if (!authStore.isAuthenticated) {
     // Try to check auth status from Django context/session
-    await authStore.checkAuth()
+    const authResult = await authStore.checkAuth()
+    // If auth check failed and we're not on login page, redirect
+    if (!authResult && to.name !== 'login' && to.meta.requiresAuth) {
+      next({
+        name: 'login',
+        query: { returnTo: to.fullPath }
+      })
+      return
+    }
   }
 
   // Check if route requires authentication

@@ -121,6 +121,7 @@ class MayanApp {
     }
 
     async doRefreshAJAXMenu (options) {
+        // Token will be added automatically by $.ajaxSetup() in foot.html
         $.ajax({
             complete: function() {
                 if (options.interval !== null) {
@@ -136,6 +137,15 @@ class MayanApp {
                     if (options.callback !== undefined) {
                         options.callback(options);
                     }
+                }
+            },
+            error: function(xhr, status, error) {
+                // If 401, don't immediately logout - let Vue app handle it
+                // This prevents premature logout during initial page load
+                if (xhr.status === 401) {
+                    console.warn('[MayanApp] Menu request returned 401, but not logging out - Vue app will handle auth');
+                    // Only clear token if we're sure we're logged out (not during initial load)
+                    // Vue router guard will handle proper logout
                 }
             },
             url: options.url,

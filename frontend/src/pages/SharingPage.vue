@@ -283,13 +283,25 @@
             <p class="text-sm text-neutral-500 mb-4">
               {{ tableSearch ? 'Попробуйте изменить параметры поиска' : 'Выберите активы в галерее и создайте ссылку для распространения' }}
             </p>
-            <router-link
-              v-if="!tableSearch"
-              to="/dam"
-              class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              Перейти в галерею
-            </router-link>
+            <div v-if="distributionStore.sharedLinksError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p class="text-sm text-red-600">Ошибка загрузки: {{ distributionStore.sharedLinksError }}</p>
+            </div>
+            <div class="flex items-center justify-center gap-4">
+              <router-link
+                v-if="!tableSearch"
+                to="/dam"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Перейти в галерею
+              </router-link>
+              <button
+                v-if="!tableSearch"
+                @click="showShareModal = true"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-neutral-100 text-neutral-700 text-sm font-medium rounded-lg hover:bg-neutral-200 transition-colors"
+              >
+                Создать ссылку
+              </button>
+            </div>
           </div>
           
           <!-- Table -->
@@ -875,7 +887,9 @@ function clearSelection() {
 async function refreshData() {
   isLoading.value = true
   try {
+    console.log('[SharingPage] Refreshing data, calling fetchSharedLinks...')
     await distributionStore.fetchSharedLinks()
+    console.log('[SharingPage] Data refreshed, links count:', distributionStore.sharedLinks.length)
   } finally {
     isLoading.value = false
   }
