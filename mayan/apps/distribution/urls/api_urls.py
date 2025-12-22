@@ -2,12 +2,15 @@ from django.http import JsonResponse
 from django.urls import include, path
 
 from ..views import (
-    APIAccessLogListView, APIGenerateRenditionsView, APIGeneratedRenditionDetailView,
-    APIGeneratedRenditionListView, APIPublicationDetailView,
-    APIPublicationItemDetailView, APIPublicationItemListView,
-    APIPublicationListView, APIRecipientDetailView, APIRecipientListDetailView,
-    APIRecipientListListView, APIRecipientListView, APIRenditionPresetDetailView,
-    APIRenditionPresetListView, APIShareLinkDetailView, APIShareLinkListView
+    APIAccessLogListView, APICampaignPublicationDetailView,
+    APICampaignPublicationListView, APIDistributionCampaignDetailView,
+    APIDistributionCampaignListView, APIGenerateRenditionsView,
+    APIGeneratedRenditionDetailView, APIGeneratedRenditionListView,
+    APIPublicationDetailView, APIPublicationItemDetailView,
+    APIPublicationItemListView, APIPublicationListView, APIRecipientDetailView,
+    APIRecipientListDetailView, APIRecipientListListView, APIRecipientListView,
+    APIRenditionPresetDetailView, APIRenditionPresetListView,
+    APIShareLinkDetailView, APIShareLinkListView
 )
 from ..views.share_link_views import create_share_link_simple
 
@@ -88,6 +91,28 @@ distribution_api_patterns = [
         route='share_links/<int:pk>/',
         view=APIShareLinkDetailView.as_view(),
         name='sharelink-detail'
+    ),
+
+    # Campaigns
+    path(
+        route='campaigns/',
+        view=APIDistributionCampaignListView.as_view(),
+        name='campaign-list'
+    ),
+    path(
+        route='campaigns/<int:campaign_id>/',
+        view=APIDistributionCampaignDetailView.as_view(),
+        name='campaign-detail'
+    ),
+    path(
+        route='campaigns/<int:campaign_id>/publications/',
+        view=APICampaignPublicationListView.as_view(),
+        name='campaign-publication-list'
+    ),
+    path(
+        route='campaigns/<int:campaign_id>/publications/<int:campaign_publication_id>/',
+        view=APICampaignPublicationDetailView.as_view(),
+        name='campaign-publication-detail'
     ),
 
     # Generated Renditions

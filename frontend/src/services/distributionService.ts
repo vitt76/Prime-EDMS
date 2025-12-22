@@ -5,7 +5,9 @@ import type {
   UpdatePublicationRequest,
   PaginatedResponse,
   ShareLink,
-  PublicationAnalytics
+  PublicationAnalytics,
+  DistributionCampaign,
+  CreateCampaignRequest
 } from '@/types/api'
 
 class DistributionService {
@@ -275,6 +277,64 @@ class DistributionService {
         event: 'download',
         asset_id: assetId
       }
+    )
+  }
+
+  /**
+   * Get list of distribution campaigns for current user
+   */
+  async getCampaigns(params?: {
+    page?: number
+    page_size?: number
+    state?: DistributionCampaign['state'] | 'all'
+    search?: string
+  }): Promise<PaginatedResponse<DistributionCampaign>> {
+    const queryParams: Record<string, string | number> = {}
+
+    if (params?.page) {
+      queryParams.page = params.page
+    }
+    if (params?.page_size) {
+      queryParams.page_size = params.page_size
+    }
+    if (params?.state && params.state !== 'all') {
+      queryParams.state = params.state
+    }
+    if (params?.search) {
+      queryParams.search = params.search
+    }
+
+    const searchParams = new URLSearchParams()
+    Object.entries(queryParams).forEach(([key, value]) => {
+      searchParams.append(key, String(value))
+    })
+
+    const endpoint =
+      searchParams.toString().length > 0
+        ? `/api/v4/distribution/campaigns/?${searchParams}`
+        : '/api/v4/distribution/campaigns/'
+
+    return apiService.get<PaginatedResponse<DistributionCampaign>>(endpoint, undefined, false)
+  }
+
+  /**
+   * Get single distribution campaign by ID
+   */
+  async getCampaign(id: number): Promise<DistributionCampaign> {
+    return apiService.get<DistributionCampaign>(
+      `/api/v4/distribution/campaigns/${id}/`,
+      undefined,
+      false
+    )
+  }
+
+  /**
+   * Create a distribution campaign
+   */
+  async createCampaign(payload: CreateCampaignRequest): Promise<DistributionCampaign> {
+    return apiService.post<DistributionCampaign>(
+      '/api/v4/distribution/campaigns/',
+      payload
     )
   }
 }

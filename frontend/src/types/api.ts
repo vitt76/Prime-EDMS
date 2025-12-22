@@ -293,3 +293,29 @@ export interface UpdatePublicationRequest {
   status?: Publication['status']
 }
 
+// Distribution Campaign API types
+export interface DistributionCampaign {
+  id: number
+  title: string
+  description?: string
+  state: 'draft' | 'active' | 'completed' | 'paused'
+  start_at?: string | null
+  end_at?: string | null
+  created: string
+  modified: string
+  owner_username?: string | null
+  publications_count: number
+  share_links_count: number
+  total_views: number | null
+  total_downloads: number | null
+}
+
+export interface CreateCampaignRequest {
+  title: string
+  description?: string
+  state?: DistributionCampaign['state']
+  start_at?: string | null
+  end_at?: string | null
+  metadata?: Record<string, unknown> | null
+}
+

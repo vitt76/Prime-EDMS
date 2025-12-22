@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { distributionService } from '@/services/distributionService'
-import type { Publication, PaginatedResponse, Asset } from '@/types/api'
+import type { Publication, PaginatedResponse, Asset, DistributionCampaign } from '@/types/api'
 import { formatApiError } from '@/utils/errors'
 import { adaptShareLink, adaptShareLinks, type APIShareLink } from '@/utils/shareLinkAdapter'
 import {
@@ -31,7 +31,7 @@ export const useDistributionStore = defineStore(
       search?: string
     }>({})
 
-    // Shared Links (new)
+    // Shared Links (public links)
     const sharedLinks = ref<SharedLink[]>([])
     const sharedLinksLoading = ref(false)
     const sharedLinksError = ref<string | null>(null)
@@ -39,6 +39,11 @@ export const useDistributionStore = defineStore(
       status?: SharedLink['status']
       search?: string
     }>({})
+
+    // Campaigns
+    const campaigns = ref<DistributionCampaign[]>([])
+    const campaignsLoading = ref(false)
+    const campaignsError = ref<string | null>(null)
 
     // ==================== Getters ====================
 
@@ -519,6 +524,53 @@ export const useDistributionStore = defineStore(
       fetchSharedLinks(sharedLinkFilters.value)
     }
 
+    // ==================== Campaigns Actions ====================
+
+    async function fetchCampaigns(params?: {
+      page?: number
+      page_size?: number
+      state?: DistributionCampaign['state'] | 'all'
+      search?: string
+    }) {
+      campaignsLoading.value = true
+      campaignsError.value = null
+
+      try {
+        const response = await distributionService.getCampaigns(params)
+        campaigns.value = response.results || []
+      } catch (err) {
+        campaignsError.value = formatApiError(err)
+        campaigns.value = []
+        // Для UX достаточно логирования; ошибка может быть показана на UI позже
+        console.error('Failed to fetch campaigns:', err)
+      } finally {
+        campaignsLoading.value = false
+      }
+    }
+
+    async function createCampaign(payload: {
+      title: string
+      description?: string
+    }): Promise<DistributionCampaign | null> {
+      campaignsLoading.value = true
+      campaignsError.value = null
+
+      try {
+        const campaign = await distributionService.createCampaign({
+          title: payload.title,
+          description: payload.description
+        })
+        campaigns.value.unshift(campaign)
+        return campaign
+      } catch (err) {
+        campaignsError.value = formatApiError(err)
+        console.error('Failed to create campaign:', err)
+        return null
+      } finally {
+        campaignsLoading.value = false
+      }
+    }
+
     return {
       // Publications State
       publications,
@@ -569,7 +621,14 @@ export const useDistributionStore = defineStore(
       applySharedLinkFilters,
       clearSharedLinkFilters,
       checkAssetShared,
-      refreshSharedLinks
+      refreshSharedLinks,
+
+      // Campaigns
+      campaigns,
+      campaignsLoading,
+      campaignsError,
+      fetchCampaigns,
+      createCampaign
     }
   },
   {

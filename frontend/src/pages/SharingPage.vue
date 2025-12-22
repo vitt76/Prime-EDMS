@@ -1,6 +1,6 @@
 // @ts-nocheck
 <template>
-  <div class="sharing-page min-h-screen bg-neutral-50">
+<div class="sharing-page min-h-screen bg-neutral-50">
     <div class="container mx-auto px-4 py-6 max-w-7xl">
       <!-- Header -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -144,7 +144,7 @@
             <p class="text-sm text-neutral-500">Истекших</p>
           </div>
         </div>
-        <div class="bg-white rounded-xl border border-neutral-200 p-4 flex items-center gap-3">
+      <div class="bg-white rounded-xl border border-neutral-200 p-4 flex items-center gap-3">
           <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
             <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -154,6 +154,20 @@
           <div>
             <p class="text-2xl font-bold text-neutral-900">{{ stats.totalViews.toLocaleString() }}</p>
             <p class="text-sm text-neutral-500">Просмотров</p>
+          </div>
+        </div>
+        <div 
+          class="bg-white rounded-xl border border-neutral-200 p-4 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
+          @click="setActiveTab('campaigns')"
+        >
+          <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-neutral-900">{{ stats.campaigns }}</p>
+            <p class="text-sm text-neutral-500">Кампаний</p>
           </div>
         </div>
       </div>
@@ -267,7 +281,91 @@
         <!-- Tab Content -->
         <div class="p-0">
           <!-- Loading -->
-          <div v-if="isLoading && filteredLinks.length === 0" class="p-12 text-center">
+          <div v-if="activeTab === 'campaigns'">
+            <!-- Campaigns tab -->
+            <div v-if="distributionStore.campaignsLoading" class="p-12 text-center">
+              <div class="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p class="text-sm text-neutral-500">Загрузка кампаний...</p>
+            </div>
+            <div v-else-if="distributionStore.campaignsError" class="p-12 text-center">
+              <p class="text-sm text-error-600 mb-2">Ошибка: {{ distributionStore.campaignsError }}</p>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+                @click="refreshCampaigns"
+              >
+                Повторить
+              </button>
+            </div>
+            <div v-else-if="distributionStore.campaigns.length === 0" class="p-12 text-center">
+              <svg class="mx-auto w-16 h-16 text-neutral-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7h18M3 12h18M3 17h18" />
+              </svg>
+              <h3 class="text-lg font-medium text-neutral-900 mb-2">Нет кампаний</h3>
+              <p class="text-sm text-neutral-500 mb-4">Создайте кампанию, чтобы объединить несколько публикаций и ссылок.</p>
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+                @click="openCampaignModal"
+              >
+                Создать кампанию
+              </button>
+            </div>
+            <div v-else class="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div
+                v-for="campaign in distributionStore.campaigns"
+                :key="campaign.id"
+                class="border border-neutral-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow"
+              >
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="text-base font-semibold text-neutral-900 truncate">{{ campaign.title }}</h3>
+                  <span
+                    class="px-2 py-0.5 text-xs rounded-full"
+                    :class="campaign.state === 'active'
+                      ? 'bg-success-100 text-success-700'
+                      : campaign.state === 'draft'
+                        ? 'bg-neutral-100 text-neutral-600'
+                        : campaign.state === 'completed'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-warning-100 text-warning-700'"
+                  >
+                    {{ campaignStateLabel(campaign.state) }}
+                  </span>
+                </div>
+                <p class="text-sm text-neutral-600 line-clamp-2 mb-3">{{ campaign.description || 'Без описания' }}</p>
+                <div class="flex items-center gap-4 text-sm text-neutral-600 mb-3">
+                  <span class="flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {{ formatDate(campaign.created) }}
+                  </span>
+                  <span class="flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+                    </svg>
+                    {{ campaign.publications_count }} публ.
+                  </span>
+                </div>
+                <div class="flex items-center gap-4 text-sm text-neutral-600">
+                  <span class="flex items-center gap-1.5" title="Просмотры">
+                    <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    {{ formatNumber(campaign.total_views || 0) }}
+                  </span>
+                  <span class="flex items-center gap-1.5" title="Скачивания">
+                    <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    {{ formatNumber(campaign.total_downloads || 0) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="isLoading && filteredLinks.length === 0" class="p-12 text-center">
             <div class="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
             <p class="text-sm text-neutral-500">Загрузка...</p>
           </div>
@@ -746,7 +844,7 @@ const notificationStore = useNotificationStore()
 // STATE
 // ============================================================================
 
-type TabId = 'all' | 'active' | 'expired'
+type TabId = 'all' | 'active' | 'expired' | 'campaigns'
 
 const activeTab = ref<TabId>('all')
 const tableSearch = ref('')
@@ -781,6 +879,7 @@ const tabs = computed(() => [
   { id: 'all' as const, label: 'Все ссылки', count: distributionStore.sharedLinks.length },
   { id: 'active' as const, label: 'Активные', count: distributionStore.sharedLinks.filter(l => l.status === 'active').length },
   { id: 'expired' as const, label: 'Истекшие', count: distributionStore.sharedLinks.filter(l => l.status === 'expired' || l.status === 'revoked').length },
+  { id: 'campaigns' as const, label: 'Кампании', count: distributionStore.campaigns.length },
 ])
 
 const stats = computed(() => ({
@@ -788,12 +887,13 @@ const stats = computed(() => ({
   activeLinks: distributionStore.sharedLinks.filter(l => l.status === 'active').length,
   expiredLinks: distributionStore.sharedLinks.filter(l => l.status === 'expired' || l.status === 'revoked').length,
   totalViews: distributionStore.sharedLinks.reduce((sum, l) => sum + (l.views || 0), 0),
+  campaigns: distributionStore.campaigns.length
 }))
 
 const filteredLinks = computed(() => {
   let links = [...distributionStore.sharedLinks]
   
-  // Filter by tab
+  // Filter by tab (only for link tabs)
   if (activeTab.value === 'active') {
     links = links.filter(l => l.status === 'active')
   } else if (activeTab.value === 'expired') {
@@ -1032,12 +1132,33 @@ function openEmailShareModal() {
   })
 }
 
-function openCampaignModal() {
-  notificationStore.addNotification({
-    type: 'info',
-    title: 'Кампании',
-    message: 'Функционал создания кампаний будет доступен в следующем обновлении'
-  })
+async function openCampaignModal() {
+  const title = window.prompt('Название кампании', 'Новая кампания')
+  if (!title) {
+    return
+  }
+  try {
+    const campaign = await distributionStore.createCampaign({ title })
+    if (campaign) {
+      notificationStore.addNotification({
+        type: 'success',
+        title: 'Кампания создана',
+        message: campaign.title
+      })
+      await refreshCampaigns()
+    }
+  } catch (err) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось создать кампанию'
+    })
+    console.error('Failed to create campaign:', err)
+  }
+}
+
+async function refreshCampaigns() {
+  await distributionStore.fetchCampaigns()
 }
 
 function handleShareSuccess(url: string) {
@@ -1101,6 +1222,16 @@ function getStatusLabel(status: SharedLink['status']): string {
   return labels[status] || 'Неизвестно'
 }
 
+function campaignStateLabel(state: string): string {
+  const labels: Record<string, string> = {
+    draft: 'Черновик',
+    active: 'Активна',
+    completed: 'Завершена',
+    paused: 'На паузе'
+  }
+  return labels[state] || 'Неизвестно'
+}
+
 // ============================================================================
 // LIFECYCLE
 // ============================================================================
@@ -1108,17 +1239,23 @@ function getStatusLabel(status: SharedLink['status']): string {
 onMounted(async () => {
   // Check URL for tab parameter
   const tabParam = route.query.tab as TabId
-  if (tabParam && ['all', 'active', 'expired'].includes(tabParam)) {
+  if (tabParam && ['all', 'active', 'expired', 'campaigns'].includes(tabParam)) {
     activeTab.value = tabParam
   }
   
   await refreshData()
+  if (activeTab.value === 'campaigns') {
+    await refreshCampaigns()
+  }
 })
 
 // Watch for route changes
-watch(() => route.query.tab, (newTab) => {
-  if (newTab && ['all', 'active', 'expired'].includes(newTab as string)) {
+watch(() => route.query.tab, async (newTab) => {
+  if (newTab && ['all', 'active', 'expired', 'campaigns'].includes(newTab as string)) {
     activeTab.value = newTab as TabId
+    if (activeTab.value === 'campaigns') {
+      await refreshCampaigns()
+    }
   }
 })
 </script>

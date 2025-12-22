@@ -1,5 +1,9 @@
 # Views package
 
+from .campaign_views import (
+    APICampaignPublicationDetailView, APICampaignPublicationListView,
+    APIDistributionCampaignDetailView, APIDistributionCampaignListView
+)
 from .preset_views import APIRenditionPresetDetailView, APIRenditionPresetListView
 from .publication_views import (
     APIAccessLogListView, APIGenerateRenditionsView, APIGeneratedRenditionDetailView,
