@@ -571,6 +571,46 @@ export const useDistributionStore = defineStore(
       }
     }
 
+    async function updateCampaign(
+      id: number,
+      payload: Partial<Pick<DistributionCampaign, 'title' | 'description' | 'state'>>
+    ): Promise<DistributionCampaign | null> {
+      campaignsLoading.value = true
+      campaignsError.value = null
+
+      try {
+        const updated = await distributionService.updateCampaign(id, payload)
+        const index = campaigns.value.findIndex(c => c.id === id)
+        if (index !== -1) {
+          campaigns.value[index] = updated
+        }
+        return updated
+      } catch (err) {
+        campaignsError.value = formatApiError(err)
+        console.error('Failed to update campaign:', err)
+        return null
+      } finally {
+        campaignsLoading.value = false
+      }
+    }
+
+    async function deleteCampaign(id: number): Promise<boolean> {
+      campaignsLoading.value = true
+      campaignsError.value = null
+
+      try {
+        await distributionService.deleteCampaign(id)
+        campaigns.value = campaigns.value.filter(c => c.id !== id)
+        return true
+      } catch (err) {
+        campaignsError.value = formatApiError(err)
+        console.error('Failed to delete campaign:', err)
+        return false
+      } finally {
+        campaignsLoading.value = false
+      }
+    }
+
     return {
       // Publications State
       publications,
@@ -628,7 +668,9 @@ export const useDistributionStore = defineStore(
       campaignsLoading,
       campaignsError,
       fetchCampaigns,
-      createCampaign
+      createCampaign,
+      updateCampaign,
+      deleteCampaign
     }
   },
   {

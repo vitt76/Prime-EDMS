@@ -317,20 +317,49 @@
                 :key="campaign.id"
                 class="border border-neutral-200 rounded-xl p-4 bg-white hover:shadow-md transition-shadow"
               >
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-base font-semibold text-neutral-900 truncate">{{ campaign.title }}</h3>
-                  <span
-                    class="px-2 py-0.5 text-xs rounded-full"
-                    :class="campaign.state === 'active'
-                      ? 'bg-success-100 text-success-700'
-                      : campaign.state === 'draft'
-                        ? 'bg-neutral-100 text-neutral-600'
-                        : campaign.state === 'completed'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-warning-100 text-warning-700'"
-                  >
-                    {{ campaignStateLabel(campaign.state) }}
-                  </span>
+                <div class="flex items-start justify-between mb-2">
+                  <div class="min-w-0">
+                    <h3 class="text-base font-semibold text-neutral-900 truncate">
+                      {{ campaign.title }}
+                    </h3>
+                    <p class="text-xs text-neutral-500 mt-0.5">
+                      Создатель: {{ campaign.owner_username || '—' }}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span
+                      class="px-2 py-0.5 text-xs rounded-full"
+                      :class="campaign.state === 'active'
+                        ? 'bg-success-100 text-success-700'
+                        : campaign.state === 'draft'
+                          ? 'bg-neutral-100 text-neutral-600'
+                          : campaign.state === 'completed'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-warning-100 text-warning-700'"
+                    >
+                      {{ campaignStateLabel(campaign.state) }}
+                    </span>
+                    <button
+                      type="button"
+                      class="p-1 text-neutral-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                      title="Редактировать кампанию"
+                      @click="editCampaign(campaign)"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="p-1 text-neutral-400 hover:text-error-600 hover:bg-error-50 rounded-full transition-colors"
+                      title="Удалить кампанию"
+                      @click="deleteCampaign(campaign)"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <p class="text-sm text-neutral-600 line-clamp-2 mb-3">{{ campaign.description || 'Без описания' }}</p>
                 <div class="flex items-center gap-4 text-sm text-neutral-600 mb-3">
@@ -801,6 +830,77 @@
       @close="showShareModal = false"
       @success="handleShareSuccess"
     />
+
+    <!-- Campaign Create/Edit Modal -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition ease-out duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition ease-in duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="showCampaignModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/60" @click="closeCampaignModal" />
+          <div class="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6">
+            <h3 class="text-lg font-semibold text-neutral-900 mb-4">
+              {{ campaignModalMode === 'create' ? 'Новая кампания' : 'Редактировать кампанию' }}
+            </h3>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-neutral-700 mb-1">Название</label>
+                <input
+                  v-model="campaignForm.title"
+                  type="text"
+                  class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Например, Летняя коллекция 2026"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-neutral-700 mb-1">Описание</label>
+                <textarea
+                  v-model="campaignForm.description"
+                  rows="3"
+                  class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                  placeholder="Краткое описание цели кампании"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-neutral-700 mb-1">Статус</label>
+                <select
+                  v-model="campaignForm.state"
+                  class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                >
+                  <option value="draft">Черновик</option>
+                  <option value="active">Активна</option>
+                  <option value="completed">Завершена</option>
+                  <option value="paused">На паузе</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="flex gap-3 mt-6">
+              <button
+                type="button"
+                class="flex-1 px-4 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-xl hover:bg-neutral-200 transition-colors"
+                @click="closeCampaignModal"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-colors"
+                @click="saveCampaign"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -870,6 +970,16 @@ const editForm = reactive({
 
 // Create modal
 const showShareModal = ref(false)
+
+// Campaign modal
+const showCampaignModal = ref(false)
+const campaignModalMode = ref<'create' | 'edit'>('create')
+const editingCampaignId = ref<number | null>(null)
+const campaignForm = reactive({
+  title: '',
+  description: '',
+  state: 'draft' as 'draft' | 'active' | 'completed' | 'paused'
+})
 
 // ============================================================================
 // COMPUTED
@@ -1133,28 +1243,16 @@ function openEmailShareModal() {
 }
 
 async function openCampaignModal() {
-  const title = window.prompt('Название кампании', 'Новая кампания')
-  if (!title) {
-    return
-  }
-  try {
-    const campaign = await distributionStore.createCampaign({ title })
-    if (campaign) {
-      notificationStore.addNotification({
-        type: 'success',
-        title: 'Кампания создана',
-        message: campaign.title
-      })
-      await refreshCampaigns()
-    }
-  } catch (err) {
-    notificationStore.addNotification({
-      type: 'error',
-      title: 'Ошибка',
-      message: 'Не удалось создать кампанию'
-    })
-    console.error('Failed to create campaign:', err)
-  }
+  campaignModalMode.value = 'create'
+  editingCampaignId.value = null
+  campaignForm.title = ''
+  campaignForm.description = ''
+  campaignForm.state = 'draft'
+  showCampaignModal.value = true
+}
+
+function closeCampaignModal() {
+  showCampaignModal.value = false
 }
 
 async function refreshCampaigns() {
@@ -1233,6 +1331,94 @@ function campaignStateLabel(state: string): string {
 }
 
 // ============================================================================
+// Campaign actions (edit/delete)
+// ============================================================================
+
+async function editCampaign(campaign: any) {
+  campaignModalMode.value = 'edit'
+  editingCampaignId.value = campaign.id
+  campaignForm.title = campaign.title
+  campaignForm.description = campaign.description || ''
+  campaignForm.state = campaign.state || 'draft'
+  showCampaignModal.value = true
+}
+
+async function deleteCampaign(campaign: any) {
+  if (!window.confirm(`Удалить кампанию "${campaign.title}"?`)) {
+    return
+  }
+
+  try {
+    const ok = await distributionStore.deleteCampaign(campaign.id)
+    if (ok) {
+      notificationStore.addNotification({
+        type: 'success',
+        title: 'Кампания удалена',
+        message: campaign.title
+      })
+      await refreshCampaigns()
+    }
+  } catch (error) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось удалить кампанию'
+    })
+    console.error('Failed to delete campaign:', error)
+  }
+}
+
+async function saveCampaign() {
+  if (!campaignForm.title.trim()) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Название кампании обязательно'
+    })
+    return
+  }
+
+  try {
+    if (campaignModalMode.value === 'create') {
+      const campaign = await distributionStore.createCampaign({
+        title: campaignForm.title.trim(),
+        description: campaignForm.description.trim() || undefined
+      })
+      if (campaign) {
+        notificationStore.addNotification({
+          type: 'success',
+          title: 'Кампания создана',
+          message: campaign.title
+        })
+      }
+    } else if (campaignModalMode.value === 'edit' && editingCampaignId.value !== null) {
+      const updated = await distributionStore.updateCampaign(editingCampaignId.value, {
+        title: campaignForm.title.trim(),
+        description: campaignForm.description.trim() || undefined,
+        state: campaignForm.state
+      })
+      if (updated) {
+        notificationStore.addNotification({
+          type: 'success',
+          title: 'Кампания обновлена',
+          message: updated.title
+        })
+      }
+    }
+
+    await refreshCampaigns()
+    closeCampaignModal()
+  } catch (error) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось сохранить кампанию'
+    })
+    console.error('Failed to save campaign:', error)
+  }
+}
+
+// ============================================================================
 // LIFECYCLE
 // ============================================================================
 
@@ -1243,10 +1429,12 @@ onMounted(async () => {
     activeTab.value = tabParam
   }
   
-  await refreshData()
-  if (activeTab.value === 'campaigns') {
-    await refreshCampaigns()
-  }
+  // Загружаем и ссылки, и кампании при инициализации,
+  // чтобы счётчики и табы сразу отображали актуальные данные
+  await Promise.all([
+    refreshData(),
+    refreshCampaigns()
+  ])
 })
 
 // Watch for route changes

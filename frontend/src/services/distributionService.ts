@@ -337,6 +337,26 @@ class DistributionService {
       payload
     )
   }
+
+  /**
+   * Update a distribution campaign
+   */
+  async updateCampaign(
+    id: number,
+    payload: Partial<CreateCampaignRequest & { state: DistributionCampaign['state'] }>
+  ): Promise<DistributionCampaign> {
+    return apiService.patch<DistributionCampaign>(
+      `/api/v4/distribution/campaigns/${id}/`,
+      payload
+    )
+  }
+
+  /**
+   * Delete a distribution campaign
+   */
+  async deleteCampaign(id: number): Promise<void> {
+    return apiService.delete<void>(`/api/v4/distribution/campaigns/${id}/`)
+  }
 }
 
 export const distributionService = new DistributionService()

@@ -80,6 +80,12 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
     share_links_count = serializers.IntegerField(read_only=True)
     total_views = serializers.IntegerField(read_only=True)
     total_downloads = serializers.IntegerField(read_only=True)
+    publication_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False,
+        help_text=_('IDs of publications to attach to this campaign')
+    )
 
     class Meta:
         model = DistributionCampaign
@@ -97,6 +103,7 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
             'share_links_count',
             'total_views',
             'total_downloads',
+            'publication_ids',
         )
         read_only_fields = (
             'id',
@@ -124,21 +131,64 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
         return validated_data
 
     def create(self, validated_data):
+        publication_ids = validated_data.pop('publication_ids', [])
         validated_data = self._strip_internal_fields(validated_data)
 
         request = self.context.get('request')
+        owner = None
         if request and request.user and request.user.is_authenticated:
-            validated_data['owner'] = request.user
+            owner = request.user
+            validated_data['owner'] = owner
 
         # Явно создаем объект, чтобы гарантированно не передавать служебные поля
-        return DistributionCampaign.objects.create(**validated_data)
+        campaign = DistributionCampaign.objects.create(**validated_data)
+
+        # Привязка публикаций, если переданы
+        if publication_ids and owner:
+            publications = Publication.objects.filter(id__in=publication_ids, owner=owner)
+            existing_ids = set()
+            for pub in publications:
+                cp, _ = CampaignPublication.objects.get_or_create(
+                    campaign=campaign,
+                    publication=pub
+                )
+                existing_ids.add(pub.id)
+
+        return campaign
 
     def update(self, instance, validated_data):
+        publication_ids = validated_data.pop('publication_ids', None)
         validated_data = self._strip_internal_fields(validated_data)
         # Owner is controlled by backend
         validated_data.pop('owner', None)
 
-        return super().update(instance, validated_data)
+        instance = super().update(instance, validated_data)
+
+        # Если пришёл список публикаций, синхронизируем связи
+        if publication_ids is not None:
+            request = self.context.get('request')
+            owner = getattr(request, 'user', None)
+            if owner and owner.is_authenticated:
+                allowed_publications = set(
+                    Publication.objects.filter(id__in=publication_ids, owner=owner).values_list('id', flat=True)
+                )
+                # Удаляем связи, которых больше нет
+                CampaignPublication.objects.filter(
+                    campaign=instance
+                ).exclude(publication_id__in=allowed_publications).delete()
+
+                # Добавляем недостающие
+                existing_ids = set(
+                    CampaignPublication.objects.filter(campaign=instance).values_list('publication_id', flat=True)
+                )
+                for pub_id in allowed_publications:
+                    if pub_id not in existing_ids:
+                        CampaignPublication.objects.create(
+                            campaign=instance,
+                            publication_id=pub_id
+                        )
+
+        return instance
 
 
 class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
