@@ -36,6 +36,10 @@ class APIDistributionCampaignListView(generics.ListCreateAPIView):
         # Annotate basic aggregates for list view.
         queryset = queryset.annotate(
             publications_count=Count('campaign_publications', distinct=True),
+            assets_count=Count(
+                'campaign_publications__publication__items',
+                distinct=True
+            ),
             share_links_count=Count(
                 'campaign_publications__publication__items__renditions__share_links',
                 distinct=True

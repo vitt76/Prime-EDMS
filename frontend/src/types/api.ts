@@ -305,6 +305,7 @@ export interface DistributionCampaign {
   modified: string
   owner_username?: string | null
   publications_count: number
+  assets_count: number
   share_links_count: number
   total_views: number | null
   total_downloads: number | null
@@ -317,5 +318,6 @@ export interface CreateCampaignRequest {
   start_at?: string | null
   end_at?: string | null
   metadata?: Record<string, unknown> | null
+  document_ids?: number[]
 }
 

@@ -373,7 +373,7 @@
                     <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
                     </svg>
-                    {{ campaign.publications_count }} публ.
+                    {{ campaign.assets_count ?? campaign.publications_count }} файлов
                   </span>
                 </div>
                 <div class="flex items-center gap-4 text-sm text-neutral-600">
@@ -924,11 +924,12 @@
  * ✅ Hover states with opacity transitions
  */
 
-import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { useDistributionStore, type SharedLink } from '@/stores/distributionStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { useAssetStore } from '@/stores/assetStore'
 import ShareModal from '@/components/DAM/ShareModal.vue'
 
 // ============================================================================
@@ -939,6 +940,7 @@ const router = useRouter()
 const route = useRoute()
 const distributionStore = useDistributionStore()
 const notificationStore = useNotificationStore()
+const assetStore = useAssetStore()
 
 // ============================================================================
 // STATE
@@ -980,6 +982,8 @@ const campaignForm = reactive({
   description: '',
   state: 'draft' as 'draft' | 'active' | 'completed' | 'paused'
 })
+
+const selectedDocumentIds = computed(() => Array.from(assetStore.selectedAssets))
 
 // ============================================================================
 // COMPUTED
@@ -1243,6 +1247,17 @@ function openEmailShareModal() {
 }
 
 async function openCampaignModal() {
+  // Для создания кампании обязательно должны быть выбраны активы
+  if (selectedDocumentIds.value.length === 0) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Нет выбранных активов',
+      message: 'Сначала выберите документы в галерее, затем создайте кампанию.'
+    })
+    router.push('/dam')
+    return
+  }
+
   campaignModalMode.value = 'create'
   editingCampaignId.value = null
   campaignForm.title = ''
@@ -1382,7 +1397,8 @@ async function saveCampaign() {
     if (campaignModalMode.value === 'create') {
       const campaign = await distributionStore.createCampaign({
         title: campaignForm.title.trim(),
-        description: campaignForm.description.trim() || undefined
+        description: campaignForm.description.trim() || undefined,
+        document_ids: selectedDocumentIds.value
       })
       if (campaign) {
         notificationStore.addNotification({
@@ -1435,6 +1451,15 @@ onMounted(async () => {
     refreshData(),
     refreshCampaigns()
   ])
+
+  // Если пришли с галереи с выбранными активами для создания кампании
+  if (route.query.from === 'assets' && selectedDocumentIds.value.length > 0) {
+    activeTab.value = 'campaigns'
+    await nextTick()
+    await openCampaignModal()
+    // Убираем служебный флаг из URL
+    router.replace({ query: { ...route.query, from: undefined, tab: 'campaigns' } })
+  }
 })
 
 // Watch for route changes

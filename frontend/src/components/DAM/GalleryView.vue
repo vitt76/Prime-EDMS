@@ -237,6 +237,7 @@
       @share="handleBulkShare"
       @download="handleBulkDownload"
       @move="handleBulkMove"
+      @campaign="handleBulkCampaign"
     />
   </div>
 </template>
@@ -524,6 +525,11 @@ function handleBulkDownload() {
 
 function handleBulkShare() {
   showBulkShareModal.value = true
+}
+
+function handleBulkCampaign() {
+  // Переходим на вкладку кампаний, SharingPage возьмет выбранные активы из assetStore
+  router.push({ path: '/sharing', query: { tab: 'campaigns', from: 'assets' } })
 }
 
 function handleShareSuccess() {

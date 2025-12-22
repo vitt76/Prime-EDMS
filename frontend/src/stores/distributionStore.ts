@@ -551,6 +551,7 @@ export const useDistributionStore = defineStore(
     async function createCampaign(payload: {
       title: string
       description?: string
+      document_ids?: number[]
     }): Promise<DistributionCampaign | null> {
       campaignsLoading.value = true
       campaignsError.value = null
@@ -558,7 +559,8 @@ export const useDistributionStore = defineStore(
       try {
         const campaign = await distributionService.createCampaign({
           title: payload.title,
-          description: payload.description
+          description: payload.description,
+          document_ids: payload.document_ids
         })
         campaigns.value.unshift(campaign)
         return campaign
