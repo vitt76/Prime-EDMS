@@ -13,6 +13,7 @@ class APITemplateDetailView(generics.RetrieveAPIView):
     """
     serializer_class = AJAXTemplateSerializer
     permission_classes = (IsAuthenticated,)
+    throttle_classes = []  # Disable throttling for menu endpoints to prevent 429 errors
 
     def get_object(self):
         return AJAXTemplate.get(self.kwargs['name']).render(
@@ -26,6 +27,7 @@ class APITemplateListView(generics.ListAPIView):
     """
     serializer_class = AJAXTemplateSerializer
     permission_classes = (IsAuthenticated,)
+    throttle_classes = []  # Disable throttling for menu endpoints to prevent 429 errors
 
     def get_queryset(self):
         return AJAXTemplate.all(rendered=True, request=self.request)

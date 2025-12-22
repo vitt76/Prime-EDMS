@@ -1,14 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { distributionService } from '@/services/distributionService'
-import type { Publication, PaginatedResponse, Asset } from '@/types/api'
+import type { Publication, PaginatedResponse, Asset, DistributionCampaign } from '@/types/api'
 import { formatApiError } from '@/utils/errors'
+import { adaptShareLink, adaptShareLinks, type APIShareLink } from '@/utils/shareLinkAdapter'
 import {
-  getMockSharedLinks,
-  getMockSharedLinkById,
-  createMockSharedLink,
-  revokeMockSharedLink,
-  updateMockSharedLink,
   getSharedAssetIds,
   isAssetShared,
   type SharedLink,
@@ -35,7 +31,7 @@ export const useDistributionStore = defineStore(
       search?: string
     }>({})
 
-    // Shared Links (new)
+    // Shared Links (public links)
     const sharedLinks = ref<SharedLink[]>([])
     const sharedLinksLoading = ref(false)
     const sharedLinksError = ref<string | null>(null)
@@ -43,6 +39,11 @@ export const useDistributionStore = defineStore(
       status?: SharedLink['status']
       search?: string
     }>({})
+
+    // Campaigns
+    const campaigns = ref<DistributionCampaign[]>([])
+    const campaignsLoading = ref(false)
+    const campaignsError = ref<string | null>(null)
 
     // ==================== Getters ====================
 
@@ -302,7 +303,7 @@ export const useDistributionStore = defineStore(
     // ==================== Shared Links Actions ====================
 
     /**
-     * Fetch all shared links
+     * Fetch all shared links from API
      */
     async function fetchSharedLinks(filters?: {
       status?: SharedLink['status']
@@ -312,14 +313,44 @@ export const useDistributionStore = defineStore(
       sharedLinksError.value = null
 
       try {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 300))
+        // Fetch from real API
+        console.log('[DistributionStore] Fetching shared links from API...')
+        const response = await distributionService.getAllShareLinks({
+          page_size: 100 // Get all links for now
+        })
         
-        sharedLinks.value = getMockSharedLinks(filters)
+        console.log('[DistributionStore] API response:', {
+          count: response.count,
+          resultsCount: response.results?.length || 0,
+          results: response.results
+        })
+        
+        // Adapt API response to Vue format
+        const baseUrl = window.location.origin
+        let adaptedLinks = adaptShareLinks(response.results || [], baseUrl)
+        
+        console.log('[DistributionStore] Adapted links:', adaptedLinks.length, adaptedLinks)
+        
+        // Apply filters if provided
+        if (filters?.status) {
+          adaptedLinks = adaptedLinks.filter(link => link.status === filters.status)
+        }
+        
+        if (filters?.search) {
+          const query = filters.search.toLowerCase()
+          adaptedLinks = adaptedLinks.filter(link =>
+            link.name.toLowerCase().includes(query) ||
+            link.slug.toLowerCase().includes(query) ||
+            link.created_by.toLowerCase().includes(query)
+          )
+        }
+        
+        sharedLinks.value = adaptedLinks
         sharedLinkFilters.value = filters || {}
       } catch (err) {
         sharedLinksError.value = formatApiError(err)
         sharedLinks.value = []
+        console.error('Failed to fetch shared links:', err)
       } finally {
         sharedLinksLoading.value = false
       }
@@ -328,26 +359,64 @@ export const useDistributionStore = defineStore(
     /**
      * Get a single shared link by ID
      */
-    function getSharedLink(id: number): SharedLink | undefined {
-      return getMockSharedLinkById(id)
+    async function getSharedLink(id: number): Promise<SharedLink | undefined> {
+      try {
+        const apiLink = await distributionService.getShareLinkById(id)
+        const baseUrl = window.location.origin
+        return adaptShareLink(apiLink, baseUrl)
+      } catch (err) {
+        console.error('Failed to fetch shared link:', err)
+        return undefined
+      }
     }
 
     /**
      * Create a new shared link
+     * Uses simplified endpoint that automatically creates publication and renditions
      */
-    async function createSharedLink(params: CreateSharedLinkParams): Promise<SharedLink> {
+    async function createSharedLink(params: CreateSharedLinkParams & { rendition_id?: number }): Promise<SharedLink> {
       sharedLinksLoading.value = true
       sharedLinksError.value = null
 
       try {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // If rendition_id is provided, use direct creation
+        if (params.rendition_id) {
+          const apiLink = await distributionService.createShareLink({
+            rendition: params.rendition_id,
+            expires_at: params.expires_date || null,
+            max_downloads: null
+          })
+          
+          const baseUrl = window.location.origin
+          const newLink = adaptShareLink(apiLink, baseUrl)
+          sharedLinks.value.unshift(newLink)
+          return newLink
+        }
         
-        const newLink = createMockSharedLink(params)
+        // Otherwise, use simplified endpoint that creates everything automatically
+        if (!params.asset_ids || params.asset_ids.length === 0) {
+          throw new Error('No assets selected for sharing')
+        }
         
-        // Add to local state
+        // Use simplified endpoint
+        const response = await distributionService.createShareLinkSimple({
+          document_file_ids: params.asset_ids,
+          title: params.name || 'Share Link',
+          expires_at: params.expires_date || null,
+          max_downloads: null
+        })
+        
+        // Response can be a single link or multiple links
+        const apiLink = response.share_links ? response.share_links[0] : response
+        const baseUrl = window.location.origin
+        const newLink = adaptShareLink(apiLink, baseUrl)
+        
+        // Update name if provided
+        if (params.name) {
+          newLink.name = params.name
+        }
+        
         sharedLinks.value.unshift(newLink)
-        
         return newLink
       } catch (err) {
         sharedLinksError.value = formatApiError(err)
@@ -365,20 +434,16 @@ export const useDistributionStore = defineStore(
       sharedLinksError.value = null
 
       try {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 300))
+        // Delete via API
+        await distributionService.deleteShareLink(id)
         
-        const success = revokeMockSharedLink(id)
-        
-        if (success) {
-          // Update local state
-          const index = sharedLinks.value.findIndex(link => link.id === id)
-          if (index !== -1) {
-            sharedLinks.value[index].status = 'revoked'
-          }
+        // Remove from local state
+        const index = sharedLinks.value.findIndex(link => link.id === id)
+        if (index !== -1) {
+          sharedLinks.value.splice(index, 1)
         }
         
-        return success
+        return true
       } catch (err) {
         sharedLinksError.value = formatApiError(err)
         throw err
@@ -398,17 +463,26 @@ export const useDistributionStore = defineStore(
       sharedLinksError.value = null
 
       try {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 300))
+        // Prepare API update payload
+        const apiUpdates: {
+          expires_at?: string | null
+          max_downloads?: number | null
+        } = {}
         
-        const updated = updateMockSharedLink(id, updates)
+        if (updates.expires_date !== undefined) {
+          apiUpdates.expires_at = updates.expires_date || null
+        }
         
-        if (updated) {
-          // Update local state
-          const index = sharedLinks.value.findIndex(link => link.id === id)
-          if (index !== -1) {
-            sharedLinks.value[index] = updated
-          }
+        // Update via API
+        const apiLink = await distributionService.updateShareLink(id, apiUpdates)
+        
+        // Adapt and update local state
+        const baseUrl = window.location.origin
+        const updated = adaptShareLink(apiLink, baseUrl)
+        
+        const index = sharedLinks.value.findIndex(link => link.id === id)
+        if (index !== -1) {
+          sharedLinks.value[index] = updated
         }
         
         return updated
@@ -448,6 +522,95 @@ export const useDistributionStore = defineStore(
      */
     function refreshSharedLinks() {
       fetchSharedLinks(sharedLinkFilters.value)
+    }
+
+    // ==================== Campaigns Actions ====================
+
+    async function fetchCampaigns(params?: {
+      page?: number
+      page_size?: number
+      state?: DistributionCampaign['state'] | 'all'
+      search?: string
+    }) {
+      campaignsLoading.value = true
+      campaignsError.value = null
+
+      try {
+        const response = await distributionService.getCampaigns(params)
+        campaigns.value = response.results || []
+      } catch (err) {
+        campaignsError.value = formatApiError(err)
+        campaigns.value = []
+        // Для UX достаточно логирования; ошибка может быть показана на UI позже
+        console.error('Failed to fetch campaigns:', err)
+      } finally {
+        campaignsLoading.value = false
+      }
+    }
+
+    async function createCampaign(payload: {
+      title: string
+      description?: string
+      document_ids?: number[]
+    }): Promise<DistributionCampaign | null> {
+      campaignsLoading.value = true
+      campaignsError.value = null
+
+      try {
+        const campaign = await distributionService.createCampaign({
+          title: payload.title,
+          description: payload.description,
+          document_ids: payload.document_ids
+        })
+        campaigns.value.unshift(campaign)
+        return campaign
+      } catch (err) {
+        campaignsError.value = formatApiError(err)
+        console.error('Failed to create campaign:', err)
+        return null
+      } finally {
+        campaignsLoading.value = false
+      }
+    }
+
+    async function updateCampaign(
+      id: number,
+      payload: Partial<Pick<DistributionCampaign, 'title' | 'description' | 'state'>>
+    ): Promise<DistributionCampaign | null> {
+      campaignsLoading.value = true
+      campaignsError.value = null
+
+      try {
+        const updated = await distributionService.updateCampaign(id, payload)
+        const index = campaigns.value.findIndex(c => c.id === id)
+        if (index !== -1) {
+          campaigns.value[index] = updated
+        }
+        return updated
+      } catch (err) {
+        campaignsError.value = formatApiError(err)
+        console.error('Failed to update campaign:', err)
+        return null
+      } finally {
+        campaignsLoading.value = false
+      }
+    }
+
+    async function deleteCampaign(id: number): Promise<boolean> {
+      campaignsLoading.value = true
+      campaignsError.value = null
+
+      try {
+        await distributionService.deleteCampaign(id)
+        campaigns.value = campaigns.value.filter(c => c.id !== id)
+        return true
+      } catch (err) {
+        campaignsError.value = formatApiError(err)
+        console.error('Failed to delete campaign:', err)
+        return false
+      } finally {
+        campaignsLoading.value = false
+      }
     }
 
     return {
@@ -500,7 +663,16 @@ export const useDistributionStore = defineStore(
       applySharedLinkFilters,
       clearSharedLinkFilters,
       checkAssetShared,
-      refreshSharedLinks
+      refreshSharedLinks,
+
+      // Campaigns
+      campaigns,
+      campaignsLoading,
+      campaignsError,
+      fetchCampaigns,
+      createCampaign,
+      updateCampaign,
+      deleteCampaign
     }
   },
   {

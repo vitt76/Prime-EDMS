@@ -435,8 +435,17 @@ async function handleCreateLink() {
     })
 
     emit('success', newLink)
-  } catch (err) {
-    error.value = 'Не удалось создать ссылку. Попробуйте снова.'
+  } catch (err: any) {
+    const errorMessage = err?.message || err?.response?.data?.detail || 'Не удалось создать ссылку. Попробуйте снова.'
+    error.value = errorMessage
+    
+    // Show detailed error notification
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка создания ссылки',
+      message: errorMessage
+    })
+    
     console.error('Failed to create share link:', err)
   } finally {
     isCreating.value = false

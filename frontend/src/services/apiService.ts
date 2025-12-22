@@ -132,10 +132,21 @@ class ApiService {
 
         // Handle 401 Unauthorized
         if (error.response?.status === 401) {
-          // Clear token and redirect to login
-          clearToken()
-          if (!window.location.pathname.includes('/login')) {
-            window.location.href = '/login'
+          // Don't immediately logout - let the calling code handle it
+          // This prevents premature logout during initial page load
+          // Only clear token if we're sure the request was intentional (not during init)
+          const isMenuRequest = error.config?.url?.includes('/templates/menu') || 
+                                error.config?.url?.includes('menu_topbar') || 
+                                error.config?.url?.includes('menu_main')
+          
+          if (!isMenuRequest) {
+            // For non-menu requests, clear token but don't redirect immediately
+            // Let the component/router handle the redirect
+            console.warn('[API] 401 Unauthorized on non-menu request:', error.config?.url)
+            clearToken()
+          } else {
+            // For menu requests, just log - Vue app will handle auth check
+            console.warn('[API] 401 Unauthorized on menu request (will be handled by Vue app):', error.config?.url)
           }
           return Promise.reject(error)
         }

@@ -1,92 +1,151 @@
-from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse
-from django.utils.translation import ugettext_lazy as _
-from django.views.generic import TemplateView
+"""
+Views for creating share links with simplified workflow.
+"""
+import logging
 
-from ..models import GeneratedRendition, Publication, ShareLink
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.utils import timezone
+from django.views.generic import TemplateView
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from mayan.apps.documents.models import DocumentFile
+from mayan.apps.rest_api import generics
+
+from ..models import Publication, PublicationItem, GeneratedRendition, ShareLink, RenditionPreset
+from ..serializers.publication_serializers import ShareLinkSerializer
+
+logger = logging.getLogger(name=__name__)
 
 
 class ShareLinkCreateView(LoginRequiredMixin, TemplateView):
+    """Template view for creating share links (UI)."""
     template_name = 'distribution/share_link_create.html'
 
-    def dispatch(self, request, *args, **kwargs):
-        # Если передан rendition_id, получаем его для предвыбора
-        rendition_id = kwargs.get('rendition_id')
-        if rendition_id:
-            self.rendition = get_object_or_404(
-                GeneratedRendition,
-                pk=rendition_id,
-                publication_item__publication__owner=self.request.user
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_share_link_simple(request):
+    """
+    Simplified endpoint to create a share link directly from document files.
+    
+    This endpoint automatically:
+    1. Creates a publication (if needed)
+    2. Adds document files to publication
+    3. Generates renditions (if needed)
+    4. Creates a share link
+    
+    Request body:
+    {
+        "document_file_ids": [1, 2, 3],
+        "title": "My Share Link",  # Optional, defaults to "Share Link"
+        "expires_at": "2025-12-31T23:59:59Z",  # Optional
+        "max_downloads": 100,  # Optional
+        "preset_id": 1  # Optional, uses first available preset if not provided
+    }
+    """
+    document_file_ids = request.data.get('document_file_ids', [])
+    title = request.data.get('title', 'Share Link')
+    expires_at = request.data.get('expires_at')
+    max_downloads = request.data.get('max_downloads')
+    preset_id = request.data.get('preset_id')
+    
+    if not document_file_ids:
+        return Response(
+            {'detail': 'document_file_ids is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # Get document files
+        document_files = DocumentFile.objects.filter(
+            pk__in=document_file_ids
+        )
+        
+        if document_files.count() != len(document_file_ids):
+            return Response(
+                {'detail': 'Some document files not found'},
+                status=status.HTTP_404_NOT_FOUND
             )
+        
+        # Get or create a preset
+        if preset_id:
+            try:
+                preset = RenditionPreset.objects.get(pk=preset_id)
+            except RenditionPreset.DoesNotExist:
+                return Response(
+                    {'detail': f'Preset {preset_id} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
         else:
-            self.rendition = None
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-
-        # Получаем все публикации пользователя
-        publications = Publication.objects.filter(owner=self.request.user)
-
-        # Получаем все рендишены из этих публикаций
-        renditions = GeneratedRendition.objects.filter(
-            publication_item__publication__owner=self.request.user
-        ).select_related(
-            'publication_item__publication',
-            'preset'
-        ).order_by('publication_item__publication__title', 'preset__name')
-
-        # Определяем выбранную публикацию
-        selected_publication = None
-        if self.rendition:
-            selected_publication = self.rendition.publication_item.publication
-        else:
-            # Проверяем параметр publication из query string
-            publication_id = self.request.GET.get('publication')
-            if publication_id:
+            # Use first available preset
+            preset = RenditionPreset.objects.first()
+            if not preset:
+                return Response(
+                    {'detail': 'No rendition presets available. Please create a preset first.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Create publication
+        publication = Publication.objects.create(
+            owner=request.user,
+            title=title,
+            access_policy='public'
+        )
+        
+        # Add document files to publication
+        publication_items = []
+        for doc_file in document_files:
+            item, created = PublicationItem.objects.get_or_create(
+                publication=publication,
+                document_file=doc_file
+            )
+            publication_items.append(item)
+        
+        # Generate renditions for all items
+        share_links = []
+        for item in publication_items:
+            # Get or create rendition
+            rendition, created = GeneratedRendition.objects.get_or_create(
+                publication_item=item,
+                preset=preset,
+                defaults={'status': 'pending'}
+            )
+            
+            # Generate rendition if needed
+            if created or rendition.status == 'pending':
                 try:
-                    selected_publication = publications.get(pk=publication_id)
-                except Publication.DoesNotExist:
-                    pass
-
-        context.update({
-            'publications': publications,
-            'renditions': renditions,
-            'selected_rendition': self.rendition,
-            'selected_publication': selected_publication,
-        })
-
-        return context
-
-    def post(self, request, *args, **kwargs):
-        rendition_id = request.POST.get('rendition')
-        expires_at = request.POST.get('expires_at')
-        max_downloads = request.POST.get('max_downloads')
-
-        # Получаем выбранный rendition
-        rendition = get_object_or_404(
-            GeneratedRendition,
-            pk=rendition_id,
-            publication_item__publication__owner=self.request.user
-        )
-
-        share_link = ShareLink.objects.create(
-            rendition=rendition,
-            expires_at=expires_at or None,
-            max_downloads=max_downloads or None
-        )
-
-        messages.success(
-            request,
-            _('Ссылка для рендишена "{preset}" публикации "{title}" создана.').format(
-                preset=rendition.preset.name,
-                title=rendition.publication_item.publication.title
+                    preset.generate_rendition(item)
+                    rendition.refresh_from_db()
+                except Exception as e:
+                    logger.error(f'Failed to generate rendition: {e}')
+                    # Continue with other items
+            
+            # Create share link for this rendition
+            share_link = ShareLink.objects.create(
+                rendition=rendition,
+                expires_at=expires_at,
+                max_downloads=max_downloads
             )
+            share_links.append(share_link)
+        
+        # Serialize the first share link (or return all if multiple)
+        if len(share_links) == 1:
+            serializer = ShareLinkSerializer(share_links[0], context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            # Return all share links
+            serializer = ShareLinkSerializer(share_links, many=True, context={'request': request})
+            return Response({
+                'share_links': serializer.data,
+                'publication_id': publication.id
+            }, status=status.HTTP_201_CREATED)
+            
+    except Exception as e:
+        logger.exception('Error creating share link')
+        return Response(
+            {'detail': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
-        return redirect('{}?publication={}'.format(
-            reverse('distribution:share_link_manage'),
-            rendition.publication_item.publication.pk
-        ))

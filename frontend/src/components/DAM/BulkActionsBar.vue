@@ -65,7 +65,7 @@
           <span class="hidden sm:inline">Скачать</span>
         </button>
 
-        <!-- Share -->
+      <!-- Share -->
         <button
           class="flex items-center gap-2 px-4 py-2.5 rounded-xl
                  bg-neutral-800 hover:bg-neutral-700 
@@ -80,6 +80,22 @@
           </svg>
           <span class="hidden sm:inline">Поделиться</span>
         </button>
+
+      <!-- Campaign -->
+      <button
+        class="flex items-center gap-2 px-4 py-2.5 rounded-xl
+               bg-purple-600/80 hover:bg-purple-600 
+               text-white text-sm font-medium
+               transition-all duration-200 hover:scale-105"
+        @click="handleCampaign"
+        :disabled="isLoading"
+        title="Создать кампанию из выбранных активов"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+        </svg>
+        <span class="hidden sm:inline">Кампания</span>
+      </button>
 
         <!-- Tag -->
         <button
@@ -180,6 +196,7 @@ const emit = defineEmits<{
   download: []
   move: []
   favorite: []
+  campaign: []
 }>()
 
 const assetStore = useAssetStore()
@@ -250,6 +267,19 @@ function handleMove() {
     message: 'Массовое перемещение будет доступно в следующем обновлении',
   })
   emit('move')
+}
+
+function handleCampaign() {
+  if (!selectedCount.value) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Нет выбранных активов',
+      message: 'Выберите один или несколько документов, чтобы создать кампанию.'
+    })
+    return
+  }
+
+  emit('campaign')
 }
 
 async function handleFavorite() {

@@ -68,14 +68,78 @@ class PublicationSerializer(serializers.ModelSerializer):
 
 
 class ShareLinkSerializer(serializers.ModelSerializer):
+    """Serializer for ShareLink with extended information for frontend."""
+    publication_title = serializers.SerializerMethodField()
+    publication_id = serializers.SerializerMethodField()
+    rendition_preset_name = serializers.SerializerMethodField()
+    rendition_preset_format = serializers.SerializerMethodField()
+    document_file_id = serializers.SerializerMethodField()
+    document_id = serializers.SerializerMethodField()
+    is_valid = serializers.SerializerMethodField()
+    public_url = serializers.SerializerMethodField()
+    owner_username = serializers.SerializerMethodField()
 
     class Meta:
         fields = (
             'id', 'rendition', 'token', 'recipient', 'expires_at',
-            'max_downloads', 'downloads_count', 'created', 'last_accessed'
+            'max_downloads', 'downloads_count', 'created', 'last_accessed',
+            'publication_title', 'publication_id', 'rendition_preset_name',
+            'rendition_preset_format', 'document_file_id', 'document_id',
+            'is_valid', 'public_url', 'owner_username'
         )
         model = ShareLink
-        read_only_fields = ('id', 'token', 'created', 'last_accessed', 'downloads_count')
+        read_only_fields = ('id', 'token', 'created', 'last_accessed', 'downloads_count',
+                           'publication_title', 'publication_id', 'rendition_preset_name',
+                           'rendition_preset_format', 'document_file_id', 'document_id',
+                           'is_valid', 'public_url', 'owner_username')
+
+    def get_publication_title(self, obj):
+        if obj.rendition and obj.rendition.publication_item:
+            return obj.rendition.publication_item.publication.title
+        return None
+
+    def get_publication_id(self, obj):
+        if obj.rendition and obj.rendition.publication_item:
+            return obj.rendition.publication_item.publication.id
+        return None
+
+    def get_rendition_preset_name(self, obj):
+        if obj.rendition and obj.rendition.preset:
+            return obj.rendition.preset.name
+        return None
+
+    def get_rendition_preset_format(self, obj):
+        if obj.rendition and obj.rendition.preset:
+            return obj.rendition.preset.format
+        return None
+
+    def get_document_file_id(self, obj):
+        if obj.rendition and obj.rendition.publication_item:
+            return obj.rendition.publication_item.document_file.id
+        return None
+
+    def get_document_id(self, obj):
+        if obj.rendition and obj.rendition.publication_item:
+            return obj.rendition.publication_item.document_file.document_id
+        return None
+
+    def get_is_valid(self, obj):
+        return obj.is_valid()
+
+    def get_public_url(self, obj):
+        """Generate public URL for the share link."""
+        request = self.context.get('request')
+        if request and obj.token:
+            # Use direct token access at root level: /{token}/
+            return request.build_absolute_uri(f'/{obj.token}/')
+        return None
+
+    def get_owner_username(self, obj):
+        if obj.rendition and obj.rendition.publication_item:
+            owner = obj.rendition.publication_item.publication.owner
+            if owner:
+                return owner.get_username()
+        return None
 
 
 class GeneratedRenditionSerializer(serializers.ModelSerializer):

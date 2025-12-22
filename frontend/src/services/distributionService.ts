@@ -5,7 +5,9 @@ import type {
   UpdatePublicationRequest,
   PaginatedResponse,
   ShareLink,
-  PublicationAnalytics
+  PublicationAnalytics,
+  DistributionCampaign,
+  CreateCampaignRequest
 } from '@/types/api'
 
 class DistributionService {
@@ -40,8 +42,8 @@ class DistributionService {
 
     const endpoint =
       searchParams.toString().length > 0
-        ? `/v4/distribution/publications/?${searchParams}`
-        : '/v4/distribution/publications/'
+        ? `/api/v4/distribution/publications/?${searchParams}`
+        : '/api/v4/distribution/publications/'
 
     return apiService.get<PaginatedResponse<Publication>>(endpoint, undefined, false)
   }
@@ -51,7 +53,7 @@ class DistributionService {
    */
   async getPublication(id: number): Promise<Publication> {
     return apiService.get<Publication>(
-      `/v4/distribution/publications/${id}/`,
+      `/api/v4/distribution/publications/${id}/`,
       undefined,
       true // Cache publication details for 5 minutes
     )
@@ -64,7 +66,7 @@ class DistributionService {
     publication: CreatePublicationRequest
   ): Promise<Publication> {
     return apiService.post<Publication>(
-      '/v4/distribution/publications/',
+      '/api/v4/distribution/publications/',
       publication
     )
   }
@@ -77,7 +79,7 @@ class DistributionService {
     publication: UpdatePublicationRequest
   ): Promise<Publication> {
     return apiService.put<Publication>(
-      `/v4/distribution/publications/${id}/`,
+      `/api/v4/distribution/publications/${id}/`,
       publication
     )
   }
@@ -86,7 +88,7 @@ class DistributionService {
    * Delete a publication
    */
   async deletePublication(id: number): Promise<void> {
-    return apiService.delete<void>(`/v4/distribution/publications/${id}/`)
+    return apiService.delete<void>(`/api/v4/distribution/publications/${id}/`)
   }
 
   /**
@@ -94,8 +96,91 @@ class DistributionService {
    */
   async publishPublication(id: number): Promise<Publication> {
     return apiService.post<Publication>(
-      `/v4/distribution/publications/${id}/publish/`
+      `/api/v4/distribution/publications/${id}/publish/`
     )
+  }
+
+  /**
+   * Get all share links (for current user)
+   */
+  async getAllShareLinks(params?: {
+    page?: number
+    page_size?: number
+  }): Promise<PaginatedResponse<any>> {
+    const queryParams: Record<string, string | number> = {}
+    if (params?.page) {
+      queryParams.page = params.page
+    }
+    if (params?.page_size) {
+      queryParams.page_size = params.page_size
+    }
+
+    const searchParams = new URLSearchParams()
+    Object.entries(queryParams).forEach(([key, value]) => {
+      searchParams.append(key, String(value))
+    })
+
+    const endpoint =
+      searchParams.toString().length > 0
+        ? `/api/v4/distribution/share_links/?${searchParams}`
+        : '/api/v4/distribution/share_links/'
+
+    console.log('[DistributionService] Calling API:', endpoint)
+    const response = await apiService.get<PaginatedResponse<any>>(endpoint, undefined, false)
+    console.log('[DistributionService] API response received:', {
+      count: response.count,
+      resultsLength: response.results?.length || 0
+    })
+    return response
+  }
+
+  /**
+   * Get single share link by ID
+   */
+  async getShareLinkById(id: number): Promise<any> {
+    return apiService.get<any>(`/api/v4/distribution/share_links/${id}/`, undefined, false)
+  }
+
+  /**
+   * Create a new share link (requires rendition_id)
+   */
+  async createShareLink(data: {
+    rendition: number
+    expires_at?: string | null
+    max_downloads?: number | null
+  }): Promise<any> {
+    return apiService.post<any>('/api/v4/distribution/share_links/', data)
+  }
+
+  /**
+   * Create a share link directly from document files (simplified)
+   * This automatically creates publication, adds files, generates renditions, and creates share link
+   */
+  async createShareLinkSimple(data: {
+    document_file_ids: number[]
+    title?: string
+    expires_at?: string | null
+    max_downloads?: number | null
+    preset_id?: number
+  }): Promise<any> {
+    return apiService.post<any>('/api/v4/distribution/share_links/create_simple/', data)
+  }
+
+  /**
+   * Update a share link
+   */
+  async updateShareLink(id: number, data: {
+    expires_at?: string | null
+    max_downloads?: number | null
+  }): Promise<any> {
+    return apiService.patch<any>(`/api/v4/distribution/share_links/${id}/`, data)
+  }
+
+  /**
+   * Delete (revoke) a share link
+   */
+  async deleteShareLink(id: number): Promise<void> {
+    return apiService.delete<void>(`/api/v4/distribution/share_links/${id}/`)
   }
 
   /**
@@ -103,7 +188,7 @@ class DistributionService {
    */
   async getShareLinks(publicationId: number): Promise<ShareLink[]> {
     const response = await apiService.get<PaginatedResponse<ShareLink>>(
-      `/v4/distribution/publications/${publicationId}/links/`
+      `/api/v4/distribution/publications/${publicationId}/links/`
     )
     return response.results || []
   }
@@ -123,7 +208,7 @@ class DistributionService {
     }
   ): Promise<ShareLink> {
     return apiService.post<ShareLink>(
-      `/v4/distribution/publications/${publicationId}/links/`,
+      `/api/v4/distribution/publications/${publicationId}/links/`,
       options
     )
   }
@@ -136,7 +221,7 @@ class DistributionService {
     linkId: number
   ): Promise<void> {
     return apiService.delete<void>(
-      `/v4/distribution/publications/${publicationId}/links/${linkId}/`
+      `/api/v4/distribution/publications/${publicationId}/links/${linkId}/`
     )
   }
 
@@ -145,7 +230,7 @@ class DistributionService {
    */
   async getChannels(): Promise<Publication['channels']> {
     const response = await apiService.get<PaginatedResponse<Publication['channels'][0]>>(
-      '/v4/distribution/channels/'
+      '/api/v4/distribution/channels/'
     )
     return response.results || []
   }
@@ -155,7 +240,7 @@ class DistributionService {
    */
   async getPublicationAnalytics(publicationId: number): Promise<PublicationAnalytics> {
     return apiService.get<PublicationAnalytics>(
-      `/v4/distribution/publications/${publicationId}/analytics/`,
+      `/api/v4/distribution/publications/${publicationId}/analytics/`,
       undefined,
       true // Cache analytics for 5 minutes
     )
@@ -166,7 +251,7 @@ class DistributionService {
    */
   async getPublicationByToken(token: string): Promise<Publication> {
     return apiService.get<Publication>(
-      `/v4/distribution/publications/portal/${token}/`,
+      `/api/v4/distribution/publications/portal/${token}/`,
       undefined,
       false
     )
@@ -177,7 +262,7 @@ class DistributionService {
    */
   async trackPublicView(token: string): Promise<void> {
     await apiService.post<void>(
-      `/v4/distribution/publications/portal/${token}/events/`,
+      `/api/v4/distribution/publications/portal/${token}/events/`,
       { event: 'view' }
     )
   }
@@ -187,12 +272,90 @@ class DistributionService {
    */
   async trackPublicDownload(token: string, assetId?: number): Promise<void> {
     await apiService.post<void>(
-      `/v4/distribution/publications/portal/${token}/events/`,
+      `/api/v4/distribution/publications/portal/${token}/events/`,
       {
         event: 'download',
         asset_id: assetId
       }
     )
+  }
+
+  /**
+   * Get list of distribution campaigns for current user
+   */
+  async getCampaigns(params?: {
+    page?: number
+    page_size?: number
+    state?: DistributionCampaign['state'] | 'all'
+    search?: string
+  }): Promise<PaginatedResponse<DistributionCampaign>> {
+    const queryParams: Record<string, string | number> = {}
+
+    if (params?.page) {
+      queryParams.page = params.page
+    }
+    if (params?.page_size) {
+      queryParams.page_size = params.page_size
+    }
+    if (params?.state && params.state !== 'all') {
+      queryParams.state = params.state
+    }
+    if (params?.search) {
+      queryParams.search = params.search
+    }
+
+    const searchParams = new URLSearchParams()
+    Object.entries(queryParams).forEach(([key, value]) => {
+      searchParams.append(key, String(value))
+    })
+
+    const endpoint =
+      searchParams.toString().length > 0
+        ? `/api/v4/distribution/campaigns/?${searchParams}`
+        : '/api/v4/distribution/campaigns/'
+
+    return apiService.get<PaginatedResponse<DistributionCampaign>>(endpoint, undefined, false)
+  }
+
+  /**
+   * Get single distribution campaign by ID
+   */
+  async getCampaign(id: number): Promise<DistributionCampaign> {
+    return apiService.get<DistributionCampaign>(
+      `/api/v4/distribution/campaigns/${id}/`,
+      undefined,
+      false
+    )
+  }
+
+  /**
+   * Create a distribution campaign
+   */
+  async createCampaign(payload: CreateCampaignRequest): Promise<DistributionCampaign> {
+    return apiService.post<DistributionCampaign>(
+      '/api/v4/distribution/campaigns/',
+      payload
+    )
+  }
+
+  /**
+   * Update a distribution campaign
+   */
+  async updateCampaign(
+    id: number,
+    payload: Partial<CreateCampaignRequest & { state: DistributionCampaign['state'] }>
+  ): Promise<DistributionCampaign> {
+    return apiService.patch<DistributionCampaign>(
+      `/api/v4/distribution/campaigns/${id}/`,
+      payload
+    )
+  }
+
+  /**
+   * Delete a distribution campaign
+   */
+  async deleteCampaign(id: number): Promise<void> {
+    return apiService.delete<void>(`/api/v4/distribution/campaigns/${id}/`)
   }
 }
 

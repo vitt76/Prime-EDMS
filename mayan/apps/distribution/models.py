@@ -580,3 +580,104 @@ class AccessLog(models.Model):
 
     def __str__(self):
         return f"{self.share_link} → {self.event} @ {self.timestamp}"
+
+
+class DistributionCampaign(models.Model):
+    """
+    Маркетинговая кампания, объединяющая несколько публикаций и каналов
+    распространения.
+    """
+
+    class States(models.TextChoices):
+        DRAFT = 'draft', _('Draft')
+        ACTIVE = 'active', _('Active')
+        COMPLETED = 'completed', _('Completed')
+        PAUSED = 'paused', _('Paused')
+
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='distribution_campaigns',
+        help_text=_('Owner of this campaign')
+    )
+    title = models.CharField(
+        max_length=255,
+        help_text=_('Title of the campaign')
+    )
+    description = models.TextField(
+        blank=True,
+        help_text=_('Description of the campaign')
+    )
+    state = models.CharField(
+        max_length=16,
+        choices=States.choices,
+        default=States.DRAFT,
+        help_text=_('State of the campaign')
+    )
+    start_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('Start datetime of the campaign')
+    )
+    end_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('End datetime of the campaign')
+    )
+    metadata = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=_('Additional campaign configuration and metadata')
+    )
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created']
+        verbose_name = _('Distribution Campaign')
+        verbose_name_plural = _('Distribution Campaigns')
+
+    def __str__(self):
+        return self.title
+
+
+class CampaignPublication(models.Model):
+    """
+    Связь кампании с публикациями (наборами рендишенов).
+    """
+
+    campaign = models.ForeignKey(
+        DistributionCampaign,
+        on_delete=models.CASCADE,
+        related_name='campaign_publications',
+        help_text=_('Campaign this publication belongs to')
+    )
+    publication = models.ForeignKey(
+        Publication,
+        on_delete=models.CASCADE,
+        related_name='campaign_links',
+        help_text=_('Publication that is part of the campaign')
+    )
+    platform_name = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=_('Optional platform name for this campaign-publication link')
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        help_text=_('Ordering of this publication inside the campaign')
+    )
+    metadata = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=_('Additional settings for this publication in the campaign')
+    )
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+        unique_together = ['campaign', 'publication']
+        verbose_name = _('Campaign Publication')
+        verbose_name_plural = _('Campaign Publications')
+
+    def __str__(self):
+        return f'{self.campaign} → {self.publication}'

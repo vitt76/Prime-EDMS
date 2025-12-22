@@ -24,6 +24,7 @@ class APICurrentUserView(generics.RetrieveUpdateDestroyAPIView):
     put: Edit the current user.
     """
     serializer_class = UserSerializer
+    throttle_classes = []  # Disable throttling for critical auth endpoint
 
     def get_object(self):
         return self.request.user

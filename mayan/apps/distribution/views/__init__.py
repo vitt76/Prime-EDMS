@@ -1,5 +1,9 @@
 # Views package
 
+from .campaign_views import (
+    APICampaignPublicationDetailView, APICampaignPublicationListView,
+    APIDistributionCampaignDetailView, APIDistributionCampaignListView
+)
 from .preset_views import APIRenditionPresetDetailView, APIRenditionPresetListView
 from .publication_views import (
     APIAccessLogListView, APIGenerateRenditionsView, APIGeneratedRenditionDetailView,
@@ -14,4 +18,4 @@ from .recipient_views import (
     APIRecipientDetailView, APIRecipientListDetailView,
     APIRecipientListListView, APIRecipientListView
 )
-from .share_link_views import ShareLinkCreateView
+from .share_link_views import ShareLinkCreateView, create_share_link_simple

@@ -48,6 +48,7 @@ class HeadlessAuthMeView(APIView):
     # returned if a browser still has a valid Django session cookie.
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
+    throttle_classes = []  # Disable throttling for critical auth endpoint
 
     def get(self, request):
         user = request.user
