@@ -317,10 +317,10 @@
                 </DisclosureButton>
 
                 <DisclosurePanel class="p-0">
-                  <WorkflowWidget
-                    :asset-id="assetId"
-                    @status-change="handleWorkflowStatusChange"
-                  />
+            <WorkflowWidget 
+              :asset-id="assetId" 
+              @status-change="handleWorkflowStatusChange"
+            />
                 </DisclosurePanel>
               </Disclosure>
             </div>
@@ -413,7 +413,7 @@
                   </DisclosureButton>
 
                   <DisclosurePanel class="px-4 pb-4">
-                    <dl class="space-y-3">
+                <dl class="space-y-3">
                   <div v-if="extendedAsset.exif.make" class="flex justify-between">
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">Камера</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.make }} {{ extendedAsset.exif.model }}</dd>
@@ -446,7 +446,7 @@
                     <dt class="text-sm text-neutral-500 dark:text-neutral-400">DPI</dt>
                     <dd class="text-sm text-neutral-900 dark:text-white">{{ extendedAsset.exif.dpi }}</dd>
                   </div>
-                    </dl>
+                </dl>
                   </DisclosurePanel>
                 </Disclosure>
               </section>
@@ -465,17 +465,17 @@
                   </DisclosureButton>
 
                   <DisclosurePanel class="px-4 pb-4">
-                    <div class="flex flex-wrap gap-2">
-                    <span
-                      v-for="tag in asset.tags"
-                      :key="tag"
-                      class="px-2.5 py-1 text-xs font-medium rounded-full 
-                             bg-primary-100 dark:bg-primary-900/30 
-                             text-primary-700 dark:text-primary-300"
-                    >
-                      {{ tag }}
-                    </span>
-                    </div>
+                <div class="flex flex-wrap gap-2">
+                  <span
+                    v-for="tag in asset.tags"
+                    :key="tag"
+                    class="px-2.5 py-1 text-xs font-medium rounded-full 
+                           bg-primary-100 dark:bg-primary-900/30 
+                           text-primary-700 dark:text-primary-300"
+                  >
+                    {{ tag }}
+                  </span>
+                </div>
                   </DisclosurePanel>
                 </Disclosure>
               </section>
@@ -494,18 +494,18 @@
                   </DisclosureButton>
 
                   <DisclosurePanel class="px-4 pb-4">
-                    <p v-if="asset.ai_analysis.ai_description" class="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
-                      {{ asset.ai_analysis.ai_description }}
-                    </p>
-                    <div v-if="asset.ai_analysis.tags?.length" class="flex flex-wrap gap-1.5">
-                      <span
-                        v-for="tag in asset.ai_analysis.tags"
-                        :key="tag"
-                        class="px-2 py-0.5 text-xs rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
-                      >
-                        {{ tag }}
-                      </span>
-                    </div>
+                <p v-if="asset.ai_analysis.ai_description" class="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
+                  {{ asset.ai_analysis.ai_description }}
+                </p>
+                <div v-if="asset.ai_analysis.tags?.length" class="flex flex-wrap gap-1.5">
+                  <span
+                    v-for="tag in asset.ai_analysis.tags"
+                    :key="tag"
+                    class="px-2 py-0.5 text-xs rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+                  >
+                    {{ tag }}
+                  </span>
+                </div>
                   </DisclosurePanel>
                 </Disclosure>
               </section>
@@ -539,10 +539,11 @@
                 <div
                   v-for="version in versions"
                   :key="version.id"
-                  class="p-3 rounded-xl border transition-colors"
+                  class="p-3 rounded-xl border transition-colors cursor-pointer"
                   :class="version.is_current 
                     ? 'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' 
                     : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50'"
+                  @click="handleSelectVersion(version)"
                 >
                   <div class="flex items-start justify-between">
                     <div class="flex items-center gap-3">
@@ -561,10 +562,10 @@
                     </div>
                     <button
                       v-if="!version.is_current"
-                      class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                      @click.stop="handleRevertVersion(version)"
+                      class="text-xs text-error-600 dark:text-error-400 hover:underline"
+                      @click.stop="handleDeleteVersion(version)"
                     >
-                      Откатить
+                      Удалить
                     </button>
                   </div>
                 </div>
@@ -577,10 +578,56 @@
               <div class="flex items-center gap-3">
                 <div class="w-12 h-12 rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-200">
                   {{ fileExtension || 'FILE' }}
-                </div>
+              </div>
                 <div class="min-w-0">
-                  <p class="text-base font-semibold text-neutral-900 dark:text-white truncate">
-                    {{ asset.file_details?.filename || asset.filename || asset.label || 'Файл' }}
+                  <!-- View mode: показываем название + кнопка переименования -->
+                  <div v-if="!isRenamingFile" class="flex items-center gap-2">
+                    <p class="text-base font-semibold text-neutral-900 dark:text-white truncate">
+                      {{ asset.label || asset.file_details?.filename || asset.filename || 'Файл' }}
+                    </p>
+                    <button
+                      type="button"
+                      class="p-1 text-neutral-400 hover:text-primary-600 dark:hover:text-primary-400 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                      title="Переименовать файл"
+                      @click="startRenameFile"
+                    >
+                      <PencilSquareIcon class="w-4 h-4" />
+                    </button>
+                  </div>
+                  <!-- Edit mode: инпут для нового имени -->
+                  <div v-else class="space-y-2">
+                    <input
+                      v-model="renameLabel"
+                      type="text"
+                      class="w-full px-3 py-2 rounded-lg border border-primary-300 dark:border-primary-600
+                             bg-white dark:bg-neutral-900
+                             text-neutral-900 dark:text-white
+                             placeholder-neutral-400
+                             focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                             transition-all text-sm"
+                      placeholder="Новое название файла"
+                      @keydown.enter.prevent="saveRenameFile"
+                      @keydown.esc.prevent="cancelRenameFile"
+                    />
+                    <div class="flex gap-2">
+                      <button
+                        type="button"
+                        class="px-3 py-1.5 bg-primary-600 text-white text-xs rounded-lg hover:bg-primary-700 transition-colors"
+                        @click="saveRenameFile"
+                      >
+                        Сохранить
+                      </button>
+                      <button
+                        type="button"
+                        class="px-3 py-1.5 bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-xs rounded-lg hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors"
+                        @click="cancelRenameFile"
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                  <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                    Оригинальное имя файла: {{ asset.file_details?.filename || asset.filename || '—' }}
                   </p>
                   <p class="text-sm text-neutral-500 dark:text-neutral-400">Предпросмотр недоступен</p>
                 </div>
@@ -656,10 +703,10 @@
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center justify-between mb-1">
                       <div class="flex items-center gap-2 flex-wrap">
-                        <span class="text-sm font-medium text-neutral-900 dark:text-white">{{ comment.author }}</span>
-                        <span class="text-xs text-neutral-500 dark:text-neutral-400">{{ formatRelativeTime(comment.created_date) }}</span>
-                        <span v-if="comment.edited" class="text-xs text-neutral-400">(изменено)</span>
-                      </div>
+                      <span class="text-sm font-medium text-neutral-900 dark:text-white">{{ comment.author }}</span>
+                      <span class="text-xs text-neutral-500 dark:text-neutral-400">{{ formatRelativeTime(comment.created_date) }}</span>
+                      <span v-if="comment.edited" class="text-xs text-neutral-400">(изменено)</span>
+                    </div>
                       <!-- Action Buttons (only for comment author) -->
                       <div v-if="canEditComment(comment)" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
@@ -869,6 +916,10 @@ const zoom = ref(1)
 const rotation = ref(0)
 const newComment = ref('')
 const showMediaEditor = ref(false)
+
+// Rename file (document label) state
+const isRenamingFile = ref(false)
+const renameLabel = ref('')
 const comments = ref<Comment[]>([])
 const isLoadingComments = ref(false)
 const editingCommentId = ref<number | null>(null)
@@ -993,7 +1044,13 @@ const usage = computed((): UsageStats | undefined => {
 
 const previewSrc = computed(() => resolveAssetImageUrl(asset.value))
 const previewFallback = ref<string | null>(null)
-const previewResolved = computed(() => previewOverride.value || previewFallback.value || previewSrc.value)
+const previewResolved = computed(() => {
+  // Если пользователь выбрал конкретный файл, не используем previewSrc (оно может ссылаться на устаревшую версию)
+  if (selectedDocumentFileId.value) {
+    return previewOverride.value || previewFallback.value || '/placeholder-document.svg'
+  }
+  return previewOverride.value || previewFallback.value || previewSrc.value
+})
 const isFavorite = computed(() => {
   if (!asset.value) return false
   return favoritesStore.isFavorite(asset.value.id) || asset.value.is_favorite === true || asset.value.isFavorite === true
@@ -1005,10 +1062,10 @@ async function loadAsset() {
   isLoading.value = true
   error.value = null
   previewError.value = false
-
+  
   try {
     console.log('[AssetDetail] Loading asset:', assetId.value)
-
+    
     // Always force reload to get fresh file data
     const storeAsset = await assetStore.getAssetDetail(assetId.value, true)
     
@@ -1025,9 +1082,9 @@ async function loadAsset() {
       } else {
         extendedAsset.value = storeAsset as ExtendedAsset
       }
-    } else {
-      error.value = `Актив с ID ${assetId.value} не найден`
-    }
+      } else {
+        error.value = `Актив с ID ${assetId.value} не найден`
+      }
 
     // Load all document files (versions) for sidebar "История версий"
     // IMPORTANT: always use numeric route id as fallback, since some adapters can
@@ -1050,21 +1107,34 @@ async function loadAsset() {
 
         // Default selected file: latest file id (if available), otherwise newest by timestamp
         const latestId = (asset.value as any)?.file_latest_id
-        selectedDocumentFileId.value =
+        let candidateId =
           typeof latestId === 'number'
             ? latestId
             : (documentFiles.value[0]?.id ?? null)
 
-        // Do NOT override preview by default; keep existing preview logic.
-        if (previewOverrideObjectUrl.value) {
-          try {
-            window.URL.revokeObjectURL(previewOverrideObjectUrl.value)
-          } catch {
-            // ignore
-          }
-          previewOverrideObjectUrl.value = null
+        const fileIds = documentFiles.value.map((f: any) => f.id)
+        if (candidateId && !fileIds.includes(candidateId)) {
+          candidateId = documentFiles.value[0]?.id ?? null
         }
-        previewOverride.value = null
+        selectedDocumentFileId.value = candidateId
+
+        // Если выбран файл — подгружаем его превью; если нет — чистим override
+        if (selectedDocumentFileId.value) {
+          const selected = documentFiles.value.find((f: any) => f.id === selectedDocumentFileId.value)
+          if (selected) {
+            await handleSelectDocumentFile(selected)
+          }
+        } else {
+          if (previewOverrideObjectUrl.value) {
+            try {
+              window.URL.revokeObjectURL(previewOverrideObjectUrl.value)
+            } catch {
+              // ignore
+            }
+            previewOverrideObjectUrl.value = null
+          }
+          previewOverride.value = null
+        }
       } catch (filesErr) {
         console.warn('[AssetDetail] Failed to load document files:', filesErr)
         documentFiles.value = []
@@ -1074,7 +1144,7 @@ async function loadAsset() {
 
   } catch (e: any) {
     console.error('[AssetDetail] Error loading asset:', e)
-    error.value = e.message || 'Не удалось загрузить актив'
+      error.value = e.message || 'Не удалось загрузить актив'
   } finally {
     isLoading.value = false
   }
@@ -1234,13 +1304,13 @@ function scrollToTop() {
 
 async function handleDownload() {
   if (!asset.value) return
-
+  
   const filename =
     asset.value.file_details?.filename ||
     asset.value.filename ||
     asset.value.label ||
     `document-${asset.value.id}`
-
+  
   notificationStore.addNotification({
     type: 'info',
     title: 'Загрузка началась',
@@ -1292,12 +1362,12 @@ async function handleDownload() {
       } as any)
 
       const objectUrl = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
+  const link = document.createElement('a')
       link.href = objectUrl
       link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
       window.URL.revokeObjectURL(objectUrl)
     } catch (err) {
       console.error('[AssetDetail] Download failed', err)
@@ -1334,7 +1404,7 @@ function handleDownloadAs(format: DownloadFormat) {
     handleDownload()
     return
   }
-
+  
   // Map UI formats to backend target formats
   const targetFormat = format === 'pdf'
     ? 'pdf'
@@ -1366,8 +1436,8 @@ function handleDownloadAs(format: DownloadFormat) {
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(objectUrl)
-
-      notificationStore.addNotification({
+  
+  notificationStore.addNotification({
         type: 'success',
         title: 'Готово',
         message: `Файл скачан в формате ${formatLabels[format]}`
@@ -2013,8 +2083,8 @@ async function handleNewVersionFileSelected(event: Event): Promise<void> {
       { headers: { 'Content-Type': 'multipart/form-data' } } as any
     )
 
-    notificationStore.addNotification({
-      type: 'info',
+  notificationStore.addNotification({
+    type: 'info',
       title: 'Загрузка запущена',
       message: 'Новая версия обрабатывается. Сейчас обновим список версий...'
     })
@@ -2068,12 +2138,141 @@ async function handleNewVersionFileSelected(event: Event): Promise<void> {
   }
 }
 
-function handleRevertVersion(version: Version) {
+// Deprecated in favor of deletion; kept to avoid breaking other flows if any.
+async function handleRevertVersion(version: Version) {
+  if (!asset.value?.id || !version?.id) return
+
+  try {
+    notificationStore.addNotification({
+      type: 'info',
+      title: 'Откат версии',
+      message: `Откатываемся к версии ${version.filename}...`
+    })
+
+    await apiService.post(`/api/v4/documents/${asset.value.id}/versions/${version.id}/revert/`)
+
+    // Перезагружаем детали актива, версии и preview
+    await loadAsset()
+    await loadDocumentFiles()
+    if (selectedDocumentFileId.value) {
+      const selected = documentFiles.value.find((f: any) => f.id === selectedDocumentFileId.value)
+      if (selected?.preview_url || selected?.image_url) {
+        await handleSelectDocumentFile(selected)
+      }
+    } else {
+      // Обновляем preview с текущим файлом
+      const latestFile = documentFiles.value[0]
+      if (latestFile) {
+        await handleSelectDocumentFile(latestFile)
+      }
+    }
+
   notificationStore.addNotification({
     type: 'success',
     title: 'Версия восстановлена',
-    message: `Откат к версии ${version.filename}`,
-  })
+      message: `Текущая версия: ${version.filename}`
+    })
+  } catch (err) {
+    console.error('[AssetDetail] Failed to revert version', err)
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Откат версии',
+      message: 'Не удалось выполнить откат'
+    })
+  }
+}
+
+async function handleDeleteVersion(version: Version) {
+  if (!asset.value?.id || !version?.id) return
+
+  if (!window.confirm(`Удалить версию ${version.filename}?`)) {
+    return
+  }
+
+  try {
+    notificationStore.addNotification({
+      type: 'info',
+      title: 'Удаление версии',
+      message: `Удаляем версию ${version.filename}...`
+    })
+
+    let deleted = false
+
+    // Пытаемся удалить через REST API document_files
+    try {
+      await apiService.delete(`/api/v4/document_files/${version.id}/`)
+      deleted = true
+    } catch (apiErr: any) {
+      // fallback на UI-эндпоинт удаления (как в Mayan UI)
+      try {
+        await apiService.post(
+          `/documents/documents/files/${version.id}/delete/`,
+          {} as any,
+          false
+        )
+        deleted = true
+      } catch (fallbackErr: any) {
+        console.error('[AssetDetail] Failed delete via UI endpoint', fallbackErr)
+        throw apiErr
+      }
+    }
+
+    // Перезагружаем детали актива, версии и preview
+    await loadAsset()
+
+    // Чистим «висячие» версии, даже если удаляли не текущий файл.
+    try {
+      const documentId = Number(asset.value.id)
+      const versionsResponse: any = await apiService.get(
+        `/api/v4/documents/${documentId}/versions/`,
+        { params: { page_size: 200 } } as any,
+        false
+      )
+      const apiVersions = Array.isArray(versionsResponse?.results)
+        ? versionsResponse.results
+        : Array.isArray(versionsResponse)
+          ? versionsResponse
+          : []
+
+      const sortedVersions = [...apiVersions].sort((a: any, b: any) => {
+        const ta = new Date(a.timestamp || a.datetime || 0).getTime()
+        const tb = new Date(b.timestamp || b.datetime || 0).getTime()
+        if (ta !== tb) return tb - ta
+        return (b.id || 0) - (a.id || 0)
+      })
+
+      // Удаляем самую новую версию (предполагаем, что она соответствовала удаленному файлу)
+      const newestVersion = sortedVersions[0]
+      if (newestVersion?.id) {
+        try {
+          await apiService.delete(`/api/v4/documents/${documentId}/versions/${newestVersion.id}/`)
+        } catch (versionErr) {
+          console.warn('[AssetDetail] Failed to delete document version', versionErr)
+        }
+      }
+    } catch (cleanupErr) {
+      console.warn('[AssetDetail] Version cleanup after file delete failed', cleanupErr)
+    }
+
+    // Если удалённый файл был выбран, переключаемся на доступный (после активации)
+    const current = documentFiles.value.find((f: any) => f.id === selectedDocumentFileId.value)
+    if (!current && documentFiles.value.length > 0) {
+      await handleSelectDocumentFile(documentFiles.value[0])
+    }
+
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Версия удалена',
+      message: version.filename
+    })
+  } catch (err) {
+    console.error('[AssetDetail] Failed to delete version', err)
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Удаление версии',
+      message: 'Не удалось удалить версию'
+    })
+  }
 }
 
 // Load comments from API
@@ -2126,12 +2325,12 @@ async function submitComment() {
   try {
     await commentService.createComment(documentId, commentText)
     await loadComments() // Reload comments to get the new one with proper data
-    
-    notificationStore.addNotification({
-      type: 'success',
-      title: 'Комментарий добавлен',
-      message: 'Ваш комментарий успешно опубликован',
-    })
+  
+  notificationStore.addNotification({
+    type: 'success',
+    title: 'Комментарий добавлен',
+    message: 'Ваш комментарий успешно опубликован',
+  })
   } catch (err: any) {
     newComment.value = commentText // Restore text on error
     
@@ -2239,6 +2438,69 @@ async function deleteComment(commentId: number) {
       message: errorMessage
     })
   }
+}
+
+function startRenameFile(): void {
+  if (!asset.value) return
+  renameLabel.value =
+    asset.value.label ||
+    asset.value.file_details?.filename ||
+    asset.value.filename ||
+    ''
+  isRenamingFile.value = true
+}
+
+function cancelRenameFile(): void {
+  isRenamingFile.value = false
+  renameLabel.value = ''
+}
+
+async function saveRenameFile(): Promise<void> {
+  if (!asset.value) return
+  const newLabel = renameLabel.value.trim()
+  if (!newLabel) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Переименование файла',
+      message: 'Название не может быть пустым'
+    })
+    return
+  }
+
+  try {
+    const updated = await assetStore.updateAssetData(asset.value.id, {
+      label: newLabel
+    } as any)
+
+    if (updated) {
+      asset.value = updated as any
+      notificationStore.addNotification({
+        type: 'success',
+        title: 'Переименование файла',
+        message: 'Название файла обновлено'
+      })
+      isRenamingFile.value = false
+    }
+  } catch (e) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Переименование файла',
+      message: 'Не удалось обновить название файла'
+    })
+    console.error('Failed to rename file', e)
+  }
+}
+
+function handleSelectVersion(version: any) {
+  if (!version) return
+  const fileId = version.id || version._file?.id
+  if (!fileId) return
+
+  const file = documentFiles.value.find((f: any) => Number(f.id) === Number(fileId))
+  if (!file) return
+
+  selectedDocumentFileId.value = file.id
+  handleSelectDocumentFile(file)
 }
 
 // Check if current user can edit comment
