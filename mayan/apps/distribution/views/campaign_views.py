@@ -1,8 +1,12 @@
+import logging
+
 from django.db.models import Count, Sum
 
 from mayan.apps.rest_api import generics
 
 from ..models import DistributionCampaign, CampaignPublication
+
+logger = logging.getLogger(name=__name__)
 from ..permissions import (
     permission_publication_api_view, permission_publication_api_create,
     permission_publication_api_edit, permission_publication_api_delete
@@ -99,6 +103,32 @@ class APIDistributionCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
         return {
             '_event_actor': self.request.user,
         }
+
+    def perform_update(self, serializer):
+        """
+        Переопределяем perform_update, чтобы гарантировать синхронизацию метаданных
+        после обновления кампании.
+        """
+        logger.info(f'[CampaignView] perform_update called for campaign {serializer.instance.id}')
+        instance = serializer.save()
+        logger.info(f'[CampaignView] Campaign {instance.id} updated: title={instance.title!r}, description={instance.description!r}')
+        
+        # Явно синхронизируем метаданные публикации (signal должен это сделать,
+        # но на случай если он не сработает, делаем явно)
+        if instance.owner:
+            campaign_pubs = CampaignPublication.objects.filter(
+                campaign=instance,
+                publication__owner=instance.owner
+            ).select_related('publication')
+            
+            if campaign_pubs.count() == 1:
+                publication = campaign_pubs.first().publication
+                publication.title = instance.title or 'Campaign publication'
+                publication.description = instance.description or ''
+                publication.save(update_fields=['title', 'description'])
+                logger.info(f'[CampaignView] Explicitly synced publication {publication.id} metadata')
+        
+        return instance
 
 
 class APICampaignPublicationListView(generics.ListCreateAPIView):

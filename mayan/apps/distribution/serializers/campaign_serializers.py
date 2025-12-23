@@ -1,8 +1,12 @@
+import logging
+
 from django.db.models import Count, Sum
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.rest_api import serializers
 from mayan.apps.documents.models import Document, DocumentFile
+
+logger = logging.getLogger(name=__name__)
 
 from ..models import (
     CampaignPublication, DistributionCampaign, Publication, PublicationItem,
@@ -163,6 +167,7 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
                 owner=owner,
                 document_ids=document_ids
             )
+            # _sync_documents_for_campaign уже синхронизирует метаданные публикации
         # Либо привязка уже существующих публикаций
         elif publication_ids and owner:
             self._sync_publications_for_campaign(
@@ -170,20 +175,38 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
                 owner=owner,
                 publication_ids=publication_ids
             )
+            # Синхронизируем метаданные с уже существующей публикацией
+            self._sync_publication_metadata(campaign=campaign, owner=owner)
 
         return campaign
 
     def update(self, instance, validated_data):
+        logger.info(f'[CampaignSerializer.update] Called for campaign {instance.id}, validated_data keys: {list(validated_data.keys())}')
         publication_ids = validated_data.pop('publication_ids', None)
         document_ids = validated_data.pop('document_ids', None)
         validated_data = self._strip_internal_fields(validated_data)
         # Owner is controlled by backend
         validated_data.pop('owner', None)
 
+        # Сохраняем старые значения для проверки изменений
+        old_title = instance.title
+        old_description = instance.description
+        logger.info(f'[CampaignSerializer.update] Before update: title={old_title!r}, description={old_description!r}, validated_data={validated_data}')
+
         instance = super().update(instance, validated_data)
+        
+        # Обновляем из БД, чтобы получить актуальные значения
+        instance.refresh_from_db()
+        logger.info(f'[CampaignSerializer.update] After update: title={instance.title!r}, description={instance.description!r}')
 
         request = self.context.get('request')
         owner = getattr(request, 'user', None)
+
+        # Всегда синхронизируем метаданные публикации с кампанией при обновлении
+        # (если есть связанная публикация)
+        if owner and owner.is_authenticated:
+            logger.info(f'Syncing publication metadata for campaign {instance.id} (title={instance.title}, description={instance.description})')
+            self._sync_publication_metadata(campaign=instance, owner=owner)
 
         # Если пришёл список документов — он имеет приоритет: создаём/синхронизируем
         # публикацию и её элементы "под капотом".
@@ -206,6 +229,37 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
     # ------------------------------------------------------------------
     # Helpers for publications & documents
     # ------------------------------------------------------------------
+
+    def _sync_publication_metadata(self, campaign, owner):
+        """
+        Синхронизирует название и описание кампании с связанной публикацией.
+        Обновляет только автоматически созданную публикацию (если она одна).
+        """
+        # Обновляем кампанию из БД, чтобы получить актуальные значения
+        campaign.refresh_from_db()
+        
+        campaign_pubs = CampaignPublication.objects.filter(
+            campaign=campaign,
+            publication__owner=owner
+        ).select_related('publication')
+
+        pub_count = campaign_pubs.count()
+        logger.info(f'Found {pub_count} publications for campaign {campaign.id} (owner={owner.username})')
+
+        # Если у кампании есть только одна публикация этого владельца,
+        # синхронизируем её метаданные с кампанией
+        if pub_count == 1:
+            publication = campaign_pubs.first().publication
+            old_title = publication.title
+            old_description = publication.description
+            publication.title = campaign.title or _('Campaign publication')
+            publication.description = campaign.description or ''
+            publication.save(update_fields=['title', 'description'])
+            logger.info(f'Updated publication {publication.id}: title "{old_title}" -> "{publication.title}", description "{old_description}" -> "{publication.description}"')
+        elif pub_count > 1:
+            logger.warning(f'Campaign {campaign.id} has {pub_count} publications, skipping metadata sync')
+        else:
+            logger.info(f'Campaign {campaign.id} has no publications, skipping metadata sync')
 
     def _sync_publications_for_campaign(self, campaign, owner, publication_ids):
         allowed_publications = set(
@@ -274,6 +328,11 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
                     document_file_id=df_id
                 )
 
+        # Синхронизируем метаданные публикации с кампанией
+        publication.title = campaign.title or _('Campaign publication')
+        publication.description = campaign.description or ''
+        publication.save(update_fields=['title', 'description'])
+
 
 class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
     """
@@ -293,7 +352,14 @@ class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
             'assets',
             'metadata',
         )
-        read_only_fields = fields
+        # В детальном сериализаторе оставляем возможность редактировать
+        # основные поля кампании (title, description, state, даты),
+        # read_only только вычисляемые/агрегированные поля.
+        read_only_fields = DistributionCampaignSerializer.Meta.read_only_fields + (
+            'publications',
+            'assets',
+            'metadata',
+        )
 
     def get_assets(self, obj):
         """
