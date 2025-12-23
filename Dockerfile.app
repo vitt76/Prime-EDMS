@@ -15,6 +15,7 @@ RUN apt-get update && \
         boto3 \
         botocore \
         cryptography \
+        django-redis==5.4.0 \
         django-storages \
         gigachat \
         PyJWT \
