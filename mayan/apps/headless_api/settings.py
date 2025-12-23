@@ -29,3 +29,13 @@ setting_doc_type_config_cache_version = namespace.add_setting(
     )
 )
 
+setting_editor_max_upload_size = namespace.add_setting(
+    default=500 * 1024 * 1024,  # 500MB
+    global_name='HEADLESS_EDITOR_MAX_UPLOAD_SIZE',
+    help_text=_(
+        'Maximum file size for editor uploads in bytes. '
+        'Default: 524288000 (500MB). '
+        'Files exceeding this limit will return 413 Payload Too Large.'
+    )
+)
+

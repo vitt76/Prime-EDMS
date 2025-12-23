@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
+from django.contrib.postgres.indexes import GinIndex
 
 from mayan.apps.documents.models import Document
 from mayan.apps.databases.model_mixins import ExtraDataModelMixin
@@ -121,7 +122,7 @@ class DocumentAIAnalysis(ExtraDataModelMixin, models.Model):
         help_text=_('Status of AI analysis'),
         verbose_name=_('Analysis Status')
     )
-    
+
     # Phase B4: Processing progress tracking
     current_step = models.CharField(
         max_length=100,
@@ -130,20 +131,20 @@ class DocumentAIAnalysis(ExtraDataModelMixin, models.Model):
         help_text=_('Current processing step (e.g., "OCR scanning", "AI analysis")'),
         verbose_name=_('Current Step')
     )
-    
+
     progress = models.PositiveSmallIntegerField(
         default=0,
         help_text=_('Processing progress percentage (0-100)'),
         verbose_name=_('Progress')
     )
-    
+
     error_message = models.TextField(
         blank=True,
         null=True,
         help_text=_('Error message if analysis failed'),
         verbose_name=_('Error Message')
     )
-    
+
     task_id = models.CharField(
         max_length=100,
         blank=True,
@@ -165,6 +166,12 @@ class DocumentAIAnalysis(ExtraDataModelMixin, models.Model):
     class Meta:
         verbose_name = _('Document AI Analysis')
         verbose_name_plural = _('Document AI Analyses')
+        indexes = [
+            GinIndex(fields=['ai_tags'], name='dam_ai_tags_gin_idx'),
+            GinIndex(fields=['categories'], name='dam_categories_gin_idx'),
+            GinIndex(fields=['people'], name='dam_people_gin_idx'),
+            GinIndex(fields=['locations'], name='dam_locations_gin_idx'),
+        ]
 
     def __str__(self):
         return f'AI Analysis for {self.document}'

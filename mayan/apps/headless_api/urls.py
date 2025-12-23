@@ -20,6 +20,7 @@ from .views.version_views import HeadlessEditView
 from .views.conversion_views import HeadlessDocumentConvertView
 from .views.auth_views import HeadlessAuthMeView
 from .views.dashboard_stats_views import HeadlessDashboardStatsView
+from .views.task_status_views import HeadlessTaskStatusView
 
 app_name = 'headless_api'
 
@@ -90,5 +91,10 @@ api_urls = [
         regex=r'^profile/$',
         view=HeadlessProfileView.as_view(),
         name='api-profile'
+    ),
+    url(
+        regex=r'^tasks/(?P<task_id>[\w-]+)/status/$',
+        view=HeadlessTaskStatusView.as_view(),
+        name='api-task-status'
     ),
 ]

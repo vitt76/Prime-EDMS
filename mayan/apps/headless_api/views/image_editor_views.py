@@ -29,6 +29,8 @@ from mayan.apps.headless_api.serializers.image_editor import (
     HeadlessImageEditorSessionStateSerializer
 )
 from mayan.apps.headless_api.serializers.version import HeadlessDocumentVersionSerializer
+from mayan.apps.storage.models import SharedUploadedFile
+from mayan.apps.headless_api.tasks import process_editor_version_task
 
 logger = logging.getLogger(__name__)
 
@@ -536,6 +538,7 @@ class HeadlessImageEditorCommitView(APIView):
         quality = _coerce_int(state.get('quality'), 85)
         dpi = _coerce_int(((state.get('resize') or {}).get('dpi')), 0) or None
 
+        # Рендеринг изображения (синхронно, для валидации)
         image = _render_image(document_file=session.document_file, state=state)
         data, _content_type, ext = _encode_image(
             image=image,
@@ -547,33 +550,51 @@ class HeadlessImageEditorCommitView(APIView):
         base_name = session.document_file.filename.rsplit('.', 1)[0]
         filename = f'{base_name}.{ext}'
 
-        new_file = document.file_new(
-            file_object=ContentFile(data, name=filename),
-            filename=filename,
-            action=action_id,
-            comment=comment,
-            _user=request.user
+        # Сохранение отрендеренного изображения во временное хранилище
+        shared_file = SharedUploadedFile.objects.create(
+            file=ContentFile(data, name=filename)
         )
 
-        version = document.versions.order_by('-timestamp').first()
-        serializer = HeadlessDocumentVersionSerializer(
-            version, context={'request': request}
-        )
+        # Запуск Celery task для создания версии (без конвертации, файл уже отрендерен)
+        try:
+            task_result = process_editor_version_task.apply_async(
+                kwargs={
+                    'shared_uploaded_file_id': shared_file.pk,
+                    'document_id': document.pk,
+                    'target_format': None,  # Файл уже отрендерен, конвертация не нужна
+                    'comment': comment,
+                    'action_id': action_id,
+                    'user_id': request.user.pk,
+                },
+                queue='converter'
+            )
+        except Exception as exc:
+            logger.exception('Failed to enqueue image editor commit task: %s', exc)
+            # Очистка временного файла при ошибке
+            try:
+                shared_file.delete()
+            except Exception:
+                pass
+            return Response(
+                {
+                    'error': 'task_enqueue_failed',
+                    'detail': str(exc)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        session.status = 'saved'
-        session.edited_checksum = new_file.checksum
-        session.save(update_fields=('status', 'edited_checksum', 'modified'))
+        # Обновление сессии: статус 'processing' вместо 'saved'
+        session.status = 'processing'
+        session.save(update_fields=('status', 'modified'))
 
         return Response(
             {
-                'success': True,
-                'document_id': document.pk,
-                'file_id': new_file.pk,
-                'version_id': version.pk if version else None,
-                'version': serializer.data,
+                'task_id': task_result.id,
+                'status': 'processing',
+                'message': 'Image editor commit started',
                 'state': state,
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_202_ACCEPTED
         )
 
 
