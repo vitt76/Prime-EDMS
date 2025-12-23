@@ -331,6 +331,72 @@ setting_analysis_image_max_size = namespace.add_setting(
     )
 )
 
+# ==================== File Size Limits for AI Analysis ====================
+# Дифференцированные лимиты для разных типов медиа-файлов
+
+setting_ai_max_file_size_images = namespace.add_setting(
+    default=20 * 1024 * 1024,  # 20MB
+    global_name='DAM_AI_MAX_FILE_SIZE_IMAGES',
+    help_text=_(
+        'Maximum file size in bytes for AI analysis of image files (JPEG, PNG, GIF, WebP, BMP). '
+        'High-resolution professional photos may require larger limits. Default: 20MB.'
+    )
+)
+
+setting_ai_max_file_size_raw = namespace.add_setting(
+    default=50 * 1024 * 1024,  # 50MB
+    global_name='DAM_AI_MAX_FILE_SIZE_RAW',
+    help_text=_(
+        'Maximum file size in bytes for AI analysis of RAW/DNG/TIFF files. '
+        'RAW files are typically much larger than processed images. Default: 50MB.'
+    )
+)
+
+setting_ai_max_file_size_pdf = namespace.add_setting(
+    default=30 * 1024 * 1024,  # 30MB
+    global_name='DAM_AI_MAX_FILE_SIZE_PDF',
+    help_text=_(
+        'Maximum file size in bytes for AI analysis of PDF documents. '
+        'Multi-page PDFs with embedded images may be large. Default: 30MB.'
+    )
+)
+
+setting_ai_max_file_size_documents = namespace.add_setting(
+    default=15 * 1024 * 1024,  # 15MB
+    global_name='DAM_AI_MAX_FILE_SIZE_DOCUMENTS',
+    help_text=_(
+        'Maximum file size in bytes for AI analysis of document files (DOCX, DOC, TXT). '
+        'Default: 15MB.'
+    )
+)
+
+setting_ai_max_file_size_video = namespace.add_setting(
+    default=500 * 1024 * 1024,  # 500MB
+    global_name='DAM_AI_MAX_FILE_SIZE_VIDEO',
+    help_text=_(
+        'Maximum file size in bytes for AI analysis of video files (future support). '
+        'Video files are typically very large. Default: 500MB.'
+    )
+)
+
+setting_ai_max_file_size_audio = namespace.add_setting(
+    default=100 * 1024 * 1024,  # 100MB
+    global_name='DAM_AI_MAX_FILE_SIZE_AUDIO',
+    help_text=_(
+        'Maximum file size in bytes for AI analysis of audio files (future support). '
+        'Default: 100MB.'
+    )
+)
+
+setting_ai_max_file_size_default = namespace.add_setting(
+    default=15 * 1024 * 1024,  # 15MB
+    global_name='DAM_AI_MAX_FILE_SIZE_DEFAULT',
+    help_text=_(
+        'Default maximum file size in bytes for AI analysis of unknown or unsupported file types. '
+        'This is a safety limit to prevent DoS attacks. Default: 15MB.'
+    )
+)
+
 setting_analysis_metadata_format = namespace.add_setting(
     default='json',
     global_name='DAM_ANALYSIS_METADATA_FORMAT',

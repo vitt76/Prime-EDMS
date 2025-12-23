@@ -325,6 +325,78 @@ class AIAnalysisAPITestCase(ACLTestCaseMixin, DocumentTestMixin, BaseAPITestCase
         # Fresh analysis should not be reanalyzable immediately
         self.assertFalse(DocumentAIAnalysisViewSet._can_reanalyze(old_analysis))
 
+    def test_file_size_check_rejects_large_files(self):
+        """Test that files exceeding size limit are rejected."""
+        from django.conf import settings
+        from mayan.apps.dam.utils import get_max_file_size_for_mime_type
+        
+        self._grant_view_access(self._test_document)
+        self._grant_analysis_access(self._test_document)
+        
+        # Get the latest file and mock its size
+        latest_file = self._test_document.files.order_by('-timestamp').first()
+        mime_type = latest_file.mimetype or 'image/jpeg'
+        max_size = get_max_file_size_for_mime_type(mime_type)
+        
+        # Mock file size to exceed limit
+        with patch.object(latest_file, 'size', max_size + 1):
+            url = '/api/dam/ai-analysis/analyze/'
+            data = {'document_id': self._test_document.pk}
+            
+            response = self.client.post(url, data, format='json')
+            
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertEqual(response.data['error_code'], 'FILE_TOO_LARGE')
+            self.assertIn('file_size', response.data)
+            self.assertIn('max_size', response.data)
+            self.assertIn('mime_type', response.data)
+
+    def test_file_size_check_allows_valid_files(self):
+        """Test that files within size limit are accepted."""
+        self._grant_view_access(self._test_document)
+        self._grant_analysis_access(self._test_document)
+        
+        # Get the latest file and mock its size
+        latest_file = self._test_document.files.order_by('-timestamp').first()
+        from mayan.apps.dam.utils import get_max_file_size_for_mime_type
+        
+        mime_type = latest_file.mimetype or 'image/jpeg'
+        max_size = get_max_file_size_for_mime_type(mime_type)
+        
+        # Mock file size to be within limit
+        with patch.object(latest_file, 'size', max_size - 1):
+            url = '/api/dam/ai-analysis/analyze/'
+            data = {'document_id': self._test_document.pk}
+            
+            with patch('mayan.apps.dam.api_views.analyze_document_with_ai.delay') as mock_task:
+                mock_task.return_value.id = 'test-task-id'
+                response = self.client.post(url, data, format='json')
+            
+            # Should proceed to task scheduling
+            self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+
+    def test_file_size_check_different_mime_types(self):
+        """Test that different MIME types have different limits."""
+        from mayan.apps.dam.utils import get_max_file_size_for_mime_type
+        
+        # Images should have 20MB limit
+        self.assertEqual(
+            get_max_file_size_for_mime_type('image/jpeg'),
+            20 * 1024 * 1024
+        )
+        
+        # PDF should have 30MB limit
+        self.assertEqual(
+            get_max_file_size_for_mime_type('application/pdf'),
+            30 * 1024 * 1024
+        )
+        
+        # RAW should have 50MB limit
+        self.assertEqual(
+            get_max_file_size_for_mime_type('image/tiff'),
+            50 * 1024 * 1024
+        )
+
 
 
 

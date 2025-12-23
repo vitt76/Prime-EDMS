@@ -311,6 +311,45 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
+            # Step 4.5: Check file size before analysis (with type-specific limits)
+            from .utils import get_max_file_size_for_mime_type, format_file_size
+            
+            latest_file = document.files.order_by('-timestamp').first()
+            if latest_file and latest_file.size:
+                mime_type = latest_file.mimetype or 'application/octet-stream'
+                max_file_size = get_max_file_size_for_mime_type(mime_type)
+                
+                if latest_file.size > max_file_size:
+                    file_size_str = format_file_size(latest_file.size)
+                    max_size_str = format_file_size(max_file_size)
+                    
+                    logger.warning(
+                        'File size exceeds maximum for AI analysis',
+                        extra={
+                            'user_id': request.user.id,
+                            'document_id': document_id,
+                            'file_size': latest_file.size,
+                            'max_size': max_file_size,
+                            'mime_type': mime_type,
+                            'file_type': 'image' if mime_type.startswith('image/') else 'document'
+                        }
+                    )
+                    return Response(
+                        {
+                            'error': (
+                                f'File size ({file_size_str}) exceeds maximum allowed size '
+                                f'({max_size_str}) for {mime_type} files'
+                            ),
+                            'error_code': 'FILE_TOO_LARGE',
+                            'file_size': latest_file.size,
+                            'max_size': max_file_size,
+                            'mime_type': mime_type,
+                            'file_size_formatted': file_size_str,
+                            'max_size_formatted': max_size_str
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
             # Step 5: Check Celery availability
             celery_available, celery_error = self._check_celery_available()
             if not celery_available:

@@ -109,6 +109,26 @@ def should_trigger_analysis(document_file, document):
         if not is_image_by_ext:
             return False, f"MIME type not supported: {mimetype}"
     
+    # Check file size with type-specific limits
+    from .utils import get_max_file_size_for_mime_type, format_file_size
+    
+    try:
+        file_size = document_file.size if hasattr(document_file, 'size') else None
+        if file_size:
+            mime_type = (document_file.mimetype or '').lower() or 'application/octet-stream'
+            max_file_size = get_max_file_size_for_mime_type(mime_type)
+            
+            if file_size > max_file_size:
+                file_size_str = format_file_size(file_size)
+                max_size_str = format_file_size(max_file_size)
+                return False, (
+                    f"File size ({file_size_str}) exceeds maximum ({max_size_str}) "
+                    f"for {mime_type} files"
+                )
+    except Exception as e:
+        logger.warning(f"Could not check file size: {e}")
+        # Continue anyway if size check fails (graceful degradation)
+    
     # Check if analysis already exists and is completed
     try:
         existing_analysis = document.ai_analysis
