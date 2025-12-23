@@ -42,18 +42,36 @@ class ActivityFeedSerializer(serializers.Serializer):
     def to_representation(self, action):
         action_text, icon = self._map_verb(action.verb)
         actor = getattr(action, 'actor', None)
+        
+        # Use prefetched document if available to avoid N+1 queries
+        prefetched_documents = self.context.get('prefetched_documents', {})
         target = getattr(action, 'target', None)
+        
+        # Try to use prefetched document for Document type
+        if target and prefetched_documents and action.target_content_type:
+            if action.target_content_type.model == 'document':
+                prefetched_doc = prefetched_documents.get(action.target_object_id)
+                if prefetched_doc:
+                    target = prefetched_doc
+        
+        # Get object name with error handling
+        object_name = None
+        try:
+            if target:
+                object_name = str(target)
+        except (AttributeError, Exception):
+            object_name = None
 
         return {
             'id': action.pk,
             'user': getattr(actor, 'username', 'system') if actor else 'system',
             'user_id': actor.pk if actor else None,
             'action_text': action_text,
-            'object_name': str(target) if target else None,
+            'object_name': object_name,
             'timestamp': action.timestamp,
             'icon': icon,
             'verb': action.verb,
-            'target_id': getattr(target, 'pk', None)
+            'target_id': getattr(target, 'pk', None) if target else None
         }
 
     def _map_verb(self, verb: str):

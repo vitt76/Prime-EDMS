@@ -1,8 +1,8 @@
 # BACKEND_AUDIT_V1.md
 
 **Дата аудита:** 2025-12-09  
-**Версия:** 1.1  
-**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов)  
+**Версия:** 1.2  
+**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов и оптимизации N+1 запросов)  
 **Статус:** Полный технический аудит бэкенда
 
 ---
@@ -694,8 +694,20 @@ DocumentAIAnalysis.objects.select_related('document').prefetch_related('document
 
 **Примеры:**
 ```python
-# headless_api/views/favorites_views.py:71
-DocumentType.objects.select_related('document_type').prefetch_related('tags')
+# headless_api/views/favorites_views.py:81-97
+# Оптимизированный prefetch для files и versions
+documents_qs.prefetch_related(
+    'tags',
+    Prefetch('files', queryset=DocumentFile.objects.order_by('-timestamp'), to_attr='_prefetched_latest_file_list'),
+    Prefetch('versions', queryset=DocumentVersion.objects.filter(active=True).prefetch_related('version_pages'), to_attr='_prefetched_version_active_list')
+)
+
+# headless_api/views/activity_views.py:277-298
+# Batch prefetch для Document объектов через GenericForeignKey
+def _prefetch_documents_for_actions(self, actions):
+    documents = Document.objects.filter(pk__in=document_ids).only(
+        'id', 'label', 'uuid', 'datetime_created'
+    ).prefetch_related('files', 'versions__version_pages')
 
 # dam/api_views.py:50
 DocumentAIAnalysis.objects.prefetch_related('document__files')
@@ -716,17 +728,21 @@ DocumentAIAnalysis.objects.prefetch_related('document__files')
 
 1. **`HeadlessActivityFeedView` (`activity_views.py:169`):**
    - Использует `select_related('actor', 'target_content_type')`
-   - **Проблема:** Нет `prefetch_related()` для `target` (Document), что может привести к N+1 при сериализации
-   - **Рекомендация:** Добавить `prefetch_related('target')` если target — Document
+   - ~~**Проблема:** Нет `prefetch_related()` для `target` (Document), что может привести к N+1 при сериализации~~ ✅ **РЕШЕНО**
+   - **Реализация:** Добавлен batch prefetch для Document объектов через `_prefetch_documents_for_actions()` с использованием `only()` для оптимизации. Реализовано кеширование ContentType на уровне класса. Методы сериализации обновлены для использования prefetched documents. Добавлена обработка ошибок для удаленных объектов.
 
 2. **`HeadlessFavoriteListView` (`favorites_views.py:61`):**
    - Использует `select_related('document', 'document__document_type')`
-   - **Проблема:** Нет `prefetch_related()` для `document__files`, `document__tags`
-   - **Рекомендация:** Добавить `prefetch_related('document__files', 'document__tags')` если эти данные используются в сериализаторе
+   - ~~**Проблема:** Нет `prefetch_related()` для `document__files`, `document__tags`~~ ✅ **РЕШЕНО**
+   - **Реализация:** Добавлен `Prefetch` для `files` с `order_by('-timestamp')` и `to_attr='_prefetched_latest_file_list'`. Добавлен `Prefetch` для `versions` с фильтром `active=True` и `to_attr='_prefetched_version_active_list'`. Применена оптимизация `only()` для минимизации передачи данных. Все prefetch'и соответствуют ожиданиям `OptimizedDocumentListSerializer`.
 
 3. **`DAMDocumentListView` (`api_views.py`):**
    - Использует `OptimizedDocumentSerializer` с оптимизациями
    - **Статус:** Оптимизирован (использует `select_related`, `prefetch_related`)
+
+4. **`DashboardActivityView` (`activity_views.py:372`):**
+   - ~~**Проблема:** Потенциальные N+1 запросы при сериализации через `ActivityFeedSerializer`~~ ✅ **РЕШЕНО**
+   - **Реализация:** Применены те же оптимизации, что и для `HeadlessActivityFeedView` - batch prefetch для Document объектов. `ActivityFeedSerializer` обновлен для использования prefetched documents из context.
 
 ### 5.2. Отсутствие Проверок Прав Доступа
 
@@ -899,7 +915,7 @@ image_editor
 2. **Производительность:**
    - Синхронная конвертация изображений в request handler
    - Отсутствие кеширования конфигурации типов документов
-   - Потенциальные N+1 в некоторых views
+   - ~~Потенциальные N+1 в некоторых views~~ ✅ **РЕШЕНО:** Оптимизированы `HeadlessActivityFeedView`, `HeadlessFavoriteListView` и `DashboardActivityView`
 
 3. **Безопасность:**
    - ~~Отсутствие валидации размера файла перед AI-анализом~~ ✅ **РЕШЕНО:** Реализована система дифференцированных лимитов с проверкой на трех уровнях
@@ -910,7 +926,7 @@ image_editor
 #### Приоритет 1 (Критично)
 1. ~~**Добавить валидацию размера файла** перед AI-анализом~~ ✅ **ВЫПОЛНЕНО**
 2. **Вынести хардкод** в settings (провайдеры, max_width)
-3. **Добавить `prefetch_related()`** в `HeadlessActivityFeedView` и `HeadlessFavoriteListView`
+3. ~~**Добавить `prefetch_related()`** в `HeadlessActivityFeedView` и `HeadlessFavoriteListView`~~ ✅ **ВЫПОЛНЕНО**
 
 #### Приоритет 2 (Важно)
 4. **Кешировать конфигурацию типов документов** (1 час TTL)
@@ -925,7 +941,7 @@ image_editor
 ---
 
 **Документ составлен:** 2025-12-09  
-**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов)  
+**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов и оптимизации N+1 запросов)  
 **Автор аудита:** Senior Backend Architect  
-**Версия:** 1.1
+**Версия:** 1.2
 

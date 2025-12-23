@@ -10,8 +10,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 
+from django.db.models import Prefetch
+
 from mayan.apps.acls.models import AccessControlList
-from mayan.apps.documents.models import Document, FavoriteDocument
+from mayan.apps.documents.models import Document, DocumentFile, DocumentVersion, FavoriteDocument
 from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.headless_api.serializers import FavoriteDocumentEntrySerializer
 
@@ -68,7 +70,33 @@ class HeadlessFavoriteListView(APIView):
                 permission=permission_document_view,
                 queryset=documents_qs,
                 user=request.user
-            ).select_related('document_type').prefetch_related('tags')
+            )
+
+            # Build optimized queryset with prefetch for files and versions
+            # Use only() to minimize data transfer - only fields used by OptimizedDocumentListSerializer
+            # Note: For Prefetch, we use a simpler approach - order by timestamp and limit to 1
+            # This works correctly because Prefetch applies the queryset to each document's related files
+            documents_qs = documents_qs.only(
+                'id', 'uuid', 'label', 'datetime_created', 'document_type_id'
+            ).select_related('document_type').prefetch_related(
+                'tags',
+                # Prefetch latest file - order by timestamp desc
+                # The serializer will take the first element from the list
+                # This is applied per-document, so each document gets its files ordered by timestamp
+                Prefetch(
+                    'files',
+                    queryset=DocumentFile.objects.order_by('-timestamp'),
+                    to_attr='_prefetched_latest_file_list'
+                ),
+                # Prefetch active version
+                Prefetch(
+                    'versions',
+                    queryset=DocumentVersion.objects.filter(active=True).prefetch_related(
+                        'version_pages'  # Also prefetch pages for version
+                    ),
+                    to_attr='_prefetched_version_active_list'
+                )
+            )
 
             # Map id -> document for serializer usage
             document_map: Dict[int, Document] = {doc.pk: doc for doc in documents_qs}
