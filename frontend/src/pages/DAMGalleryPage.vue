@@ -414,7 +414,7 @@
     <ConfirmModal
       :is-open="showDeleteConfirm"
       title="Удалить документ?"
-      :message="deleteTarget ? `\"${deleteTarget.label}\" будет удалён вместе с файлами и версиями. Действие необратимо.` : 'Удалить документ?'"
+        :message="deleteTarget ? `${deleteTarget.label} будет удалён вместе с файлами и версиями. Действие необратимо.` : 'Удалить документ?'"
       confirm-text="Удалить"
       confirm-variant="danger"
       @close="cancelDelete"

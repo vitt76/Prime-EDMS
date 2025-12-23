@@ -1646,8 +1646,10 @@ function addSelectedDocumentsToCampaign() {
   })
 }
 
-function assetPreviewKey(asset: any): string {
-  return String(asset.document_file_id ?? asset.document_id ?? asset.id)
+function assetPreviewKey(asset: any, resolvedFileId?: number | null): string {
+  const filePart = resolvedFileId ?? asset.document_file_id ?? asset.file_latest_id ?? asset.file_id
+  const docPart = asset.document_id ?? asset.id
+  return `${docPart || 'doc'}-${filePart || 'file'}`
 }
 
 function getAssetPreviewUrl(asset: any): string {
@@ -1688,14 +1690,14 @@ async function loadCampaignAssetPreviews() {
     const versionId = asset.version_active_id || asset.version_id || asset.version?.id
 
     const paths: string[] = []
-    // 1) страница актуального файла
+    // 1) прямой download (даёт актуальный файл, как в галерее)
+    paths.push(`/api/v4/documents/${docId}/files/${fileId}/download/`)
+    // 2) страница актуального файла
     paths.push(`/api/v4/documents/${docId}/files/${fileId}/pages/1/image/?width=600`)
-    // 2) страница активной версии (если есть)
+    // 3) страница активной версии (если есть)
     if (versionId) {
       paths.push(`/api/v4/documents/${docId}/versions/${versionId}/pages/1/image/?width=600`)
     }
-    // 3) прямой download
-    paths.push(`/api/v4/documents/${docId}/files/${fileId}/download/`)
 
     for (const path of paths) {
       try {
@@ -1705,7 +1707,7 @@ async function loadCampaignAssetPreviews() {
           false
         )
         const objectUrl = window.URL.createObjectURL(blob)
-        previews[assetPreviewKey(asset)] = objectUrl
+        previews[assetPreviewKey(asset, fileId)] = objectUrl
         break
       } catch (e) {
         // try next path
