@@ -1,8 +1,8 @@
 # BACKEND_AUDIT_V1.md
 
 **Дата аудита:** 2025-12-09  
-**Версия:** 1.7  
-**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов, оптимизации N+1 запросов, выносе хардкода конфигурации в settings, кешировании конфигурации типов документов, асинхронной конвертации изображений, GIN-индексов для JSON-полей и исправлении конфигурации Redis для distributed rate limiting)  
+**Версия:** 1.8  
+**Последнее обновление:** 2025-12-23 (уточнена информация о способах установки кастомных приложений: явно в INSTALLED_APPS vs через ready() метод, добавлена информация о process_editor_version_task в headless_api, уточнена структура image_editor интеграции)  
 **Статус:** Полный технический аудит бэкенда
 
 ---
@@ -39,14 +39,48 @@
 - И другие стандартные приложения Mayan...
 
 #### Custom Apps (Кастомные расширения)
+
+**Способ установки:**
+- **Явно в INSTALLED_APPS** (`mayan/settings/base.py`): устанавливаются при старте Django
+- **Через `ready()` метод** (`apps.py`): устанавливаются динамически при инициализации приложения
+
+**Список кастомных приложений:**
+
 1. **`mayan.apps.headless_api`** — BFF-адаптер для SPA
+   - **Способ установки:** Явно в INSTALLED_APPS (строка 101)
+   - **Назначение:** Предоставляет SPA-friendly REST endpoints
+
 2. **`mayan.apps.dam`** — Digital Asset Management (AI-анализ, метаданные)
+   - **Способ установки:** Через `ready()` метод (`apps.py:46-47`)
+   - **Назначение:** AI-анализ документов, извлечение метаданных
+   - **Особенность:** Автоматически добавляется в INSTALLED_APPS при инициализации
+
 3. **`mayan.apps.distribution`** — Распространение контента (публикации, share links)
-4. **`mayan.apps.image_editor`** — Редактор изображений (server-side)
-5. **`mayan.apps.converter_pipeline_extension`** — Расширение конвертера (RAW, DNG)
-6. **`mayan.apps.storage`** — Кастомные storage backends (S3, Яндекс.Диск)
-7. **`mayan.apps.user_management`** — Расширенное управление пользователями
-8. **`mayan.apps.autoadmin`** — Автоматическая администрирование
+   - **Способ установки:** Через `ready()` метод (`apps.py:34-35`)
+   - **Назначение:** Управление публикациями, share links, rendition'ами
+   - **Особенность:** Автоматически добавляется в INSTALLED_APPS при инициализации
+
+4. **`mayan.apps.converter_pipeline_extension`** — Расширение конвертера (RAW, DNG)
+   - **Способ установки:** Через `ready()` метод (`apps.py:27-28`)
+   - **Назначение:** Расширенная система конвертеров для RAW/DNG файлов
+   - **Особенность:** Автоматически добавляется в INSTALLED_APPS при инициализации
+
+5. **`mayan.apps.storage`** — Кастомные storage backends (S3, Яндекс.Диск)
+   - **Способ установки:** Явно в INSTALLED_APPS (строка 103)
+   - **Назначение:** Кастомные storage backends для файлов
+
+6. **`mayan.apps.user_management`** — Расширенное управление пользователями
+   - **Способ установки:** Явно в INSTALLED_APPS (строка 79)
+   - **Назначение:** Расширенное управление пользователями и группами
+
+7. **`mayan.apps.autoadmin`** — Автоматическая администрирование
+   - **Способ установки:** Явно в INSTALLED_APPS (строка 82)
+   - **Назначение:** Автоматическая настройка администратора
+
+8. **`mayan.apps.image_editor`** — Редактор изображений (server-side)
+   - **Способ установки:** Не установлен в INSTALLED_APPS, используется через интеграцию с `headless_api`
+   - **Назначение:** Server-side редактор изображений
+   - **Особенность:** Функционал экспонируется через `headless_api` endpoints (`/api/v4/headless/image-editor/...`)
 
 ### 1.3. Конфигурация Инфраструктуры
 
@@ -137,8 +171,28 @@
 | `/api/v4/headless/image-editor/watermarks/` | GET | `HeadlessImageEditorWatermarkListView` | Список водяных знаков |
 
 #### Фоновые Задачи
+
 **Celery tasks:**
-- `process_editor_version_task` (`tasks.py`) — асинхронная обработка изображений из редактора (очередь `converter`)
+
+##### `process_editor_version_task` (`tasks.py:47`)
+- **Queue:** `converter`
+- **Retries:** 3 (max_retries=3, default_retry_delay=60)
+- **Триггер:** 
+  - API endpoint `/api/v4/headless/documents/{id}/versions/new_from_edit/` (`HeadlessEditView`)
+  - API endpoint `/api/v4/headless/image-editor/sessions/{id}/commit/` (`HeadlessImageEditorCommitView`)
+- **Логика:**
+  1. Получение временного файла из `SharedUploadedFile` по `shared_uploaded_file_id`
+  2. Получение документа по `document_id`
+  3. Конвертация изображения (если указан `target_format`) через Pillow
+  4. Создание новой версии документа через `document.file_new()` с указанным `action_id`
+  5. Автоматический запуск постобработки (OCR, AI-анализ) через сигналы Mayan EDMS
+  6. Очистка временного файла из `SharedUploadedFile`
+  7. Возврат результата с `document_id`, `file_id`, `version_id`
+- **Особенности:**
+  - Использует `SharedUploadedFile` для временного хранения файлов перед обработкой
+  - Поддерживает retry при операционных ошибках БД (`OperationalError`)
+  - Автоматическая очистка временных файлов при ошибках
+  - TTFB < 200ms независимо от размера файла (асинхронная обработка)
 
 #### Использование Core Mayan
 - **Модели:** `Document`, `User`, `Action`, `DocumentType`, `DocumentTypeMetadataType`
@@ -391,18 +445,31 @@ def trigger_ai_analysis(sender, instance, created, **kwargs):
 
 **Назначение:** Server-side редактор изображений с поддержкой сессий, трансформаций, водяных знаков.
 
+**Особенность:** Не установлен в INSTALLED_APPS, функционал экспонируется через `headless_api` endpoints.
+
 #### Ключевые Модели
-**Использует модели из core Mayan:** `Document`, `DocumentFile`, `DocumentVersion`
+- **`ImageEditSession`** (`mayan/apps/image_editor/models.py`) — модель сессии редактирования изображения
+  - Связь с `Document` через ForeignKey
+  - Хранение состояния редактирования (трансформации, фильтры, водяные знаки)
+  - Статус сессии (draft, processing, completed, failed)
 
 #### API Эндпоинты
-**Интегрированы в headless_api:**
-- `/api/v4/headless/image-editor/sessions/` — создание сессии
-- `/api/v4/headless/image-editor/sessions/{id}/` — управление сессией
-- `/api/v4/headless/image-editor/sessions/{id}/preview/` — превью
-- `/api/v4/headless/image-editor/sessions/{id}/commit/` — коммит изменений
+**Интегрированы в headless_api через `HeadlessImageEditor*View`:**
+
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/image-editor/sessions/` | POST | `HeadlessImageEditorSessionCreateView` | Создание сессии редактора |
+| `/api/v4/headless/image-editor/sessions/{id}/` | GET, PATCH | `HeadlessImageEditorSessionDetailView` | Управление сессией (получение/обновление состояния) |
+| `/api/v4/headless/image-editor/sessions/{id}/preview/` | GET | `HeadlessImageEditorPreviewView` | Превью отредактированного изображения |
+| `/api/v4/headless/image-editor/sessions/{id}/commit/` | POST | `HeadlessImageEditorCommitView` | Коммит изменений (асинхронно, возвращает 202 Accepted + task_id) |
+| `/api/v4/headless/image-editor/watermarks/` | GET | `HeadlessImageEditorWatermarkListView` | Список доступных водяных знаков |
 
 #### Фоновые Задачи
-**Нет собственных tasks** — использует `HeadlessEditView` для синхронного создания версий.
+**Использует Celery tasks из `headless_api`:**
+- `process_editor_version_task` (`headless_api/tasks.py`) — асинхронная обработка изображений из редактора (очередь `converter`)
+  - Вызывается из `HeadlessImageEditorCommitView` при коммите изменений
+  - Поддерживает конвертацию форматов, применение фильтров, водяных знаков
+  - Создает новую версию документа через `document.file_new()`
 
 ---
 
@@ -965,7 +1032,7 @@ image_editor
 ---
 
 **Документ составлен:** 2025-12-09  
-**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов, оптимизации N+1 запросов, выносе хардкода конфигурации в settings, кешировании конфигурации типов документов, асинхронной конвертации изображений, GIN-индексов для JSON-полей и исправлении конфигурации Redis для distributed rate limiting)  
+**Последнее обновление:** 2025-12-23 (уточнена информация о способах установки кастомных приложений: явно в INSTALLED_APPS vs через ready() метод, добавлена информация о process_editor_version_task в headless_api, уточнена структура image_editor интеграции)  
 **Автор аудита:** Senior Backend Architect  
-**Версия:** 1.7
+**Версия:** 1.8
 
