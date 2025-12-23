@@ -1,8 +1,8 @@
 # BACKEND_AUDIT_V1.md
 
 **Дата аудита:** 2025-12-09  
-**Версия:** 1.8  
-**Последнее обновление:** 2025-12-23 (уточнена информация о способах установки кастомных приложений: явно в INSTALLED_APPS vs через ready() метод, добавлена информация о process_editor_version_task в headless_api, уточнена структура image_editor интеграции)  
+**Версия:** 1.9  
+**Последнее обновление:** 2025-12-23 (реализованы TODO задачи: интеграция AI-метаданных с Mayan, подсчет документов для пресета с ACL и кешированием, удаление deprecated ImageEditorSaveView)  
 **Статус:** Полный технический аудит бэкенда
 
 ---
@@ -293,6 +293,14 @@ queryset = AccessControlList.objects.restrict_queryset(
   7. Обновление прогресса (`progress`, `current_step`)
   8. Сохранение результатов в `DocumentAIAnalysis`
   9. Обновление статуса на `completed` или `failed`
+  10. Интеграция результатов с системой метаданных Mayan через `update_document_metadata_from_ai()`:
+      - Теги (ai_tags, people, locations, categories) → Mayan `Tag` через `tag.attach_to(document)`
+      - Текстовые поля (description, alt_text, copyright_notice) → `MetadataType` через `DocumentMetadata`
+      - Принцип "Человек > AI": перезапись только если значение пустое (кроме `force_reanalyze=True`)
+  10. Интеграция результатов с системой метаданных Mayan через `update_document_metadata_from_ai()`:
+      - Теги (ai_tags, people, locations, categories) → Mayan `Tag` через `tag.attach_to(document)`
+      - Текстовые поля (description, alt_text, copyright_notice) → `MetadataType` через `DocumentMetadata`
+      - Принцип "Человек > AI": перезапись только если значение пустое (кроме `force_reanalyze=True`)
 
 ##### `bulk_analyze_documents` (`tasks.py`)
 - **Queue:** `tools`
@@ -305,15 +313,22 @@ queryset = AccessControlList.objects.restrict_queryset(
 - **Логика:** Импорт файлов из Яндекс.Диск
 
 #### Утилиты
-- **`mayan.apps.dam.utils`** — утилиты для работы с лимитами размеров файлов:
+- **`mayan.apps.dam.utils`** — утилиты для работы с лимитами размеров файлов и тегами:
   - `get_max_file_size_for_mime_type(mime_type: str) -> int` — определение лимита по MIME типу
   - `format_file_size(size_bytes: int) -> str` — форматирование размера для сообщений
+  - `get_or_create_tag(label: str, color: Optional[str] = None) -> Optional[Tag]` — создание/получение тега для интеграции AI-результатов
+- **`mayan.apps.dam.cache_utils`** — утилиты для кеширования подсчета документов пресета:
+  - `get_preset_count_cache_key(preset_id, user_id=None)` — генерация ключа кеша
+  - `get_preset_count_cache_ttl()` — получение TTL из настроек
+  - `invalidate_preset_count_cache(preset_id, user_id=None)` — инвалидация кеша
 
 #### Использование Core Mayan
 - **Модели:** `Document`, `DocumentFile`, `DocumentType`
-- **Signals:** `post_save` на `DocumentFile` (автоматический триггер AI-анализа с проверкой размера файла)
-- **ACL:** `AccessControlList.objects.check_access()` для проверки прав на документ
+- **Signals:** `post_save` на `DocumentFile` (автоматический триггер AI-анализа с проверкой размера файла), `post_save`/`post_delete` на `DAMMetadataPreset` (инвалидация кеша подсчета документов)
+- **ACL:** `AccessControlList.objects.check_access()` для проверки прав на документ, `AccessControlList.objects.restrict_queryset()` для подсчета документов пресета с учетом прав доступа
 - **Permissions:** `permission_document_view`, `permission_ai_analysis_create`
+- **Tags:** Интеграция AI-тегов с системой тегов Mayan через `Tag.attach_to(document)` (ai_tags, people, locations, categories → Tag)
+- **Metadata:** Интеграция AI-описаний с системой метаданных Mayan через `DocumentMetadata` (description, alt_text, copyright_notice → MetadataType)
 - **Search:** Интеграция с `mayan.apps.dynamic_search` для индексации AI-тегов
 - **OCR:** Использование `mayan.apps.ocr.models.DocumentVersionPageOCRContent` для извлечения текста
 
@@ -547,6 +562,7 @@ AccessControlList.objects.check_access(
 **Использование в dam:**
 - `DocumentAIAnalysisViewSet.get_document()` — проверка `permission_document_view`
 - `DocumentAIAnalysisViewSet._assert_analysis_permission()` — проверка `permission_ai_analysis_create`
+- `DAMMetadataPresetSerializer.get_applicable_documents_count()` — фильтрация документов по ACL через `restrict_queryset()` для подсчета с учетом прав доступа
 
 ### 3.4. Использование Permissions
 
@@ -860,23 +876,40 @@ DocumentAIAnalysis.objects.prefetch_related('document__files')
 
 ### 5.5. TODO и FIXME в Коде
 
-1. **`dam/tasks.py:939`:**
+1. **`dam/tasks.py:984` (было 939):**
    ```python
    # TODO: Integrate with Mayan metadata system to automatically
    ```
-   - **Описание:** Интеграция AI-тегов с системой метаданных Mayan
+   - ~~**Описание:** Интеграция AI-тегов с системой метаданных Mayan~~ ✅ **РЕШЕНО**
+   - **Реализация:** Реализована гибридная интеграция AI-результатов с системой метаданных Mayan:
+     - **Теги** (ai_tags, people, locations, categories) → Mayan `Tag` через `tag.attach_to(document)`
+     - **Текстовые поля** (ai_description, alt_text, copyright_notice) → `MetadataType` через `DocumentMetadata`
+     - **Принцип "Человек > AI":** Перезапись только если значение пустое (кроме `force_reanalyze=True`)
+     - **Настройки:** `DAM_AI_METADATA_MAPPING` для конфигурации маппинга, `DAM_AI_TAG_DEFAULT_COLOR` для цвета тегов
+     - **Утилита:** `get_or_create_tag()` для создания/получения тегов
+     - **Важно:** MetadataType должны быть созданы администратором вручную перед использованием
 
-2. **`dam/serializers.py:192`:**
+2. **`dam/serializers.py:189` (было 192):**
    ```python
    return 0  # TODO: Implement actual counting logic
    ```
-   - **Описание:** Реализовать подсчет документов для пресета
+   - ~~**Описание:** Реализовать подсчет документов для пресета~~ ✅ **РЕШЕНО**
+   - **Реализация:** Реализован метод `get_applicable_documents_count()` с:
+     - **ACL-фильтрацией:** Использование `AccessControlList.objects.restrict_queryset()` для учета прав доступа
+     - **Фильтрацией по MIME типам:** Через Subquery для latest file mimetype
+     - **Кешированием:** TTL 10 минут (настраивается через `DAM_PRESET_DOCUMENT_COUNT_CACHE_TTL`)
+     - **Инвалидацией кеша:** Автоматическая через сигналы при изменении `DAMMetadataPreset`
+     - **Утилиты:** `mayan/apps/dam/cache_utils.py` для управления кешем
 
-3. **`image_editor/views.py:36`:**
+3. **`image_editor/views.py:35` (было 36):**
    ```python
    """[DEPRECATED] Сохранение изменений изображения и создание новой версии.
    ```
-   - **Описание:** Deprecated view (заменен на `HeadlessEditView`)
+   - ~~**Описание:** Deprecated view (заменен на `HeadlessEditView`)~~ ✅ **РЕШЕНО**
+   - **Реализация:** 
+     - URL-маршрут удален из `mayan/apps/image_editor/urls.py`
+     - Класс `ImageEditorSaveView` закомментирован в `mayan/apps/image_editor/views.py` с пояснением
+     - Оставлен на 1 спринт для возможности быстрого восстановления при необходимости
 
 ### 5.6. Уязвимости Безопасности
 
@@ -949,9 +982,10 @@ headless_api
   └── uses: distribution (для share links через API)
 
 dam
-  ├── depends on: documents, metadata, ocr, acls, permissions (core)
+  ├── depends on: documents, metadata, ocr, acls, permissions, tags (core)
   ├── uses: dynamic_search (для индексации AI-тегов)
-  └── uses: storage (для S3/Yandex Disk)
+  ├── uses: storage (для S3/Yandex Disk)
+  └── integrates: tags (для AI-тегов через tag.attach_to()), metadata (для AI-описаний через DocumentMetadata)
 
 distribution
   ├── depends on: documents, acls, permissions (core)
@@ -999,7 +1033,7 @@ image_editor
 ### 7.2. Слабые Стороны
 
 1. **Технический долг:**
-   - TODO в коде (интеграция с метаданными, подсчет документов)
+   - ~~TODO в коде (интеграция с метаданными, подсчет документов)~~ ✅ **РЕШЕНО:** Реализована интеграция AI-метаданных с Mayan (гибридная стратегия: теги → Tag, остальное → MetadataType), реализован подсчет документов для пресета с ACL и кешированием, удален deprecated ImageEditorSaveView
    - ~~Хардкод конфигурации (последовательность провайдеров, max_width)~~ ✅ **РЕШЕНО:** Вынесено в settings (`DAM_AI_PROVIDER_SEQUENCE`, `DAM_AI_IMAGE_MAX_WIDTH`)
 
 2. **Производительность:**
@@ -1021,7 +1055,10 @@ image_editor
 #### Приоритет 2 (Важно)
 4. ~~**Кешировать конфигурацию типов документов** (1 час TTL)~~ ✅ **ВЫПОЛНЕНО**
 5. ~~**Вынести конвертацию изображений** в Celery task для больших файлов~~ ✅ **ВЫПОЛНЕНО**
-6. **Реализовать TODO** (интеграция с метаданными, подсчет документов)
+6. ~~**Реализовать TODO** (интеграция с метаданными, подсчет документов)~~ ✅ **ВЫПОЛНЕНО**
+   - Интеграция AI-метаданных с Mayan (гибридная стратегия: теги → Tag, остальное → MetadataType)
+   - Подсчет документов для пресета с ACL-фильтрацией и кешированием
+   - Удаление deprecated ImageEditorSaveView
 
 #### Приоритет 3 (Желательно)
 7. ~~**Добавить GIN-индексы** для JSON-полей (если используется PostgreSQL)~~ ✅ **ВЫПОЛНЕНО**
@@ -1032,7 +1069,7 @@ image_editor
 ---
 
 **Документ составлен:** 2025-12-09  
-**Последнее обновление:** 2025-12-23 (уточнена информация о способах установки кастомных приложений: явно в INSTALLED_APPS vs через ready() метод, добавлена информация о process_editor_version_task в headless_api, уточнена структура image_editor интеграции)  
+**Последнее обновление:** 2025-12-23 (реализованы TODO задачи: интеграция AI-метаданных с Mayan, подсчет документов для пресета с ACL и кешированием, удаление deprecated ImageEditorSaveView)  
 **Автор аудита:** Senior Backend Architect  
-**Версия:** 1.8
+**Версия:** 1.9
 

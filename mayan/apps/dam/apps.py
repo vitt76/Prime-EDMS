@@ -106,8 +106,16 @@ class DAMApp(MayanAppConfig):
             traceback.print_exc()
 
     def _register_signals(self):
-        """Регистрация сигналов для автоматического анализа"""
-        from . import signals
+        """
+        Регистрация сигналов для автоматического анализа.
+        
+        Signals are automatically registered when the signals module is imported
+        (via @receiver decorators). This import ensures signals are loaded.
+        Includes:
+        - AI analysis auto-trigger on DocumentFile creation
+        - Preset cache invalidation on DAMMetadataPreset save/delete
+        """
+        from . import signals  # Import signals to register them
         print('📡 DAM signals registered!')
 
     def _register_celery_tasks(self):

@@ -1,14 +1,16 @@
 import logging
-from typing import Optional
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import OuterRef, Subquery
 from django.utils.translation import ugettext_lazy as _
 
 from rest_framework import serializers
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document
+from mayan.apps.documents.models.document_file_models import DocumentFile
 from mayan.apps.documents.permissions import (
     permission_document_edit, permission_document_file_download,
     permission_document_trash, permission_document_view
@@ -18,6 +20,9 @@ from mayan.apps.permissions.models import Permission
 
 from .models import DocumentAIAnalysis, DAMMetadataPreset
 from .permissions import permission_ai_analysis_view
+from .cache_utils import (
+    get_preset_count_cache_key, get_preset_count_cache_ttl
+)
 
 logger = logging.getLogger(__name__)
 
@@ -188,8 +193,64 @@ class DAMMetadataPresetSerializer(serializers.ModelSerializer):
 
     def get_applicable_documents_count(self, obj):
         """Get count of documents this preset would apply to."""
-        # This is a simplified calculation - in practice you'd need to check actual documents
-        return 0  # TODO: Implement actual counting logic
+        # Get user from request context
+        request = self.context.get('request')
+        if not request or not request.user or not request.user.is_authenticated:
+            return 0
+        
+        user = request.user
+        user_id = user.pk
+        
+        # Generate cache key
+        cache_key = get_preset_count_cache_key(obj.id, user_id)
+        cache_ttl = get_preset_count_cache_ttl()
+        
+        # Check cache
+        if cache_ttl > 0:
+            cached_count = cache.get(cache_key)
+            if cached_count is not None:
+                return cached_count
+        
+        try:
+            # Get base queryset
+            queryset = Document.valid.all()
+            
+            # Filter by MIME types if specified
+            if obj.supported_mime_types:
+                # Get latest file mimetype for each document using Subquery
+                latest_file_subquery = DocumentFile.objects.filter(
+                    document=OuterRef('pk')
+                ).order_by('-timestamp').values('mimetype')[:1]
+                
+                queryset = queryset.annotate(
+                    latest_file_mimetype=Subquery(latest_file_subquery)
+                ).filter(
+                    latest_file_mimetype__in=obj.supported_mime_types
+                )
+            
+            # Apply ACL filtering
+            queryset = AccessControlList.objects.restrict_queryset(
+                permission=permission_document_view,
+                queryset=queryset,
+                user=user
+            )
+            
+            # Count documents
+            count = queryset.count()
+            
+            # Cache the result
+            if cache_ttl > 0:
+                try:
+                    cache.set(cache_key, count, cache_ttl)
+                except Exception as e:
+                    logger.warning(f'Failed to cache preset document count: {e}')
+            
+            return count
+            
+        except Exception as e:
+            logger.error(f'Error counting applicable documents for preset {obj.id}: {e}')
+            # Return 0 on error to avoid breaking the API
+            return 0
 
 
 class AIProviderStatusSerializer(serializers.Serializer):

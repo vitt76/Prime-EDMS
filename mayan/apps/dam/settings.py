@@ -545,3 +545,44 @@ setting_logging_save_responses = namespace.add_setting(
         'Enable only for troubleshooting.'
     )
 )
+
+# Preset Document Count Cache Settings
+setting_preset_document_count_cache_ttl = namespace.add_setting(
+    default=600,  # 10 minutes
+    global_name='DAM_PRESET_DOCUMENT_COUNT_CACHE_TTL',
+    help_text=_(
+        'Cache TTL in seconds for preset document count. '
+        'Default: 600 (10 minutes). '
+        'Set to 0 to disable caching.'
+    )
+)
+
+# AI Metadata Mapping Settings
+setting_ai_metadata_mapping = namespace.add_setting(
+    default={
+        'description': 'ai_description',  # MetadataType name
+        'alt_text': 'ai_alt_text',
+        'copyright_notice': 'ai_copyright',
+        'tags_to_mayan_tags': True,  # Convert AI tags to Mayan Tags
+        'people_to_tags': True,  # Convert people to Tags
+        'locations_to_tags': True,  # Convert locations to Tags
+        'categories_to_tags': True,  # Convert categories to Tags
+    },
+    global_name='DAM_AI_METADATA_MAPPING',
+    help_text=_(
+        'Mapping configuration for AI results to Mayan metadata system. '
+        'Keys: description, alt_text, copyright_notice (MetadataType names), '
+        'tags_to_mayan_tags, people_to_tags, locations_to_tags, categories_to_tags (boolean). '
+        'MetadataType names must be created manually by administrator. '
+        'If a MetadataType is not found, the field will be ignored.'
+    )
+)
+
+setting_ai_tag_default_color = namespace.add_setting(
+    default='#3c8dbc',
+    global_name='DAM_AI_TAG_DEFAULT_COLOR',
+    help_text=_(
+        'Default color for AI-generated tags in RGB hex format (e.g., #3c8dbc). '
+        'Used when creating new tags from AI results.'
+    )
+)

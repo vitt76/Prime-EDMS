@@ -353,7 +353,9 @@ def analyze_document_with_ai(self, document_id: int):
         logger.info(f"📊 Progress: 100% - Analysis complete, reindexing...")
 
         # Update document metadata if needed
-        update_document_metadata_from_ai(document, analysis_results)
+        # Note: force_reanalyze can be passed via task kwargs in the future
+        force_reanalyze = getattr(self, 'force_reanalyze', False)
+        update_document_metadata_from_ai(document, analysis_results, force_reanalyze=force_reanalyze)
         reindex_document_assets(document=document)
 
         logger.info(f"Successfully completed AI analysis for document {document_id}")
@@ -981,24 +983,175 @@ def get_basic_tags_for_mime_type(mime_type: str) -> List[str]:
     return tags
 
 
-def update_document_metadata_from_ai(document: Document, analysis_results: Dict[str, Any]):
+def update_document_metadata_from_ai(
+    document: Document, 
+    analysis_results: Dict[str, Any],
+    force_reanalyze: bool = False
+):
     """
     Update document metadata based on AI analysis results.
+    
+    Implements hybrid strategy:
+    - Tags (ai_tags, people, locations, categories) -> Mayan Tag via tag.attach_to(document)
+    - Text fields (ai_description, alt_text, copyright_notice) -> MetadataType via DocumentMetadata
+    
+    Principle: "Human > AI" - only overwrite if value is empty (except force_reanalyze).
 
     Args:
         document: Document instance
         analysis_results: Results from AI analysis
+        force_reanalyze: If True, overwrite even non-empty values
     """
     try:
-        # This is where we could integrate with Mayan's metadata system
-        # For now, we'll just log the results
-        logger.info(f"AI analysis results for document {document.id}: {analysis_results}")
-
-        # TODO: Integrate with Mayan metadata system to automatically
-        # create/update metadata entries based on AI results
+        from mayan.apps.tags.models import Tag
+        from mayan.apps.metadata.models import MetadataType, DocumentMetadata
+        from mayan.apps.metadata.api import save_metadata
+        from django.core.exceptions import ObjectDoesNotExist
+        from . import settings as dam_settings
+        from .utils import get_or_create_tag
+        
+        # Get mapping configuration
+        mapping_config = dam_settings.setting_ai_metadata_mapping.value or {}
+        
+        # Get DocumentAIAnalysis
+        try:
+            ai_analysis = document.ai_analysis
+        except ObjectDoesNotExist:
+            logger.warning(f"No AI analysis found for document {document.id}, skipping metadata update")
+            return
+        
+        # Process tags (ai_tags, people, locations, categories) -> Mayan Tag
+        if mapping_config.get('tags_to_mayan_tags', True):
+            ai_tags = analysis_results.get('tags', [])
+            if isinstance(ai_tags, list):
+                for tag_label in ai_tags:
+                    if tag_label:
+                        try:
+                            tag = get_or_create_tag(tag_label)
+                            if tag:
+                                tag.attach_to(document)
+                                logger.debug(f"Attached tag '{tag_label}' to document {document.id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to attach tag '{tag_label}': {e}")
+        
+        if mapping_config.get('people_to_tags', True):
+            people = analysis_results.get('people', [])
+            if isinstance(people, list):
+                for person in people:
+                    if person:
+                        try:
+                            tag = get_or_create_tag(str(person))
+                            if tag:
+                                tag.attach_to(document)
+                                logger.debug(f"Attached person tag '{person}' to document {document.id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to attach person tag '{person}': {e}")
+        
+        if mapping_config.get('locations_to_tags', True):
+            locations = analysis_results.get('locations', [])
+            if isinstance(locations, list):
+                for location in locations:
+                    if location:
+                        try:
+                            tag = get_or_create_tag(str(location))
+                            if tag:
+                                tag.attach_to(document)
+                                logger.debug(f"Attached location tag '{location}' to document {document.id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to attach location tag '{location}': {e}")
+        
+        if mapping_config.get('categories_to_tags', True):
+            categories = analysis_results.get('categories', [])
+            if isinstance(categories, list):
+                for category in categories:
+                    if category:
+                        try:
+                            tag = get_or_create_tag(str(category))
+                            if tag:
+                                tag.attach_to(document)
+                                logger.debug(f"Attached category tag '{category}' to document {document.id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to attach category tag '{category}': {e}")
+        
+        # Process metadata (description, alt_text, copyright_notice) -> MetadataType
+        metadata_fields = {
+            'description': 'ai_description',
+            'alt_text': 'ai_alt_text',
+            'copyright_notice': 'ai_copyright',
+        }
+        
+        for field_key, metadata_type_name in metadata_fields.items():
+            metadata_type_name_from_config = mapping_config.get(field_key)
+            if metadata_type_name_from_config:
+                metadata_type_name = metadata_type_name_from_config
+            
+            # Get value from analysis_results
+            value = analysis_results.get(field_key, '')
+            if not value and field_key == 'description':
+                # Fallback to ai_description from DocumentAIAnalysis
+                value = getattr(ai_analysis, 'ai_description', '') or ''
+            elif not value and field_key == 'alt_text':
+                # Fallback to alt_text from DocumentAIAnalysis
+                value = getattr(ai_analysis, 'alt_text', '') or ''
+            elif not value and field_key == 'copyright_notice':
+                # Fallback to copyright_notice from DocumentAIAnalysis
+                value = getattr(ai_analysis, 'copyright_notice', '') or ''
+            
+            if not value:
+                continue  # Skip empty values
+            
+            # Find MetadataType by name
+            try:
+                metadata_type = MetadataType.objects.get(name=metadata_type_name)
+            except MetadataType.DoesNotExist:
+                logger.warning(
+                    f"MetadataType '{metadata_type_name}' not found for field '{field_key}', "
+                    f"skipping metadata update for document {document.id}"
+                )
+                continue
+            
+            # Check if DocumentMetadata exists
+            try:
+                document_metadata = DocumentMetadata.objects.get(
+                    document=document,
+                    metadata_type=metadata_type
+                )
+                # Check if we should overwrite (only if empty or force_reanalyze)
+                if not force_reanalyze and document_metadata.value:
+                    logger.debug(
+                        f"Metadata '{metadata_type_name}' already has value for document {document.id}, "
+                        f"skipping (Human > AI principle)"
+                    )
+                    continue
+                
+                # Update existing metadata
+                document_metadata.value = str(value)[:255]  # DocumentMetadata.value max_length=255
+                document_metadata.save()
+                logger.info(
+                    f"Updated metadata '{metadata_type_name}' for document {document.id}"
+                )
+            except DocumentMetadata.DoesNotExist:
+                # Create new metadata
+                try:
+                    DocumentMetadata.objects.create(
+                        document=document,
+                        metadata_type=metadata_type,
+                        value=str(value)[:255]  # DocumentMetadata.value max_length=255
+                    )
+                    logger.info(
+                        f"Created metadata '{metadata_type_name}' for document {document.id}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to create metadata '{metadata_type_name}' for document {document.id}: {e}"
+                    )
+        
+        logger.info(f"Successfully updated metadata for document {document.id}")
 
     except Exception as e:
-        logger.error(f"Failed to update document metadata: {e}")
+        logger.error(f"Failed to update document metadata for document {document.id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 
 def reindex_document_assets(document: Document):

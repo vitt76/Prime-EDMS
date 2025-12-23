@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import ImageEditorView, ImageEditorSaveView, WatermarkListView, WatermarkAssetView
+from .views import ImageEditorView, WatermarkListView, WatermarkAssetView
 
 app_name = 'image_editor'
 
@@ -11,11 +11,8 @@ ui_urlpatterns = [
         ImageEditorView.as_view(),
         name='edit_image'
     ),
-    path(
-        'save/<int:document_file_id>/',
-        ImageEditorSaveView.as_view(),
-        name='save_image'
-    )
+    # [DEPRECATED] ImageEditorSaveView URL removed 2025-12-23
+    # Replaced by HeadlessEditView: POST /api/v4/headless/documents/{id}/versions/new_from_edit/
 ]
 
 # API URL patterns
@@ -36,7 +33,6 @@ api_urls = [
 urlpatterns = ui_urlpatterns + api_urls
 
 # ДОПОЛНИТЕЛЬНЫЙ URL ДЛЯ ТЕСТИРОВАНИЯ (ОБЫЧНАЯ НАВИГАЦИЯ)
-from .views import ImageEditorView
 urlpatterns += [
     path('test/<int:document_file_id>/', ImageEditorView.as_view(), name='test_editor'),
 ]
