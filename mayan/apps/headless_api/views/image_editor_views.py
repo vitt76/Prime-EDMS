@@ -550,38 +550,27 @@ class HeadlessImageEditorCommitView(APIView):
         base_name = session.document_file.filename.rsplit('.', 1)[0]
         filename = f'{base_name}.{ext}'
 
-        # Сохранение отрендеренного изображения во временное хранилище
-        shared_file = SharedUploadedFile.objects.create(
-            file=ContentFile(data, name=filename)
+        previous_active = document.version_active
+
+        new_file = document.file_new(
+            file_object=ContentFile(data, name=filename),
+            filename=filename,
+            action=action_id,
+            comment=comment,
+            _user=request.user
         )
 
-        # Запуск Celery task для создания версии (без конвертации, файл уже отрендерен)
-        try:
-            task_result = process_editor_version_task.apply_async(
-                kwargs={
-                    'shared_uploaded_file_id': shared_file.pk,
-                    'document_id': document.pk,
-                    'target_format': None,  # Файл уже отрендерен, конвертация не нужна
-                    'comment': comment,
-                    'action_id': action_id,
-                    'user_id': request.user.pk,
-                },
-                queue='converter'
-            )
-        except Exception as exc:
-            logger.exception('Failed to enqueue image editor commit task: %s', exc)
-            # Очистка временного файла при ошибке
-            try:
-                shared_file.delete()
-            except Exception:
-                pass
-            return Response(
-                {
-                    'error': 'task_enqueue_failed',
-                    'detail': str(exc)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        version = document.versions.order_by('-timestamp').first()
+        if version:
+            if version.active:
+                version.active = False
+                version.save(update_fields=('active',))
+            if previous_active and previous_active.pk != version.pk:
+                previous_active.active_set(save=True)
+
+        serializer = HeadlessDocumentVersionSerializer(
+            version, context={'request': request}
+        )
 
         # Обновление сессии: статус 'processing' вместо 'saved'
         session.status = 'processing'

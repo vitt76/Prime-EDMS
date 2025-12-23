@@ -16,6 +16,13 @@ function makeAbsolute(url: string | undefined | null): string | undefined {
 export function resolveAssetImageUrl(asset: any): string {
   if (!asset) return PLACEHOLDER
 
+  const preferredFileId =
+    asset?.selected_file_id ||
+    asset?.current_file_id ||
+    asset?.file_latest_id ||
+    asset?.file_id ||
+    asset?.file?.id
+
   const versionId =
     asset?.version_active_id ||
     asset?.version_id ||
@@ -23,12 +30,20 @@ export function resolveAssetImageUrl(asset: any): string {
     asset?.version_active?.id ||
     'latest'
 
-  const fallbackPreview =
-    asset?.id
+  const filePreview =
+    asset?.id && preferredFileId
+      ? `/api/v4/documents/${asset.id}/files/${preferredFileId}/pages/1/image/?width=1200`
+      : undefined
+
+  const versionPreview =
+    asset?.id && versionId
       ? `/api/v4/documents/${asset.id}/versions/${versionId}/pages/1/image/?width=1200`
       : undefined
 
+  const fallbackPreview = filePreview || versionPreview
+
   const url =
+    filePreview ||
     asset.thumbnail_url ||
     asset.preview_url ||
     asset.download_url ||

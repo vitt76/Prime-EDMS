@@ -6,8 +6,8 @@
     <!-- Thumbnail -->
     <div class="relative aspect-video bg-neutral-100 overflow-hidden">
       <img
-        v-if="asset.thumbnail_url"
-        :src="asset.thumbnail_url"
+        v-if="imageSrc"
+        :src="imageSrc"
         :alt="asset.label"
         class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
         loading="lazy"
@@ -143,6 +143,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ExtendedAsset } from '@/types/api'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 
 // ============================================================================
 // PROPS
@@ -176,6 +177,8 @@ const emit = defineEmits<{
 // ============================================================================
 // COMPUTED
 // ============================================================================
+
+const imageSrc = computed(() => resolveAssetImageUrl(props.asset))
 
 const assetType = computed(() => {
   const type = props.asset.metadata?.type as string

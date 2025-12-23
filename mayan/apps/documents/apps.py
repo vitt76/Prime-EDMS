@@ -1,7 +1,7 @@
 import logging
 
 from django.apps import apps
-from django.db.models.signals import post_migrate
+from django.db.models.signals import post_migrate, post_delete
 from django.utils.translation import ugettext_lazy as _
 
 logger = logging.getLogger(name=__name__)
@@ -85,7 +85,8 @@ from .handlers import (
     handler_create_document_file_page_image_cache,
     handler_create_document_version_page_image_cache,
     handler_invalidate_document_thumbnail_cache,
-    handler_invalidate_version_thumbnail_cache
+    handler_invalidate_version_thumbnail_cache,
+    handler_cleanup_after_document_file_delete
 )
 from .html_widgets import ThumbnailWidget
 from .links.document_links import (
@@ -1116,3 +1117,11 @@ class DocumentsApp(MayanAppConfig):
             sender=DocumentVersion
         )
         logger.debug('Registered thumbnail cache invalidation handlers (Phase B2.3)')
+
+        # Авточистка после удаления файла: удаление пустых версий и восстановление активной.
+        post_delete.connect(
+            dispatch_uid='documents_handler_cleanup_after_document_file_delete',
+            receiver=handler_cleanup_after_document_file_delete,
+            sender=DocumentFile,
+            weak=False
+        )

@@ -456,6 +456,7 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
 
   return {
     id: backendDoc.id,
+    version_active_id: (backendDoc as any)?.version_active?.id || (backendDoc as any)?.version_active_id || (backendDoc as any)?.version?.id,
     label: backendDoc.label,
     description: backendDoc.description,
     filename: filename,

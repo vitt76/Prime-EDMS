@@ -1,6 +1,7 @@
 import logging
 
 from django.apps import apps
+from django.db.models import Count
 
 logger = logging.getLogger(name=__name__)
 
@@ -228,3 +229,43 @@ def handler_invalidate_version_thumbnail_cache(sender, instance, **kwargs):
             getattr(instance, 'document_id', 'unknown'),
             str(e)
         )
+
+
+def handler_cleanup_after_document_file_delete(sender, instance, **kwargs):
+    """
+    После удаления DocumentFile:
+    - удаляем пустые версии без страниц;
+    - если нет активной версии с страницами, создаём новую из последнего файла.
+    """
+    DocumentVersion = apps.get_model(app_label='documents', model_name='DocumentVersion')
+    document = instance.document
+
+    # Удаляем версии без страниц
+    empty_versions = (
+        DocumentVersion.objects.filter(document=document)
+        .annotate(page_count=Count('version_pages'))
+        .filter(page_count=0)
+    )
+    if empty_versions.exists():
+        empty_versions.delete()
+
+    # Проверяем активную версию
+    active = document.version_active
+    if active and active.pages.exists():
+        return
+
+    latest_file = document.file_latest
+    if not latest_file:
+        logger.info('No files left for document %s; cannot recreate version', document.pk)
+        return
+
+    try:
+        new_version = DocumentVersion(document=document, active=True, comment='Auto after file delete')
+        new_version.save()
+        new_version.pages_reset(document_file=latest_file)
+        logger.info(
+            'Recreated active version %s for document %s after file delete (pages=%s)',
+            new_version.pk, document.pk, new_version.pages.count()
+        )
+    except Exception as exc:
+        logger.error('Failed to recreate version for document %s: %s', document.pk, exc, exc_info=True)

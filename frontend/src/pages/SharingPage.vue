@@ -342,11 +342,12 @@
                     <button
                       type="button"
                       class="p-1 text-neutral-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                      title="Редактировать кампанию"
-                      @click="editCampaign(campaign)"
+                      title="Просмотреть кампанию"
+                      @click="openCampaignDetails(campaign)"
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
                     </button>
                     <button
@@ -901,6 +902,155 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Campaign Details Modal -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition ease-out duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition ease-in duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="showCampaignDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/60" @click="closeCampaignDetailsModal" />
+          <div class="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl p-6 max-h-[80vh] overflow-y-auto">
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h3 class="text-lg font-semibold text-neutral-900">
+                  Детали кампании
+                </h3>
+                <p v-if="campaignDetails" class="text-sm text-neutral-500 mt-1">
+                  {{ campaignDetails.title || 'Без названия' }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="p-1 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors"
+                @click="closeCampaignDetailsModal"
+              >
+                <span class="sr-only">Закрыть</span>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div v-if="campaignDetailsLoading" class="py-12 text-center">
+              <div class="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p class="text-sm text-neutral-500">Загрузка деталей кампании...</p>
+            </div>
+            <div v-else-if="campaignDetails" class="space-y-6">
+              <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                  <span
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                    :class="campaignDetails.state === 'active'
+                      ? 'bg-success-100 text-success-700'
+                      : campaignDetails.state === 'draft'
+                        ? 'bg-neutral-100 text-neutral-600'
+                        : campaignDetails.state === 'completed'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-warning-100 text-warning-700'"
+                  >
+                    {{ campaignStateLabel(campaignDetails.state) }}
+                  </span>
+                  <span class="text-xs text-neutral-500">
+                    Создана: {{ formatDate(campaignDetails.created) }}
+                  </span>
+                </div>
+                <p class="text-sm text-neutral-700">
+                  {{ campaignDetails.description || 'Без описания' }}
+                </p>
+              </div>
+
+              <div class="border-t border-neutral-200 pt-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="text-sm font-medium text-neutral-900">
+                    Файлы в кампании
+                  </h4>
+                  <div class="flex items-center gap-3">
+                    <span class="text-xs text-neutral-500">
+                      {{ (campaignDetailsAssets.length) || 0 }} файлов
+                    </span>
+                    <button
+                      v-if="selectedDocumentIds.length > 0"
+                      type="button"
+                      class="px-2 py-1 text-xs font-medium text-primary-700 bg-primary-50 rounded-md hover:bg-primary-100 transition-colors"
+                      @click="addSelectedDocumentsToCampaign"
+                    >
+                      Добавить выбранные ({{ selectedDocumentIds.length }})
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="campaignDetailsAssets.length > 0" class="space-y-2">
+                  <div
+                    v-for="asset in campaignDetailsAssets"
+                    :key="asset.id"
+                    class="flex items-center justify-between px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50"
+                  >
+                    <div class="flex items-center gap-3 min-w-0">
+                      <img
+                        :src="getAssetPreviewUrl(asset)"
+                        class="w-12 h-12 rounded-lg object-cover bg-neutral-100 border border-neutral-200 flex-shrink-0"
+                        :alt="asset.document_label || `Документ #${asset.document_id}`"
+                      />
+                      <div class="min-w-0">
+                        <p class="text-sm font-medium text-neutral-900 truncate">
+                          <a
+                            :href="getAssetDocumentUrl(asset)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="hover:underline"
+                          >
+                            {{ asset.document_label || `Документ #${asset.document_id}` }}
+                          </a>
+                        </p>
+                        <p class="text-xs text-neutral-500">
+                          document_id: {{ asset.document_id }} · file_id: {{ asset.document_file_id }}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="p-1 text-neutral-400 hover:text-error-600 hover:bg-error-50 rounded-full transition-colors"
+                      title="Удалить файл из кампании"
+                      @click="removeAssetFromCampaign(asset)"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div v-else class="py-6 text-center text-sm text-neutral-500">
+                  В кампанию пока не добавлено ни одного файла.
+                </div>
+              </div>
+
+              <div class="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  class="px-3 py-2 text-sm font-medium text-primary-700 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors"
+                  @click="saveCampaignAssets"
+                >
+                  Сохранить изменения файлов
+                </button>
+                <button
+                  type="button"
+                  class="px-3 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
+                  @click="editCampaignFromDetails"
+                >
+                  Редактировать кампанию
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -928,9 +1078,11 @@ import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { useDistributionStore, type SharedLink } from '@/stores/distributionStore'
+import { distributionService } from '@/services/distributionService'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useAssetStore } from '@/stores/assetStore'
 import ShareModal from '@/components/DAM/ShareModal.vue'
+import { apiService } from '@/services/apiService'
 
 // ============================================================================
 // STORES & ROUTER
@@ -973,7 +1125,7 @@ const editForm = reactive({
 // Create modal
 const showShareModal = ref(false)
 
-// Campaign modal
+// Campaign create/edit modal
 const showCampaignModal = ref(false)
 const campaignModalMode = ref<'create' | 'edit'>('create')
 const editingCampaignId = ref<number | null>(null)
@@ -984,6 +1136,13 @@ const campaignForm = reactive({
 })
 
 const selectedDocumentIds = computed(() => Array.from(assetStore.selectedAssets))
+
+// Campaign details modal
+const showCampaignDetailsModal = ref(false)
+const campaignDetailsLoading = ref(false)
+const campaignDetails = ref<any | null>(null)
+const campaignDetailsAssets = ref<any[]>([])
+const campaignAssetPreviews = ref<Record<string, string>>({})
 
 // ============================================================================
 // COMPUTED
@@ -1346,7 +1505,7 @@ function campaignStateLabel(state: string): string {
 }
 
 // ============================================================================
-// Campaign actions (edit/delete)
+// Campaign actions (details / edit / delete)
 // ============================================================================
 
 async function editCampaign(campaign: any) {
@@ -1383,6 +1542,206 @@ async function deleteCampaign(campaign: any) {
   }
 }
 
+async function openCampaignDetails(campaign: DistributionCampaign) {
+  showCampaignDetailsModal.value = true
+  campaignDetailsLoading.value = true
+  campaignDetails.value = null
+  campaignDetailsAssets.value = []
+  // Очистим старые превью
+  Object.values(campaignAssetPreviews.value).forEach(url => {
+    try {
+      URL.revokeObjectURL(url)
+    } catch {
+      // ignore
+    }
+  })
+  campaignAssetPreviews.value = {}
+
+  try {
+    const details: any = await distributionService.getCampaign(campaign.id)
+    campaignDetails.value = details
+    campaignDetailsAssets.value = Array.isArray(details.assets) ? [...details.assets] : []
+    await loadCampaignAssetPreviews()
+  } catch (error) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось загрузить детали кампании'
+    })
+    console.error('Failed to load campaign details:', error)
+    showCampaignDetailsModal.value = false
+  } finally {
+    campaignDetailsLoading.value = false
+  }
+}
+
+function closeCampaignDetailsModal() {
+  // Освобождаем objectURL-ы превью
+  Object.values(campaignAssetPreviews.value).forEach(url => {
+    try {
+      URL.revokeObjectURL(url)
+    } catch {
+      // ignore
+    }
+  })
+  campaignAssetPreviews.value = {}
+  showCampaignDetailsModal.value = false
+}
+
+async function saveCampaignAssets() {
+  if (!campaignDetails.value) return
+
+  const documentIds = campaignDetailsAssets.value
+    .map((asset: any) => asset.document_id)
+    .filter((id: any) => typeof id === 'number')
+
+  try {
+    const updated: any = await distributionService.updateCampaign(
+      campaignDetails.value.id,
+      { document_ids: documentIds }
+    )
+    campaignDetails.value = updated
+    campaignDetailsAssets.value = Array.isArray(updated.assets) ? [...updated.assets] : []
+    await loadCampaignAssetPreviews()
+    // Обновляем список кампаний, чтобы пересчитался assets_count
+    await distributionStore.fetchCampaigns()
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Кампания обновлена',
+      message: 'Состав файлов кампании сохранён'
+    })
+  } catch (error) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось сохранить состав файлов кампании'
+    })
+    console.error('Failed to save campaign assets:', error)
+  }
+}
+
+function removeAssetFromCampaign(asset: any) {
+  campaignDetailsAssets.value = campaignDetailsAssets.value.filter(a => a.id !== asset.id)
+}
+
+function addSelectedDocumentsToCampaign() {
+  if (!selectedDocumentIds.value.length) return
+
+  const existingIds = new Set(
+    campaignDetailsAssets.value
+      .map((asset: any) => asset.document_id)
+      .filter((id: any) => typeof id === 'number')
+  )
+
+  const now = Date.now()
+  selectedDocumentIds.value.forEach((docId, index) => {
+    if (!existingIds.has(docId)) {
+      campaignDetailsAssets.value.push({
+        id: `tmp-${now}-${index}-${docId}`,
+        document_id: docId,
+        document_label: `Документ #${docId}`,
+        document_file_id: null
+      })
+    }
+  })
+}
+
+function assetPreviewKey(asset: any, resolvedFileId?: number | null): string {
+  const filePart = resolvedFileId ?? asset.document_file_id ?? asset.file_latest_id ?? asset.file_id
+  const docPart = asset.document_id ?? asset.id
+  return `${docPart || 'doc'}-${filePart || 'file'}`
+}
+
+function getAssetPreviewUrl(asset: any): string {
+  const key = assetPreviewKey(asset)
+  return campaignAssetPreviews.value[key] || '/placeholder-document.svg'
+}
+
+async function loadCampaignAssetPreviews() {
+  const previews: Record<string, string> = {}
+
+  for (const asset of campaignDetailsAssets.value) {
+    if (!asset?.document_id) continue
+
+    const docId = asset.document_id
+    // Всегда берём актуальный файл документа (последний по timestamp),
+    // чтобы не зависеть от сохранённого file_id в кампании.
+    let fileId: number | null = null
+    try {
+      const filesResponse: any = await apiService.get(
+        `/api/v4/documents/${docId}/files/`,
+        { params: { page_size: 1, ordering: '-timestamp' } } as any,
+        false
+      )
+      const results = Array.isArray(filesResponse?.results)
+        ? filesResponse.results
+        : Array.isArray(filesResponse)
+          ? filesResponse
+          : []
+      fileId = results[0]?.id || null
+    } catch (e) {
+      // fallback на то, что пришло в кампании, если запрос файлов не удался
+      fileId = asset.document_file_id || asset.file_latest_id || asset.file_id || null
+    }
+
+    if (!fileId) continue
+
+    // Для активной версии пробуем добавить путь на всякий случай
+    const versionId = asset.version_active_id || asset.version_id || asset.version?.id
+
+    const paths: string[] = []
+    // 1) прямой download (даёт актуальный файл, как в галерее)
+    paths.push(`/api/v4/documents/${docId}/files/${fileId}/download/`)
+    // 2) страница актуального файла
+    paths.push(`/api/v4/documents/${docId}/files/${fileId}/pages/1/image/?width=600`)
+    // 3) страница активной версии (если есть)
+    if (versionId) {
+      paths.push(`/api/v4/documents/${docId}/versions/${versionId}/pages/1/image/?width=600`)
+    }
+
+    for (const path of paths) {
+      try {
+        const blob = await apiService.get<Blob>(
+          path,
+          { responseType: 'blob' } as any,
+          false
+        )
+        const objectUrl = window.URL.createObjectURL(blob)
+        previews[assetPreviewKey(asset, fileId)] = objectUrl
+        break
+      } catch (e) {
+        // try next path
+        continue
+      }
+    }
+  }
+
+  // Освобождаем старые objectURL-ы
+  Object.values(campaignAssetPreviews.value).forEach(url => {
+    try {
+      URL.revokeObjectURL(url)
+    } catch {
+      // ignore
+    }
+  })
+
+  campaignAssetPreviews.value = previews
+}
+
+function getAssetDocumentUrl(asset: any): string {
+  if (asset?.document_id) {
+    // SPA-роут на карточку ассета в DAM
+    return `/dam/assets/${asset.document_id}`
+  }
+  return '#'
+}
+
+async function editCampaignFromDetails() {
+  if (!campaignDetails.value) return
+  await editCampaign(campaignDetails.value)
+  showCampaignDetailsModal.value = false
+}
+
 async function saveCampaign() {
   if (!campaignForm.title.trim()) {
     notificationStore.addNotification({
@@ -1410,7 +1769,7 @@ async function saveCampaign() {
     } else if (campaignModalMode.value === 'edit' && editingCampaignId.value !== null) {
       const updated = await distributionStore.updateCampaign(editingCampaignId.value, {
         title: campaignForm.title.trim(),
-        description: campaignForm.description.trim() || undefined,
+        description: campaignForm.description.trim() || '',
         state: campaignForm.state
       })
       if (updated) {
