@@ -991,13 +991,27 @@
                     :key="asset.id"
                     class="flex items-center justify-between px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50"
                   >
-                    <div class="min-w-0">
-                      <p class="text-sm font-medium text-neutral-900 truncate">
-                        {{ asset.document_label || `Документ #${asset.document_id}` }}
-                      </p>
-                      <p class="text-xs text-neutral-500">
-                        document_id: {{ asset.document_id }} · file_id: {{ asset.document_file_id }}
-                      </p>
+                    <div class="flex items-center gap-3 min-w-0">
+                      <img
+                        :src="getAssetPreviewUrl(asset)"
+                        class="w-12 h-12 rounded-lg object-cover bg-neutral-100 border border-neutral-200 flex-shrink-0"
+                        :alt="asset.document_label || `Документ #${asset.document_id}`"
+                      />
+                      <div class="min-w-0">
+                        <p class="text-sm font-medium text-neutral-900 truncate">
+                          <a
+                            :href="getAssetDocumentUrl(asset)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="hover:underline"
+                          >
+                            {{ asset.document_label || `Документ #${asset.document_id}` }}
+                          </a>
+                        </p>
+                        <p class="text-xs text-neutral-500">
+                          document_id: {{ asset.document_id }} · file_id: {{ asset.document_file_id }}
+                        </p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -1068,6 +1082,7 @@ import { distributionService } from '@/services/distributionService'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useAssetStore } from '@/stores/assetStore'
 import ShareModal from '@/components/DAM/ShareModal.vue'
+import { apiService } from '@/services/apiService'
 
 // ============================================================================
 // STORES & ROUTER
@@ -1127,6 +1142,7 @@ const showCampaignDetailsModal = ref(false)
 const campaignDetailsLoading = ref(false)
 const campaignDetails = ref<any | null>(null)
 const campaignDetailsAssets = ref<any[]>([])
+const campaignAssetPreviews = ref<Record<string, string>>({})
 
 // ============================================================================
 // COMPUTED
@@ -1531,11 +1547,21 @@ async function openCampaignDetails(campaign: DistributionCampaign) {
   campaignDetailsLoading.value = true
   campaignDetails.value = null
   campaignDetailsAssets.value = []
+  // Очистим старые превью
+  Object.values(campaignAssetPreviews.value).forEach(url => {
+    try {
+      URL.revokeObjectURL(url)
+    } catch {
+      // ignore
+    }
+  })
+  campaignAssetPreviews.value = {}
 
   try {
     const details: any = await distributionService.getCampaign(campaign.id)
     campaignDetails.value = details
     campaignDetailsAssets.value = Array.isArray(details.assets) ? [...details.assets] : []
+    await loadCampaignAssetPreviews()
   } catch (error) {
     notificationStore.addNotification({
       type: 'error',
@@ -1550,6 +1576,15 @@ async function openCampaignDetails(campaign: DistributionCampaign) {
 }
 
 function closeCampaignDetailsModal() {
+  // Освобождаем objectURL-ы превью
+  Object.values(campaignAssetPreviews.value).forEach(url => {
+    try {
+      URL.revokeObjectURL(url)
+    } catch {
+      // ignore
+    }
+  })
+  campaignAssetPreviews.value = {}
   showCampaignDetailsModal.value = false
 }
 
@@ -1567,6 +1602,7 @@ async function saveCampaignAssets() {
     )
     campaignDetails.value = updated
     campaignDetailsAssets.value = Array.isArray(updated.assets) ? [...updated.assets] : []
+    await loadCampaignAssetPreviews()
     // Обновляем список кампаний, чтобы пересчитался assets_count
     await distributionStore.fetchCampaigns()
     notificationStore.addNotification({
@@ -1608,6 +1644,62 @@ function addSelectedDocumentsToCampaign() {
       })
     }
   })
+}
+
+function assetPreviewKey(asset: any): string {
+  return String(asset.document_file_id ?? asset.document_id ?? asset.id)
+}
+
+function getAssetPreviewUrl(asset: any): string {
+  const key = assetPreviewKey(asset)
+  return campaignAssetPreviews.value[key] || '/placeholder-document.svg'
+}
+
+async function loadCampaignAssetPreviews() {
+  const previews: Record<string, string> = {}
+
+  for (const asset of campaignDetailsAssets.value) {
+    if (!asset?.document_id) continue
+
+    const fileId = asset.document_file_id
+    const docId = asset.document_id
+    if (!fileId) continue
+
+    // Берём прямой download файла как fallback-превью (для изображений вернёт сам файл)
+    const path = `/api/v4/documents/${docId}/files/${fileId}/download/`
+
+    try {
+      const blob = await apiService.get<Blob>(
+        path,
+        { responseType: 'blob' } as any,
+        false
+      )
+      const objectUrl = window.URL.createObjectURL(blob)
+      previews[assetPreviewKey(asset)] = objectUrl
+    } catch (e) {
+      // Если превью не загрузилось, просто оставим плейсхолдер
+      console.warn('Failed to load campaign asset preview', asset, e)
+    }
+  }
+
+  // Освобождаем старые objectURL-ы
+  Object.values(campaignAssetPreviews.value).forEach(url => {
+    try {
+      URL.revokeObjectURL(url)
+    } catch {
+      // ignore
+    }
+  })
+
+  campaignAssetPreviews.value = previews
+}
+
+function getAssetDocumentUrl(asset: any): string {
+  if (asset?.document_id) {
+    // SPA-роут на карточку ассета в DAM
+    return `/dam/assets/${asset.document_id}`
+  }
+  return '#'
 }
 
 async function editCampaignFromDetails() {
