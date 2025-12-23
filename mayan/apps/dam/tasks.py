@@ -209,6 +209,53 @@ def analyze_document_with_ai(self, document_id: int):
         
         logger.info(f"📁 Document file: {document_file} (mimetype: {document_file.mimetype if document_file else 'N/A'})")
 
+        # Check file size before processing (with type-specific limits)
+        from .utils import get_max_file_size_for_mime_type, format_file_size
+        
+        if document_file.size:
+            mime_type = document_file.mimetype or 'application/octet-stream'
+            max_file_size = get_max_file_size_for_mime_type(mime_type)
+            
+            if document_file.size > max_file_size:
+                file_size_str = format_file_size(document_file.size)
+                max_size_str = format_file_size(max_file_size)
+                error_msg = (
+                    f'File size ({file_size_str}) exceeds maximum allowed size '
+                    f'({max_size_str}) for {mime_type} files'
+                )
+                
+                logger.warning(
+                    f'File size check failed for document {document_id}: {error_msg}',
+                    extra={
+                        'document_id': document_id,
+                        'file_size': document_file.size,
+                        'max_size': max_file_size,
+                        'mime_type': mime_type
+                    }
+                )
+                
+                # Get or create AI analysis record to update with error
+                ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
+                    document=document,
+                    defaults={
+                        'analysis_status': 'failed',
+                        'task_id': self.request.id,
+                        'progress': 0,
+                        'current_step': f'File too large ({file_size_str} > {max_size_str})',
+                        'error_message': error_msg
+                    }
+                )
+                
+                # Update status if record already existed
+                if not created:
+                    ai_analysis.analysis_status = 'failed'
+                    ai_analysis.task_id = self.request.id
+                    ai_analysis.current_step = f'File too large ({file_size_str} > {max_size_str})'
+                    ai_analysis.error_message = error_msg
+                    ai_analysis.save()
+                
+                return  # Exit early, don't process
+
         # Get AI analysis record
         ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
             document=document,
