@@ -70,6 +70,18 @@ setting_ai_provider_fallback = namespace.add_setting(
     )
 )
 
+setting_ai_provider_sequence = namespace.add_setting(
+    default=['qwenlocal', 'gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai'],
+    global_name='DAM_AI_PROVIDER_SEQUENCE',
+    help_text=_(
+        'Ordered list of AI providers to try in sequence for fallback. '
+        'Providers will be tried in this order if previous ones fail. '
+        'This sequence is used when DAM_AI_PROVIDERS_ACTIVE is empty or not configured. '
+        'Default sequence prioritizes local models first (qwenlocal), then cloud providers. '
+        'Available providers: qwenlocal, gigachat, openai, claude, gemini, yandexgpt, kieai'
+    )
+)
+
 # Настройки локальной qwen модели
 setting_qwenlocal_api_url = namespace.add_setting(
     default='http://192.168.1.25:11434/api/generate',
@@ -328,6 +340,19 @@ setting_analysis_image_max_size = namespace.add_setting(
     help_text=_(
         'Maximum image file size in bytes for AI analysis. '
         'Larger images will be skipped.'
+    )
+)
+
+setting_ai_image_max_width = namespace.add_setting(
+    default=1600,
+    global_name='DAM_AI_IMAGE_MAX_WIDTH',
+    help_text=_(
+        'Maximum width in pixels for image resizing before AI analysis. '
+        'Larger images will be downscaled to this width while maintaining aspect ratio. '
+        'Higher values provide better quality but increase processing time and API costs. '
+        'Lower values reduce payload size and improve performance. '
+        'Default: 1600px (suitable for most AI vision models). '
+        'Recommended range: 800-3200 pixels.'
     )
 )
 
