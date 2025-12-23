@@ -29,6 +29,8 @@ from mayan.apps.headless_api.serializers.image_editor import (
     HeadlessImageEditorSessionStateSerializer
 )
 from mayan.apps.headless_api.serializers.version import HeadlessDocumentVersionSerializer
+from mayan.apps.storage.models import SharedUploadedFile
+from mayan.apps.headless_api.tasks import process_editor_version_task
 
 logger = logging.getLogger(__name__)
 
@@ -536,6 +538,7 @@ class HeadlessImageEditorCommitView(APIView):
         quality = _coerce_int(state.get('quality'), 85)
         dpi = _coerce_int(((state.get('resize') or {}).get('dpi')), 0) or None
 
+        # Рендеринг изображения (синхронно, для валидации)
         image = _render_image(document_file=session.document_file, state=state)
         data, _content_type, ext = _encode_image(
             image=image,
@@ -569,20 +572,18 @@ class HeadlessImageEditorCommitView(APIView):
             version, context={'request': request}
         )
 
-        session.status = 'saved'
-        session.edited_checksum = new_file.checksum
-        session.save(update_fields=('status', 'edited_checksum', 'modified'))
+        # Обновление сессии: статус 'processing' вместо 'saved'
+        session.status = 'processing'
+        session.save(update_fields=('status', 'modified'))
 
         return Response(
             {
-                'success': True,
-                'document_id': document.pk,
-                'file_id': new_file.pk,
-                'version_id': version.pk if version else None,
-                'version': serializer.data,
+                'task_id': task_result.id,
+                'status': 'processing',
+                'message': 'Image editor commit started',
                 'state': state,
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_202_ACCEPTED
         )
 
 

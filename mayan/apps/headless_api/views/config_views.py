@@ -5,6 +5,7 @@ Provides REST endpoints for exposing Mayan EDMS configuration data
 that frontend needs to build dynamic forms and interfaces.
 """
 
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import ugettext_lazy as _
 from rest_framework import status
@@ -15,6 +16,11 @@ from rest_framework.views import APIView
 
 from mayan.apps.documents.models import DocumentType
 from mayan.apps.metadata.models import DocumentTypeMetadataType
+from mayan.apps.headless_api.cache_utils import (
+    get_cache_key_list,
+    get_cache_key_detail,
+    get_cache_ttl
+)
 
 import logging
 
@@ -59,15 +65,34 @@ class HeadlessDocumentTypeConfigView(APIView):
 
     def _get_single_config(self, document_type_id):
         """
-        Get detailed configuration for a specific document type.
+        Get detailed configuration for a specific document type (with caching).
+        
+        Caches the result for HEADLESS_DOC_TYPE_CONFIG_CACHE_TTL seconds (default: 1 hour).
+        Cache is automatically invalidated when document type, metadata, or workflows are modified.
         """
+        cache_key = get_cache_key_detail(document_type_id)
+        
+        try:
+            cached_config = cache.get(cache_key)
+            if cached_config is not None:
+                logger.debug(f'Document type {document_type_id} config cache HIT')
+                return Response(cached_config)
+        except Exception as e:
+            logger.warning(f'Cache get error: {e}, falling back to DB')
+        
+        logger.debug(f'Document type {document_type_id} config cache MISS')
         try:
             doc_type = DocumentType.objects.get(pk=document_type_id)
             config = self._build_full_config(doc_type)
-
+            
+            try:
+                cache.set(cache_key, config, get_cache_ttl())
+            except Exception as e:
+                logger.warning(f'Cache set error: {e}, continuing without cache')
+            
             return Response(config)
-
         except ObjectDoesNotExist:
+            # Не кешируем 404
             return Response(
                 {
                     'error': _('Document type not found'),
@@ -87,17 +112,35 @@ class HeadlessDocumentTypeConfigView(APIView):
 
     def _get_all_configs(self):
         """
-        Get basic configuration for all document types.
+        Get basic configuration for all document types (with caching).
+        
+        Caches the result for HEADLESS_DOC_TYPE_CONFIG_CACHE_TTL seconds (default: 1 hour).
+        Cache is automatically invalidated when document types are modified.
         """
+        cache_key = get_cache_key_list()
+        
+        try:
+            cached_configs = cache.get(cache_key)
+            if cached_configs is not None:
+                logger.debug('Document types list cache HIT')
+                return Response(cached_configs)
+        except Exception as e:
+            logger.warning(f'Cache get error: {e}, falling back to DB')
+        
+        logger.debug('Document types list cache MISS')
         try:
             doc_types = DocumentType.objects.all()
             configs = []
-
+            
             for doc_type in doc_types:
                 configs.append(self._build_basic_config(doc_type))
-
+            
+            try:
+                cache.set(cache_key, configs, get_cache_ttl())
+            except Exception as e:
+                logger.warning(f'Cache set error: {e}, continuing without cache')
+            
             return Response(configs)
-
         except Exception as e:
             logger.error(f"Error getting document types list: {str(e)}")
             return Response(

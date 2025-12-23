@@ -305,13 +305,30 @@ REST_FRAMEWORK_EXTENDED = {
 }
 
 # Caching configuration (used for throttling counters)
+REDIS_HOST = os.environ.get('MAYAN_REDIS_HOST', 'redis')
+REDIS_PORT = os.environ.get('MAYAN_REDIS_PORT', '6379')
+REDIS_PASSWORD = os.environ.get('MAYAN_REDIS_PASSWORD', '')
+REDIS_DB_CACHE = os.environ.get('MAYAN_REDIS_DB_CACHE', '0')
+
+if REDIS_PASSWORD:
+    REDIS_LOCATION = f'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_CACHE}'
+else:
+    REDIS_LOCATION = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_CACHE}'
+
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'mayan-cache',
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_LOCATION,
+        'KEY_PREFIX': 'mayan_v4',
         'TIMEOUT': 300,
         'OPTIONS': {
-            'MAX_ENTRIES': 1000,
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 100,
+                'retry_on_timeout': True,
+                'socket_connect_timeout': 5,
+                'socket_timeout': 5,
+            }
         }
     }
 }

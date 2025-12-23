@@ -110,6 +110,28 @@ class HeadlessActivityFeedView(APIView):
         'authentication.user_logged_out': _('вышел из системы'),
     }
 
+    # Class-level cache for ContentType objects
+    _document_ct = None
+    _user_ct = None
+
+    @classmethod
+    def _get_document_content_type(cls):
+        """
+        Get or cache Document ContentType for performance.
+        """
+        if cls._document_ct is None:
+            cls._document_ct = ContentType.objects.get_for_model(Document)
+        return cls._document_ct
+
+    @classmethod
+    def _get_user_content_type(cls):
+        """
+        Get or cache User ContentType for performance.
+        """
+        if cls._user_ct is None:
+            cls._user_ct = ContentType.objects.get_for_model(get_user_model())
+        return cls._user_ct
+
     def get(self, request):
         """
         Handle GET requests for activity feed.
@@ -132,8 +154,14 @@ class HeadlessActivityFeedView(APIView):
             except EmptyPage:
                 page_obj = paginator.page(paginator.num_pages or 1)
 
+            # Batch prefetch Document objects to avoid N+1 queries
+            prefetched_documents = self._prefetch_documents_for_actions(page_obj.object_list)
+
             # Serialize results
-            results = [self._serialize_action(action) for action in page_obj.object_list]
+            results = [
+                self._serialize_action(action, prefetched_documents=prefetched_documents)
+                for action in page_obj.object_list
+            ]
 
             response_data = {
                 'count': paginator.count,
@@ -192,7 +220,7 @@ class HeadlessActivityFeedView(APIView):
             # Hide "system" actions by default:
             # - actions without an actor
             # - actions whose actor is not a user model instance
-            user_ct = ContentType.objects.get_for_model(get_user_model())
+            user_ct = self._get_user_content_type()
             system_actor_q = (
                 Q(actor_content_type__isnull=True) |
                 Q(actor_object_id__isnull=True) |
@@ -219,7 +247,7 @@ class HeadlessActivityFeedView(APIView):
 
         elif filter_type == 'my_documents':
             # Actions related to documents accessible to the user
-            document_ct = ContentType.objects.get_for_model(Document)
+            document_ct = self._get_document_content_type()
             # ACL-filter documents for the requesting user.
             # Staff/superusers with direct permission will get full queryset.
             allowed_documents = AccessControlList.objects.restrict_queryset(
@@ -246,18 +274,54 @@ class HeadlessActivityFeedView(APIView):
         # Limit to recent actions for performance
         return queryset[:500]  # Last 500 actions
 
-    def _serialize_action(self, action):
+    def _prefetch_documents_for_actions(self, actions):
+        """
+        Batch prefetch Document objects referenced in actions to avoid N+1 queries.
+        
+        Returns a dictionary mapping document_id -> Document instance.
+        """
+        document_ids = set()
+        document_ct = self._get_document_content_type()
+
+        for action in actions:
+            if action.target_content_type == document_ct and action.target_object_id:
+                document_ids.add(action.target_object_id)
+            if action.action_object_content_type == document_ct and action.action_object_object_id:
+                document_ids.add(action.action_object_object_id)
+
+        prefetched_documents = {}
+        if document_ids:
+            # Use only() to minimize data transfer and prefetch related objects
+            documents = Document.objects.filter(pk__in=document_ids).only(
+                'id', 'label', 'uuid', 'datetime_created'
+            ).prefetch_related('files', 'versions__version_pages')
+            prefetched_documents = {doc.pk: doc for doc in documents}
+
+        return prefetched_documents
+
+    def _serialize_action(self, action, prefetched_documents=None):
         """
         Serialize an Action object to API response format.
+        
+        Args:
+            action: Action instance to serialize
+            prefetched_documents: Dictionary of prefetched Document objects (document_id -> Document)
         """
+        if prefetched_documents is None:
+            prefetched_documents = {}
+        
         return {
             'id': action.pk,
             'timestamp': action.timestamp.isoformat(),
             'actor': self._serialize_actor(action.actor),
             'verb': self._translate_verb(action.verb),
             'verb_code': action.verb,
-            'target': self._serialize_target(action.target, action.target_content_type),
-            'description': self._build_description(action)
+            'target': self._serialize_target(
+                action.target, 
+                action.target_content_type,
+                prefetched_documents=prefetched_documents
+            ),
+            'description': self._build_description(action, prefetched_documents=prefetched_documents)
         }
 
     def _serialize_actor(self, actor):
@@ -292,26 +356,55 @@ class HeadlessActivityFeedView(APIView):
             'full_name': full_name
         }
 
-    def _serialize_target(self, target, content_type):
+    def _serialize_target(self, target, content_type, prefetched_documents=None):
         """
         Serialize the target of the action.
+        
+        Args:
+            target: Target object (may be None or deleted)
+            content_type: ContentType of the target
+            prefetched_documents: Dictionary of prefetched Document objects
         """
-        if not target:
+        if not target and not content_type:
             return None
+
+        # Use prefetched document if available (for Document type)
+        if prefetched_documents and content_type and content_type.model == 'document':
+            document = prefetched_documents.get(target.pk if target else None)
+            if document:
+                target = document
+
+        # Handle deleted or missing objects
+        if not target:
+            return {
+                'id': None,
+                'type': content_type.model if content_type else 'unknown',
+                'label': _('Deleted %(type)s') % {'type': content_type.model if content_type else 'object'},
+                'url': None
+            }
 
         # Build URL based on content type
         url = None
-        if content_type and target:
-            if content_type.model == 'document':
-                url = f'/api/v4/documents/{target.pk}/'
-            elif content_type.model == 'documentfile':
-                url = f'/api/v4/document_files/{target.pk}/'
-            # Add more content types as needed
+        try:
+            if content_type and target:
+                if content_type.model == 'document':
+                    url = f'/api/v4/documents/{target.pk}/'
+                elif content_type.model == 'documentfile':
+                    url = f'/api/v4/document_files/{target.pk}/'
+                # Add more content types as needed
+        except (AttributeError, Exception):
+            url = None
+
+        # Get label with error handling
+        try:
+            label = str(target)
+        except (AttributeError, Exception):
+            label = _('Deleted %(type)s') % {'type': content_type.model if content_type else 'object'}
 
         return {
             'id': target.pk,
             'type': content_type.model if content_type else 'unknown',
-            'label': str(target),
+            'label': label,
             'url': url
         }
 
@@ -326,10 +419,17 @@ class HeadlessActivityFeedView(APIView):
         # Fallback: keep technical verb (frontend may still show it for debugging).
         return verb
 
-    def _build_description(self, action):
+    def _build_description(self, action, prefetched_documents=None):
         """
         Build a human-readable description of the action.
+        
+        Args:
+            action: Action instance
+            prefetched_documents: Dictionary of prefetched Document objects
         """
+        if prefetched_documents is None:
+            prefetched_documents = {}
+        
         actor_name = getattr(action.actor, 'username', _('Система')) if action.actor else _('Система')
         verb_ru = self._translate_verb(action.verb)
 
@@ -337,14 +437,35 @@ class HeadlessActivityFeedView(APIView):
         doc_label = None
         try:
             if action.action_object_content_type and action.action_object_content_type.model == 'document':
-                doc_label = str(action.action_object)
-        except Exception:
+                # Use prefetched document if available
+                if prefetched_documents and action.action_object_object_id:
+                    document = prefetched_documents.get(action.action_object_object_id)
+                    if document:
+                        doc_label = str(document)
+                    else:
+                        # Fallback to direct access if not in prefetched
+                        doc_label = str(action.action_object) if action.action_object else None
+                else:
+                    # Fallback to direct access if prefetch not available
+                    doc_label = str(action.action_object) if action.action_object else None
+        except (AttributeError, Exception):
             doc_label = None
 
         target_label = None
         try:
-            target_label = str(action.target) if action.target else None
-        except Exception:
+            if action.target:
+                # Use prefetched document if available
+                if prefetched_documents and action.target_content_type and action.target_content_type.model == 'document':
+                    document = prefetched_documents.get(action.target_object_id)
+                    if document:
+                        target_label = str(document)
+                    else:
+                        # Fallback to direct access if not in prefetched
+                        target_label = str(action.target)
+                else:
+                    # Fallback to direct access if prefetch not available
+                    target_label = str(action.target)
+        except (AttributeError, Exception):
             target_label = None
 
         if doc_label:
@@ -369,6 +490,43 @@ class DashboardActivityView(APIView):
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
+    # Class-level cache for ContentType objects
+    _document_ct = None
+
+    @classmethod
+    def _get_document_content_type(cls):
+        """
+        Get or cache Document ContentType for performance.
+        """
+        if cls._document_ct is None:
+            cls._document_ct = ContentType.objects.get_for_model(Document)
+        return cls._document_ct
+
+    def _prefetch_documents_for_actions(self, actions):
+        """
+        Batch prefetch Document objects referenced in actions to avoid N+1 queries.
+        
+        Returns a dictionary mapping document_id -> Document instance.
+        """
+        document_ids = set()
+        document_ct = self._get_document_content_type()
+
+        for action in actions:
+            if action.target_content_type == document_ct and action.target_object_id:
+                document_ids.add(action.target_object_id)
+            if action.action_object_content_type == document_ct and action.action_object_object_id:
+                document_ids.add(action.action_object_object_id)
+
+        prefetched_documents = {}
+        if document_ids:
+            # Use only() to minimize data transfer and prefetch related objects
+            documents = Document.objects.filter(pk__in=document_ids).only(
+                'id', 'label', 'uuid', 'datetime_created'
+            ).prefetch_related('files', 'versions__version_pages')
+            prefetched_documents = {doc.pk: doc for doc in documents}
+
+        return prefetched_documents
+
     def get(self, request):
         try:
             limit = min(int(request.query_params.get('limit', 20)), 50)
@@ -377,7 +535,17 @@ class DashboardActivityView(APIView):
                 'actor_content_type', 'target_content_type', 'action_object_content_type'
             ).order_by('-timestamp')[:limit]
 
-            serializer = ActivityFeedSerializer(queryset, many=True)
+            # Convert queryset to list for prefetching
+            actions_list = list(queryset)
+            
+            # Batch prefetch Document objects to avoid N+1 queries
+            prefetched_documents = self._prefetch_documents_for_actions(actions_list)
+
+            serializer = ActivityFeedSerializer(
+                actions_list, 
+                many=True,
+                context={'prefetched_documents': prefetched_documents}
+            )
             return Response(serializer.data)
 
         except Exception as exc:

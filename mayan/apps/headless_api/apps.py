@@ -39,6 +39,9 @@ class HeadlessAPIApp(AppConfig):
         """
         super().ready()
 
+        # Import signals to register them
+        from . import signals  # noqa: F401
+
         # Log that headless API is ready
         import logging
         logger = logging.getLogger(__name__)

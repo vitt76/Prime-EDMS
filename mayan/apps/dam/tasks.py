@@ -22,7 +22,6 @@ from .ai_providers import AIProviderRegistry
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_PROVIDER_SEQUENCE = ['qwenlocal', 'gigachat', 'openai', 'claude', 'gemini', 'yandexgpt', 'kieai']
 IMAGE_SIGNATURES = (
     b'\xff\xd8\xff',  # JPEG
     b'GIF87a',
@@ -37,10 +36,21 @@ def _is_supported_image(data: bytes) -> bool:
     return any(data.startswith(signature) for signature in IMAGE_SIGNATURES)
 
 
-def _shrink_image_bytes(image_data: bytes, max_width: int = 1600) -> bytes:
+def _shrink_image_bytes(image_data: bytes, max_width: Optional[int] = None) -> bytes:
     """
     Downscale raw image bytes to a JPEG preview to reduce payload size.
+    
+    Args:
+        image_data: Raw image bytes to process
+        max_width: Maximum width in pixels. If None, uses DAM_AI_IMAGE_MAX_WIDTH setting.
+    
+    Returns:
+        Resized image bytes as JPEG, or None on error
     """
+    # Получаем max_width из settings, если не указан явно
+    if max_width is None:
+        max_width = dam_settings.setting_ai_image_max_width.value or 1600
+    
     try:
         from PIL import Image
         import io
@@ -610,7 +620,8 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
 
     # Try providers in order of proven availability (GigaChat first)
     configured_providers = _coerce_list(dam_settings.setting_ai_providers_active.value)
-    providers_to_try = configured_providers or DEFAULT_PROVIDER_SEQUENCE.copy()
+    default_sequence = _coerce_list(dam_settings.setting_ai_provider_sequence.value)
+    providers_to_try = configured_providers or default_sequence
 
     # Ensure локальная модель стоит первой, если она настроена
     qwen_config = get_provider_config('qwenlocal')

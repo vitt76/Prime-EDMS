@@ -99,6 +99,12 @@ services:
       MAYAN_CELERY_RESULT_BACKEND: redis://:mayanredispassword@redis:6379/1
       MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock
       MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:mayanredispassword@redis:6379/2','default_timeout':30}"
+      MAYAN_REDIS_HOST: redis
+      MAYAN_REDIS_PORT: "6379"
+      MAYAN_REDIS_PASSWORD: "${MAYAN_REDIS_PASSWORD:-mayanredispassword}"
+      MAYAN_REDIS_DB_CACHE: "0"
+      MAYAN_REDIS_DB_CELERY: "1"
+      MAYAN_REDIS_DB_LOCKS: "2"
       MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
       MAYAN_SEARCH_BACKEND: mayan.apps.dynamic_search.backends.django.DjangoSearchBackend
       MAYAN_WORKER_A_QUEUES: converter,sources_fast,distribution
