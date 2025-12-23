@@ -547,6 +547,8 @@ class HeadlessImageEditorCommitView(APIView):
         base_name = session.document_file.filename.rsplit('.', 1)[0]
         filename = f'{base_name}.{ext}'
 
+        previous_active = document.version_active
+
         new_file = document.file_new(
             file_object=ContentFile(data, name=filename),
             filename=filename,
@@ -556,6 +558,13 @@ class HeadlessImageEditorCommitView(APIView):
         )
 
         version = document.versions.order_by('-timestamp').first()
+        if version:
+            if version.active:
+                version.active = False
+                version.save(update_fields=('active',))
+            if previous_active and previous_active.pk != version.pk:
+                previous_active.active_set(save=True)
+
         serializer = HeadlessDocumentVersionSerializer(
             version, context={'request': request}
         )

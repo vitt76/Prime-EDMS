@@ -1661,24 +1661,56 @@ async function loadCampaignAssetPreviews() {
   for (const asset of campaignDetailsAssets.value) {
     if (!asset?.document_id) continue
 
-    const fileId = asset.document_file_id
     const docId = asset.document_id
-    if (!fileId) continue
-
-    // Берём прямой download файла как fallback-превью (для изображений вернёт сам файл)
-    const path = `/api/v4/documents/${docId}/files/${fileId}/download/`
-
+    // Всегда берём актуальный файл документа (последний по timestamp),
+    // чтобы не зависеть от сохранённого file_id в кампании.
+    let fileId: number | null = null
     try {
-      const blob = await apiService.get<Blob>(
-        path,
-        { responseType: 'blob' } as any,
+      const filesResponse: any = await apiService.get(
+        `/api/v4/documents/${docId}/files/`,
+        { params: { page_size: 1, ordering: '-timestamp' } } as any,
         false
       )
-      const objectUrl = window.URL.createObjectURL(blob)
-      previews[assetPreviewKey(asset)] = objectUrl
+      const results = Array.isArray(filesResponse?.results)
+        ? filesResponse.results
+        : Array.isArray(filesResponse)
+          ? filesResponse
+          : []
+      fileId = results[0]?.id || null
     } catch (e) {
-      // Если превью не загрузилось, просто оставим плейсхолдер
-      console.warn('Failed to load campaign asset preview', asset, e)
+      // fallback на то, что пришло в кампании, если запрос файлов не удался
+      fileId = asset.document_file_id || asset.file_latest_id || asset.file_id || null
+    }
+
+    if (!fileId) continue
+
+    // Для активной версии пробуем добавить путь на всякий случай
+    const versionId = asset.version_active_id || asset.version_id || asset.version?.id
+
+    const paths: string[] = []
+    // 1) страница актуального файла
+    paths.push(`/api/v4/documents/${docId}/files/${fileId}/pages/1/image/?width=600`)
+    // 2) страница активной версии (если есть)
+    if (versionId) {
+      paths.push(`/api/v4/documents/${docId}/versions/${versionId}/pages/1/image/?width=600`)
+    }
+    // 3) прямой download
+    paths.push(`/api/v4/documents/${docId}/files/${fileId}/download/`)
+
+    for (const path of paths) {
+      try {
+        const blob = await apiService.get<Blob>(
+          path,
+          { responseType: 'blob' } as any,
+          false
+        )
+        const objectUrl = window.URL.createObjectURL(blob)
+        previews[assetPreviewKey(asset)] = objectUrl
+        break
+      } catch (e) {
+        // try next path
+        continue
+      }
     }
   }
 

@@ -409,6 +409,28 @@
         </div>
       </transition>
     </Teleport>
+
+    <!-- Confirm delete single -->
+    <ConfirmModal
+      :is-open="showDeleteConfirm"
+      title="Удалить документ?"
+      :message="deleteTarget ? `\"${deleteTarget.label}\" будет удалён вместе с файлами и версиями. Действие необратимо.` : 'Удалить документ?'"
+      confirm-text="Удалить"
+      confirm-variant="danger"
+      @close="cancelDelete"
+      @confirm="confirmDelete"
+    />
+
+    <!-- Confirm bulk delete -->
+    <ConfirmModal
+      :is-open="showBulkDeleteConfirm"
+      title="Удалить выбранные документы?"
+      :message="`Вы собираетесь удалить ${assetStore.selectedCount} ${pluralize(assetStore.selectedCount, 'документ', 'документа', 'документов')}. Действие необратимо.`"
+      confirm-text="Удалить"
+      confirm-variant="danger"
+      @close="showBulkDeleteConfirm = false"
+      @confirm="handleBulkDeleteConfirm"
+    />
   </div>
 </template>
 
@@ -418,9 +440,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAssetStore } from '@/stores/assetStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useFolderStore } from '@/stores/folderStore'
+import { useNotificationStore } from '@/stores/notificationStore'
 import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import AssetCardEnhanced from '@/components/DAM/AssetCardEnhanced.vue'
+import ConfirmModal from '@/components/Common/ConfirmModal.vue'
 import type { Asset } from '@/types/api'
 import { findFolderById } from '@/mocks/folders'
 
@@ -433,6 +457,7 @@ const route = useRoute()
 const assetStore = useAssetStore()
 const favoritesStore = useFavoritesStore()
 const folderStore = useFolderStore()
+const notificationStore = useNotificationStore()
 
 // ============================================================================
 // STATE
@@ -446,6 +471,9 @@ const sortOption = ref('date_added-desc')
 const previewAsset = ref<Asset | null>(null)
 const previewImageError = ref(false)
 const loadMoreTrigger = ref<HTMLElement | null>(null)
+const showDeleteConfirm = ref(false)
+const deleteTarget = ref<Asset | null>(null)
+const showBulkDeleteConfirm = ref(false)
 const previewAssetSrc = computed(() => resolveAssetImageUrl(previewAsset.value))
 const previewIsFavorite = computed(() => {
   const asset = previewAsset.value
@@ -671,9 +699,28 @@ function handlePreviewImageError(): void {
 }
 
 function handleAssetDelete(asset: Asset): void {
-  if (confirm(`Удалить "${asset.label}"?`)) {
-    assetStore.deleteAsset(asset.id)
+  deleteTarget.value = asset
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete(): Promise<void> {
+  if (!deleteTarget.value) return
+  const target = deleteTarget.value
+  showDeleteConfirm.value = false
+  const ok = await assetStore.deleteAsset(target.id)
+  if (ok) {
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Документ удалён',
+      message: `"${target.label}" удалён вместе с файлами и версиями`
+    })
   }
+  deleteTarget.value = null
+}
+
+function cancelDelete(): void {
+  showDeleteConfirm.value = false
+  deleteTarget.value = null
 }
 
 // ============================================================================
@@ -691,10 +738,20 @@ function handleBulkShare(): void {
 }
 
 function handleBulkDelete(): void {
-  const count = assetStore.selectedCount
-  if (confirm(`Удалить ${count} ${pluralize(count, 'актив', 'актива', 'активов')}?`)) {
-    const ids = Array.from(assetStore.selectedAssets)
-    assetStore.bulkDelete(ids)
+  showBulkDeleteConfirm.value = true
+}
+
+async function handleBulkDeleteConfirm(): Promise<void> {
+  const ids = Array.from(assetStore.selectedAssets)
+  showBulkDeleteConfirm.value = false
+  if (!ids.length) return
+  const deleted = await assetStore.bulkDelete(ids)
+  if (deleted > 0) {
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Документы удалены',
+      message: `${deleted} ${pluralize(deleted, 'документ', 'документа', 'документов')} удалены вместе с файлами и версиями`
+    })
   }
 }
 
