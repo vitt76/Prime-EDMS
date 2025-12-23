@@ -1,8 +1,8 @@
 # BACKEND_AUDIT_V1.md
 
 **Дата аудита:** 2025-12-09  
-**Версия:** 1.6  
-**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов, оптимизации N+1 запросов, выносе хардкода конфигурации в settings, кешировании конфигурации типов документов, асинхронной конвертации изображений и GIN-индексов для JSON-полей)  
+**Версия:** 1.7  
+**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов, оптимизации N+1 запросов, выносе хардкода конфигурации в settings, кешировании конфигурации типов документов, асинхронной конвертации изображений, GIN-индексов для JSON-полей и исправлении конфигурации Redis для distributed rate limiting)  
 **Статус:** Полный технический аудит бэкенда
 
 ---
@@ -67,9 +67,12 @@
 - **Password:** `mayandbpass` (по умолчанию, через env)
 
 #### Кеширование
-- **Backend:** `django.core.cache.backends.locmem.LocMemCache`
+- **Backend:** `django_redis.cache.RedisCache` (Redis через django-redis)
+- **Location:** `redis://:{password}@{host}:{port}/{db}` (DB 0 для cache, настраивается через env: `MAYAN_REDIS_HOST`, `MAYAN_REDIS_PORT`, `MAYAN_REDIS_PASSWORD`, `MAYAN_REDIS_DB_CACHE`)
 - **Timeout:** 300 секунд
-- **Max Entries:** 1000
+- **KEY_PREFIX:** `mayan_v4` (для версионирования ключей)
+- **Connection Pool:** Enterprise настройки (max_connections=100, retry_on_timeout, socket timeouts)
+- **Разделение баз данных:** DB 0 (Cache), DB 1 (Celery Result Backend), DB 2 (Lock Manager)
 
 ### 1.4. Механизм Аутентификации
 
@@ -717,7 +720,7 @@ DocumentAIAnalysis.objects.prefetch_related('document__files')
 
 #### Кеширование
 - **DRF Pagination:** Кеширование страниц через `cacheService` на фронтенде
-- **Django Cache:** LocMemCache для throttling counters
+- **Django Cache:** Redis (django-redis) для throttling counters, sessions и общего кеша (работает в multi-process/multi-server окружении)
 - **Нет кеширования:** AI-анализ, метаданные (каждый раз запрос к БД)
 
 ---
@@ -811,8 +814,15 @@ DocumentAIAnalysis.objects.prefetch_related('document__files')
 ### 5.6. Уязвимости Безопасности
 
 1. **Отсутствие Rate Limiting на AI-анализ:**
-   - **Проблема:** Throttling есть (`AIAnalysisThrottle`), но может быть недостаточно для защиты от злоупотреблений
-   - **Рекомендация:** Добавить более строгие лимиты для bulk-операций
+   - ~~**Проблема:** Throttling есть (`AIAnalysisThrottle`), но LocMemCache не работает в multi-process окружении (5 воркеров = 5-кратный лимит)~~ ✅ **ЧАСТИЧНО РЕШЕНО** (инфраструктура)
+   - **Реализация (инфраструктура):** Исправлена конфигурация Redis для distributed rate limiting:
+     - Заменен `LocMemCache` на `RedisCache` (django-redis) в `mayan/settings/base.py`
+     - Разделение Redis databases: DB 0 (Application Cache), DB 1 (Celery Result Backend), DB 2 (Lock Manager)
+     - Централизация конфигурации в `base.py` через переменные окружения (`MAYAN_REDIS_HOST`, `MAYAN_REDIS_PORT`, `MAYAN_REDIS_PASSWORD`, `MAYAN_REDIS_DB_CACHE`)
+     - Удалено дублирование `CACHES` из `production.py` (DRY принцип)
+     - Добавлен `KEY_PREFIX: 'mayan_v4'` для версионирования ключей
+     - Enterprise настройки connection pool для надежности
+   - **Осталось:** Реализовать Quota Management (Service Layer Quotas) для bulk-операций и Token Bucket / Burst Protection (P1)
 
 2. **Отсутствие валидации размера файла:**
    - ~~**Проблема:** Нет проверки размера файла перед AI-анализом (может привести к DoS)~~ ✅ **РЕШЕНО**
@@ -948,13 +958,14 @@ image_editor
 
 #### Приоритет 3 (Желательно)
 7. ~~**Добавить GIN-индексы** для JSON-полей (если используется PostgreSQL)~~ ✅ **ВЫПОЛНЕНО**
-8. **Улучшить rate limiting** для bulk-операций
+8. ~~**Улучшить rate limiting** для bulk-операций~~ ✅ **ЧАСТИЧНО ВЫПОЛНЕНО** (инфраструктура: Redis cache для distributed throttling)
+   - **Осталось:** Quota Management (Service Layer Quotas) и Token Bucket / Burst Protection
 9. **Добавить поддержку range requests** для скачивания больших файлов
 
 ---
 
 **Документ составлен:** 2025-12-09  
-**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов, оптимизации N+1 запросов, выносе хардкода конфигурации в settings, кешировании конфигурации типов документов, асинхронной конвертации изображений и GIN-индексов для JSON-полей)  
+**Последнее обновление:** 2025-12-23 (добавлена информация о реализации проверки размера файлов, оптимизации N+1 запросов, выносе хардкода конфигурации в settings, кешировании конфигурации типов документов, асинхронной конвертации изображений, GIN-индексов для JSON-полей и исправлении конфигурации Redis для distributed rate limiting)  
 **Автор аудита:** Senior Backend Architect  
-**Версия:** 1.6
+**Версия:** 1.7
 
