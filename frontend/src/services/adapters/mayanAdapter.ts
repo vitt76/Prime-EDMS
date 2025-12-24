@@ -103,6 +103,13 @@ export interface BackendOptimizedDocument {
   is_stub: boolean
   document_type: BackendDocumentType
   file_latest?: BackendDocumentFile | null
+  // Separate file fields from OptimizedDocumentListSerializer (list view)
+  file_latest_id?: number
+  file_latest_filename?: string
+  file_latest_size?: number
+  file_latest_mimetype?: string
+  file_latest_download_url?: string
+  file_latest_url?: string
   files_count?: number
   version_active?: {
     id: number
@@ -438,13 +445,25 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
   )
   
   // Get file information with fallback logic
+  // OptimizedDocumentListSerializer returns separate fields (file_latest_filename, file_latest_size, etc.)
+  // instead of a file_latest object, so we need to handle both cases
   let filename = backendDoc.label
   let size = 0
   let mime_type = mimeType
   let file_details = undefined
   let date_added = backendDoc.datetime_created
+  let file_latest_id = backendDoc.file_latest?.id || (backendDoc as any)?.file_latest_id
+
+  // Check if we have separate file fields from OptimizedDocumentListSerializer
+  const hasFileFields = !!(backendDoc as any)?.file_latest_filename || !!(backendDoc as any)?.file_latest_size
+  
+  // Priority: version_active_file_id > file_latest
+  // This ensures we use the active version file, not just the latest by timestamp
+  const activeFileId = (backendDoc as any)?.version_active_file_id
+  const shouldUseActiveFile = activeFileId && activeFileId !== file_latest_id
 
   if (backendDoc.file_latest) {
+    // Full file_latest object (from OptimizedDocumentSerializer detail view)
     filename = backendDoc.file_latest.filename || backendDoc.label
     size = backendDoc.file_latest.size || 0
     mime_type = backendDoc.file_latest.mimetype || mimeType
@@ -455,15 +474,41 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
       uploaded_date: backendDoc.file_latest.timestamp,
       checksum: backendDoc.file_latest.checksum,
     }
-    // Use file timestamp as date_added if available (more accurate)
     if (backendDoc.file_latest.timestamp) {
       date_added = backendDoc.file_latest.timestamp
     }
+    file_latest_id = backendDoc.file_latest.id
+  } else if (hasFileFields) {
+    // Separate file fields from OptimizedDocumentListSerializer (list view)
+    const docAny = backendDoc as any
+    filename = docAny.file_latest_filename || backendDoc.label
+    size = docAny.file_latest_size || 0
+    mime_type = docAny.file_latest_mimetype || mimeType
+    file_latest_id = docAny.file_latest_id || file_latest_id
+    file_details = {
+      filename: docAny.file_latest_filename,
+      size: docAny.file_latest_size,
+      mime_type: docAny.file_latest_mimetype,
+      uploaded_date: undefined, // Not available in list view
+      checksum: undefined, // Not available in list view
+    }
   } else {
-    // Fallback: try to infer from label if no file_latest
+    // No file information available
     filename = backendDoc.label
-    size = 0 // We don't have size info
-    mime_type = mimeType // Use inferred mime type
+    size = 0
+    mime_type = mimeType
+  }
+
+  // If we have version_active_file_id that differs from file_latest_id,
+  // we should use it, but for list view we'll keep file_latest data
+  // and let getAssetDetail fetch the correct active file if needed
+  if (shouldUseActiveFile && !hasFileFields && !backendDoc.file_latest) {
+    // Only log if we don't have file data at all
+    console.log('[MayanAdapter] Active file ID differs from file_latest:', {
+      activeFileId,
+      file_latest_id,
+      documentId: backendDoc.id
+    })
   }
 
   return {

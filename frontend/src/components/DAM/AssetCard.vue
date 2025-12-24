@@ -703,7 +703,10 @@ function handleMove() {
 
 function handleDelete() {
   showActionsMenu.value = false
-  emit('delete', props.asset)
+  // Небольшая задержка, чтобы меню успело закрыться перед открытием модалки
+  setTimeout(() => {
+    emit('delete', props.asset)
+  }, 100)
 }
 
 function handleGlobalClick(event: MouseEvent) {

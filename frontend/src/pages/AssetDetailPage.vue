@@ -548,7 +548,7 @@
                   <div class="flex items-start justify-between">
                     <div class="flex items-center gap-3">
                       <div class="w-10 h-10 rounded-lg bg-neutral-200 dark:bg-neutral-600 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-300">
-                        v{{ versions.indexOf(version) + 1 }}
+                        v{{ version.versionNumber || versions.indexOf(version) + 1 }}
                       </div>
                       <div>
                         <p class="text-sm font-medium text-neutral-900 dark:text-white">
@@ -1058,7 +1058,31 @@ const versions = computed((): any[] => {
     })
   }
   
-  return result
+  // Сортируем версии по дате: новые первыми (v2, v3... сверху), старые ниже (v1)
+  // Но нумерация должна быть хронологической: самая старая = v1, новая = v2, v3...
+  const sortedByDate = [...result].sort((a, b) => {
+    const dateA = new Date(a.uploaded_date || 0).getTime()
+    const dateB = new Date(b.uploaded_date || 0).getTime()
+    return dateB - dateA // По убыванию: новые первыми
+  })
+  
+  // Создаем хронологически отсортированный список для определения номеров версий
+  const chronological = [...result].sort((a, b) => {
+    const dateA = new Date(a.uploaded_date || 0).getTime()
+    const dateB = new Date(b.uploaded_date || 0).getTime()
+    return dateA - dateB // По возрастанию: старые первыми
+  })
+  
+  // Добавляем номер версии на основе хронологического порядка
+  const sorted = sortedByDate.map(version => {
+    const chronologicalIndex = chronological.findIndex(v => v.id === version.id)
+    return {
+      ...version,
+      versionNumber: chronologicalIndex + 1 // v1 для самой старой, v2 для следующей и т.д.
+    }
+  })
+  
+  return sorted
 })
 
 // Comments are now loaded from API, not from asset
@@ -1139,7 +1163,7 @@ async function loadAsset() {
         const results = Array.isArray(filesResponse?.results)
           ? filesResponse.results
           : (Array.isArray(filesResponse) ? filesResponse : [])
-        // Sort newest first
+        // Sort newest first (v2, v3... first, then v1)
         documentFiles.value = results.sort(
           (a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         )

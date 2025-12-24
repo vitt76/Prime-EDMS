@@ -699,6 +699,10 @@ function handlePreviewImageError(): void {
 }
 
 function handleAssetDelete(asset: Asset): void {
+  if (!asset) {
+    console.error('[DAMGallery] handleAssetDelete: asset is null or undefined')
+    return
+  }
   deleteTarget.value = asset
   showDeleteConfirm.value = true
 }
