@@ -196,17 +196,27 @@ onMounted(() => {
 function mapRecentItem(item: any): ExtendedAsset {
   const doc = item.document || {}
   const file = doc.file_latest || {}
+  
+  // Используем version_active_file_id, если он доступен (файл активной версии)
+  // Иначе используем file_latest_id из file_latest объекта
+  const activeFileId = doc.version_active_file_id || file?.id || doc.file_latest_id
+  
   return {
     id: doc.id,
     label: doc.label,
     description: doc.description || '',
-    size: file.size || 0,
-    mime_type: file.mimetype || '',
-    filename: file.filename || doc.label,
-    // Для \"Недавних\" используем прямой download как preview,
-    // чтобы не упираться в /versions/latest/..., которые могут отсутствовать.
-    preview_url: file.download_url || doc.preview_url,
-    download_url: file.download_url,
+    size: file?.size || 0,
+    mime_type: file?.mimetype || '',
+    filename: file?.filename || doc.label,
+    // Используем version_active_file_id для правильного отображения активной версии
+    version_active_file_id: doc.version_active_file_id,
+    version_active_id: doc.version_active_id,
+    file_latest_id: file?.id || doc.file_latest_id,
+    // Для превью и download используем готовые URL из бэкенда
+    // resolveAssetImageUrl будет использовать version_active_file_id для правильного превью
+    // Не формируем URL вручную, чтобы избежать 404 ошибок
+    preview_url: doc.preview_url || doc.thumbnail_url,
+    download_url: file?.download_url, // Используем готовый URL от бэкенда
     thumbnail_url: doc.thumbnail_url,
     date_added: doc.datetime_created,
     lastAccessedAt: item.datetime_accessed || doc.datetime_created,

@@ -108,6 +108,8 @@ export interface BackendOptimizedDocument {
     id: number
     timestamp: string
   }
+  version_active_id?: number
+  version_active_file_id?: number
   // DAM Extension fields
   ai_analysis?: BackendAIAnalysis | null
   tags?: BackendTag[]
@@ -220,12 +222,17 @@ function getThumbnailUrl(doc: BackendOptimizedDocument): string {
     }
   }
   
-  // Priority 4: Generate Mayan page image URL
-  // Note: This requires auth token - handled by browser cookies or will need proxy
-  if (doc.file_latest && doc.id) {
-    // Mayan generates thumbnails at /documents/{id}/versions/latest/pages/1/image/
-    // Using width=300 for thumbnail quality vs size balance
-    return `${baseUrl}/api/v4/documents/${doc.id}/versions/latest/pages/1/image/?width=300&height=300`
+  // Priority 4: Generate download URL для файла активной версии (для изображений)
+  // Используем прямой download URL, так как браузер может отображать изображения напрямую
+  if (doc.id) {
+    const fileId = (doc as any).version_active_file_id || doc.file_latest?.id
+    if (fileId) {
+      // Проверяем, является ли файл изображением
+      const mimeType = doc.file_latest?.mimetype?.toLowerCase() || ''
+      if (mimeType.startsWith('image/')) {
+        return `${baseUrl}/api/v4/documents/${doc.id}/files/${fileId}/download/`
+      }
+    }
   }
   
   // Fallback to placeholder
@@ -251,12 +258,18 @@ function getPreviewUrl(doc: BackendOptimizedDocument): string | undefined {
     return toAbsoluteUrl(doc.file_latest.download_url)
   }
   
-  // Priority 4: Generate Mayan page image URL (larger size) через DocumentFile,
-  // а не через versions/latest, поскольку в некоторых эндпоинтах (my_uploads,
-  // accessed) активная версия может быть не указана и /versions/latest даёт 404.
-  if (doc.file_latest && doc.id) {
-    const fileId = doc.file_latest.id
-    return `${baseUrl}/api/v4/documents/${doc.id}/files/${fileId}/pages/1/image/?width=1200`
+  // Priority 4: Generate download URL для файла активной версии
+  // Используем прямой download URL, так как браузер может отображать изображения напрямую
+  // Это более надёжно, чем /files/{file_id}/pages/{page_id}/image/, который требует ID страницы
+  if (doc.id) {
+    const fileId = (doc as any).version_active_file_id || doc.file_latest?.id
+    if (fileId) {
+      // Проверяем, является ли файл изображением
+      const mimeType = doc.file_latest?.mimetype?.toLowerCase() || ''
+      if (mimeType.startsWith('image/')) {
+        return `${baseUrl}/api/v4/documents/${doc.id}/files/${fileId}/download/`
+      }
+    }
   }
   
   return undefined
@@ -456,6 +469,7 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
   return {
     id: backendDoc.id,
     version_active_id: (backendDoc as any)?.version_active?.id || (backendDoc as any)?.version_active_id || (backendDoc as any)?.version?.id,
+    version_active_file_id: (backendDoc as any)?.version_active_file_id || undefined,
     label: backendDoc.label,
     description: backendDoc.description,
     filename: filename,

@@ -43,40 +43,22 @@ export function resolveAssetImageUrl(asset: any): string {
     asset?.version?.id ||
     'latest'
 
-  // Сначала пробуем активную версию
-  const versionActivePreview =
-    asset?.id && versionActiveId
-      ? `/api/v4/documents/${asset.id}/versions/${versionActiveId}/pages/1/image/?width=1200`
-      : undefined
+  // Приоритет 1: Готовые URL из бэкенда (thumbnail_url, preview_url)
+  // Эти URL уже правильно сформированы и работают
+  const backendPreview = asset?.thumbnail_url || asset?.preview_url
 
-  // Затем текущий файл (если активной версии нет)
-  const filePreview =
-    asset?.id && preferredFileId
-      ? `/api/v4/documents/${asset.id}/files/${preferredFileId}/pages/1/image/?width=1200`
-      : undefined
+  // Приоритет 2: Fallback на общий download_url (готовый URL от бэкенда)
+  // Используем только готовые URL, чтобы избежать 404 ошибок
+  const downloadUrl = asset?.download_url
 
-  // Fallback на другие версии
-  const versionPreview =
-    asset?.id && versionId && versionId !== 'latest'
-      ? `/api/v4/documents/${asset.id}/versions/${versionId}/pages/1/image/?width=1200`
-      : undefined
+  // Примечание: НЕ формируем URL вручную, так как:
+  // 1. file_id может быть неправильным или файл может быть удален
+  // 2. Бэкенд уже предоставляет готовые валидные URL
+  // 3. Ручное формирование URL приводит к 404 ошибкам
 
-  // Последний fallback: latest версия
-  const latestVersionPreview =
-    asset?.id && versionId === 'latest'
-      ? `/api/v4/documents/${asset.id}/versions/latest/pages/1/image/?width=1200`
-      : undefined
-
-  // Сначала пробуем превью по файлу (надёжнее, чем по версии: страницы
-  // у файла создаются стабильнее, а versions/latest может отсутствовать).
   const url =
-    filePreview ||
-    versionActivePreview ||
-    asset.thumbnail_url ||
-    asset.preview_url ||
-    versionPreview ||
-    latestVersionPreview ||
-    asset.download_url
+    backendPreview ||
+    downloadUrl
 
   return makeAbsolute(url) || PLACEHOLDER
 }
