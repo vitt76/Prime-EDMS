@@ -3,6 +3,7 @@
 """
 from typing import Optional
 from django.conf import settings
+from mayan.apps.tags.models import Tag
 
 
 def get_max_file_size_for_mime_type(mime_type: str) -> int:
@@ -76,4 +77,30 @@ def format_file_size(size_bytes: int) -> str:
         return f"{size_bytes / 1024:.1f} KB"
     else:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+def get_or_create_tag(label: str, color: Optional[str] = None) -> Optional[Tag]:
+    """
+    Get or create a Tag by label.
+    
+    Args:
+        label: Tag label (will be trimmed and validated)
+        color: Optional tag color (default from settings)
+    
+    Returns:
+        Tag instance or None if label is invalid
+    """
+    from . import settings as dam_settings
+    
+    label = label.strip()[:128]  # Tag.label max_length=128
+    if not label:
+        return None
+    
+    color = color or dam_settings.setting_ai_tag_default_color.value or '#3c8dbc'
+    
+    tag, created = Tag.objects.get_or_create(
+        label=label,
+        defaults={'color': color}
+    )
+    return tag
 

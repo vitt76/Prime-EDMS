@@ -1,5 +1,6 @@
 import logging
 
+from django.http import HttpResponseRedirect
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -119,7 +120,47 @@ class APIDocumentFileDownloadView(
     def get_queryset(self):
         return self.get_document().files.all()
 
+    def _serve_s3_file_with_range(self, document_file):
+        """
+        Return a redirect response to the storage URL (typically presigned),
+        allowing the storage/CDN to handle Range Requests natively.
+
+        This is optional and must be enabled by passing `?direct=1`.
+        """
+        storage = document_file.file.storage
+        storage_url = None
+
+        # django-storages S3Boto3Storage.url supports `parameters`.
+        try:
+            storage_url = storage.url(
+                name=document_file.file.name,
+                parameters={
+                    'ResponseContentDisposition': (
+                        f'attachment; filename="{document_file.filename}"'
+                    )
+                }
+            )
+        except TypeError:
+            storage_url = storage.url(name=document_file.file.name)
+
+        if storage_url:
+            return HttpResponseRedirect(redirect_to=storage_url)
+
     def retrieve(self, request, *args, **kwargs):
+        # Optional optimization for S3-backed storages: return a presigned URL
+        # and let the storage backend serve the file (including Range support).
+        #
+        # NOTE: Default behavior remains proxying the file via Django to preserve
+        # same-origin downloads for SPA/XHR callers (CORS constraints).
+        direct = request.query_params.get('direct')
+        if direct in ('1', 'true', 'True'):
+            try:
+                instance = self.get_object()
+                return self._serve_s3_file_with_range(document_file=instance)
+            except Exception:
+                # Fall back to Django streaming download.
+                pass
+
         return self.render_to_response()
 
 

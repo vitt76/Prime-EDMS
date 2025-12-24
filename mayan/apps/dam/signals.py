@@ -10,10 +10,13 @@ import time
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from django.db.models.signals import post_save, post_delete
+
 from mayan.apps.documents.models import Document, DocumentFile
 
-from .models import DocumentAIAnalysis
+from .models import DocumentAIAnalysis, DAMMetadataPreset
 from .tasks import analyze_document_with_ai
+from .cache_utils import invalidate_preset_count_cache
 
 logger = logging.getLogger(__name__)
 
@@ -237,3 +240,15 @@ def trigger_ai_analysis(sender, instance, created, **kwargs):
 
 # Note: Document indexing is handled by the unified DocumentIndexCoordinator
 # in mayan.apps.documents.indexing_coordinator - no duplicate handlers needed here.
+
+
+@receiver(post_save, sender=DAMMetadataPreset)
+def invalidate_preset_cache_on_save(sender, instance, **kwargs):
+    """Invalidate cache when preset is saved."""
+    invalidate_preset_count_cache(instance.id)
+
+
+@receiver(post_delete, sender=DAMMetadataPreset)
+def invalidate_preset_cache_on_delete(sender, instance, **kwargs):
+    """Invalidate cache when preset is deleted."""
+    invalidate_preset_count_cache(instance.id)
