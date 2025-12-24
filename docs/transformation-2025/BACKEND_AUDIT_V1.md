@@ -281,7 +281,7 @@ queryset = AccessControlList.objects.restrict_queryset(
 - **Queue:** `tools`
 - **Retries:** 3 (max_retries=3, default_retry_delay=60)
 - **Триггер:** 
-  - Автоматически через signal `post_save` на `DocumentFile` (`signals.py:125`)
+  - Автоматически через signal `post_save` на `DocumentFile` (`signals.py:148`)
   - Вручную через API endpoint `/api/v4/dam/ai-analysis/analyze/`
 - **Логика:**
   1. Проверка `DAM_AI_ANALYSIS_ENABLED`
@@ -289,18 +289,15 @@ queryset = AccessControlList.objects.restrict_queryset(
   3. **Проверка размера файла** (дифференцированные лимиты по MIME типу через `utils.get_max_file_size_for_mime_type()`)
   4. Проверка доступности файла в storage (S3 race condition fix)
   5. Создание/обновление `DocumentAIAnalysis` со статусом `processing`
-  6. Попытка анализа через провайдеры (fallback sequence: qwenlocal → gigachat → openai → claude → gemini → yandexgpt → kieai)
-  7. Обновление прогресса (`progress`, `current_step`)
-  8. Сохранение результатов в `DocumentAIAnalysis`
-  9. Обновление статуса на `completed` или `failed`
-  10. Интеграция результатов с системой метаданных Mayan через `update_document_metadata_from_ai()`:
-      - Теги (ai_tags, people, locations, categories) → Mayan `Tag` через `tag.attach_to(document)`
-      - Текстовые поля (description, alt_text, copyright_notice) → `MetadataType` через `DocumentMetadata`
-      - Принцип "Человек > AI": перезапись только если значение пустое (кроме `force_reanalyze=True`)
-  10. Интеграция результатов с системой метаданных Mayan через `update_document_metadata_from_ai()`:
-      - Теги (ai_tags, people, locations, categories) → Mayan `Tag` через `tag.attach_to(document)`
-      - Текстовые поля (description, alt_text, copyright_notice) → `MetadataType` через `DocumentMetadata`
-      - Принцип "Человек > AI": перезапись только если значение пустое (кроме `force_reanalyze=True`)
+   6. Попытка анализа через провайдеры (fallback sequence из `DAM_AI_PROVIDER_SEQUENCE`: qwenlocal → gigachat → openai → claude → gemini → yandexgpt → kieai)
+   7. Обновление прогресса (`progress`, `current_step`) на каждом этапе
+   8. Сохранение результатов в `DocumentAIAnalysis` (ai_description, ai_tags, categories, people, locations, dominant_colors, alt_text, etc.)
+   9. Обновление статуса на `completed` или `failed`
+   10. Интеграция результатов с системой метаданных Mayan через `update_document_metadata_from_ai()` (`tasks.py:358, 986`):
+       - Теги (ai_tags, people, locations, categories) → Mayan `Tag` через `tag.attach_to(document)` (`tasks.py:1027-1040`)
+       - Текстовые поля (ai_description, alt_text, copyright_notice) → `MetadataType` через `DocumentMetadata` (`tasks.py:1042-1080`)
+       - Принцип "Человек > AI": перезапись только если значение пустое (кроме `force_reanalyze=True`)
+   11. Реиндексация документа через `reindex_document_assets()` (`tasks.py:359, 1157`) для обновления поискового индекса с новыми AI-данными
 
 ##### `bulk_analyze_documents` (`tasks.py`)
 - **Queue:** `tools`
@@ -313,33 +310,46 @@ queryset = AccessControlList.objects.restrict_queryset(
 - **Логика:** Импорт файлов из Яндекс.Диск
 
 #### Утилиты
-- **`mayan.apps.dam.utils`** — утилиты для работы с лимитами размеров файлов и тегами:
-  - `get_max_file_size_for_mime_type(mime_type: str) -> int` — определение лимита по MIME типу
-  - `format_file_size(size_bytes: int) -> str` — форматирование размера для сообщений
-  - `get_or_create_tag(label: str, color: Optional[str] = None) -> Optional[Tag]` — создание/получение тега для интеграции AI-результатов
-- **`mayan.apps.dam.cache_utils`** — утилиты для кеширования подсчета документов пресета:
-  - `get_preset_count_cache_key(preset_id, user_id=None)` — генерация ключа кеша
-  - `get_preset_count_cache_ttl()` — получение TTL из настроек
-  - `invalidate_preset_count_cache(preset_id, user_id=None)` — инвалидация кеша
+- **`mayan.apps.dam.utils`** (`utils.py`) — утилиты для работы с лимитами размеров файлов и тегами:
+  - `get_max_file_size_for_mime_type(mime_type: str) -> int` — определение лимита по MIME типу (дифференцированные лимиты для изображений, RAW, PDF, документов, видео, аудио)
+  - `format_file_size(size_bytes: int) -> str` — форматирование размера для сообщений (B, KB, MB)
+  - `get_or_create_tag(label: str, color: Optional[str] = None) -> Optional[Tag]` — создание/получение тега для интеграции AI-результатов (использует `DAM_AI_TAG_DEFAULT_COLOR` из settings)
+- **`mayan.apps.dam.cache_utils`** (`cache_utils.py`) — утилиты для кеширования подсчета документов пресета:
+  - `get_preset_count_cache_key(preset_id, user_id=None)` — генерация ключа кеша (user-specific или global)
+  - `get_preset_count_cache_ttl()` — получение TTL из настроек (`DAM_PRESET_DOCUMENT_COUNT_CACHE_TTL`, по умолчанию 600 секунд)
+  - `invalidate_preset_count_cache(preset_id, user_id=None)` — инвалидация кеша (вызывается через сигналы при изменении пресета)
 
 #### Использование Core Mayan
-- **Модели:** `Document`, `DocumentFile`, `DocumentType`
-- **Signals:** `post_save` на `DocumentFile` (автоматический триггер AI-анализа с проверкой размера файла), `post_save`/`post_delete` на `DAMMetadataPreset` (инвалидация кеша подсчета документов)
-- **ACL:** `AccessControlList.objects.check_access()` для проверки прав на документ, `AccessControlList.objects.restrict_queryset()` для подсчета документов пресета с учетом прав доступа
+- **Модели:** `Document`, `DocumentFile`, `DocumentType`, `Tag`, `MetadataType`, `DocumentMetadata`
+- **Signals:** 
+  - `post_save` на `DocumentFile` (`signals.py:148`) — автоматический триггер AI-анализа с проверкой размера файла и MIME типа
+  - `post_save`/`post_delete` на `DAMMetadataPreset` (`signals.py:245, 251`) — инвалидация кеша подсчета документов
+- **ACL:** 
+  - `AccessControlList.objects.check_access()` для проверки прав на документ
+  - `AccessControlList.objects.restrict_queryset()` для подсчета документов пресета с учетом прав доступа (`serializers.py:232`)
 - **Permissions:** `permission_document_view`, `permission_ai_analysis_create`
-- **Tags:** Интеграция AI-тегов с системой тегов Mayan через `Tag.attach_to(document)` (ai_tags, people, locations, categories → Tag)
-- **Metadata:** Интеграция AI-описаний с системой метаданных Mayan через `DocumentMetadata` (description, alt_text, copyright_notice → MetadataType)
-- **Search:** Интеграция с `mayan.apps.dynamic_search` для индексации AI-тегов
+- **Tags:** Интеграция AI-тегов с системой тегов Mayan через `Tag.attach_to(document)` (`tasks.py:1027-1040`):
+  - `ai_tags` → Tag (каждый тег создается/получается через `get_or_create_tag()`)
+  - `people`, `locations`, `categories` → Tag (с префиксами для группировки)
+- **Metadata:** Интеграция AI-описаний с системой метаданных Mayan через `DocumentMetadata` (`tasks.py:1042-1080`):
+  - `ai_description` → MetadataType (настраивается через `DAM_AI_METADATA_MAPPING`)
+  - `alt_text`, `copyright_notice` → MetadataType
+  - Принцип "Человек > AI": перезапись только если значение пустое (кроме `force_reanalyze=True`)
+- **Search:** Интеграция с `mayan.apps.dynamic_search` для индексации AI-тегов через `reindex_document_assets()` (`tasks.py:1157`)
 - **OCR:** Использование `mayan.apps.ocr.models.DocumentVersionPageOCRContent` для извлечения текста
 
 **Примеры сигналов:**
 ```python
-# signals.py:125
+# signals.py:148
 @receiver(post_save, sender=DocumentFile)
 def trigger_ai_analysis(sender, instance, created, **kwargs):
     # Автоматический запуск AI-анализа при создании нового файла
+    # Проверка через should_trigger_analysis() включает: MIME тип, размер файла, существующий анализ
     if created and should_trigger_analysis(instance, instance.document):
-        analyze_document_with_ai.apply_async(args=[instance.document.id], countdown=10)
+        analyze_document_with_ai.apply_async(
+            args=[instance.document.id], 
+            countdown=DAM_AI_ANALYSIS_DELAY_SECONDS
+        )
 ```
 
 ---
@@ -514,19 +524,30 @@ ai_analysis = document.ai_analysis  # через related_name
 
 ### 3.2. Перехват Сигналов
 
-#### `post_save` на `DocumentFile` (`dam/signals.py:125`)
+#### `post_save` на `DocumentFile` (`dam/signals.py:148`)
 **Назначение:** Автоматический запуск AI-анализа при загрузке нового файла.
 
 **Логика:**
 1. Проверка `created=True` (только для новых файлов)
-2. Проверка MIME-типа (только изображения/PDF)
-3. Проверка доступности файла в storage (S3 race condition fix)
-4. Создание/обновление `DocumentAIAnalysis` со статусом `pending`
-5. Запуск `analyze_document_with_ai.apply_async()` с задержкой 10 секунд
+2. Проверка `should_trigger_analysis()` (`signals.py:86`):
+   - Проверка `DAM_AI_ANALYSIS_AUTO_TRIGGER` (включение/выключение автозапуска)
+   - Проверка MIME-типа (только изображения/PDF из `ANALYZABLE_MIMETYPES`)
+   - Проверка размера файла через `get_max_file_size_for_mime_type()` (дифференцированные лимиты)
+   - Проверка существующего анализа (пропуск если уже `completed` или `processing`)
+3. Создание/обновление `DocumentAIAnalysis` со статусом `pending`
+4. Запуск `analyze_document_with_ai.apply_async()` с задержкой (по умолчанию 10 секунд для S3)
+5. Сохранение `task_id` для отслеживания прогресса
 
 **Настройки:**
-- `DAM_AI_ANALYSIS_AUTO_TRIGGER` — включение/выключение автозапуска
-- `DAM_AI_ANALYSIS_DELAY_SECONDS` — задержка перед запуском (по умолчанию 10s)
+- `DAM_AI_ANALYSIS_AUTO_TRIGGER` — включение/выключение автозапуска (по умолчанию `True`)
+- `DAM_AI_ANALYSIS_DELAY_SECONDS` — задержка перед запуском (по умолчанию 10s для S3 propagation)
+
+#### `post_save`/`post_delete` на `DAMMetadataPreset` (`dam/signals.py:245, 251`)
+**Назначение:** Инвалидация кеша подсчета документов при изменении пресета.
+
+**Логика:**
+- При сохранении или удалении пресета вызывается `invalidate_preset_count_cache(preset_id)`
+- Кеш инвалидируется для всех пользователей (user-specific кеши будут обновлены при следующем запросе)
 
 ### 3.3. Использование ACL (Access Control Lists)
 
@@ -804,6 +825,11 @@ DocumentAIAnalysis.objects.prefetch_related('document__files')
 #### Кеширование
 - **DRF Pagination:** Кеширование страниц через `cacheService` на фронтенде
 - **Django Cache:** Redis (django-redis) для throttling counters, sessions и общего кеша (работает в multi-process/multi-server окружении)
+- **Кеширование подсчета документов пресета:** 
+  - TTL: 10 минут (настраивается через `DAM_PRESET_DOCUMENT_COUNT_CACHE_TTL`)
+  - User-specific ключи для учета ACL при подсчете
+  - Автоматическая инвалидация через сигналы при изменении `DAMMetadataPreset` (`signals.py:245, 251`)
+  - Утилиты: `mayan/apps/dam/cache_utils.py`
 - **Нет кеширования:** AI-анализ, метаданные (каждый раз запрос к БД)
 
 ---
@@ -903,13 +929,14 @@ DocumentAIAnalysis.objects.prefetch_related('document__files')
 
 3. **`image_editor/views.py:35` (было 36):**
    ```python
-   """[DEPRECATED] Сохранение изменений изображения и создание новой версии.
+   # [DEPRECATED] ImageEditorSaveView - удален 2025-12-23
    ```
    - ~~**Описание:** Deprecated view (заменен на `HeadlessEditView`)~~ ✅ **РЕШЕНО**
    - **Реализация:** 
-     - URL-маршрут удален из `mayan/apps/image_editor/urls.py`
-     - Класс `ImageEditorSaveView` закомментирован в `mayan/apps/image_editor/views.py` с пояснением
-     - Оставлен на 1 спринт для возможности быстрого восстановления при необходимости
+     - URL-маршрут удален из `mayan/apps/image_editor/urls.py:14` (комментарий: `[DEPRECATED] ImageEditorSaveView URL removed 2025-12-23`)
+     - Класс `ImageEditorSaveView` закомментирован в `mayan/apps/image_editor/views.py:35-59` с пояснением о замене на `HeadlessEditView`
+     - Оставлен закомментированным на 1 спринт для возможности быстрого восстановления при необходимости
+     - Новый endpoint: `POST /api/v4/headless/documents/{id}/versions/new_from_edit/` (`HeadlessEditView`)
 
 ### 5.6. Уязвимости Безопасности
 
@@ -1021,11 +1048,12 @@ image_editor
    - Проверка размера на трех уровнях: API endpoint, Celery task, Signal handler
    - Поддержка различных лимитов для разных типов медиа-файлов (изображения, RAW, PDF, документы, видео, аудио)
 
-3. **Оптимизации запросов:**
+4. **Оптимизации запросов:**
    - Использование `select_related()`, `prefetch_related()` в большинстве views
    - Оптимизированный serializer для списка документов
+   - Кеширование подсчета документов пресета с ACL-фильтрацией (TTL 10 минут)
 
-4. **Асинхронная обработка:**
+5. **Асинхронная обработка:**
    - AI-анализ через Celery tasks
    - Генерация rendition'ов через Celery
    - Правильное использование очередей
@@ -1039,6 +1067,7 @@ image_editor
 2. **Производительность:**
    - ~~Синхронная конвертация изображений в request handler~~ ✅ **РЕШЕНО:** Реализована полностью асинхронная обработка через Celery tasks с TTFB < 200ms
    - ~~Отсутствие кеширования конфигурации типов документов~~ ✅ **РЕШЕНО:** Реализовано кеширование с TTL 1 час и автоматической инвалидацией через сигналы
+   - ~~Отсутствие кеширования подсчета документов пресета~~ ✅ **РЕШЕНО:** Реализовано кеширование с TTL 10 минут, ACL-фильтрацией и автоматической инвалидацией через сигналы (`signals.py:245, 251`)
    - ~~Потенциальные N+1 в некоторых views~~ ✅ **РЕШЕНО:** Оптимизированы `HeadlessActivityFeedView`, `HeadlessFavoriteListView` и `DashboardActivityView`
 
 3. **Безопасность:**
