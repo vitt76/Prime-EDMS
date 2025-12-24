@@ -777,7 +777,7 @@ class AnalyzeDocumentSerializer(serializers.Serializer):
 
 **Проблемы:**
 - Нет rate limiting на скачивание (только общий throttle)
-- Нет поддержки range requests (для возобновления загрузки)
+- ~~Нет поддержки range requests (для возобновления загрузки)~~ ✅ **РЕШЕНО:** добавлена поддержка HTTP Range Requests (RFC 7233) в `DownloadViewMixin` (ответы `206 Partial Content` / `416 Range Not Satisfiable`, заголовки `Accept-Ranges`, `Content-Range`). Для S3 предусмотрен опциональный режим `?direct=1` (redirect на storage URL) для offload на storage/CDN.
 
 ---
 
@@ -1093,7 +1093,7 @@ image_editor
 7. ~~**Добавить GIN-индексы** для JSON-полей (если используется PostgreSQL)~~ ✅ **ВЫПОЛНЕНО**
 8. ~~**Улучшить rate limiting** для bulk-операций~~ ✅ **ЧАСТИЧНО ВЫПОЛНЕНО** (инфраструктура: Redis cache для distributed throttling)
    - **Осталось:** Quota Management (Service Layer Quotas) и Token Bucket / Burst Protection
-9. **Добавить поддержку range requests** для скачивания больших файлов
+9. ~~**Добавить поддержку range requests** для скачивания больших файлов~~ ✅ **ВЫПОЛНЕНО**
 
 ---
 

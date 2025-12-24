@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models.query import QuerySet
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseRedirect, StreamingHttpResponse
 from django.http.response import FileResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -74,6 +74,102 @@ class DownloadViewMixin:
     def get_as_attachment(self):
         return self.as_attachment
 
+    def _get_file_size(self, file_object):
+        """
+        Return file size in bytes if available, otherwise None.
+
+        Notes:
+            Some storage-backed file objects might not provide a reliable size
+            attribute or might not be seekable. In those cases, Range Requests
+            will be ignored and the whole file will be returned.
+        """
+        try:
+            file_size = getattr(file_object, 'size', None)
+            if isinstance(file_size, int) and file_size >= 0:
+                return file_size
+
+            if hasattr(file_object, 'seek') and hasattr(file_object, 'tell'):
+                current_pos = file_object.tell()
+                file_object.seek(0, 2)  # Seek to end
+                file_size = file_object.tell()
+                file_object.seek(current_pos, 0)
+                if isinstance(file_size, int) and file_size >= 0:
+                    return file_size
+        except Exception:
+            return None
+
+        return None
+
+    def _parse_range_header(self, range_header, file_size):
+        """
+        Parse a HTTP Range header for bytes (RFC 7233).
+
+        Supported formats:
+            - bytes=START-END
+            - bytes=START-
+            - bytes=-SUFFIX_LENGTH
+
+        Returns:
+            tuple[int, int] inclusive range (start, end) or None when invalid.
+
+        Notes:
+            Multiple ranges (e.g. bytes=0-1,4-5) are not supported.
+        """
+        import re
+
+        if not range_header or not file_size or file_size <= 0:
+            return None
+
+        match = re.match(r'^bytes=(\d*)-(\d*)$', range_header.strip())
+        if not match:
+            return None
+
+        start_str, end_str = match.groups()
+
+        # bytes=-SUFFIX_LENGTH (last N bytes)
+        if start_str == '' and end_str != '':
+            suffix_length = int(end_str)
+            if suffix_length <= 0:
+                return None
+            if suffix_length >= file_size:
+                return 0, file_size - 1
+            return file_size - suffix_length, file_size - 1
+
+        # bytes=START- (to end)
+        if start_str != '' and end_str == '':
+            start = int(start_str)
+            if start >= file_size:
+                return None
+            return start, file_size - 1
+
+        # bytes=START-END
+        if start_str != '' and end_str != '':
+            start = int(start_str)
+            end = int(end_str)
+            if start >= file_size or end >= file_size or start > end:
+                return None
+            return start, end
+
+        # bytes=- (invalid)
+        return None
+
+    def _range_file_iterator(self, file_object, start, end, chunk_size=8192):
+        """Yield file bytes from [start, end] inclusive."""
+        try:
+            remaining = end - start + 1
+            while remaining > 0:
+                read_size = min(chunk_size, remaining)
+                chunk = file_object.read(read_size)
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+        finally:
+            try:
+                file_object.close()
+            except Exception:
+                pass
+
     def get_download_file_object(self):
         raise NotImplementedError(
             'Class must provide a .get_download_file_object() method that '
@@ -91,10 +187,54 @@ class DownloadViewMixin:
         return mime_type, encoding
 
     def render_to_response(self, **response_kwargs):
+        file_object = self.get_download_file_object()
+        file_size = self._get_file_size(file_object=file_object)
+
+        # Attempt Range Requests if possible
+        range_header = getattr(self, 'request', None) and self.request.META.get('HTTP_RANGE')
+        if range_header and file_size and hasattr(file_object, 'seek'):
+            range_tuple = self._parse_range_header(
+                range_header=range_header, file_size=file_size
+            )
+            if range_tuple:
+                start, end = range_tuple
+                try:
+                    file_object.seek(start)
+                    mime_type, encoding = self.get_download_mime_type_and_encoding(
+                        file_object=file_object
+                    )
+
+                    response = StreamingHttpResponse(
+                        streaming_content=self._range_file_iterator(
+                            file_object=file_object, start=start, end=end
+                        ),
+                        status=206,  # Partial Content
+                        content_type=mime_type or 'application/octet-stream'
+                    )
+                    response['Accept-Ranges'] = 'bytes'
+                    response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+                    response['Content-Length'] = str(end - start + 1)
+
+                    filename = self.get_download_filename()
+                    if filename:
+                        disposition = 'attachment' if self.get_as_attachment() else 'inline'
+                        response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
+
+                    return response
+                except Exception:
+                    # Fall back to full response on any Range processing failure.
+                    pass
+            else:
+                # Invalid range request. RFC 7233: respond 416 + Content-Range: bytes */size
+                response = HttpResponse(status=416)
+                response['Accept-Ranges'] = 'bytes'
+                response['Content-Range'] = f'bytes */{file_size}'
+                return response
+
         response = FileResponse(
             as_attachment=self.get_as_attachment(),
             filename=self.get_download_filename(),
-            streaming_content=self.get_download_file_object()
+            streaming_content=file_object
         )
 
         encoding_map = {
@@ -114,6 +254,7 @@ class DownloadViewMixin:
         else:
             response.headers['Content-Type'] = 'application/octet-stream'
 
+        response.headers['Accept-Ranges'] = 'bytes'
         return response
 
 
