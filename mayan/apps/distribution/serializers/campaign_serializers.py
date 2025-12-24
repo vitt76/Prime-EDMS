@@ -4,7 +4,7 @@ from django.db.models import Count, Sum
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.rest_api import serializers
-from mayan.apps.documents.models import Document, DocumentFile
+from mayan.apps.documents.models import Document, DocumentFile, DocumentVersion
 
 logger = logging.getLogger(name=__name__)
 
@@ -363,8 +363,19 @@ class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
 
     def get_assets(self, obj):
         """
-        Возвращает список файлов (PublicationItem) в кампании с базовой
-        информацией по документу и версии.
+        Возвращает список файлов в кампании, опираясь на АКТИВНУЮ версию документа.
+
+        Логика сопоставления:
+        - Для каждого документа берём его версии и файлы в порядке timestamp (по возрастанию).
+        - Находим индекс активной версии (Document.version_active).
+        - Берём файл с тем же индексом из списка файлов.
+
+        Таким образом, если активной сделана старая версия документа, мы вернём
+        именно связанный с ней файл, а не самый новый.
+
+        Если по каким‑то причинам активная версия не найдена или количество версий
+        и файлов не совпадает, используем последний файл документа как безопасный
+        fallback.
         """
         items = PublicationItem.objects.filter(
             publication__campaign_links__campaign=obj
@@ -372,15 +383,51 @@ class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
 
         results = []
         for item in items:
-            document_file = getattr(item, 'document_file', None)
-            if not document_file:
+            base_document_file = getattr(item, 'document_file', None)
+            if not base_document_file:
                 continue
-            document = getattr(document_file, 'document', None)
+            document = getattr(base_document_file, 'document', None)
+            if not document:
+                continue
+
+            # Списки версий и файлов по возрастанию timestamp, чтобы индексы совпадали.
+            version_qs = document.versions.order_by('timestamp').only('pk', 'timestamp', 'active')
+            file_qs = document.files.order_by('timestamp').only('pk', 'timestamp')
+
+            versions = list(version_qs)
+            files = list(file_qs)
+
+            if not files:
+                continue
+
+            # Пытаемся найти активную версию.
+            active_version = None
+            for v in versions:
+                if getattr(v, 'active', False):
+                    active_version = v
+                    break
+
+            selected_file = None
+            if active_version is not None:
+                try:
+                    active_index = next(
+                        idx for idx, v in enumerate(versions) if v.pk == active_version.pk
+                    )
+                except StopIteration:
+                    active_index = None
+
+                if active_index is not None and 0 <= active_index < len(files):
+                    selected_file = files[active_index]
+
+            # Fallback: если не удалось сматчить по активной версии — берём последний файл.
+            if selected_file is None:
+                selected_file = files[-1]
+
             results.append({
                 'id': item.pk,
-                'document_id': document.pk if document else None,
-                'document_label': document.label if document else None,
-                'document_file_id': document_file.pk,
+                'document_id': document.pk,
+                'document_label': document.label,
+                'document_file_id': selected_file.pk,
             })
 
         return results

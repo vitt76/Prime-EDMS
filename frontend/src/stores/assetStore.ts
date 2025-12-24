@@ -575,7 +575,15 @@ export const useAssetStore = defineStore(
         }
         // (debug ingest removed)
 
+        // Update current asset
         currentAsset.value = asset
+
+        // Also update the asset in the main list so gallery cards
+        // reflect fresh file size, filename и другие детали.
+        const listIndex = assets.value.findIndex(a => a.id === id)
+        if (listIndex !== -1) {
+          assets.value[listIndex] = asset
+        }
         return asset
         
       } catch (err: any) {

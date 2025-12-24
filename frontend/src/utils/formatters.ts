@@ -1,8 +1,15 @@
 /**
- * Format file size in bytes to human-readable string
+ * Format file size in bytes to human-readable string.
+ * Accepts nullable values and returns a dash for unknown size.
  */
-export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes'
+export function formatFileSize(bytes?: number | null): string {
+  if (bytes == null) {
+    return '—'
+  }
+
+  if (bytes === 0) {
+    return '0 Bytes'
+  }
   
   const k = 1024
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']

@@ -16,7 +16,7 @@ from .views.activity_views import DashboardActivityView, HeadlessActivityFeedVie
 from .views.favorites_views import HeadlessFavoriteListView, HeadlessFavoriteToggleView
 from .views.my_uploads_views import HeadlessMyUploadsView
 from .views.profile_views import HeadlessProfileView
-from .views.version_views import HeadlessEditView
+from .views.version_views import HeadlessEditView, HeadlessVersionActivateView
 from .views.conversion_views import HeadlessDocumentConvertView
 from .views.auth_views import HeadlessAuthMeView
 from .views.dashboard_stats_views import HeadlessDashboardStatsView
@@ -81,6 +81,11 @@ api_urls = [
         regex=r'^documents/(?P<document_id>\d+)/versions/new_from_edit/$',
         view=HeadlessEditView.as_view(),
         name='api-document-version-new-from-edit'
+    ),
+    url(
+        regex=r'^documents/(?P<document_id>\d+)/versions/activate/$',
+        view=HeadlessVersionActivateView.as_view(),
+        name='api-document-version-activate'
     ),
     url(
         regex=r'^documents/(?P<document_id>\d+)/convert/$',

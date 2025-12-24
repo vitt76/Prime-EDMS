@@ -1083,6 +1083,7 @@ import { useNotificationStore } from '@/stores/notificationStore'
 import { useAssetStore } from '@/stores/assetStore'
 import ShareModal from '@/components/DAM/ShareModal.vue'
 import { apiService } from '@/services/apiService'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 
 // ============================================================================
 // STORES & ROUTER
@@ -1654,7 +1655,23 @@ function assetPreviewKey(asset: any, resolvedFileId?: number | null): string {
 
 function getAssetPreviewUrl(asset: any): string {
   const key = assetPreviewKey(asset)
-  return campaignAssetPreviews.value[key] || '/placeholder-document.svg'
+  const blobUrl = campaignAssetPreviews.value[key]
+  if (blobUrl) {
+    return blobUrl
+  }
+
+  // Fallback: используем ту же логику превью, что и в галерее/коллекциях,
+  // чтобы всегда показывать "актуальную" версию документа.
+  const pseudoAsset: any = {
+    id: asset.document_id || asset.id,
+    version_active_id: asset.version_active_id || asset.version_id || asset.version?.id,
+    file_latest_id: asset.document_file_id || asset.file_latest_id || asset.file_id,
+    thumbnail_url: asset.thumbnail_url,
+    preview_url: asset.preview_url,
+    download_url: asset.download_url
+  }
+
+  return resolveAssetImageUrl(pseudoAsset)
 }
 
 async function loadCampaignAssetPreviews() {
@@ -1664,27 +1681,36 @@ async function loadCampaignAssetPreviews() {
     if (!asset?.document_id) continue
 
     const docId = asset.document_id
-    // Всегда берём актуальный файл документа (последний по timestamp),
-    // чтобы не зависеть от сохранённого file_id в кампании.
-    let fileId: number | null = null
-    try {
-      const filesResponse: any = await apiService.get(
-        `/api/v4/documents/${docId}/files/`,
-        { params: { page_size: 1, ordering: '-timestamp' } } as any,
-        false
-      )
-      const results = Array.isArray(filesResponse?.results)
-        ? filesResponse.results
-        : Array.isArray(filesResponse)
-          ? filesResponse
-          : []
-      fileId = results[0]?.id || null
-    } catch (e) {
-      // fallback на то, что пришло в кампании, если запрос файлов не удался
-      fileId = asset.document_file_id || asset.file_latest_id || asset.file_id || null
+    // Приоритет — "текущий" файл, который приходит из бэкенда (document_file_id).
+    // Только если его нет, пробуем подтянуть последний файл по timestamp.
+    let fileId: number | null =
+      asset.document_file_id || asset.file_latest_id || asset.file_id || null
+
+    if (!fileId) {
+      try {
+        const filesResponse: any = await apiService.get(
+          `/api/v4/documents/${docId}/files/`,
+          { params: { page_size: 1, ordering: '-timestamp' } } as any,
+          false
+        )
+        const results = Array.isArray(filesResponse?.results)
+          ? filesResponse.results
+          : Array.isArray(filesResponse)
+            ? filesResponse
+            : []
+        fileId = results[0]?.id || null
+      } catch (e) {
+        // Если запрос файлов не удался, оставляем fileId как null и переходим к следующему asset.
+        fileId = null
+      }
     }
 
     if (!fileId) continue
+
+    // Обновляем идентификатор файла в объекте asset, чтобы ключ превью
+    // совпадал между загрузкой и рендерингом (используем актуальный файл).
+    asset.document_file_id = fileId
+    asset.file_latest_id = fileId
 
     // Для активной версии пробуем добавить путь на всякий случай
     const versionId = asset.version_active_id || asset.version_id || asset.version?.id
@@ -1707,7 +1733,9 @@ async function loadCampaignAssetPreviews() {
           false
         )
         const objectUrl = window.URL.createObjectURL(blob)
-        previews[assetPreviewKey(asset, fileId)] = objectUrl
+        // Ключ должен совпадать с getAssetPreviewUrl(asset),
+        // который вызывает assetPreviewKey(asset) без fileId.
+        previews[assetPreviewKey(asset)] = objectUrl
         break
       } catch (e) {
         // try next path

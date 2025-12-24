@@ -203,6 +203,9 @@ function mapRecentItem(item: any): ExtendedAsset {
     size: file.size || 0,
     mime_type: file.mimetype || '',
     filename: file.filename || doc.label,
+    // Для \"Недавних\" используем прямой download как preview,
+    // чтобы не упираться в /versions/latest/..., которые могут отсутствовать.
+    preview_url: file.download_url || doc.preview_url,
     download_url: file.download_url,
     thumbnail_url: doc.thumbnail_url,
     date_added: doc.datetime_created,

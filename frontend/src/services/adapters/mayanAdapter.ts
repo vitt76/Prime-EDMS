@@ -251,13 +251,12 @@ function getPreviewUrl(doc: BackendOptimizedDocument): string | undefined {
     return toAbsoluteUrl(doc.file_latest.download_url)
   }
   
-  // Priority 4: Generate Mayan page image URL (larger size)
+  // Priority 4: Generate Mayan page image URL (larger size) через DocumentFile,
+  // а не через versions/latest, поскольку в некоторых эндпоинтах (my_uploads,
+  // accessed) активная версия может быть не указана и /versions/latest даёт 404.
   if (doc.file_latest && doc.id) {
-    const versionId =
-      (doc as any).version_active?.id ||
-      (doc as any).version_active_id ||
-      'latest'
-    return `${baseUrl}/api/v4/documents/${doc.id}/versions/${versionId}/pages/1/image/?width=1200`
+    const fileId = doc.file_latest.id
+    return `${baseUrl}/api/v4/documents/${doc.id}/files/${fileId}/pages/1/image/?width=1200`
   }
   
   return undefined
