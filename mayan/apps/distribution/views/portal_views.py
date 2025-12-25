@@ -36,23 +36,58 @@ class PublicationPortalView(DetailView):
 
     def get_object(self, queryset=None):
         """
-        Get the share link and validate it.
+        Get the share link.
         """
-        share_link = super().get_object(queryset)
+        return super().get_object(queryset)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Handle GET request and check if link is valid.
+        """
+        try:
+            share_link = self.get_object()
+        except Http404:
+            raise
 
         # Check if link is valid
         if not share_link.is_valid():
-            raise Http404(_("This link has expired or reached its limit."))
+            # Determine reason for expiration
+            from django.utils import timezone
+            reason = None
+            if share_link.expires_at and timezone.now() > share_link.expires_at:
+                reason = _("Срок действия ссылки истёк.")
+            elif share_link.max_downloads and share_link.downloads_count >= share_link.max_downloads:
+                reason = _("Достигнут лимит скачиваний.")
+            elif share_link.max_views and share_link.views_count >= share_link.max_views:
+                reason = _("Достигнут лимит просмотров.")
+            
+            # Return JSON response for API requests
+            if request.headers.get('Accept', '').startswith('application/json'):
+                return JsonResponse(
+                    {'error': 'Link expired', 'reason': str(reason) if reason else 'Unknown'},
+                    status=410
+                )
+            # For browser requests, show expired page
+            return render(
+                request,
+                'distribution/portal/link_expired.html',
+                {
+                    'token': share_link.token,
+                    'reason': reason
+                },
+                status=410
+            )
 
         # Check password if set
         if share_link.password_hash:
-            password = self.request.GET.get('password') or self.request.POST.get('password')
+            password = request.GET.get('password') or request.POST.get('password')
             if not password or not share_link.check_password(password):
                 # Store token in session for password form
-                self.request.session[f'share_link_{share_link.token}'] = True
+                request.session[f'share_link_{share_link.token}'] = True
                 raise Http404(_("Password required for this link."))
 
-        return share_link
+        # Continue with normal DetailView processing
+        return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -88,7 +123,32 @@ def share_link_view(request, token):
 
     # Check if link is valid
     if not share_link.is_valid():
-        raise Http404(_("This link has expired or reached its limit."))
+        # Determine reason for expiration
+        from django.utils import timezone
+        reason = None
+        if share_link.expires_at and timezone.now() > share_link.expires_at:
+            reason = _("Срок действия ссылки истёк.")
+        elif share_link.max_downloads and share_link.downloads_count >= share_link.max_downloads:
+            reason = _("Достигнут лимит скачиваний.")
+        elif share_link.max_views and share_link.views_count >= share_link.max_views:
+            reason = _("Достигнут лимит просмотров.")
+        
+        # Return JSON response for API requests
+        if request.headers.get('Accept', '').startswith('application/json'):
+            return JsonResponse(
+                {'error': 'Link expired', 'reason': str(reason) if reason else 'Unknown'},
+                status=410
+            )
+        # For browser requests, show expired page
+        return render(
+            request,
+            'distribution/portal/link_expired.html',
+            {
+                'token': token,
+                'reason': reason
+            },
+            status=410
+        )
 
     # Check password if set
     if share_link.password_hash:
@@ -124,33 +184,42 @@ def share_link_view(request, token):
     if rendition.status != 'completed':
         raise Http404(_("Rendition is not ready yet."))
 
-    # Record access
-    share_link.record_access(request)
+    # Determine content type
+    content_type = 'application/octet-stream'
+    if rendition.preset.format == 'jpeg':
+        content_type = 'image/jpeg'
+    elif rendition.preset.format == 'png':
+        content_type = 'image/png'
+    elif rendition.preset.format == 'pdf':
+        content_type = 'application/pdf'
+    elif rendition.preset.format == 'mp4':
+        content_type = 'video/mp4'
 
-    # Serve file inline (for viewing in browser)
-    try:
-        # Determine content type
-        content_type = 'application/octet-stream'
-        if rendition.preset.format == 'jpeg':
-            content_type = 'image/jpeg'
-        elif rendition.preset.format == 'png':
-            content_type = 'image/png'
-        elif rendition.preset.format == 'pdf':
-            content_type = 'application/pdf'
-        elif rendition.preset.format == 'mp4':
-            content_type = 'video/mp4'
+    filename = rendition.file.name.split('/')[-1]
 
+    # If max_downloads is set, we need to force download (attachment) to properly track downloads
+    # Otherwise, show inline for better UX
+    has_download_limit = share_link.max_downloads is not None
+    
+    if has_download_limit:
+        # If download limit is set, force download to track it properly
+        # Record download (this increments downloads_count)
+        share_link.record_download(request, rendition)
+        
         response = HttpResponse(rendition.file, content_type=content_type)
-
-        # For inline viewing instead of download
-        filename = rendition.file.name.split('/')[-1]
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    else:
+        # No download limit, show inline for better viewing experience
+        # Record access (this increments views_count only)
+        share_link.record_access(request)
+        
+        response = HttpResponse(rendition.file, content_type=content_type)
         response['Content-Disposition'] = f'inline; filename="{filename}"'
-
         # Add cache headers for better performance
         response['Cache-Control'] = 'private, max-age=3600'
 
+    try:
         return response
-
     except Exception as e:
         logger.error(f"Error serving share link {token}: {e}")
         raise Http404(_("Error accessing file."))
