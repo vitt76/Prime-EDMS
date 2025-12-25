@@ -18,6 +18,10 @@ django-solo==2.0.0
 django-stronghold==0.4.0
 django-widget-tweaks==1.4.12
 django-redis==5.4.0
+channels==3.0.5
+channels-redis==4.1.0
+# channels==3.0.5 requires daphne<4
+daphne==3.0.2
 djangorestframework==3.13.1
 djangorestframework-recursive==0.1.2
 drf-yasg==1.20.0

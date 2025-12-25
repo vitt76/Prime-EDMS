@@ -5,8 +5,6 @@ This module defines the URL patterns for the Headless API endpoints that provide
 SPA-friendly REST interfaces for functionality not exposed by Mayan EDMS core API.
 """
 
-print(">>> HEADLESS URLS LOADED <<<")  # Debug canary for runtime import
-
 from django.conf.urls import url
 from django.http import JsonResponse
 
@@ -21,6 +19,14 @@ from .views.conversion_views import HeadlessDocumentConvertView
 from .views.auth_views import HeadlessAuthMeView
 from .views.dashboard_stats_views import HeadlessDashboardStatsView
 from .views.task_status_views import HeadlessTaskStatusView
+from .views.notification_views import (
+    HeadlessNotificationDetailView,
+    HeadlessNotificationListView,
+    HeadlessNotificationPreferenceView,
+    HeadlessNotificationReadAllView,
+    HeadlessNotificationReadView,
+    HeadlessNotificationUnreadCountView,
+)
 
 app_name = 'headless_api'
 
@@ -101,5 +107,35 @@ api_urls = [
         regex=r'^tasks/(?P<task_id>[\w-]+)/status/$',
         view=HeadlessTaskStatusView.as_view(),
         name='api-task-status'
+    ),
+    url(
+        regex=r'^notifications/$',
+        view=HeadlessNotificationListView.as_view(),
+        name='api-notifications-list'
+    ),
+    url(
+        regex=r'^notifications/(?P<notification_id>\d+)/$',
+        view=HeadlessNotificationDetailView.as_view(),
+        name='api-notifications-detail'
+    ),
+    url(
+        regex=r'^notifications/(?P<notification_id>\d+)/read/$',
+        view=HeadlessNotificationReadView.as_view(),
+        name='api-notifications-read'
+    ),
+    url(
+        regex=r'^notifications/read-all/$',
+        view=HeadlessNotificationReadAllView.as_view(),
+        name='api-notifications-read-all'
+    ),
+    url(
+        regex=r'^notifications/unread-count/$',
+        view=HeadlessNotificationUnreadCountView.as_view(),
+        name='api-notifications-unread-count'
+    ),
+    url(
+        regex=r'^notifications/preferences/$',
+        view=HeadlessNotificationPreferenceView.as_view(),
+        name='api-notifications-preferences'
     ),
 ]

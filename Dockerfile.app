@@ -14,7 +14,10 @@ RUN apt-get update && \
     /opt/mayan-edms/bin/pip install --upgrade \
         boto3 \
         botocore \
+        channels==3.0.5 \
+        channels-redis==4.1.0 \
         cryptography \
+        daphne==3.0.2 \
         django-redis==5.4.0 \
         django-storages \
         gigachat \
@@ -59,7 +62,10 @@ COPY mayan/apps/smart_settings/classes.py /opt/mayan-edms/lib/python3.9/site-pac
 COPY mayan/apps/lock_manager/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/lock_manager/apps.py
 COPY mayan/apps/task_manager/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/task_manager/apps.py
 COPY mayan/apps/distribution /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
+COPY mayan/apps/notifications /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/notifications
+COPY mayan/apps/events /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/events
 COPY mayan/settings/base.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
+COPY mayan/asgi.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/asgi.py
 
 # Переводы
 COPY mayan/apps/documents/locale /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/locale

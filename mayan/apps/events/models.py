@@ -1,7 +1,10 @@
+import uuid
+
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.utils import timezone
 from django.utils.encoding import force_text
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
@@ -11,9 +14,11 @@ from actstream.models import Action
 from .classes import EventType
 from .literals import TEXT_UNKNOWN_EVENT_ID
 from .managers import (
-    EventSubscriptionManager, NotificationManager,
-    ObjectEventSubscriptionManager
+    EventSubscriptionManager,
+    ObjectEventSubscriptionManager,
 )
+
+from mayan.apps.notifications.managers import EnhancedNotificationManager
 
 
 class StoredEventType(models.Model):
@@ -91,7 +96,39 @@ class Notification(models.Model):
     )
     read = models.BooleanField(default=False, verbose_name=_('Read'))
 
-    objects = NotificationManager()
+    # Notification Center fields (added via migration 0010_extend_notification).
+    uuid = models.UUIDField(blank=True, default=uuid.uuid4, null=True, unique=True)
+    title = models.CharField(blank=True, max_length=255, null=True)
+    message = models.TextField(blank=True, null=True)
+    icon_type = models.CharField(blank=True, default='info', max_length=50)
+    icon_url = models.URLField(blank=True, default='')
+
+    event_type = models.CharField(blank=True, max_length=64, null=True)
+    event_data = models.JSONField(blank=True, default=dict, null=True)
+
+    priority = models.CharField(blank=True, default='NORMAL', max_length=20, null=True)
+    state = models.CharField(blank=True, default='CREATED', max_length=20, null=True)
+
+    actions = models.JSONField(blank=True, default=list, null=True)
+
+    content_type = models.ForeignKey(
+        blank=True, null=True, on_delete=models.SET_NULL, to=ContentType
+    )
+    object_id = models.BigIntegerField(blank=True, null=True)
+    content_object = GenericForeignKey(ct_field='content_type', fk_field='object_id')
+
+    sent_at = models.DateTimeField(blank=True, null=True)
+    read_at = models.DateTimeField(blank=True, null=True)
+    archived_at = models.DateTimeField(blank=True, null=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
+    expires_at = models.DateTimeField(blank=True, null=True)
+
+    is_mutable = models.BooleanField(default=True)
+    is_removable = models.BooleanField(default=True)
+
+    metadata = models.JSONField(blank=True, default=dict, null=True)
+
+    objects = EnhancedNotificationManager()
 
     class Meta:
         ordering = ('-action__timestamp',)
@@ -106,6 +143,28 @@ class Notification(models.Model):
             return EventType.get(id=self.action.verb)
         except KeyError:
             return None
+
+    def mark_as_read(self):
+        """Mark notification as read."""
+
+        self.read = True
+        self.state = 'READ'
+        self.read_at = timezone.now()
+        self.save(update_fields=['read', 'state', 'read_at'])
+
+    def archive(self):
+        """Archive notification."""
+
+        self.state = 'ARCHIVED'
+        self.archived_at = timezone.now()
+        self.save(update_fields=['state', 'archived_at'])
+
+    def soft_delete(self):
+        """Soft delete notification (keeps audit trail)."""
+
+        self.state = 'DELETED'
+        self.deleted_at = timezone.now()
+        self.save(update_fields=['state', 'deleted_at'])
 
 
 class ObjectEventSubscription(models.Model):

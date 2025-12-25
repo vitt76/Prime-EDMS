@@ -107,6 +107,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/SettingsPage.vue'),
     meta: { requiresAuth: true }
   },
+  {
+    path: '/notifications/archive',
+    name: 'notifications-archive',
+    component: () => import('@/pages/NotificationsArchivePage.vue'),
+    meta: { requiresAuth: true, title: 'Уведомления' }
+  },
+  {
+    path: '/notifications/settings',
+    name: 'notifications-settings',
+    component: () => import('@/pages/NotificationsSettingsPage.vue'),
+    meta: { requiresAuth: true, title: 'Настройки уведомлений' }
+  },
   // Unified Sharing Section
   {
     path: '/sharing',
