@@ -9,8 +9,9 @@ from django.utils.translation import ugettext_lazy as _
 from rest_framework import serializers
 
 from mayan.apps.acls.models import AccessControlList
-from mayan.apps.documents.models import Document
+from mayan.apps.documents.models import Document, DocumentVersion
 from mayan.apps.documents.models.document_file_models import DocumentFile
+from mayan.apps.documents.models.document_file_page_models import DocumentFilePage
 from mayan.apps.documents.permissions import (
     permission_document_edit, permission_document_file_download,
     permission_document_trash, permission_document_view
@@ -396,6 +397,10 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
     preview_url = serializers.SerializerMethodField()
     download_url = serializers.SerializerMethodField()
 
+    # Active version info
+    version_active_id = serializers.SerializerMethodField()
+    version_active_file_id = serializers.SerializerMethodField()
+
     created_at = serializers.SerializerMethodField()
     updated_at = serializers.SerializerMethodField()
 
@@ -418,6 +423,7 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
             'file_id', 'filename', 'file_size', 'mime_type',
             # Phase B1: URL fields
             'thumbnail_url', 'preview_url', 'download_url',
+            'version_active_id', 'version_active_file_id',
             'created_at', 'updated_at',
             'metadata', 'versions_count', 'versions',
             'permissions', 'tags',
@@ -500,6 +506,123 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
         file_obj = self._latest_file(obj)
         if file_obj:
             return f'/api/v4/documents/{obj.pk}/files/{file_obj.pk}/download/'
+        return None
+
+    # ------------------------------------------------------------------
+    # Active version helpers
+    # ------------------------------------------------------------------
+
+    def _get_active_version(self, obj) -> DocumentVersion:
+        """
+        Helper to get the active version of the document, if any.
+        """
+        try:
+            return getattr(obj, 'version_active', None)
+        except Exception:
+            return None
+
+    def get_version_active_id(self, obj):
+        """
+        ID активной DocumentVersion документа, если она есть.
+        """
+        version = self._get_active_version(obj=obj)
+        return version.pk if version else None
+
+    def get_version_active_file_id(self, obj):
+        """
+        Пытаемся сопоставить активную версию с исходным DocumentFile.
+
+        Алгоритм:
+        1. Берём активную версию документа
+        2. Используем page_content_objects property для получения content_object'ов
+        3. Ищем DocumentFilePage среди content_object'ов
+        4. Если нашли, берём document_file_id
+
+        Если цепочка не восстанавливается, возвращаем None и позволяем фронтенду
+        использовать fallback (file_latest_id).
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        version = self._get_active_version(obj=obj)
+        if not version:
+            logger.warning('No active version for document %s', obj.pk)
+            return None
+
+        try:
+            # Сначала пробуем через прямой запрос к version_pages с prefetch
+            from django.contrib.contenttypes.models import ContentType
+            from mayan.apps.documents.models import DocumentFilePage
+            
+            file_page_content_type = ContentType.objects.get_for_model(DocumentFilePage)
+            
+            # Пробуем получить страницу с content_object
+            page = version.version_pages.filter(
+                content_type=file_page_content_type
+            ).first()
+            
+            if page:
+                # Явно загружаем content_object
+                try:
+                    content_obj = page.content_object
+                    if content_obj and isinstance(content_obj, DocumentFilePage):
+                        file_id = content_obj.document_file_id
+                        logger.info(
+                            'Found active version file_id=%s for document %s (via DocumentFilePage from version_pages)',
+                            file_id, obj.pk
+                        )
+                        return file_id
+                except Exception as e:
+                    logger.warning('Error accessing content_object for page %s: %s', page.pk, str(e))
+            
+            # Fallback: используем page_content_objects property
+            try:
+                content_objects = version.page_content_objects
+                if content_objects:
+                    for content_obj in content_objects:
+                        if isinstance(content_obj, DocumentFilePage):
+                            file_id = content_obj.document_file_id
+                            logger.info(
+                                'Found active version file_id=%s for document %s (via page_content_objects)',
+                                file_id, obj.pk
+                            )
+                            return file_id
+            except Exception as e:
+                logger.warning('Error accessing page_content_objects: %s', str(e))
+            
+            # Последний fallback: пробуем найти через object_id напрямую
+            page_with_object_id = version.version_pages.filter(
+                content_type=file_page_content_type
+            ).first()
+            
+            if page_with_object_id:
+                try:
+                    # Пробуем получить DocumentFilePage напрямую по object_id
+                    file_page = DocumentFilePage.objects.filter(
+                        pk=page_with_object_id.object_id
+                    ).select_related('document_file').first()
+                    
+                    if file_page and file_page.document_file:
+                        file_id = file_page.document_file_id
+                        logger.info(
+                            'Found active version file_id=%s for document %s (via direct DocumentFilePage lookup)',
+                            file_id, obj.pk
+                        )
+                        return file_id
+                except Exception as e:
+                    logger.warning('Error in direct DocumentFilePage lookup: %s', str(e))
+            
+            logger.warning(
+                'Could not find document_file for active version %s of document %s. '
+                'Pages count: %s',
+                version.pk, obj.pk, version.version_pages.count()
+            )
+        except Exception as e:
+            logger.error(
+                'Error getting version_active_file_id for document %s: %s',
+                obj.pk, str(e), exc_info=True
+            )
+
         return None
 
     def get_created_at(self, obj):

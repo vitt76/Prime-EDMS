@@ -907,7 +907,11 @@ class DAMDocumentDetailView(generics.RetrieveAPIView):
         queryset = Document.objects.select_related(
             'document_type', 'ai_analysis'
         ).prefetch_related(
-            'files', 'metadata__metadata_type', 'versions', 'tags'
+            'files', 'metadata__metadata_type', 'versions', 'tags',
+            # Prefetch активной версии и её страниц для правильного определения version_active_file_id
+            'versions__version_pages__content_type',
+            'versions__version_pages__content_object',
+            'versions__version_pages'
         )
 
         return AccessControlList.objects.restrict_queryset(

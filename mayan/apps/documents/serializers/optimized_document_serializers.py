@@ -209,6 +209,10 @@ class OptimizedDocumentListSerializer(
     file_latest_mimetype = serializers.SerializerMethodField()
     file_latest_size = serializers.SerializerMethodField()
     
+    # Version info
+    version_active_id = serializers.SerializerMethodField()
+    version_active_file_id = serializers.SerializerMethodField()
+    
     # URLs (cached)
     thumbnail_url = serializers.SerializerMethodField()
     preview_url = serializers.SerializerMethodField()
@@ -227,6 +231,7 @@ class OptimizedDocumentListSerializer(
             'document_type_id', 'document_type_label',
             'file_latest_id', 'file_latest_download_url', 'file_latest_url',
             'file_latest_filename', 'file_latest_mimetype', 'file_latest_size',
+            'version_active_id', 'version_active_file_id',
             'thumbnail_url', 'preview_url', 'download_url',
             'tags', 'ai_status'
         )
@@ -297,6 +302,46 @@ class OptimizedDocumentListSerializer(
     def get_file_latest_size(self, obj):
         file = self._get_file_latest(obj)
         return file.size if file else None
+    
+    def get_version_active_id(self, obj):
+        """Get active version ID."""
+        version = self._get_version_active(obj)
+        return version.pk if version else None
+    
+    def get_version_active_file_id(self, obj):
+        """Get file ID from active version's first page."""
+        version = self._get_version_active(obj)
+        if not version:
+            return None
+        
+        # Try to get file_id from prefetched pages
+        pages = getattr(version, 'version_pages', None)
+        if pages:
+            page_list = list(pages.all()) if hasattr(pages, 'all') else []
+            if page_list:
+                first_page = page_list[0]
+                # Check if page has content_object (DocumentFilePage)
+                if hasattr(first_page, 'content_object'):
+                    content_obj = first_page.content_object
+                    if hasattr(content_obj, 'document_file_id'):
+                        return content_obj.document_file_id
+                    if hasattr(content_obj, 'document_file'):
+                        return content_obj.document_file.pk
+        
+        # Fallback: query directly
+        try:
+            from ..models.document_version_models import DocumentVersionPage
+            first_page = version.version_pages.select_related('content_object').first()
+            if first_page and hasattr(first_page, 'content_object'):
+                content_obj = first_page.content_object
+                if hasattr(content_obj, 'document_file_id'):
+                    return content_obj.document_file_id
+                if hasattr(content_obj, 'document_file'):
+                    return content_obj.document_file.pk
+        except Exception:
+            pass
+        
+        return None
     
     def get_thumbnail_url(self, obj):
         """Get cached thumbnail URL."""
@@ -392,6 +437,8 @@ class OptimizedDocumentSerializer(
     
     # Version info
     version_active = serializers.SerializerMethodField()
+    version_active_id = serializers.SerializerMethodField()
+    version_active_file_id = serializers.SerializerMethodField()
     versions_count = serializers.SerializerMethodField()
     
     # URLs
@@ -411,7 +458,7 @@ class OptimizedDocumentSerializer(
             'datetime_created', 'in_trash',
             'document_type_id', 'document_type',
             'file_latest', 'files_count',
-            'version_active', 'versions_count',
+            'version_active', 'version_active_id', 'version_active_file_id', 'versions_count',
             'thumbnail_url', 'preview_url', 'download_url',
             'tags', 'metadata', 'ai_analysis'
         )
@@ -466,6 +513,46 @@ class OptimizedDocumentSerializer(
                 'comment': version.comment,
                 'timestamp': version.timestamp
             }
+        return None
+    
+    def get_version_active_id(self, obj):
+        """Get active version ID."""
+        version = self._get_version_active(obj)
+        return version.pk if version else None
+    
+    def get_version_active_file_id(self, obj):
+        """Get file ID from active version's first page."""
+        version = self._get_version_active(obj)
+        if not version:
+            return None
+        
+        # Try to get file_id from prefetched pages
+        pages = getattr(version, 'version_pages', None)
+        if pages:
+            page_list = list(pages.all()) if hasattr(pages, 'all') else []
+            if page_list:
+                first_page = page_list[0]
+                # Check if page has content_object (DocumentFilePage)
+                if hasattr(first_page, 'content_object'):
+                    content_obj = first_page.content_object
+                    if hasattr(content_obj, 'document_file_id'):
+                        return content_obj.document_file_id
+                    if hasattr(content_obj, 'document_file'):
+                        return content_obj.document_file.pk
+        
+        # Fallback: query directly
+        try:
+            from ..models.document_version_models import DocumentVersionPage
+            first_page = version.version_pages.select_related('content_object').first()
+            if first_page and hasattr(first_page, 'content_object'):
+                content_obj = first_page.content_object
+                if hasattr(content_obj, 'document_file_id'):
+                    return content_obj.document_file_id
+                if hasattr(content_obj, 'document_file'):
+                    return content_obj.document_file.pk
+        except Exception:
+            pass
+        
         return None
     
     def get_versions_count(self, obj):

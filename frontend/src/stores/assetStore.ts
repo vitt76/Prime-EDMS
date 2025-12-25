@@ -404,9 +404,18 @@ export const useAssetStore = defineStore(
 
         const asset = adaptBackendAsset(response.data)
 
-        // If no file information, try to fetch file details separately
-        console.log('[AssetStore] Checking file details:', { hasFileDetails: !!asset.file_details, size: asset.size, fileLatestId: asset.file_latest_id })
-        if (!asset.file_details || asset.size === 0) {
+        // If no file information OR if version_active_file_id differs from file_latest_id,
+        // try to fetch file details separately to get the correct active file
+        const activeFileId = (asset as any)?.version_active_file_id
+        const needsActiveFile = activeFileId && activeFileId !== asset.file_latest_id
+        console.log('[AssetStore] Checking file details:', { 
+          hasFileDetails: !!asset.file_details, 
+          size: asset.size, 
+          fileLatestId: asset.file_latest_id,
+          activeFileId,
+          needsActiveFile
+        })
+        if (!asset.file_details || asset.size === 0 || needsActiveFile) {
           console.log('[AssetStore] Fetching file details for asset', id)
           try {
             // Try to get file list and take the latest file
@@ -441,9 +450,22 @@ export const useAssetStore = defineStore(
             // #endregion agent log
 
             if (filesResponse.data?.results && filesResponse.data.results.length > 0) {
-              // Sort by timestamp descending and take the latest file
-              const latestFile = filesResponse.data.results
-                .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+              // Priority: use active file if available, otherwise latest by timestamp
+              const activeFileId = (asset as any)?.version_active_file_id
+              let targetFile = null
+              
+              if (activeFileId) {
+                // Try to find the active file first
+                targetFile = filesResponse.data.results.find((f: any) => f.id === activeFileId)
+              }
+              
+              // Fallback to latest by timestamp if active file not found
+              if (!targetFile) {
+                targetFile = filesResponse.data.results
+                  .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+              }
+              
+              const latestFile = targetFile
 
               // #region agent log
               try {
@@ -575,7 +597,15 @@ export const useAssetStore = defineStore(
         }
         // (debug ingest removed)
 
+        // Update current asset
         currentAsset.value = asset
+
+        // Also update the asset in the main list so gallery cards
+        // reflect fresh file size, filename и другие детали.
+        const listIndex = assets.value.findIndex(a => a.id === id)
+        if (listIndex !== -1) {
+          assets.value[listIndex] = asset
+        }
         return asset
         
       } catch (err: any) {

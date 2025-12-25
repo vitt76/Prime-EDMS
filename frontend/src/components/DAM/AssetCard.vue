@@ -333,7 +333,9 @@
       
       <!-- File info row -->
       <div class="flex items-center justify-between text-xs text-neutral-500">
-        <span class="font-medium">{{ formatFileSize(asset.size) }}</span>
+        <span class="font-medium">
+          {{ formatFileSize(asset.file_details?.size ?? asset.size) }}
+        </span>
         <span>{{ formatDate(asset.date_added) }}</span>
       </div>
       
@@ -701,7 +703,10 @@ function handleMove() {
 
 function handleDelete() {
   showActionsMenu.value = false
-  emit('delete', props.asset)
+  // Небольшая задержка, чтобы меню успело закрыться перед открытием модалки
+  setTimeout(() => {
+    emit('delete', props.asset)
+  }, 100)
 }
 
 function handleGlobalClick(event: MouseEvent) {
@@ -733,6 +738,16 @@ onMounted(() => {
   window.addEventListener('keydown', handleGlobalEscape)
   window.addEventListener('resize', handleGlobalResizeScroll)
   window.addEventListener('scroll', handleGlobalResizeScroll, true)
+
+  // Если размер неизвестен (0) и нет file_details,
+  // дотягиваем детальную информацию и обновляем стор,
+  // чтобы карточка показывала реальный размер.
+  const size = (props.asset as any)?.file_details?.size ?? props.asset.size
+  if (!size || size === 0) {
+    assetStore.getAssetDetail(props.asset.id, true).catch(() => {
+      // тихо игнорируем ошибки, чтобы не ломать UI
+    })
+  }
 })
 
 onBeforeUnmount(() => {

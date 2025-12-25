@@ -348,7 +348,7 @@
                 <div class="dam-gallery__modal-meta">
                   <div class="dam-gallery__modal-meta-item">
                     <span class="dam-gallery__modal-meta-label">Размер:</span>
-                    <span>{{ formatFileSize(previewAsset.size) }}</span>
+                    <span>{{ formatFileSize(previewAsset.file_details?.size || previewAsset.size) }}</span>
                   </div>
                   <div class="dam-gallery__modal-meta-item">
                     <span class="dam-gallery__modal-meta-label">Тип:</span>
@@ -699,6 +699,10 @@ function handlePreviewImageError(): void {
 }
 
 function handleAssetDelete(asset: Asset): void {
+  if (!asset) {
+    console.error('[DAMGallery] handleAssetDelete: asset is null or undefined')
+    return
+  }
   deleteTarget.value = asset
   showDeleteConfirm.value = true
 }

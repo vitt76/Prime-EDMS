@@ -1628,8 +1628,23 @@ async function handleConfirmSave(format: string, comment: string) {
     isSaveModalOpen.value = false
     emit('close')
   } catch (error: any) {
+    // Обработка ошибки "Session already committed"
+    if (error?.response?.status === 400 && error?.response?.data?.error === 'Session already committed') {
+      const message = 'Эта сессия уже была сохранена. Закройте редактор и откройте его заново для создания новой версии.'
+      saveError.value = message
+      notificationStore.addNotification({
+        type: 'warning',
+        title: 'Сессия уже сохранена',
+        message
+      })
+      // Закрываем модалку сохранения, но не редактор
+      isSaveModalOpen.value = false
+      return
+    }
+
     const message =
       error?.response?.data?.detail ||
+      error?.response?.data?.message ||
       error?.response?.data?.error ||
       error?.message ||
       'Не удалось сохранить изменения'

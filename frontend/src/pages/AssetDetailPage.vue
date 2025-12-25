@@ -548,7 +548,7 @@
                   <div class="flex items-start justify-between">
                     <div class="flex items-center gap-3">
                       <div class="w-10 h-10 rounded-lg bg-neutral-200 dark:bg-neutral-600 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-300">
-                        v{{ versions.indexOf(version) + 1 }}
+                        v{{ version.versionNumber || versions.indexOf(version) + 1 }}
                       </div>
                       <div>
                         <p class="text-sm font-medium text-neutral-900 dark:text-white">
@@ -1016,24 +1016,73 @@ const documentType = computed(() => {
   return 'image' // default
 })
 
-// Versions UI should reflect Mayan document files (multiple files per document).
-// Keep the UI shape similar to Version[] used by the template.
+// ID файла, который соответствует активной версии документа на бэкенде.
+// Используется для пометки "(текущая)" независимо от того, что выбрал пользователь в UI.
+const activeVersionFileId = ref<number | null>(null)
+
+// Versions UI отражает DocumentFile'ы. Добавляем два признака:
+// - is_current: файл, связанный с активной DocumentVersion (бэкенд "текущая версия")
+// - is_selected: файл, который пользователь сейчас выбрал в сайдбаре
 const versions = computed((): any[] => {
   const files = documentFiles.value || []
   if (!files.length) return []
 
-  const currentId = selectedDocumentFileId.value
-  return files.map((f: any) => {
+  // is_current определяется ТОЛЬКО по activeVersionFileId из бэкенда
+  // (это файл, связанный с активной DocumentVersion на бэкенде)
+  const currentId = activeVersionFileId.value
+  const selectedId = selectedDocumentFileId.value
+
+  const result = files.map((f: any) => ({
+    id: f.id,
+    filename: f.filename,
+    uploaded_by: 'Система',
+    uploaded_date: f.timestamp,
+    is_current: currentId ? f.id === currentId : false,
+    is_selected: selectedId ? f.id === selectedId : false,
+    size: f.size,
+    _file: f
+  }))
+  
+  // Отладка: логируем, какая версия помечена как текущая
+  const currentVersion = result.find(v => v.is_current)
+  if (currentVersion) {
+    console.log('[AssetDetail] Current version (from backend):', {
+      fileId: currentVersion.id,
+      filename: currentVersion.filename,
+      activeVersionFileId: currentId
+    })
+  } else if (currentId) {
+    console.warn('[AssetDetail] Active version file ID from backend not found in files list:', {
+      activeVersionFileId: currentId,
+      availableFileIds: files.map((f: any) => f.id)
+    })
+  }
+  
+  // Сортируем версии по дате: новые первыми (v2, v3... сверху), старые ниже (v1)
+  // Но нумерация должна быть хронологической: самая старая = v1, новая = v2, v3...
+  const sortedByDate = [...result].sort((a, b) => {
+    const dateA = new Date(a.uploaded_date || 0).getTime()
+    const dateB = new Date(b.uploaded_date || 0).getTime()
+    return dateB - dateA // По убыванию: новые первыми
+  })
+  
+  // Создаем хронологически отсортированный список для определения номеров версий
+  const chronological = [...result].sort((a, b) => {
+    const dateA = new Date(a.uploaded_date || 0).getTime()
+    const dateB = new Date(b.uploaded_date || 0).getTime()
+    return dateA - dateB // По возрастанию: старые первыми
+  })
+  
+  // Добавляем номер версии на основе хронологического порядка
+  const sorted = sortedByDate.map(version => {
+    const chronologicalIndex = chronological.findIndex(v => v.id === version.id)
     return {
-      id: f.id,
-      filename: f.filename,
-      uploaded_by: 'Система',
-      uploaded_date: f.timestamp,
-      is_current: currentId ? f.id === currentId : false,
-      size: f.size,
-      _file: f,
+      ...version,
+      versionNumber: chronologicalIndex + 1 // v1 для самой старой, v2 для следующей и т.д.
     }
   })
+  
+  return sorted
 })
 
 // Comments are now loaded from API, not from asset
@@ -1072,6 +1121,20 @@ async function loadAsset() {
     if (storeAsset) {
       console.log('[AssetDetail] Loaded from real API:', storeAsset)
       asset.value = storeAsset as Asset
+
+      // Если бэкенд прислал ID файла активной версии, используем его
+      // как источник истины для пометки \"(текущая)\".
+      const backendActiveFileId = (storeAsset as any)?.version_active_file_id
+      activeVersionFileId.value =
+        typeof backendActiveFileId === 'number' && backendActiveFileId > 0
+          ? backendActiveFileId
+          : null
+      
+      console.log('[AssetDetail] Backend active version file ID:', {
+        version_active_file_id: backendActiveFileId,
+        activeVersionFileId: activeVersionFileId.value,
+        file_latest_id: (storeAsset as any)?.file_latest_id
+      })
       
       // If asset has AI analysis, set it as extended data
       if (storeAsset.ai_analysis) {
@@ -1100,17 +1163,159 @@ async function loadAsset() {
         const results = Array.isArray(filesResponse?.results)
           ? filesResponse.results
           : (Array.isArray(filesResponse) ? filesResponse : [])
-        // Sort newest first
+        // Sort newest first (v2, v3... first, then v1)
         documentFiles.value = results.sort(
           (a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         )
 
-        // Default selected file: latest file id (if available), otherwise newest by timestamp
+        // Пытаемся сопоставить активную версию с её файлом только если не было установлено из бэкенда
+        // (version_active_file_id из DAMDocumentDetailSerializer — это источник истины)
+        if (!activeVersionFileId.value) {
+          try {
+            const versionsResp: any = await apiService.get(
+              `/api/v4/documents/${documentId}/versions/`,
+              { params: { page_size: 50 } } as any,
+              false
+            )
+            const vResults = Array.isArray(versionsResp?.results)
+              ? versionsResp.results
+              : (Array.isArray(versionsResp) ? versionsResp : [])
+            const activeVersion = vResults.find(
+              (v: any) => v.active === true || v.is_active === true
+            )
+            
+            console.log('[AssetDetail] Active version from versions API:', {
+              activeVersion,
+              activeVersionKeys: activeVersion ? Object.keys(activeVersion) : [],
+              allVersions: vResults.map((v: any) => ({ id: v.id, active: v.active, is_active: v.is_active }))
+            })
+            
+            if (activeVersion) {
+              // Пробуем найти file_id через страницы версии
+              // Сначала пробуем получить file_id из версии напрямую
+              let fileId = 
+                (activeVersion.document_file && (activeVersion.document_file.id || activeVersion.document_file.pk)) ||
+                activeVersion.document_file_id ||
+                (typeof activeVersion.document_file === 'number' ? activeVersion.document_file : null)
+              
+              console.log('[AssetDetail] Trying to find file_id:', {
+                fromDocumentFile: activeVersion.document_file,
+                fromDocumentFileId: activeVersion.document_file_id,
+                currentFileId: fileId
+              })
+              
+              // Если не нашли, пробуем использовать pages_first из activeVersion (уже есть в ответе)
+              if (!fileId && activeVersion.pages_first) {
+                const firstPage = activeVersion.pages_first
+                console.log('[AssetDetail] Using pages_first from activeVersion:', firstPage)
+                
+                // object_id в DocumentVersionPage указывает на DocumentFilePage.id
+                // content_type указывает на тип объекта (DocumentFilePage)
+                if (firstPage.object_id && firstPage.content_type) {
+                  const contentTypeModel = firstPage.content_type?.model
+                  const isDocumentFilePage = contentTypeModel && 
+                    (typeof contentTypeModel === 'string' && contentTypeModel.toLowerCase() === 'documentfilepage')
+                  
+                  if (isDocumentFilePage && firstPage.object_id) {
+                    // object_id - это ID DocumentFilePage
+                    // Ищем файл, который содержит страницу с таким ID
+                    // Перебираем все файлы и проверяем их страницы
+                    for (const file of documentFiles.value) {
+                      try {
+                        const filePagesResp: any = await apiService.get(
+                          `/api/v4/documents/${documentId}/files/${file.id}/pages/`,
+                          { params: { page_size: 100 } } as any,
+                          false
+                        )
+                        const filePages = Array.isArray(filePagesResp?.results) 
+                          ? filePagesResp.results 
+                          : (Array.isArray(filePagesResp) ? filePagesResp : [])
+                        const hasMatchingPage = filePages.some((page: any) => page.id === firstPage.object_id)
+                        if (hasMatchingPage) {
+                          fileId = file.id
+                          console.log('[AssetDetail] ✅ Found file_id by matching page in file:', fileId)
+                          break
+                        }
+                      } catch (err) {
+                        // Продолжаем поиск
+                      }
+                    }
+                  }
+                }
+              }
+              
+              // Если все еще не нашли, пробуем загрузить страницы версии через API
+              if (!fileId && activeVersion.id) {
+                try {
+                  const pagesResp: any = await apiService.get(
+                    `/api/v4/documents/${documentId}/versions/${activeVersion.id}/pages/`,
+                    { params: { page_size: 10 } } as any,
+                    false
+                  )
+                  const pages = Array.isArray(pagesResp?.results)
+                    ? pagesResp.results
+                    : (Array.isArray(pagesResp) ? pagesResp : [])
+                  
+                  if (pages.length > 0) {
+                    const firstPage = pages[0]
+                    // Пробуем получить file_id через content_object или object_id
+                    if (firstPage.content_object && firstPage.content_object.document_file) {
+                      fileId = firstPage.content_object.document_file.id || firstPage.content_object.document_file.pk
+                    } else if (firstPage.content_object && firstPage.content_object.document_file_id) {
+                      fileId = firstPage.content_object.document_file_id
+                    } else if (firstPage.document_file_id) {
+                      fileId = firstPage.document_file_id
+                    }
+                  }
+                } catch (pagesErr) {
+                  console.warn('[AssetDetail] Failed to load version pages:', pagesErr)
+                }
+              }
+              
+              // Если все еще не нашли, пробуем найти файл по версии через сопоставление по timestamp
+              if (!fileId) {
+                const backendActiveVersionId = (storeAsset as any)?.version_active_id
+                if (backendActiveVersionId && activeVersion.id === backendActiveVersionId) {
+                  const versionTimestamp = new Date(activeVersion.timestamp || activeVersion.created_at)
+                  // Расширяем окно поиска до 5 секунд
+                  const matchingFile = documentFiles.value.find((f: any) => {
+                    const fileTimestamp = new Date(f.timestamp)
+                    return Math.abs(fileTimestamp.getTime() - versionTimestamp.getTime()) < 5000
+                  })
+                  if (matchingFile) {
+                    fileId = matchingFile.id
+                    console.log('[AssetDetail] Found file_id by timestamp matching:', fileId)
+                  }
+                }
+              }
+              
+              if (fileId && Number.isFinite(Number(fileId))) {
+                activeVersionFileId.value = Number(fileId)
+                console.log('[AssetDetail] ✅ Set activeVersionFileId from versions API:', fileId)
+              } else {
+                console.warn('[AssetDetail] ❌ Could not determine file_id for active version. Full object:', JSON.stringify(activeVersion, null, 2))
+              }
+            } else {
+              console.warn('[AssetDetail] No active version found in versions API')
+            }
+          } catch (versionErr) {
+            console.warn('[AssetDetail] Failed to load document versions for active file mapping:', versionErr)
+            // Не перезаписываем activeVersionFileId, если он уже был установлен из бэкенда
+          }
+        }
+
+        // Default selected file:
+        // 1) файл активной версии (если удалось определить),
+        // 2) иначе latest file id,
+        // 3) иначе самый новый по timestamp.
         const latestId = (asset.value as any)?.file_latest_id
+        const backendActiveId = activeVersionFileId.value
         let candidateId =
-          typeof latestId === 'number'
-            ? latestId
-            : (documentFiles.value[0]?.id ?? null)
+          typeof backendActiveId === 'number' && backendActiveId > 0
+            ? backendActiveId
+            : (typeof latestId === 'number'
+              ? latestId
+              : (documentFiles.value[0]?.id ?? null))
 
         const fileIds = documentFiles.value.map((f: any) => f.id)
         if (candidateId && !fileIds.includes(candidateId)) {
@@ -1982,18 +2187,37 @@ async function handleSaveAsVersion(_assetId: number, fileId: number) {
     return
   }
 
+  // Немедленно обновляем данные актива и список файлов
+  await loadAsset()
+
   activeTab.value = 'versions'
   const beforeCount = documentFiles.value?.length || 0
 
+  // Если файл уже есть в списке, выбираем его
+  if (fileId && documentFiles.value) {
+    const found = documentFiles.value.find((f: any) => Number(f?.id) === Number(fileId))
+    if (found) {
+      selectedDocumentFileId.value = found.id
+      await handleSelectDocumentFile(found)
+      notificationStore.addNotification({
+        type: 'success',
+        title: 'Версия создана',
+        message: 'Новая версия успешно добавлена'
+      })
+      return
+    }
+  }
+
+  // Если файл ещё не появился, ждём немного и проверяем снова
   notificationStore.addNotification({
     type: 'info',
     title: 'Версия в обработке',
     message: 'Файл сохранён, ожидаем появления версии в списке...'
   })
 
-  const maxAttempts = 14
+  const maxAttempts = 10
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    await new Promise((r) => setTimeout(r, 1500))
+    await new Promise((r) => setTimeout(r, 1000))
     try {
       const filesResponse: any = await apiService.get(
         `/api/v4/documents/${documentId}/files/`,
@@ -2501,6 +2725,23 @@ function handleSelectVersion(version: any) {
 
   selectedDocumentFileId.value = file.id
   handleSelectDocumentFile(file)
+
+  // Явно активируем соответствующую версию документа на бэкенде,
+  // чтобы Mayan сразу помечал её как текущую.
+  const documentId = Number(asset.value?.id || assetId.value)
+  if (Number.isFinite(documentId) && documentId > 0) {
+    apiService
+      .post(
+        `/api/v4/headless/documents/${documentId}/versions/activate/`,
+        { file_id: file.id } as any
+      )
+      .then(() => {
+        activeVersionFileId.value = file.id
+      })
+      .catch((err: any) => {
+        console.warn('[AssetDetail] Failed to activate version on backend:', err)
+      })
+  }
 }
 
 // Check if current user can edit comment

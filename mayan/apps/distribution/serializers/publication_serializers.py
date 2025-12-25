@@ -14,6 +14,7 @@ class PublicationItemSerializer(serializers.ModelSerializer):
 
 class PublicationSerializer(serializers.ModelSerializer):
     items = PublicationItemSerializer(many=True, read_only=True)
+    renditions = serializers.SerializerMethodField()
     owner = serializers.SerializerMethodField()
     owner_username = serializers.SerializerMethodField()
     items_count = serializers.SerializerMethodField()
@@ -23,11 +24,11 @@ class PublicationSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'owner', 'owner_username', 'title', 'description', 'access_policy',
             'expires_at', 'max_downloads', 'presets', 'recipient_lists',
-            'downloads_count', 'items', 'items_count', 'renditions_count',
+            'downloads_count', 'items', 'items_count', 'renditions', 'renditions_count',
             'created', 'modified'
         )
         model = Publication
-        read_only_fields = ('id', 'created', 'modified', 'downloads_count', 'owner', 'owner_username', 'items_count', 'renditions_count')
+        read_only_fields = ('id', 'created', 'modified', 'downloads_count', 'owner', 'owner_username', 'items_count', 'renditions', 'renditions_count')
 
     def get_owner(self, obj):
         owner = obj.owner
@@ -46,6 +47,49 @@ class PublicationSerializer(serializers.ModelSerializer):
 
     def get_renditions_count(self, obj):
         return GeneratedRendition.objects.filter(publication_item__publication=obj).count()
+    
+    def get_renditions(self, obj):
+        """Get all renditions for this publication with details."""
+        renditions = GeneratedRendition.objects.filter(
+            publication_item__publication=obj
+        ).select_related(
+            'publication_item',
+            'publication_item__document_file',
+            'preset'
+        )
+        
+        return [
+            {
+                'id': r.id,
+                'publication_item_id': r.publication_item.id,
+                'document_file_id': r.publication_item.document_file.id,
+                'preset_id': r.preset.id,
+                'preset_name': r.preset.name,
+                'preset_format': r.preset.format,
+                'status': r.status,
+                'file_name': r.file.name.rsplit('/', 1)[-1] if r.file else None,
+                'download_url': self._get_rendition_download_url(r),
+                'file_size': r.file_size,
+                'checksum': r.checksum,
+                'error_message': r.error_message,
+                'created': r.created,
+                'modified': r.modified
+            }
+            for r in renditions
+        ]
+    
+    def _get_rendition_download_url(self, rendition):
+        """Get download URL for rendition file."""
+        request = self.context.get('request')
+        if rendition.file:
+            try:
+                url = rendition.get_download_url()
+                if url and request is not None:
+                    return request.build_absolute_uri(url)
+                return url
+            except Exception:
+                return None
+        return None
 
     def _strip_internal_fields(self, validated_data):
         validated_data.pop('_instance_extra_data', None)

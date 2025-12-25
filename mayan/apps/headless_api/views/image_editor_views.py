@@ -510,6 +510,16 @@ class HeadlessImageEditorCommitView(APIView):
     def post(self, request, session_id: int):
         session = _get_session_for_request(request=request, session_id=session_id)
 
+        # Проверка: если сессия уже была закоммичена, возвращаем ошибку
+        if session.status in ('saved', 'processing'):
+            return Response(
+                {
+                    'error': 'Session already committed',
+                    'message': 'Эта сессия уже была сохранена. Создайте новую сессию для редактирования.'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         document = get_object_or_404(
             Document.valid.all(), pk=session.document_file.document_id
         )
@@ -552,6 +562,7 @@ class HeadlessImageEditorCommitView(APIView):
 
         previous_active = document.version_active
 
+        # Создание нового файла синхронно
         new_file = document.file_new(
             file_object=ContentFile(data, name=filename),
             filename=filename,
@@ -572,18 +583,20 @@ class HeadlessImageEditorCommitView(APIView):
             version, context={'request': request}
         )
 
-        # Обновление сессии: статус 'processing' вместо 'saved'
-        session.status = 'processing'
+        # Обновление сессии: статус 'saved' после успешного создания файла
+        session.status = 'saved'
         session.save(update_fields=('status', 'modified'))
 
         return Response(
             {
-                'task_id': task_result.id,
-                'status': 'processing',
-                'message': 'Image editor commit started',
-                'state': state,
+                'success': True,
+                'document_id': document.pk,
+                'file_id': new_file.pk,
+                'version_id': version.pk if version else None,
+                'version': serializer.data,
+                'message': 'Новая версия успешно создана',
             },
-            status=status.HTTP_202_ACCEPTED
+            status=status.HTTP_201_CREATED
         )
 
 

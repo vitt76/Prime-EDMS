@@ -16,38 +16,49 @@ function makeAbsolute(url: string | undefined | null): string | undefined {
 export function resolveAssetImageUrl(asset: any): string {
   if (!asset) return PLACEHOLDER
 
+  // Приоритет 1: Активная версия (если есть)
+  const versionActiveId =
+    asset?.version_active_id ||
+    asset?.version_active?.id
+
+  // Приоритет 2: Текущий файл (из активной версии или последний).
+  // Сюда включаем:
+  // - version_active_file_id (если пришёл с детального DAM-эндпоинта),
+  // - выбранный/текущий файл из UI,
+  // - document_file_id (для кампаний и других связок),
+  // - file_latest_id (для оптимизированных списков),
+  // - прочие fallback-и.
   const preferredFileId =
+    asset?.version_active_file_id ||
     asset?.selected_file_id ||
     asset?.current_file_id ||
+    asset?.document_file_id ||
     asset?.file_latest_id ||
     asset?.file_id ||
     asset?.file?.id
 
+  // Приоритет 3: Другие версии (fallback)
   const versionId =
-    asset?.version_active_id ||
     asset?.version_id ||
     asset?.version?.id ||
-    asset?.version_active?.id ||
     'latest'
 
-  const filePreview =
-    asset?.id && preferredFileId
-      ? `/api/v4/documents/${asset.id}/files/${preferredFileId}/pages/1/image/?width=1200`
-      : undefined
+  // Приоритет 1: Готовые URL из бэкенда (thumbnail_url, preview_url)
+  // Эти URL уже правильно сформированы и работают
+  const backendPreview = asset?.thumbnail_url || asset?.preview_url
 
-  const versionPreview =
-    asset?.id && versionId
-      ? `/api/v4/documents/${asset.id}/versions/${versionId}/pages/1/image/?width=1200`
-      : undefined
+  // Приоритет 2: Fallback на общий download_url (готовый URL от бэкенда)
+  // Используем только готовые URL, чтобы избежать 404 ошибок
+  const downloadUrl = asset?.download_url
 
-  const fallbackPreview = filePreview || versionPreview
+  // Примечание: НЕ формируем URL вручную, так как:
+  // 1. file_id может быть неправильным или файл может быть удален
+  // 2. Бэкенд уже предоставляет готовые валидные URL
+  // 3. Ручное формирование URL приводит к 404 ошибкам
 
   const url =
-    filePreview ||
-    asset.thumbnail_url ||
-    asset.preview_url ||
-    asset.download_url ||
-    fallbackPreview
+    backendPreview ||
+    downloadUrl
 
   return makeAbsolute(url) || PLACEHOLDER
 }

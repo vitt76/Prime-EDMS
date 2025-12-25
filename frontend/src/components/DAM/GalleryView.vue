@@ -147,6 +147,7 @@
           @preview="handleAssetPreview"
           @download="handleAssetDownload"
           @share="handleAssetShare"
+          @delete="handleAssetDelete"
           @more="handleAssetMore"
         />
       </div>
@@ -181,6 +182,7 @@
                 @preview="handleAssetPreview"
                 @download="handleAssetDownload"
                 @share="handleAssetShare"
+                @delete="handleAssetDelete"
                 @more="handleAssetMore"
               />
             </div>
@@ -259,8 +261,9 @@ import Pagination from '@/components/Common/Pagination.vue'
 import type { Asset } from '@/types/api'
 
 // Emits
-defineEmits<{
+const emit = defineEmits<{
   'open-upload': []
+  'delete': [asset: Asset]
 }>()
 
 const router = useRouter()
@@ -485,6 +488,10 @@ function handleAssetShare(asset: Asset) {
 function handleAssetMore(asset: Asset) {
   // TODO: Open more actions menu
   console.log('More actions for asset:', asset.id)
+}
+
+function handleAssetDelete(asset: Asset) {
+  emit('delete', asset)
 }
 
 function handlePageChange(page: number) {

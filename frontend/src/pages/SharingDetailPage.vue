@@ -508,7 +508,13 @@ async function saveEdit() {
 // FORMATTERS
 // ============================================================================
 
-function formatNumber(num: number): string {
+function formatNumber(value: number | null | undefined): string {
+  const num = typeof value === 'number' ? value : Number(value ?? 0)
+
+  if (!Number.isFinite(num) || num <= 0) {
+    return '0'
+  }
+
   if (num >= 1000000) {
     return (num / 1000000).toFixed(1) + 'M'
   }

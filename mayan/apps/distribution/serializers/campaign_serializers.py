@@ -4,7 +4,7 @@ from django.db.models import Count, Sum
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.rest_api import serializers
-from mayan.apps.documents.models import Document, DocumentFile
+from mayan.apps.documents.models import Document, DocumentFile, DocumentVersion
 
 logger = logging.getLogger(name=__name__)
 
@@ -321,17 +321,81 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
         existing_qs.exclude(document_file_id__in=file_ids).delete()
 
         # Добавляем недостающие
+        new_items_created = False
         for df_id in file_ids:
             if df_id not in existing_file_ids:
                 PublicationItem.objects.create(
                     publication=publication,
                     document_file_id=df_id
                 )
+                new_items_created = True
 
         # Синхронизируем метаданные публикации с кампанией
         publication.title = campaign.title or _('Campaign publication')
         publication.description = campaign.description or ''
         publication.save(update_fields=['title', 'description'])
+        
+        # Автоматически генерируем рендишены для всех файлов в публикации
+        # если были добавлены новые элементы или если у публикации нет пресетов
+        if new_items_created or not publication.presets.exists():
+            from ..models import RenditionPreset, Recipient
+            
+            # Если у публикации нет пресетов, создаем дефолтный пресет для изображений
+            if not publication.presets.exists():
+                # Ищем дефолтный пресет для изображений или создаем его
+                default_preset = RenditionPreset.objects.filter(
+                    resource_type='image',
+                    name__icontains='default'
+                ).first()
+                
+                if not default_preset:
+                    # Создаем или получаем дефолтного получателя для системных пресетов
+                    default_recipient, _ = Recipient.objects.get_or_create(
+                        email='system@mayan-edms.local',
+                        defaults={
+                            'name': 'System Default',
+                            'organization': 'Mayan EDMS'
+                        }
+                    )
+                    
+                    # Создаем дефолтный пресет для изображений
+                    default_preset = RenditionPreset.objects.create(
+                        resource_type='image',
+                        format='jpeg',
+                        name='Default JPEG',
+                        description='Default preset for campaign publications',
+                        quality=85,
+                        width=1920,
+                        height=None,  # Сохраняем пропорции
+                        crop=False,
+                        recipient=default_recipient
+                    )
+                    logger.info(f'[Campaign] Created default preset: {default_preset.name}')
+                
+                # Добавляем пресет к публикации
+                publication.presets.add(default_preset)
+                logger.info(f'[Campaign] Added default preset to publication {publication.id}')
+            
+            # Генерируем рендишены для всех элементов публикации
+            # generate_all_renditions() использует get_or_create, так что безопасно вызывать для всех
+            # Это гарантирует, что рендишены будут созданы для всех файлов, включая новые
+            try:
+                items_count = publication.items.count()
+                presets_count = publication.presets.count()
+                logger.info(
+                    f'[Campaign] Generating renditions for publication {publication.id}: '
+                    f'{items_count} items, {presets_count} presets'
+                )
+                publication.generate_all_renditions()
+                logger.info(
+                    f'[Campaign] Successfully queued rendition generation for publication {publication.id} '
+                    f'({items_count} items × {presets_count} presets = {items_count * presets_count} renditions)'
+                )
+            except Exception as exc:
+                logger.error(
+                    f'[Campaign] Failed to auto-generate renditions for publication {publication.id}: {exc}',
+                    exc_info=True
+                )
 
 
 class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
@@ -363,8 +427,19 @@ class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
 
     def get_assets(self, obj):
         """
-        Возвращает список файлов (PublicationItem) в кампании с базовой
-        информацией по документу и версии.
+        Возвращает список файлов в кампании, опираясь на АКТИВНУЮ версию документа.
+
+        Логика сопоставления:
+        - Для каждого документа берём его версии и файлы в порядке timestamp (по возрастанию).
+        - Находим индекс активной версии (Document.version_active).
+        - Берём файл с тем же индексом из списка файлов.
+
+        Таким образом, если активной сделана старая версия документа, мы вернём
+        именно связанный с ней файл, а не самый новый.
+
+        Если по каким‑то причинам активная версия не найдена или количество версий
+        и файлов не совпадает, используем последний файл документа как безопасный
+        fallback.
         """
         items = PublicationItem.objects.filter(
             publication__campaign_links__campaign=obj
@@ -372,15 +447,52 @@ class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
 
         results = []
         for item in items:
-            document_file = getattr(item, 'document_file', None)
-            if not document_file:
+            base_document_file = getattr(item, 'document_file', None)
+            if not base_document_file:
                 continue
-            document = getattr(document_file, 'document', None)
+            document = getattr(base_document_file, 'document', None)
+            if not document:
+                continue
+
+            # Списки версий и файлов по возрастанию timestamp, чтобы индексы совпадали.
+            version_qs = document.versions.order_by('timestamp').only('pk', 'timestamp', 'active')
+            file_qs = document.files.order_by('timestamp').only('pk', 'timestamp')
+
+            versions = list(version_qs)
+            files = list(file_qs)
+
+            if not files:
+                continue
+
+            # Пытаемся найти активную версию.
+            active_version = None
+            for v in versions:
+                if getattr(v, 'active', False):
+                    active_version = v
+                    break
+
+            selected_file = None
+            if active_version is not None:
+                try:
+                    active_index = next(
+                        idx for idx, v in enumerate(versions) if v.pk == active_version.pk
+                    )
+                except StopIteration:
+                    active_index = None
+
+                if active_index is not None and 0 <= active_index < len(files):
+                    selected_file = files[active_index]
+
+            # Fallback: если не удалось сматчить по активной версии — берём последний файл.
+            if selected_file is None:
+                selected_file = files[-1]
+
             results.append({
                 'id': item.pk,
-                'document_id': document.pk if document else None,
-                'document_label': document.label if document else None,
-                'document_file_id': document_file.pk,
+                'document_id': document.pk,
+                'document_label': document.label,
+                'document_file_id': selected_file.pk,
+                'publication_id': item.publication.id,  # Добавляем publication_id
             })
 
         return results

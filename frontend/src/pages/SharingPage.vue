@@ -175,7 +175,7 @@
       <!-- Tabs & Table Container -->
       <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         <!-- Tab Headers -->
-        <div class="flex items-center border-b border-neutral-200">
+        <div class="flex items-center border-b border-neutral-200 overflow-x-auto">
           <button
             v-for="tab in tabs"
             :key="tab.id"
@@ -432,8 +432,10 @@
             </div>
           </div>
           
-          <!-- Table -->
-          <table v-else class="w-full">
+          <!-- Table Container with Scroll -->
+          <div v-else class="overflow-x-auto">
+            <!-- Table -->
+            <table class="w-full min-w-[800px]">
             <thead>
               <tr class="bg-neutral-50 border-b border-neutral-200">
                 <th class="w-12 px-4 py-3">
@@ -490,32 +492,76 @@
                   <div class="flex items-center gap-4">
                     <!-- Stacked Thumbnails -->
                     <div class="relative flex-shrink-0" style="width: 68px; height: 44px;">
-                      <template v-if="link.assets && link.assets.length > 0">
+                      <template v-if="(link.assets && link.assets.length > 0) || (link as any).document_id">
+                        <!-- Если есть assets, показываем их -->
+                        <template v-if="link.assets && link.assets.length > 0">
+                          <div
+                            v-for="(asset, idx) in link.assets.slice(0, 3)"
+                            :key="`${link.id}-${asset.document_id || asset.id}-${idx}`"
+                            class="absolute rounded-lg overflow-hidden border-2 border-white shadow-sm transition-transform group-hover:scale-105"
+                            :style="{
+                              width: '44px',
+                              height: '44px',
+                              left: `${idx * 12}px`,
+                              zIndex: 3 - idx,
+                            }"
+                          >
+                            <img
+                              :key="`preview-${link.id}-${asset.document_id || asset.id}-${asset.document_file_id || asset.file_id || idx}-${shareLinkPreviews[`${link.id}-${asset.document_id || (link as any).document_id}-${asset.document_file_id || asset.file_id || (link as any).document_file_id}`] ? 'loaded' : 'pending'}`"
+                              :src="getShareLinkAssetPreviewUrl(asset, link)"
+                              :alt="asset.label || `Asset ${idx + 1}`"
+                              class="w-full h-full object-cover"
+                              loading="lazy"
+                              @error="(e: any) => { 
+                                e.target.style.display = 'none';
+                                if (e.target.nextElementSibling) {
+                                  e.target.nextElementSibling.style.display = 'flex';
+                                }
+                              }"
+                            />
+                            <div class="w-full h-full bg-neutral-100 flex items-center justify-center" style="display: none;">
+                              <svg class="w-5 h-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                          </div>
+                          <!-- More indicator -->
+                          <div
+                            v-if="link.assets.length > 3"
+                            class="absolute rounded-lg bg-neutral-800/90 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white"
+                            style="width: 44px; height: 44px; left: 36px; z-index: 0;"
+                          >
+                            +{{ link.assets.length - 3 }}
+                          </div>
+                        </template>
+                        <!-- Если нет assets, но есть document_id, показываем одно превью -->
                         <div
-                          v-for="(asset, idx) in link.assets.slice(0, 3)"
-                          :key="idx"
+                          v-else
                           class="absolute rounded-lg overflow-hidden border-2 border-white shadow-sm transition-transform group-hover:scale-105"
-                          :style="{
-                            width: '44px',
-                            height: '44px',
-                            left: `${idx * 12}px`,
-                            zIndex: 3 - idx,
-                          }"
+                          style="width: 44px; height: 44px; left: 0px; z-index: 3;"
                         >
                           <img
-                            :src="asset.thumbnail_url || 'https://via.placeholder.com/44'"
-                            :alt="asset.label"
+                            :key="`preview-${link.id}-${(link as any).document_id}-${(link as any).document_file_id}`"
+                            :src="getShareLinkAssetPreviewUrl({}, link)"
+                            :alt="link.name"
                             class="w-full h-full object-cover"
                             loading="lazy"
+                            @error="(e: any) => { 
+                              console.error('[ShareLinkPreview] Image load error:', e.target.src, e);
+                              e.target.style.display = 'none';
+                              if (e.target.nextElementSibling) {
+                                e.target.nextElementSibling.style.display = 'flex';
+                              }
+                            }"
+                            @load="(e: any) => {
+                              console.log('[ShareLinkPreview] Image loaded successfully:', e.target.src);
+                            }"
                           />
-                        </div>
-                        <!-- More indicator -->
-                        <div
-                          v-if="link.assets.length > 3"
-                          class="absolute rounded-lg bg-neutral-800/90 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white"
-                          style="width: 44px; height: 44px; left: 36px; z-index: 0;"
-                        >
-                          +{{ link.assets.length - 3 }}
+                          <div class="w-full h-full bg-neutral-100 flex items-center justify-center" style="display: none;">
+                            <svg class="w-5 h-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
                         </div>
                       </template>
                       <!-- No assets placeholder -->
@@ -530,12 +576,12 @@
                     </div>
                     
                     <!-- Link Details -->
-                    <div class="min-w-0">
-                      <p class="text-sm font-medium text-neutral-900 truncate max-w-[220px] group-hover:text-primary-600 transition-colors">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-medium text-neutral-900 truncate group-hover:text-primary-600 transition-colors">
                         {{ link.name }}
                       </p>
-                      <div class="flex items-center gap-1.5 mt-0.5">
-                        <code class="text-xs text-neutral-500 font-mono truncate max-w-[160px]">
+                      <div class="flex items-center gap-1.5 mt-0.5 min-w-0">
+                        <code class="text-xs text-neutral-500 font-mono truncate min-w-0">
                           {{ link.slug }}
                         </code>
                         <!-- Quick Copy inline -->
@@ -658,6 +704,7 @@
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>
@@ -1074,7 +1121,7 @@
  * ✅ Hover states with opacity transitions
  */
 
-import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { useDistributionStore, type SharedLink } from '@/stores/distributionStore'
@@ -1083,6 +1130,7 @@ import { useNotificationStore } from '@/stores/notificationStore'
 import { useAssetStore } from '@/stores/assetStore'
 import ShareModal from '@/components/DAM/ShareModal.vue'
 import { apiService } from '@/services/apiService'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 
 // ============================================================================
 // STORES & ROUTER
@@ -1103,6 +1151,7 @@ type TabId = 'all' | 'active' | 'expired' | 'campaigns'
 const activeTab = ref<TabId>('all')
 const tableSearch = ref('')
 const isLoading = ref(false)
+const shareLinkPreviews = ref<Record<string, string>>({})
 
 // Single revoke
 const showRevokeModal = ref(false)
@@ -1263,9 +1312,122 @@ async function refreshData() {
     console.log('[SharingPage] Refreshing data, calling fetchSharedLinks...')
     await distributionStore.fetchSharedLinks()
     console.log('[SharingPage] Data refreshed, links count:', distributionStore.sharedLinks.length)
+    
+    // Загружаем превью для активных версий файлов в ссылках
+    await loadShareLinkPreviews()
   } finally {
     isLoading.value = false
   }
+}
+
+async function loadShareLinkPreviews() {
+  // Очищаем старые blob URLs
+  Object.values(shareLinkPreviews.value).forEach(url => {
+    if (url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(url)
+      } catch {
+        // ignore
+      }
+    }
+  })
+  
+  const newPreviews: Record<string, string> = {}
+  
+  // Загружаем превью для всех ссылок, у которых есть document_id и document_file_id
+  for (const link of distributionStore.sharedLinks) {
+    const linkWithDoc = link as SharedLink & { document_id?: number, document_file_id?: number }
+    
+    if (!linkWithDoc.document_id || !linkWithDoc.document_file_id) {
+      console.log(`[loadShareLinkPreviews] Skipping link ${link.id}: missing document_id or document_file_id`)
+      continue
+    }
+    
+    // Загружаем превью для активной версии файла
+    const docId = linkWithDoc.document_id
+    let fileId = linkWithDoc.document_file_id
+    
+    try {
+      // Получаем активную версию из документа
+      try {
+        const docResponse: any = await apiService.get(
+          `/api/v4/documents/${docId}/`,
+          undefined,
+          false
+        )
+        // Используем активную версию файла, если она есть
+        const versionActiveFileId = docResponse?.version_active_file_id
+        if (versionActiveFileId) {
+          fileId = versionActiveFileId
+          console.log(`[loadShareLinkPreviews] Link ${link.id}: using active file ${fileId} instead of ${linkWithDoc.document_file_id}`)
+        }
+      } catch (e) {
+        console.warn(`[loadShareLinkPreviews] Failed to get document ${docId} for share link ${link.id}:`, e)
+        // Продолжаем с исходным fileId
+      }
+      
+      // Формируем ключ ПОСЛЕ получения активной версии
+      const previewKey = `${link.id}-${docId}-${fileId}`
+      
+      // Если превью уже загружено, пропускаем
+      if (shareLinkPreviews.value[previewKey] && shareLinkPreviews.value[previewKey].startsWith('blob:')) {
+        newPreviews[previewKey] = shareLinkPreviews.value[previewKey]
+        console.log(`[loadShareLinkPreviews] Link ${link.id}: using cached preview for key ${previewKey}`)
+        continue
+      }
+      
+      // Для изображений используем прямой download (работает надежнее, чем /pages/1/image/)
+      try {
+        console.log(`[loadShareLinkPreviews] Loading preview for link ${link.id}, doc ${docId}, file ${fileId}`)
+        const blob = await apiService.get<Blob>(
+          `/api/v4/documents/${docId}/files/${fileId}/download/`,
+          { responseType: 'blob' } as any,
+          false
+        )
+        const objectUrl = window.URL.createObjectURL(blob)
+        newPreviews[previewKey] = objectUrl
+        
+        // Обновляем assets ссылки для совместимости
+        // Используем новый массив для обеспечения реактивности Vue
+        if (link.assets && link.assets.length > 0) {
+          link.assets = [{
+            ...link.assets[0],
+            document_file_id: fileId,
+            version_active_file_id: fileId,
+            thumbnail_url: objectUrl
+          }]
+        } else {
+          // Создаем assets если их нет
+          link.assets = [{
+            id: docId,
+            document_id: docId,
+            document_file_id: fileId,
+            version_active_file_id: fileId,
+            file_latest_id: fileId,
+            file_id: fileId,
+            label: `Document #${docId}`,
+            thumbnail_url: objectUrl,
+            download_url: undefined
+          }]
+        }
+        
+        // Обновляем document_file_id в ссылке для правильного отображения
+        linkWithDoc.document_file_id = fileId
+      } catch (e) {
+        console.warn(`[loadShareLinkPreviews] Failed to load preview for share link ${link.id} (file ${fileId}):`, e)
+        newPreviews[previewKey] = '/placeholder-document.svg'
+      }
+    } catch (e) {
+      console.warn(`[loadShareLinkPreviews] Failed to load preview for share link ${link.id}:`, e)
+      const previewKey = `${link.id}-${docId}-${fileId}`
+      newPreviews[previewKey] = '/placeholder-document.svg'
+    }
+  }
+  
+  shareLinkPreviews.value = newPreviews
+  
+  // Принудительно обновляем ссылки для реактивности Vue
+  await nextTick()
 }
 
 async function copyLink(link: SharedLink) {
@@ -1610,6 +1772,8 @@ async function saveCampaignAssets() {
       title: 'Кампания обновлена',
       message: 'Состав файлов кампании сохранён'
     })
+    // Закрываем модалку после успешного сохранения
+    closeCampaignDetailsModal()
   } catch (error) {
     notificationStore.addNotification({
       type: 'error',
@@ -1624,7 +1788,7 @@ function removeAssetFromCampaign(asset: any) {
   campaignDetailsAssets.value = campaignDetailsAssets.value.filter(a => a.id !== asset.id)
 }
 
-function addSelectedDocumentsToCampaign() {
+async function addSelectedDocumentsToCampaign() {
   if (!selectedDocumentIds.value.length) return
 
   const existingIds = new Set(
@@ -1634,16 +1798,24 @@ function addSelectedDocumentsToCampaign() {
   )
 
   const now = Date.now()
+  const newAssets: any[] = []
   selectedDocumentIds.value.forEach((docId, index) => {
     if (!existingIds.has(docId)) {
-      campaignDetailsAssets.value.push({
+      const newAsset = {
         id: `tmp-${now}-${index}-${docId}`,
         document_id: docId,
         document_label: `Документ #${docId}`,
         document_file_id: null
-      })
+      }
+      campaignDetailsAssets.value.push(newAsset)
+      newAssets.push(newAsset)
     }
   })
+  
+  // Загружаем превью для новых файлов сразу после добавления
+  if (newAssets.length > 0) {
+    await loadCampaignAssetPreviews()
+  }
 }
 
 function assetPreviewKey(asset: any, resolvedFileId?: number | null): string {
@@ -1654,7 +1826,61 @@ function assetPreviewKey(asset: any, resolvedFileId?: number | null): string {
 
 function getAssetPreviewUrl(asset: any): string {
   const key = assetPreviewKey(asset)
-  return campaignAssetPreviews.value[key] || '/placeholder-document.svg'
+  const blobUrl = campaignAssetPreviews.value[key]
+  if (blobUrl) {
+    return blobUrl
+  }
+
+  // Fallback: используем ту же логику превью, что и в галерее/коллекциях,
+  // чтобы всегда показывать "актуальную" версию документа.
+  const pseudoAsset: any = {
+    id: asset.document_id || asset.id,
+    version_active_id: asset.version_active_id || asset.version_id || asset.version?.id,
+    file_latest_id: asset.document_file_id || asset.file_latest_id || asset.file_id,
+    thumbnail_url: asset.thumbnail_url,
+    preview_url: asset.preview_url,
+    download_url: asset.download_url
+  }
+
+  return resolveAssetImageUrl(pseudoAsset)
+}
+
+function getShareLinkAssetPreviewUrl(asset: any, link: SharedLink & { document_id?: number, document_file_id?: number }): string {
+  // Используем document_id и document_file_id из ссылки для получения превью активной версии
+  const docId = asset.document_id || link.document_id
+  const fileId = asset.document_file_id || asset.version_active_file_id || asset.file_latest_id || asset.file_id || link.document_file_id
+  
+  if (!docId || !fileId) {
+    return '/placeholder-document.svg'
+  }
+  
+  // Проверяем, есть ли загруженное превью в shareLinkPreviews
+  const previewKey = `${link.id}-${docId}-${fileId}`
+  const previewUrl = shareLinkPreviews.value[previewKey]
+  
+  if (previewUrl) {
+    return previewUrl
+  }
+  
+  // Если есть готовое превью в asset, используем его
+  if (asset.thumbnail_url) {
+    return asset.thumbnail_url
+  }
+  
+  // Fallback: создаем псевдо-актив для resolveAssetImageUrl
+  const pseudoAsset: any = {
+    id: docId,
+    document_id: docId,
+    document_file_id: fileId,
+    version_active_file_id: fileId,
+    file_latest_id: fileId,
+    file_id: fileId,
+    thumbnail_url: asset.thumbnail_url,
+    preview_url: asset.preview_url,
+    download_url: asset.download_url
+  }
+  
+  return resolveAssetImageUrl(pseudoAsset) || '/placeholder-document.svg'
 }
 
 async function loadCampaignAssetPreviews() {
@@ -1664,27 +1890,36 @@ async function loadCampaignAssetPreviews() {
     if (!asset?.document_id) continue
 
     const docId = asset.document_id
-    // Всегда берём актуальный файл документа (последний по timestamp),
-    // чтобы не зависеть от сохранённого file_id в кампании.
-    let fileId: number | null = null
-    try {
-      const filesResponse: any = await apiService.get(
-        `/api/v4/documents/${docId}/files/`,
-        { params: { page_size: 1, ordering: '-timestamp' } } as any,
-        false
-      )
-      const results = Array.isArray(filesResponse?.results)
-        ? filesResponse.results
-        : Array.isArray(filesResponse)
-          ? filesResponse
-          : []
-      fileId = results[0]?.id || null
-    } catch (e) {
-      // fallback на то, что пришло в кампании, если запрос файлов не удался
-      fileId = asset.document_file_id || asset.file_latest_id || asset.file_id || null
+    // Приоритет — "текущий" файл, который приходит из бэкенда (document_file_id).
+    // Только если его нет, пробуем подтянуть последний файл по timestamp.
+    let fileId: number | null =
+      asset.document_file_id || asset.file_latest_id || asset.file_id || null
+
+    if (!fileId) {
+      try {
+        const filesResponse: any = await apiService.get(
+          `/api/v4/documents/${docId}/files/`,
+          { params: { page_size: 1, ordering: '-timestamp' } } as any,
+          false
+        )
+        const results = Array.isArray(filesResponse?.results)
+          ? filesResponse.results
+          : Array.isArray(filesResponse)
+            ? filesResponse
+            : []
+        fileId = results[0]?.id || null
+      } catch (e) {
+        // Если запрос файлов не удался, оставляем fileId как null и переходим к следующему asset.
+        fileId = null
+      }
     }
 
     if (!fileId) continue
+
+    // Обновляем идентификатор файла в объекте asset, чтобы ключ превью
+    // совпадал между загрузкой и рендерингом (используем актуальный файл).
+    asset.document_file_id = fileId
+    asset.file_latest_id = fileId
 
     // Для активной версии пробуем добавить путь на всякий случай
     const versionId = asset.version_active_id || asset.version_id || asset.version?.id
@@ -1707,7 +1942,9 @@ async function loadCampaignAssetPreviews() {
           false
         )
         const objectUrl = window.URL.createObjectURL(blob)
-        previews[assetPreviewKey(asset, fileId)] = objectUrl
+        // Ключ должен совпадать с getAssetPreviewUrl(asset),
+        // который вызывает assetPreviewKey(asset) без fileId.
+        previews[assetPreviewKey(asset)] = objectUrl
         break
       } catch (e) {
         // try next path
@@ -1819,6 +2056,32 @@ onMounted(async () => {
     // Убираем служебный флаг из URL
     router.replace({ query: { ...route.query, from: undefined, tab: 'campaigns' } })
   }
+})
+
+onBeforeUnmount(() => {
+  // Очищаем blob URLs для превью ссылок
+  Object.values(shareLinkPreviews.value).forEach(url => {
+    if (url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(url)
+      } catch {
+        // ignore
+      }
+    }
+  })
+  shareLinkPreviews.value = {}
+  
+  // Очищаем blob URLs для превью кампаний
+  Object.values(campaignAssetPreviews.value).forEach(url => {
+    if (url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(url)
+      } catch {
+        // ignore
+      }
+    }
+  })
+  campaignAssetPreviews.value = {}
 })
 
 // Watch for route changes

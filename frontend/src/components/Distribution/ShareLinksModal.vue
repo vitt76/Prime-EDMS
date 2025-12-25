@@ -184,7 +184,7 @@ const newLinkPermissions = ref({
 
 const handleCreateLink = async (): Promise<void> => {
   try {
-    await distributionService.createShareLink(props.publicationId, {
+    await distributionService.createShareLinkForPublication(props.publicationId, {
       expires_at: newLinkExpiresAt.value || undefined,
       password: newLinkPassword.value || undefined,
       permissions: newLinkPermissions.value
@@ -212,7 +212,7 @@ const handleCreateLink = async (): Promise<void> => {
 
 const handleDeleteLink = async (linkId: number): Promise<void> => {
   try {
-    await distributionService.deleteShareLink(props.publicationId, linkId)
+    await distributionService.deleteShareLinkForPublication(props.publicationId, linkId)
     emit('link-deleted')
     uiStore.addNotification({
       type: 'success',

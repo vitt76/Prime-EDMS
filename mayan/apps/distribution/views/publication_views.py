@@ -240,9 +240,13 @@ class APIAccessLogListView(generics.ListAPIView):
 
 class APIGenerateRenditionsView(generics.RetrieveAPIView):
     """
+    get: Return publication details.
     post: Generate all renditions for a publication.
     """
-    mayan_object_permissions = {'POST': (permission_publication_api_edit,)}
+    mayan_object_permissions = {
+        'GET': (permission_publication_api_view,),
+        'POST': (permission_publication_api_edit,)
+    }
     serializer_class = PublicationSerializer
     queryset = Publication.objects.all()
 
@@ -253,3 +257,71 @@ class APIGenerateRenditionsView(generics.RetrieveAPIView):
             return Publication.objects.none()
 
         return Publication.objects.filter(owner=user)
+    
+    def post(self, request, *args, **kwargs):
+        """
+        Generate renditions for all items in the publication.
+        """
+        publication = self.get_object()
+        
+        # Проверяем, есть ли у публикации пресеты
+        if not publication.presets.exists():
+            from ..models import RenditionPreset, Recipient
+            
+            # Ищем или создаем дефолтный пресет
+            default_preset = RenditionPreset.objects.filter(
+                resource_type='image',
+                name__icontains='default'
+            ).first()
+            
+            if not default_preset:
+                default_recipient, _ = Recipient.objects.get_or_create(
+                    email='system@mayan-edms.local',
+                    defaults={
+                        'name': 'System Default',
+                        'organization': 'Mayan EDMS'
+                    }
+                )
+                
+                default_preset = RenditionPreset.objects.create(
+                    resource_type='image',
+                    format='jpeg',
+                    name='Default JPEG',
+                    description='Default preset for campaign publications',
+                    quality=85,
+                    width=1920,
+                    height=None,
+                    crop=False,
+                    recipient=default_recipient
+                )
+            
+            publication.presets.add(default_preset)
+        
+        # Генерируем рендишены для всех элементов
+        try:
+            items_count = publication.items.count()
+            presets_count = publication.presets.count()
+            publication.generate_all_renditions()
+            
+            from rest_framework.response import Response
+            from rest_framework import status
+            
+            return Response({
+                'status': 'success',
+                'message': f'Rendition generation queued for {items_count} items with {presets_count} presets',
+                'publication_id': publication.id,
+                'items_count': items_count,
+                'presets_count': presets_count
+            }, status=status.HTTP_202_ACCEPTED)
+        except Exception as exc:
+            from rest_framework.response import Response
+            from rest_framework import status
+            import logging
+            
+            logger = logging.getLogger(__name__)
+            logger.error(f'Failed to generate renditions for publication {publication.id}: {exc}', exc_info=True)
+            
+            return Response({
+                'status': 'error',
+                'message': f'Failed to generate renditions: {str(exc)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

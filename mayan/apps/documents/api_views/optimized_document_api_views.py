@@ -99,11 +99,13 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
                 ).filter(pk=Subquery(latest_file_subquery)),
                 to_attr='_prefetched_latest_file_list'
             ),
-            # Prefetch active version
+            # Prefetch active version with pages
+            # Note: content_object is a GenericForeignKey, so we can't use select_related
+            # The serializer will query it directly when needed
             Prefetch(
                 'versions',
                 queryset=DocumentVersion.objects.filter(active=True).prefetch_related(
-                    'version_pages'  # Also prefetch pages for version
+                    'version_pages'  # Prefetch pages, content_object will be queried in serializer
                 ),
                 to_attr='_prefetched_version_active_list'
             ),
@@ -234,7 +236,7 @@ class OptimizedAPIDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
             Prefetch(
                 'versions',
                 queryset=DocumentVersion.objects.filter(active=True).prefetch_related(
-                    'version_pages'
+                    'version_pages'  # Prefetch pages for active version
                 ),
                 to_attr='_prefetched_version_active_list'
             ),

@@ -233,6 +233,25 @@ export interface Publication {
   permissions?: PublicationPermissions
   analytics?: PublicationAnalytics
   share_links?: ShareLink[]
+  renditions?: GeneratedRendition[]
+  renditions_count?: number
+}
+
+export interface GeneratedRendition {
+  id: number
+  publication_item_id: number
+  document_file_id: number
+  preset_id: number
+  preset_name: string
+  preset_format: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  file_name?: string
+  download_url?: string
+  file_size?: number
+  checksum?: string
+  error_message?: string
+  created: string
+  modified: string
 }
 
 export interface PublicationChannel {
@@ -294,6 +313,14 @@ export interface UpdatePublicationRequest {
 }
 
 // Distribution Campaign API types
+export interface CampaignAsset {
+  id: number
+  document_id: number
+  document_label: string
+  document_file_id: number
+  publication_id?: number  // ID публикации, в которой находится этот файл
+}
+
 export interface DistributionCampaign {
   id: number
   title: string
@@ -309,6 +336,7 @@ export interface DistributionCampaign {
   share_links_count: number
   total_views: number | null
   total_downloads: number | null
+  assets?: CampaignAsset[] // Only in detail view
 }
 
 export interface CreateCampaignRequest {

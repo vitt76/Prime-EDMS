@@ -103,11 +103,20 @@ export interface BackendOptimizedDocument {
   is_stub: boolean
   document_type: BackendDocumentType
   file_latest?: BackendDocumentFile | null
+  // Separate file fields from OptimizedDocumentListSerializer (list view)
+  file_latest_id?: number
+  file_latest_filename?: string
+  file_latest_size?: number
+  file_latest_mimetype?: string
+  file_latest_download_url?: string
+  file_latest_url?: string
   files_count?: number
   version_active?: {
     id: number
     timestamp: string
   }
+  version_active_id?: number
+  version_active_file_id?: number
   // DAM Extension fields
   ai_analysis?: BackendAIAnalysis | null
   tags?: BackendTag[]
@@ -220,12 +229,17 @@ function getThumbnailUrl(doc: BackendOptimizedDocument): string {
     }
   }
   
-  // Priority 4: Generate Mayan page image URL
-  // Note: This requires auth token - handled by browser cookies or will need proxy
-  if (doc.file_latest && doc.id) {
-    // Mayan generates thumbnails at /documents/{id}/versions/latest/pages/1/image/
-    // Using width=300 for thumbnail quality vs size balance
-    return `${baseUrl}/api/v4/documents/${doc.id}/versions/latest/pages/1/image/?width=300&height=300`
+  // Priority 4: Generate download URL для файла активной версии (для изображений)
+  // Используем прямой download URL, так как браузер может отображать изображения напрямую
+  if (doc.id) {
+    const fileId = (doc as any).version_active_file_id || doc.file_latest?.id
+    if (fileId) {
+      // Проверяем, является ли файл изображением
+      const mimeType = doc.file_latest?.mimetype?.toLowerCase() || ''
+      if (mimeType.startsWith('image/')) {
+        return `${baseUrl}/api/v4/documents/${doc.id}/files/${fileId}/download/`
+      }
+    }
   }
   
   // Fallback to placeholder
@@ -251,13 +265,18 @@ function getPreviewUrl(doc: BackendOptimizedDocument): string | undefined {
     return toAbsoluteUrl(doc.file_latest.download_url)
   }
   
-  // Priority 4: Generate Mayan page image URL (larger size)
-  if (doc.file_latest && doc.id) {
-    const versionId =
-      (doc as any).version_active?.id ||
-      (doc as any).version_active_id ||
-      'latest'
-    return `${baseUrl}/api/v4/documents/${doc.id}/versions/${versionId}/pages/1/image/?width=1200`
+  // Priority 4: Generate download URL для файла активной версии
+  // Используем прямой download URL, так как браузер может отображать изображения напрямую
+  // Это более надёжно, чем /files/{file_id}/pages/{page_id}/image/, который требует ID страницы
+  if (doc.id) {
+    const fileId = (doc as any).version_active_file_id || doc.file_latest?.id
+    if (fileId) {
+      // Проверяем, является ли файл изображением
+      const mimeType = doc.file_latest?.mimetype?.toLowerCase() || ''
+      if (mimeType.startsWith('image/')) {
+        return `${baseUrl}/api/v4/documents/${doc.id}/files/${fileId}/download/`
+      }
+    }
   }
   
   return undefined
@@ -426,13 +445,25 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
   )
   
   // Get file information with fallback logic
+  // OptimizedDocumentListSerializer returns separate fields (file_latest_filename, file_latest_size, etc.)
+  // instead of a file_latest object, so we need to handle both cases
   let filename = backendDoc.label
   let size = 0
   let mime_type = mimeType
   let file_details = undefined
   let date_added = backendDoc.datetime_created
+  let file_latest_id = backendDoc.file_latest?.id || (backendDoc as any)?.file_latest_id
+
+  // Check if we have separate file fields from OptimizedDocumentListSerializer
+  const hasFileFields = !!(backendDoc as any)?.file_latest_filename || !!(backendDoc as any)?.file_latest_size
+  
+  // Priority: version_active_file_id > file_latest
+  // This ensures we use the active version file, not just the latest by timestamp
+  const activeFileId = (backendDoc as any)?.version_active_file_id
+  const shouldUseActiveFile = activeFileId && activeFileId !== file_latest_id
 
   if (backendDoc.file_latest) {
+    // Full file_latest object (from OptimizedDocumentSerializer detail view)
     filename = backendDoc.file_latest.filename || backendDoc.label
     size = backendDoc.file_latest.size || 0
     mime_type = backendDoc.file_latest.mimetype || mimeType
@@ -443,20 +474,47 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
       uploaded_date: backendDoc.file_latest.timestamp,
       checksum: backendDoc.file_latest.checksum,
     }
-    // Use file timestamp as date_added if available (more accurate)
     if (backendDoc.file_latest.timestamp) {
       date_added = backendDoc.file_latest.timestamp
     }
+    file_latest_id = backendDoc.file_latest.id
+  } else if (hasFileFields) {
+    // Separate file fields from OptimizedDocumentListSerializer (list view)
+    const docAny = backendDoc as any
+    filename = docAny.file_latest_filename || backendDoc.label
+    size = docAny.file_latest_size || 0
+    mime_type = docAny.file_latest_mimetype || mimeType
+    file_latest_id = docAny.file_latest_id || file_latest_id
+    file_details = {
+      filename: docAny.file_latest_filename,
+      size: docAny.file_latest_size,
+      mime_type: docAny.file_latest_mimetype,
+      uploaded_date: undefined, // Not available in list view
+      checksum: undefined, // Not available in list view
+    }
   } else {
-    // Fallback: try to infer from label if no file_latest
+    // No file information available
     filename = backendDoc.label
-    size = 0 // We don't have size info
-    mime_type = mimeType // Use inferred mime type
+    size = 0
+    mime_type = mimeType
+  }
+
+  // If we have version_active_file_id that differs from file_latest_id,
+  // we should use it, but for list view we'll keep file_latest data
+  // and let getAssetDetail fetch the correct active file if needed
+  if (shouldUseActiveFile && !hasFileFields && !backendDoc.file_latest) {
+    // Only log if we don't have file data at all
+    console.log('[MayanAdapter] Active file ID differs from file_latest:', {
+      activeFileId,
+      file_latest_id,
+      documentId: backendDoc.id
+    })
   }
 
   return {
     id: backendDoc.id,
     version_active_id: (backendDoc as any)?.version_active?.id || (backendDoc as any)?.version_active_id || (backendDoc as any)?.version?.id,
+    version_active_file_id: (backendDoc as any)?.version_active_file_id || undefined,
     label: backendDoc.label,
     description: backendDoc.description,
     filename: filename,
