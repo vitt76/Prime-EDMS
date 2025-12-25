@@ -15,6 +15,12 @@ export interface APIShareLink {
   expires_at: string | null
   max_downloads: number | null
   downloads_count: number
+  views_count: number
+  max_views: number | null
+  password_hash?: string | null
+  allow_download: boolean
+  unique_visitors_count?: number
+  password_protected?: boolean
   created: string
   last_accessed: string | null
   // Extended fields from serializer
@@ -76,23 +82,24 @@ export function adaptShareLink(apiLink: APIShareLink, baseUrl: string = ''): Sha
     asset_ids: apiLink.document_file_id ? [apiLink.document_file_id] : [],
     assets: assets, // Create assets array from document_id and document_file_id
     is_public: true, // ShareLinks are always public (token-based access)
-    password_protected: false, // Not implemented in current model
+    password_protected: apiLink.password_protected || false,
     created_date: apiLink.created,
     updated_date: apiLink.last_accessed || undefined,
     expires_date: apiLink.expires_at,
     created_by: apiLink.owner_username || 'Unknown',
     created_by_id: 0, // Not available in current API
-    views: apiLink.downloads_count, // Using downloads_count as views proxy
+    views: apiLink.views_count || 0,
     downloads: apiLink.downloads_count,
-    unique_visitors: 0, // Not tracked in current model
+    unique_visitors: apiLink.unique_visitors_count || 0,
     status,
-    allow_download: true, // ShareLinks always allow download
+    allow_download: apiLink.allow_download !== false, // Default to true if not specified
     allow_comment: false, // Not implemented
     max_downloads: apiLink.max_downloads,
+    max_views: apiLink.max_views,
     // Store document info for preview loading
     document_id: apiLink.document_id,
     document_file_id: apiLink.document_file_id,
-  } as SharedLink & { document_id?: number, document_file_id?: number }
+  } as SharedLink & { document_id?: number, document_file_id?: number, max_views?: number | null }
 }
 
 /**

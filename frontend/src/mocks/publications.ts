@@ -44,6 +44,7 @@ export interface SharedLink {
   ip_whitelist?: string[]
   domain_whitelist?: string[]
   max_downloads?: number | null
+  max_views?: number | null
   watermark_enabled?: boolean
 }
 
@@ -55,6 +56,9 @@ export interface CreateSharedLinkParams {
   password?: string
   allow_download: boolean
   allow_comment: boolean
+  max_views?: number | null
+  max_downloads?: number | null
+  publication_id?: number
 }
 
 // ============================================================================

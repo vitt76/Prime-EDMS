@@ -184,6 +184,9 @@ class DistributionService {
     title?: string
     expires_at?: string | null
     max_downloads?: number | null
+    max_views?: number | null
+    password?: string
+    allow_download?: boolean
     preset_id?: number
   }): Promise<any> {
     return apiService.post<any>('/api/v4/distribution/share_links/create_simple/', data)
@@ -195,8 +198,21 @@ class DistributionService {
   async updateShareLink(id: number, data: {
     expires_at?: string | null
     max_downloads?: number | null
+    max_views?: number | null
+    password?: string
+    allow_download?: boolean
   }): Promise<any> {
     return apiService.patch<any>(`/api/v4/distribution/share_links/${id}/`, data)
+  }
+
+  /**
+   * Check password for a share link
+   */
+  async checkShareLinkPassword(token: string, password: string): Promise<{ valid: boolean }> {
+    return apiService.post<{ valid: boolean }>(
+      `/api/v4/distribution/public/${token}/check-password/`,
+      { password }
+    )
   }
 
   /**

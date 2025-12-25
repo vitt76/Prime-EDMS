@@ -71,7 +71,7 @@
               </div>
               
               <p class="mt-3 text-sm text-neutral-500">
-                UUID: <code class="font-mono text-xs">{{ link.uuid }}</code>
+                UUID: <code class="font-mono text-xs">{{ link.slug || link.uuid }}</code>
               </p>
             </div>
             
@@ -312,41 +312,120 @@
             
             <div class="space-y-4">
               <div>
-                <label class="block text-sm font-medium text-neutral-700 mb-1">Название</label>
+                <label class="block text-sm font-medium text-neutral-700 mb-2">Название ссылки</label>
                 <input
                   v-model="editForm.name"
                   type="text"
-                  class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 />
               </div>
               
+              <!-- Expiration Date -->
               <div>
-                <label class="block text-sm font-medium text-neutral-700 mb-1">Срок действия</label>
+                <label class="flex items-center gap-3 cursor-pointer mb-3">
+                  <input
+                    v-model="editForm.has_expiration"
+                    type="checkbox"
+                    class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span class="text-sm font-medium text-neutral-700">Ограничить срок действия</span>
+                </label>
                 <input
+                  v-if="editForm.has_expiration"
                   v-model="editForm.expires_date"
                   type="date"
-                  class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  :min="new Date().toISOString().split('T')[0]"
+                  class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 />
               </div>
               
-              <div class="flex items-center gap-4">
-                <label class="flex items-center gap-2 cursor-pointer">
+              <!-- Password Protection -->
+              <div>
+                <label class="flex items-center gap-3 cursor-pointer mb-3">
                   <input
-                    v-model="editForm.allow_download"
+                    v-model="editForm.has_password"
                     type="checkbox"
                     class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
                   />
-                  <span class="text-sm text-neutral-700">Разрешить скачивание</span>
+                  <span class="text-sm font-medium text-neutral-700">Защитить паролем</span>
                 </label>
+                <input
+                  v-if="editForm.has_password"
+                  v-model="editForm.password"
+                  type="password"
+                  placeholder="Введите новый пароль (оставьте пустым, чтобы убрать пароль)"
+                  class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                />
+              </div>
+              
+              <!-- Limits -->
+              <div class="space-y-4">
+                <div>
+                  <label class="flex items-center gap-3 cursor-pointer mb-3">
+                    <input
+                      v-model="editForm.has_max_views"
+                      type="checkbox"
+                      class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span class="text-sm font-medium text-neutral-700">Ограничить просмотры</span>
+                  </label>
+                  <input
+                    v-if="editForm.has_max_views"
+                    v-model.number="editForm.max_views"
+                    type="number"
+                    min="1"
+                    placeholder="Максимальное количество просмотров"
+                    class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                  />
+                </div>
                 
-                <label class="flex items-center gap-2 cursor-pointer">
+                <div>
+                  <label class="flex items-center gap-3 cursor-pointer mb-3">
+                    <input
+                      v-model="editForm.has_max_downloads"
+                      type="checkbox"
+                      class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span class="text-sm font-medium text-neutral-700">Ограничить скачивания</span>
+                  </label>
                   <input
-                    v-model="editForm.allow_comment"
-                    type="checkbox"
-                    class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                    v-if="editForm.has_max_downloads"
+                    v-model.number="editForm.max_downloads"
+                    type="number"
+                    min="1"
+                    placeholder="Максимальное количество скачиваний"
+                    class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                   />
-                  <span class="text-sm text-neutral-700">Комментарии</span>
-                </label>
+                </div>
+              </div>
+              
+              <!-- Permissions -->
+              <div>
+                <p class="text-sm font-medium text-neutral-700 mb-3">Разрешения</p>
+                <div class="space-y-3">
+                  <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                      v-model="editForm.allow_download"
+                      type="checkbox"
+                      class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span class="text-sm text-neutral-700">Разрешить скачивание</span>
+                      <p class="text-xs text-neutral-500">Пользователи смогут скачать файлы</p>
+                    </div>
+                  </label>
+                  <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                      v-model="editForm.allow_comment"
+                      type="checkbox"
+                      class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span class="text-sm text-neutral-700">Разрешить комментарии</span>
+                      <p class="text-xs text-neutral-500">Пользователи смогут оставлять комментарии</p>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
             
@@ -375,10 +454,14 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDistributionStore, type SharedLink } from '@/stores/distributionStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { distributionService } from '@/services/distributionService'
+import { adaptShareLink } from '@/utils/shareLinkAdapter'
+import { apiService } from '@/services/apiService'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 
 // ============================================================================
 // PROPS & ROUTE
@@ -401,10 +484,18 @@ const isLoading = ref(true)
 const link = ref<SharedLink | null>(null)
 const showRevokeModal = ref(false)
 const showEditModal = ref(false)
+const assetPreviews = ref<Record<string, string>>({})
 
 const editForm = reactive({
   name: '',
+  has_expiration: false,
   expires_date: '',
+  has_password: false,
+  password: '',
+  has_max_views: false,
+  max_views: null as number | null,
+  has_max_downloads: false,
+  max_downloads: null as number | null,
   allow_download: true,
   allow_comment: false
 })
@@ -418,18 +509,98 @@ async function loadLink() {
   
   try {
     const id = parseInt(props.id || route.params.id as string, 10)
-    await distributionStore.fetchSharedLinks()
-    link.value = distributionStore.getSharedLink(id) || null
+    
+    // Загружаем детали ссылки напрямую из API
+    const apiLink = await distributionService.getShareLinkById(id)
+    
+    // Адаптируем данные из API в формат SharedLink
+    const baseUrl = window.location.origin
+    link.value = adaptShareLink(apiLink, baseUrl)
     
     if (link.value) {
       editForm.name = link.value.name
+      editForm.has_expiration = !!link.value.expires_date
       editForm.expires_date = link.value.expires_date ? link.value.expires_date.split('T')[0] : ''
+      editForm.has_password = link.value.password_protected
+      editForm.password = '' // Не показываем существующий пароль
+      editForm.has_max_views = !!link.value.max_views
+      editForm.max_views = link.value.max_views || null
+      editForm.has_max_downloads = !!link.value.max_downloads
+      editForm.max_downloads = link.value.max_downloads || null
       editForm.allow_download = link.value.allow_download
       editForm.allow_comment = link.value.allow_comment
+      
+      // Загружаем детали активов и их превью
+      await loadAssetDetails()
     }
+  } catch (error) {
+    console.error('Failed to load share link:', error)
+    link.value = null
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось загрузить данные ссылки'
+    })
   } finally {
     isLoading.value = false
   }
+}
+
+async function loadAssetDetails() {
+  if (!link.value || !link.value.assets || link.value.assets.length === 0) {
+    return
+  }
+  
+  const previews: Record<string, string> = {}
+  
+  for (const asset of link.value.assets) {
+    if (!asset.document_id) continue
+    
+    try {
+      // Загружаем детали документа для получения правильного названия
+      const docResponse: any = await apiService.get(
+        `/api/v4/documents/${asset.document_id}/`,
+        undefined,
+        false
+      )
+      
+      // Обновляем название актива
+      asset.label = docResponse.label || `Document #${asset.document_id}`
+      
+      // Получаем активную версию файла
+      const fileId = docResponse.version_active_file_id || asset.document_file_id || asset.file_id
+      
+      if (fileId) {
+        // Загружаем превью
+        try {
+          const blob = await apiService.get<Blob>(
+            `/api/v4/documents/${asset.document_id}/files/${fileId}/download/`,
+            { responseType: 'blob' } as any,
+            false
+          )
+          const objectUrl = window.URL.createObjectURL(blob)
+          previews[`${asset.document_id}-${fileId}`] = objectUrl
+          asset.thumbnail_url = objectUrl
+        } catch (e) {
+          // Fallback: используем resolveAssetImageUrl
+          const pseudoAsset: any = {
+            id: asset.document_id,
+            version_active_file_id: fileId,
+            file_latest_id: fileId
+          }
+          const imageUrl = resolveAssetImageUrl(pseudoAsset)
+          if (imageUrl && imageUrl !== '/placeholder-document.svg') {
+            previews[`${asset.document_id}-${fileId}`] = imageUrl
+            asset.thumbnail_url = imageUrl
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`Failed to load asset details for document ${asset.document_id}:`, e)
+    }
+  }
+  
+  assetPreviews.value = previews
 }
 
 function goBack() {
@@ -480,12 +651,32 @@ async function saveEdit() {
   if (!link.value) return
   
   try {
-    await distributionStore.updateSharedLink(link.value.id, {
-      name: editForm.name,
-      expires_date: editForm.expires_date || null,
+    const updates: any = {
+      // Note: 'name' is not a field in ShareLink model - it's derived from publication title
+      // 'allow_comment' is also not supported by the backend
       allow_download: editForm.allow_download,
-      allow_comment: editForm.allow_comment
-    })
+      max_views: editForm.has_max_views ? (editForm.max_views || null) : null,
+      max_downloads: editForm.has_max_downloads ? (editForm.max_downloads || null) : null
+    }
+    
+    // Handle expires_date: convert date string to ISO datetime format
+    if (editForm.has_expiration && editForm.expires_date) {
+      // Convert date string (YYYY-MM-DD) to ISO datetime (YYYY-MM-DDTHH:mm:ssZ)
+      const date = new Date(editForm.expires_date + 'T23:59:59Z')
+      updates.expires_date = date.toISOString()
+    } else if (!editForm.has_expiration) {
+      updates.expires_date = null
+    }
+    
+    // Handle password: if checkbox is off, clear password; if on and password provided, set it
+    if (!editForm.has_password) {
+      updates.password = '' // Clear password
+    } else if (editForm.password) {
+      updates.password = editForm.password // Set new password
+    }
+    // If checkbox is on but password is empty, don't change it (don't include in updates)
+    
+    await distributionStore.updateSharedLink(link.value.id, updates)
     
     notificationStore.addNotification({
       type: 'success',
@@ -580,6 +771,20 @@ watch(
   () => props.id,
   () => loadLink()
 )
+
+onBeforeUnmount(() => {
+  // Очищаем blob URLs для превью активов
+  Object.values(assetPreviews.value).forEach(url => {
+    if (url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(url)
+      } catch {
+        // ignore
+      }
+    }
+  })
+  assetPreviews.value = {}
+})
 </script>
 
 <style scoped>

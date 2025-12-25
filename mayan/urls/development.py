@@ -43,5 +43,7 @@ urlpatterns += [  # NOQA
     url(regex=r'^digital-assets/(?!api/).*', view=TemplateView.as_view(template_name='appearance/spa.html'), name='dam-spa-route'),
     url(regex=r'^settings/(?!api/).*', view=TemplateView.as_view(template_name='appearance/spa.html'), name='settings-spa-route'),
     # Catch-all route for SPA - must be last
-    url(regex=r'^(?!api/|admin/|static/|media/).*', view=TemplateView.as_view(template_name='appearance/spa.html'), name='spa-catch-all')
+    # Exclude: api/, admin/, static/, media/, and UUID-like tokens (public share links)
+    # UUID pattern: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    url(regex=r'^(?!api/|admin/|static/|media/|publish/|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*', view=TemplateView.as_view(template_name='appearance/spa.html'), name='spa-catch-all')
 ]

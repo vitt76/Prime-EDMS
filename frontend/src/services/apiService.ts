@@ -9,6 +9,7 @@ import { getToken, clearToken } from './authService'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 const MAX_RETRIES = 3
+const MAX_RETRIES_RATE_LIMIT = 5 // More retries for rate limit errors
 const RETRY_DELAY = 1000 // 1 second
 
 const shouldDebugLog = (): boolean => {
@@ -59,7 +60,8 @@ const shouldRetry = (error: AxiosError): boolean => {
   }
   
   const status = error.response.status
-  return status >= 500 && status < 600
+  // Retry on 5xx errors or 429 (rate limit)
+  return (status >= 500 && status < 600) || status === 429
 }
 
 const delay = (ms: number): Promise<void> => {
@@ -171,23 +173,64 @@ class ApiService {
           return Promise.reject(apiError)
         }
 
-        // Retry logic for network errors and 5xx
+        // Retry logic for network errors, 5xx, and 429 (rate limit)
         if (shouldRetry(error) && config && !config._retry) {
           config._retry = true
           config._retryCount = (config._retryCount || 0) + 1
 
-          if (config._retryCount <= MAX_RETRIES) {
-            // Exponential backoff
-            const delayMs = RETRY_DELAY * Math.pow(2, config._retryCount - 1)
+          // Use different max retries for rate limit errors
+          const maxRetries = error.response?.status === 429 ? MAX_RETRIES_RATE_LIMIT : MAX_RETRIES
+
+          if (config._retryCount <= maxRetries) {
+            // For 429 errors, use retry_after from response if available
+            let delayMs = RETRY_DELAY * Math.pow(2, config._retryCount - 1)
+            
+            if (error.response?.status === 429) {
+              // Try to get retry_after from response header or body
+              const retryAfterHeader = error.response.headers['retry-after']
+              const retryAfterBody = (error.response.data as any)?.retry_after
+              
+              if (retryAfterHeader) {
+                // retry-after can be in seconds (string or number)
+                const retryAfterSeconds = typeof retryAfterHeader === 'string' 
+                  ? parseInt(retryAfterHeader, 10) 
+                  : retryAfterHeader
+                delayMs = Math.max(retryAfterSeconds * 1000, 1000) // Minimum 1 second
+              } else if (retryAfterBody !== undefined && retryAfterBody !== null) {
+                // retry_after from body can be number or string
+                const retryAfterSeconds = typeof retryAfterBody === 'string'
+                  ? parseInt(retryAfterBody, 10)
+                  : retryAfterBody
+                delayMs = Math.max(retryAfterSeconds * 1000, 1000) // Minimum 1 second
+              } else {
+                // Default to longer delay for rate limits with exponential backoff
+                delayMs = 2000 * Math.pow(2, config._retryCount - 1)
+              }
+              
+              if (import.meta.env.DEV) {
+                console.log(
+                  `[API Rate Limit] Waiting ${delayMs}ms before retry ${config._retryCount}/${maxRetries} for ${config.url}`
+                )
+              }
+            } else {
+              // Exponential backoff for other errors
+              if (import.meta.env.DEV) {
+                console.log(
+                  `[API Retry] Attempt ${config._retryCount}/${maxRetries} for ${config.url}`
+                )
+              }
+            }
+            
             await delay(delayMs)
 
-            if (import.meta.env.DEV) {
-              console.log(
-                `[API Retry] Attempt ${config._retryCount}/${MAX_RETRIES} for ${config.url}`
+            return this.client.request(config)
+          } else {
+            // Max retries exceeded
+            if (import.meta.env.DEV && error.response?.status === 429) {
+              console.warn(
+                `[API Rate Limit] Max retries (${maxRetries}) exceeded for ${config.url}`
               )
             }
-
-            return this.client.request(config)
           }
         }
 

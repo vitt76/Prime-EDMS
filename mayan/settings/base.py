@@ -314,12 +314,13 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
-        'user': '1000/hour',
+        'user': '10000/hour',  # Increased from 1000/hour to prevent 429 errors during normal usage
         'ai_analysis': '10/minute,50/hour,500/day',
         'ai_analysis_anon': '1/hour',
         'upload': '50/hour',
         'download': '100/hour',
         'bulk_operation': '20/hour',
+        'template': '1000/minute',  # High limit for template/menu endpoints
     },
     'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.AcceptHeaderVersioning',
     # Use default DRF exception handler

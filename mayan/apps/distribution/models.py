@@ -1,5 +1,6 @@
 import uuid
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password, check_password
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 
@@ -368,6 +369,25 @@ class ShareLink(models.Model):
         default=0,
         help_text=_('Current downloads count')
     )
+    views_count = models.IntegerField(
+        default=0,
+        help_text=_('Current views count')
+    )
+    max_views = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text=_('Maximum views allowed for this link')
+    )
+    password_hash = models.CharField(
+        max_length=128,
+        null=True,
+        blank=True,
+        help_text=_('Hashed password for link protection')
+    )
+    allow_download = models.BooleanField(
+        default=True,
+        help_text=_('Allow downloading files from this link')
+    )
     created = models.DateTimeField(auto_now_add=True)
     last_accessed = models.DateTimeField(
         null=True,
@@ -388,6 +408,23 @@ class ShareLink(models.Model):
             self.token = str(uuid.uuid4())
         super().save(*args, **kwargs)
 
+    def set_password(self, raw_password):
+        """
+        Set password for the share link.
+        """
+        if raw_password:
+            self.password_hash = make_password(raw_password)
+        else:
+            self.password_hash = None
+
+    def check_password(self, raw_password):
+        """
+        Check if the provided password is correct.
+        """
+        if not self.password_hash:
+            return True  # No password set
+        return check_password(raw_password, self.password_hash)
+
     def is_valid(self):
         """
         Check if the share link is still valid.
@@ -402,13 +439,17 @@ class ShareLink(models.Model):
         if self.max_downloads and self.downloads_count >= self.max_downloads:
             return False
 
+        # Check views limit
+        if self.max_views and self.views_count >= self.max_views:
+            return False
+
         return True
 
     def can_download(self):
         """
-        Check if download is allowed (valid and under limit).
+        Check if download is allowed (valid and download enabled).
         """
-        return self.is_valid()
+        return self.is_valid() and self.allow_download
 
     def record_access(self, request):
         """
@@ -417,9 +458,10 @@ class ShareLink(models.Model):
         from django.utils import timezone
         from mayan.apps.distribution.models import AccessLog
 
-        # Update last accessed
+        # Increment views count
+        self.views_count += 1
         self.last_accessed = timezone.now()
-        self.save(update_fields=['last_accessed'])
+        self.save(update_fields=['views_count', 'last_accessed'])
 
         # Create access log
         AccessLog.objects.create(
@@ -429,6 +471,16 @@ class ShareLink(models.Model):
             user_agent=request.META.get('HTTP_USER_AGENT', ''),
             timestamp=timezone.now()
         )
+
+    def get_unique_visitors_count(self):
+        """
+        Get count of unique visitors based on IP addresses.
+        """
+        from mayan.apps.distribution.models import AccessLog
+        return AccessLog.objects.filter(
+            share_link=self,
+            event='view'
+        ).values('ip_address').distinct().count()
 
     def record_download(self, request, rendition=None):
         """

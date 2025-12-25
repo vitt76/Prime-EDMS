@@ -601,6 +601,19 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                           </svg>
                         </span>
+                        <!-- Max views indicator -->
+                        <span v-if="link.max_views" class="text-neutral-400" :title="`Ограничение просмотров: ${link.views || 0}/${link.max_views}`">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </span>
+                        <!-- Max downloads indicator -->
+                        <span v-if="link.max_downloads" class="text-neutral-400" :title="`Ограничение скачиваний: ${link.downloads || 0}/${link.max_downloads}`">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -811,42 +824,104 @@
             <h3 class="text-lg font-semibold text-neutral-900 mb-4">Редактировать ссылку</h3>
             
             <div class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-neutral-700 mb-1">Название</label>
-                <input
-                  v-model="editForm.name"
-                  type="text"
-                  class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
+              <!-- Note: Name is derived from publication title and cannot be edited directly -->
               
+              <!-- Expiration Date -->
               <div>
-                <label class="block text-sm font-medium text-neutral-700 mb-1">Срок действия</label>
+                <label class="flex items-center gap-3 cursor-pointer mb-3">
+                  <input
+                    v-model="editForm.has_expiration"
+                    type="checkbox"
+                    class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span class="text-sm font-medium text-neutral-700">Ограничить срок действия</span>
+                </label>
                 <input
+                  v-if="editForm.has_expiration"
                   v-model="editForm.expires_date"
                   type="date"
-                  class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  :min="new Date().toISOString().split('T')[0]"
+                  class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 />
               </div>
               
-              <div class="flex items-center gap-4">
-                <label class="flex items-center gap-2 cursor-pointer">
+              <!-- Password Protection -->
+              <div>
+                <label class="flex items-center gap-3 cursor-pointer mb-3">
                   <input
-                    v-model="editForm.allow_download"
+                    v-model="editForm.has_password"
                     type="checkbox"
                     class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
                   />
-                  <span class="text-sm text-neutral-700">Разрешить скачивание</span>
+                  <span class="text-sm font-medium text-neutral-700">Защитить паролем</span>
                 </label>
+                <input
+                  v-if="editForm.has_password"
+                  v-model="editForm.password"
+                  type="password"
+                  placeholder="Введите новый пароль (оставьте пустым, чтобы убрать пароль)"
+                  class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                />
+              </div>
+              
+              <!-- Limits -->
+              <div class="space-y-4">
+                <div>
+                  <label class="flex items-center gap-3 cursor-pointer mb-3">
+                    <input
+                      v-model="editForm.has_max_views"
+                      type="checkbox"
+                      class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span class="text-sm font-medium text-neutral-700">Ограничить просмотры</span>
+                  </label>
+                  <input
+                    v-if="editForm.has_max_views"
+                    v-model.number="editForm.max_views"
+                    type="number"
+                    min="1"
+                    placeholder="Максимальное количество просмотров"
+                    class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                  />
+                </div>
                 
-                <label class="flex items-center gap-2 cursor-pointer">
+                <div>
+                  <label class="flex items-center gap-3 cursor-pointer mb-3">
+                    <input
+                      v-model="editForm.has_max_downloads"
+                      type="checkbox"
+                      class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span class="text-sm font-medium text-neutral-700">Ограничить скачивания</span>
+                  </label>
                   <input
-                    v-model="editForm.allow_comment"
-                    type="checkbox"
-                    class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                    v-if="editForm.has_max_downloads"
+                    v-model.number="editForm.max_downloads"
+                    type="number"
+                    min="1"
+                    placeholder="Максимальное количество скачиваний"
+                    class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                   />
-                  <span class="text-sm text-neutral-700">Комментарии</span>
-                </label>
+                </div>
+              </div>
+              
+              <!-- Permissions -->
+              <div>
+                <p class="text-sm font-medium text-neutral-700 mb-3">Разрешения</p>
+                <div class="space-y-3">
+                  <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                      v-model="editForm.allow_download"
+                      type="checkbox"
+                      class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span class="text-sm text-neutral-700">Разрешить скачивание</span>
+                      <p class="text-xs text-neutral-500">Пользователи смогут скачать файлы</p>
+                    </div>
+                  </label>
+                  <!-- Note: allow_comment is not supported by the backend ShareLink model -->
+                </div>
               </div>
             </div>
             
@@ -1165,10 +1240,17 @@ const showBulkRevokeModal = ref(false)
 const showEditModal = ref(false)
 const editingLink = ref<SharedLink | null>(null)
 const editForm = reactive({
-  name: '',
+  // Note: name is derived from publication title and cannot be edited
+  has_expiration: false,
   expires_date: '',
-  allow_download: true,
-  allow_comment: false
+  has_password: false,
+  password: '',
+  has_max_views: false,
+  max_views: null as number | null,
+  has_max_downloads: false,
+  max_downloads: null as number | null,
+  allow_download: true
+  // Note: allow_comment is not supported by the backend ShareLink model
 })
 
 // Create modal
@@ -1514,10 +1596,17 @@ async function confirmBulkRevoke() {
 // Edit
 function editLink(link: SharedLink) {
   editingLink.value = link
-  editForm.name = link.name
+  // Note: name is derived from publication title and cannot be edited
+  editForm.has_expiration = !!link.expires_date
   editForm.expires_date = link.expires_date ? link.expires_date.split('T')[0] : ''
+  editForm.has_password = link.password_protected
+  editForm.password = '' // Не показываем существующий пароль
+  editForm.has_max_views = !!link.max_views
+  editForm.max_views = link.max_views || null
+  editForm.has_max_downloads = !!link.max_downloads
+  editForm.max_downloads = link.max_downloads || null
   editForm.allow_download = link.allow_download
-  editForm.allow_comment = link.allow_comment
+  // Note: allow_comment is not supported by the backend
   showEditModal.value = true
 }
 
@@ -1530,12 +1619,32 @@ async function saveEdit() {
   if (!editingLink.value) return
   
   try {
-    await distributionStore.updateSharedLink(editingLink.value.id, {
-      name: editForm.name,
-      expires_date: editForm.expires_date || null,
+    const updates: any = {
+      // Note: 'name' is not a field in ShareLink model - it's derived from publication title
+      // 'allow_comment' is also not supported by the backend
       allow_download: editForm.allow_download,
-      allow_comment: editForm.allow_comment
-    })
+      max_views: editForm.has_max_views ? (editForm.max_views || null) : null,
+      max_downloads: editForm.has_max_downloads ? (editForm.max_downloads || null) : null
+    }
+    
+    // Handle expires_date: convert date string to ISO datetime format
+    if (editForm.has_expiration && editForm.expires_date) {
+      // Convert date string (YYYY-MM-DD) to ISO datetime (YYYY-MM-DDTHH:mm:ssZ)
+      const date = new Date(editForm.expires_date + 'T23:59:59Z')
+      updates.expires_date = date.toISOString()
+    } else if (!editForm.has_expiration) {
+      updates.expires_date = null
+    }
+    
+    // Handle password: if checkbox is off, clear password; if on and password provided, set it
+    if (!editForm.has_password) {
+      updates.password = '' // Clear password
+    } else if (editForm.password) {
+      updates.password = editForm.password // Set new password
+    }
+    // If checkbox is on but password is empty, don't change it (don't include in updates)
+    
+    await distributionStore.updateSharedLink(editingLink.value.id, updates)
     
     notificationStore.addNotification({
       type: 'success',
@@ -2041,12 +2150,15 @@ onMounted(async () => {
     activeTab.value = tabParam
   }
   
-  // Загружаем и ссылки, и кампании при инициализации,
-  // чтобы счётчики и табы сразу отображали актуальные данные
-  await Promise.all([
-    refreshData(),
-    refreshCampaigns()
-  ])
+  // Загружаем и ссылки, и кампании при инициализации последовательно,
+  // чтобы избежать 429 ошибок от одновременных запросов
+  // Небольшая задержка между запросами помогает избежать rate limiting
+  await refreshData()
+  
+  // Небольшая задержка перед следующим запросом
+  await new Promise(resolve => setTimeout(resolve, 300))
+  
+  await refreshCampaigns()
 
   // Если пришли с галереи с выбранными активами для создания кампании
   if (route.query.from === 'assets' && selectedDocumentIds.value.length > 0) {

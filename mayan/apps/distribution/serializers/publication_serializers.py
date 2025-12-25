@@ -122,20 +122,32 @@ class ShareLinkSerializer(serializers.ModelSerializer):
     is_valid = serializers.SerializerMethodField()
     public_url = serializers.SerializerMethodField()
     owner_username = serializers.SerializerMethodField()
+    views_count = serializers.IntegerField(read_only=True)
+    unique_visitors_count = serializers.SerializerMethodField()
+    password_protected = serializers.SerializerMethodField()
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         fields = (
             'id', 'rendition', 'token', 'recipient', 'expires_at',
-            'max_downloads', 'downloads_count', 'created', 'last_accessed',
+            'max_downloads', 'downloads_count', 'max_views', 'views_count',
+            'password', 'password_hash', 'allow_download', 'created', 'last_accessed',
             'publication_title', 'publication_id', 'rendition_preset_name',
             'rendition_preset_format', 'document_file_id', 'document_id',
-            'is_valid', 'public_url', 'owner_username'
+            'is_valid', 'public_url', 'owner_username', 'unique_visitors_count',
+            'password_protected'
         )
         model = ShareLink
-        read_only_fields = ('id', 'token', 'created', 'last_accessed', 'downloads_count',
-                           'publication_title', 'publication_id', 'rendition_preset_name',
-                           'rendition_preset_format', 'document_file_id', 'document_id',
-                           'is_valid', 'public_url', 'owner_username')
+        read_only_fields = (
+            'id', 'token', 'created', 'last_accessed', 'downloads_count',
+            'views_count', 'publication_title', 'publication_id', 
+            'rendition_preset_name', 'rendition_preset_format', 
+            'document_file_id', 'document_id', 'is_valid', 'public_url', 
+            'owner_username', 'unique_visitors_count', 'password_protected'
+        )
+        extra_kwargs = {
+            'password_hash': {'write_only': True},  # Не возвращаем хеш пароля
+        }
 
     def get_publication_title(self, obj):
         if obj.rendition and obj.rendition.publication_item:
@@ -184,6 +196,32 @@ class ShareLinkSerializer(serializers.ModelSerializer):
             if owner:
                 return owner.get_username()
         return None
+
+    def get_unique_visitors_count(self, obj):
+        """Get count of unique visitors."""
+        return obj.get_unique_visitors_count()
+
+    def get_password_protected(self, obj):
+        """Check if link is password protected."""
+        return bool(obj.password_hash)
+
+    def create(self, validated_data):
+        """Handle password setting during creation."""
+        password = validated_data.pop('password', None)
+        instance = super().create(validated_data)
+        if password:
+            instance.set_password(password)
+            instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        """Handle password setting during update."""
+        password = validated_data.pop('password', None)
+        instance = super().update(instance, validated_data)
+        if password is not None:  # Allow clearing password with empty string
+            instance.set_password(password)
+            instance.save()
+        return instance
 
 
 class GeneratedRenditionSerializer(serializers.ModelSerializer):
