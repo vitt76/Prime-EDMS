@@ -150,37 +150,58 @@ class ShareLinkSerializer(serializers.ModelSerializer):
         }
 
     def get_publication_title(self, obj):
-        if obj.rendition and obj.rendition.publication_item:
-            return obj.rendition.publication_item.publication.title
+        try:
+            if obj.rendition and obj.rendition.publication_item and obj.rendition.publication_item.publication:
+                return obj.rendition.publication_item.publication.title
+        except (AttributeError, TypeError):
+            pass
         return None
 
     def get_publication_id(self, obj):
-        if obj.rendition and obj.rendition.publication_item:
-            return obj.rendition.publication_item.publication.id
+        try:
+            if obj.rendition and obj.rendition.publication_item and obj.rendition.publication_item.publication:
+                return obj.rendition.publication_item.publication.id
+        except (AttributeError, TypeError):
+            pass
         return None
 
     def get_rendition_preset_name(self, obj):
-        if obj.rendition and obj.rendition.preset:
-            return obj.rendition.preset.name
+        try:
+            if obj.rendition and obj.rendition.preset:
+                return obj.rendition.preset.name
+        except (AttributeError, TypeError):
+            pass
         return None
 
     def get_rendition_preset_format(self, obj):
-        if obj.rendition and obj.rendition.preset:
-            return obj.rendition.preset.format
+        try:
+            if obj.rendition and obj.rendition.preset:
+                return obj.rendition.preset.format
+        except (AttributeError, TypeError):
+            pass
         return None
 
     def get_document_file_id(self, obj):
-        if obj.rendition and obj.rendition.publication_item:
-            return obj.rendition.publication_item.document_file.id
+        try:
+            if obj.rendition and obj.rendition.publication_item and obj.rendition.publication_item.document_file:
+                return obj.rendition.publication_item.document_file.id
+        except AttributeError:
+            pass
         return None
 
     def get_document_id(self, obj):
-        if obj.rendition and obj.rendition.publication_item:
-            return obj.rendition.publication_item.document_file.document_id
+        try:
+            if obj.rendition and obj.rendition.publication_item and obj.rendition.publication_item.document_file:
+                return obj.rendition.publication_item.document_file.document_id
+        except AttributeError:
+            pass
         return None
 
     def get_is_valid(self, obj):
-        return obj.is_valid()
+        try:
+            return obj.is_valid()
+        except (AttributeError, TypeError):
+            return False
 
     def get_public_url(self, obj):
         """Generate public URL for the share link."""
@@ -191,15 +212,21 @@ class ShareLinkSerializer(serializers.ModelSerializer):
         return None
 
     def get_owner_username(self, obj):
-        if obj.rendition and obj.rendition.publication_item:
-            owner = obj.rendition.publication_item.publication.owner
-            if owner:
-                return owner.get_username()
+        try:
+            if obj.rendition and obj.rendition.publication_item and obj.rendition.publication_item.publication:
+                owner = obj.rendition.publication_item.publication.owner
+                if owner:
+                    return owner.get_username()
+        except (AttributeError, TypeError):
+            pass
         return None
 
     def get_unique_visitors_count(self, obj):
         """Get count of unique visitors."""
-        return obj.get_unique_visitors_count()
+        try:
+            return obj.get_unique_visitors_count()
+        except (AttributeError, TypeError):
+            return 0
 
     def get_password_protected(self, obj):
         """Check if link is password protected."""

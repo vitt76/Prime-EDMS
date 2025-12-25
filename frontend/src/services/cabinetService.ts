@@ -32,9 +32,9 @@ export function mapCabinetTreeToFolders(tree: CabinetDTO[]): FolderNode[] {
 const CABINET_BASE = '/api/v4/cabinets'
 
 class CabinetService {
-  async getCabinetTree(): Promise<FolderNode[]> {
+  async getCabinetTree(useCache = false): Promise<FolderNode[]> {
     const operation = () =>
-      apiService.get<CabinetDTO[]>(`${CABINET_BASE}/tree/`)
+      apiService.get<CabinetDTO[]>(`${CABINET_BASE}/tree/`, undefined, useCache)
     const result = await withRetry(operation)
 
     if (!result.success) throw result.error

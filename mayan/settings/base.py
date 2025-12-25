@@ -289,6 +289,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
         'user': '10000/hour',  # Increased from 1000/hour to prevent 429 errors during normal usage
+        'distribution': '200/minute,10000/hour',  # High limit for distribution endpoints (share links, campaigns)
         'ai_analysis': '10/minute,50/hour,500/day',
         'ai_analysis_anon': '1/hour',
         'upload': '50/hour',

@@ -15,6 +15,7 @@ from ..serializers import (
     CampaignPublicationSerializer, CampaignPublicationCreateSerializer,
     DistributionCampaignDetailSerializer, DistributionCampaignSerializer
 )
+from ..throttles import DistributionThrottle
 
 
 class APIDistributionCampaignListView(generics.ListCreateAPIView):
@@ -22,7 +23,7 @@ class APIDistributionCampaignListView(generics.ListCreateAPIView):
     get: Return a list of distribution campaigns for the current user.
     post: Create a new distribution campaign.
     """
-
+    throttle_classes = [DistributionThrottle]
     mayan_object_permissions = {'GET': (permission_publication_api_view,)}
     mayan_view_permissions = {'POST': (permission_publication_api_create,)}
     queryset = DistributionCampaign.objects.all()
@@ -79,7 +80,7 @@ class APIDistributionCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
     patch: Edit the properties of a distribution campaign.
     delete: Delete a distribution campaign.
     """
-
+    throttle_classes = [DistributionThrottle]
     mayan_object_permissions = {
         'GET': (permission_publication_api_view,),
         'PUT': (permission_publication_api_edit,),

@@ -1,3 +1,4 @@
+from django.conf import settings
 from mayan.apps.rest_api import generics
 
 from ..models import (
@@ -11,6 +12,7 @@ from ..serializers import (
     PublicationSerializer, PublicationItemSerializer, ShareLinkSerializer,
     GeneratedRenditionSerializer, AccessLogSerializer
 )
+from ..throttles import DistributionThrottle
 
 
 class APIPublicationListView(generics.ListCreateAPIView):
@@ -124,27 +126,65 @@ class APIShareLinkListView(generics.ListCreateAPIView):
     get: Return a list of share links.
     post: Create a new share link.
     """
+    throttle_classes = [DistributionThrottle]
     mayan_object_permissions = {'GET': (permission_publication_api_view,)}
     mayan_view_permissions = {'POST': (permission_publication_api_create,)}
     queryset = ShareLink.objects.all()
     serializer_class = ShareLinkSerializer
 
     def get_queryset(self):
+        import logging
+        logger = logging.getLogger(__name__)
+        
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
-        # Filter to show only share links for publications owned by current user
-        # Optimize queries with select_related
-        return queryset.filter(
-            rendition__publication_item__publication__owner=user
-        ).select_related(
-            'rendition__preset',
-            'rendition__publication_item__publication__owner',
-            'rendition__publication_item__document_file'
-        ).order_by('-created')
+        try:
+            # Filter to show only share links for publications owned by current user
+            # Use select_related and prefetch_related to optimize queries
+            # Filter out any share links with missing relationships
+            queryset = queryset.filter(
+                rendition__isnull=False,
+                rendition__publication_item__isnull=False,
+                rendition__publication_item__publication__isnull=False,
+                rendition__publication_item__publication__owner=user
+            ).select_related(
+                'rendition',
+                'rendition__preset',
+                'rendition__publication_item',
+                'rendition__publication_item__publication',
+                'rendition__publication_item__publication__owner',
+                'rendition__publication_item__document_file'
+            ).order_by('-created')
+            
+            return queryset
+        except Exception as e:
+            logger.exception('Error in APIShareLinkListView.get_queryset: %s', e)
+            # Return empty queryset on error to prevent 500
+            return queryset.none()
+    
+    def list(self, request, *args, **kwargs):
+        import logging
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            return super().list(request, *args, **kwargs)
+        except Exception as e:
+            logger.exception('Error in APIShareLinkListView.list: %s', e)
+            return Response(
+                {
+                    'error': 'Failed to retrieve share links',
+                    'error_code': 'SERIALIZATION_ERROR',
+                    'detail': str(e) if settings.DEBUG else 'An error occurred while retrieving share links'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -154,6 +194,7 @@ class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
     patch: Edit the properties of a share link.
     delete: Delete a share link.
     """
+    throttle_classes = [DistributionThrottle]
     mayan_object_permissions = {
         'GET': (permission_publication_api_view,),
         'PUT': (permission_publication_api_edit,),
@@ -171,11 +212,17 @@ class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
             return queryset.none()
 
         # Filter to show only share links for publications owned by current user
-        # Optimize queries with select_related
+        # Filter out any share links with missing relationships
         return queryset.filter(
+            rendition__isnull=False,
+            rendition__publication_item__isnull=False,
+            rendition__publication_item__publication__isnull=False,
             rendition__publication_item__publication__owner=user
         ).select_related(
+            'rendition',
             'rendition__preset',
+            'rendition__publication_item',
+            'rendition__publication_item__publication',
             'rendition__publication_item__publication__owner',
             'rendition__publication_item__document_file'
         )
