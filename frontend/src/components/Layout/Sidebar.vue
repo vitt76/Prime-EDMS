@@ -102,19 +102,19 @@
                hover:from-primary-700 hover:to-primary-600 
                transition-all duration-200 min-h-[48px]
                shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30"
-        @click="handleUpload"
+        @click="handleTrash"
         type="button"
-        aria-label="Загрузить файлы"
+        aria-label="Корзина"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
             stroke-width="2"
-            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
           />
         </svg>
-        <span v-if="isExpanded" class="text-sm font-semibold">Загрузить</span>
+        <span v-if="isExpanded" class="text-sm font-semibold">Корзина</span>
       </button>
     </div>
   </aside>
@@ -205,11 +205,20 @@ const navigationItems = [
   { path: '/settings', label: 'Настройки', icon: SettingsIcon }
 ]
 
+const TrashIcon = {
+  template: `
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  `
+}
+
 const collections = [
   { id: 1, path: '/dam/my-uploads', label: 'Мои загрузки', icon: UploadIcon },
   { id: 2, path: '/dam/favorites', label: 'Избранное', icon: HeartIcon },
   { id: 3, path: '/dam/recent', label: 'Недавние', icon: ClockIcon },
-  { id: 4, path: '/dam/shared', label: 'Доступные мне', icon: ShareIcon }
+  { id: 4, path: '/dam/shared', label: 'Доступные мне', icon: ShareIcon },
+  { id: 5, path: '/dam/trash', label: 'Корзина', icon: TrashIcon }
 ]
 
 function toggleSidebar() {
@@ -224,8 +233,8 @@ function handleNavigate(path: string) {
   emit('navigate', path)
 }
 
-function handleUpload() {
-  emit('open-upload')
+function handleTrash() {
+  router.push('/dam/trash')
 }
 
 function handleFolderSelect(folderId: string) {

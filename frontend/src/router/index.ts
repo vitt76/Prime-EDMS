@@ -84,6 +84,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, title: 'Мои загрузки' }
   },
   {
+    path: '/dam/trash',
+    name: 'dam-trash',
+    component: () => import('@/pages/collections/TrashPage.vue'),
+    meta: { requiresAuth: true, title: 'Корзина' }
+  },
+  {
     path: '/dam/recent',
     name: 'dam-recent',
     component: () => import('@/pages/collections/RecentPage.vue'),
