@@ -3,7 +3,7 @@ import logging
 
 from django.contrib import messages
 from django.http import Http404, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.csrf import csrf_exempt
@@ -92,15 +92,26 @@ def share_link_view(request, token):
 
     # Check password if set
     if share_link.password_hash:
-        password = request.GET.get('password')
+        password = request.GET.get('password') or request.POST.get('password')
         if not password or not share_link.check_password(password):
-            # Return JSON response for API requests, or redirect for browser
+            # Return JSON response for API requests
             if request.headers.get('Accept', '').startswith('application/json'):
                 return JsonResponse(
                     {'error': 'Password required', 'password_required': True},
                     status=403
                 )
-            raise Http404(_("Password required for this link."))
+            # For browser requests, show password form
+            # Show error if password was provided but incorrect
+            error = 'invalid' if password else None
+            return render(
+                request,
+                'distribution/portal/password_required.html',
+                {
+                    'token': token,
+                    'error': error
+                },
+                status=403
+            )
 
     # Check if download is allowed (using can_download for consistency, though it's inline view)
     if not share_link.can_download():

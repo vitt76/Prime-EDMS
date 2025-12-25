@@ -491,7 +491,9 @@ export const useDistributionStore = defineStore(
         }
         
         if (updates.password !== undefined) {
-          apiUpdates.password = updates.password || undefined
+          // Send empty string to clear password, or actual password to set it
+          // Don't convert empty string to undefined, as we need to explicitly clear the password
+          apiUpdates.password = updates.password
         }
         
         if (updates.allow_download !== undefined) {
