@@ -53,14 +53,28 @@ export function adaptShareLink(apiLink: APIShareLink, baseUrl: string = ''): Sha
     : ''
   const fullName = `${name}${presetInfo}`
   
+  // Create assets array from document_id and document_file_id
+  const assets = apiLink.document_id && apiLink.document_file_id ? [{
+    id: apiLink.document_id,
+    document_id: apiLink.document_id,
+    document_file_id: apiLink.document_file_id,
+    version_active_file_id: apiLink.document_file_id, // Use document_file_id as active version
+    file_latest_id: apiLink.document_file_id,
+    file_id: apiLink.document_file_id,
+    label: `Document #${apiLink.document_id}`,
+    thumbnail_url: undefined, // Will be loaded separately
+    preview_url: undefined,
+    download_url: undefined
+  }] : []
+
   return {
     id: apiLink.id,
     uuid: apiLink.token,
     name: fullName,
-    slug: apiLink.token.substring(0, 12), // Short slug for display
+    slug: apiLink.token, // Full UUID for display
     url: publicUrl,
     asset_ids: apiLink.document_file_id ? [apiLink.document_file_id] : [],
-    assets: undefined, // Will be loaded separately if needed
+    assets: assets, // Create assets array from document_id and document_file_id
     is_public: true, // ShareLinks are always public (token-based access)
     password_protected: false, // Not implemented in current model
     created_date: apiLink.created,
@@ -75,7 +89,10 @@ export function adaptShareLink(apiLink: APIShareLink, baseUrl: string = ''): Sha
     allow_download: true, // ShareLinks always allow download
     allow_comment: false, // Not implemented
     max_downloads: apiLink.max_downloads,
-  }
+    // Store document info for preview loading
+    document_id: apiLink.document_id,
+    document_file_id: apiLink.document_file_id,
+  } as SharedLink & { document_id?: number, document_file_id?: number }
 }
 
 /**
