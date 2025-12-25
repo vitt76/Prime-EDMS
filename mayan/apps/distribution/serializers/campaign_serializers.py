@@ -492,6 +492,7 @@ class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
                 'document_id': document.pk,
                 'document_label': document.label,
                 'document_file_id': selected_file.pk,
+                'publication_id': item.publication.id,  # Добавляем publication_id
             })
 
         return results

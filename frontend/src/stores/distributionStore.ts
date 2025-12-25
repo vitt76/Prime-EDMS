@@ -374,7 +374,7 @@ export const useDistributionStore = defineStore(
      * Create a new shared link
      * Uses simplified endpoint that automatically creates publication and renditions
      */
-    async function createSharedLink(params: CreateSharedLinkParams & { rendition_id?: number }): Promise<SharedLink> {
+    async function createSharedLink(params: CreateSharedLinkParams & { rendition_id?: number, publication_id?: number }): Promise<SharedLink> {
       sharedLinksLoading.value = true
       sharedLinksError.value = null
 
@@ -399,8 +399,10 @@ export const useDistributionStore = defineStore(
         }
         
         // Use simplified endpoint
+        // Note: params.asset_ids now contains document_file_ids (active version files)
         const response = await distributionService.createShareLinkSimple({
-          document_file_ids: params.asset_ids,
+          document_file_ids: params.asset_ids, // These are document_file_ids, not document_ids
+          publication_id: params.publication_id, // Use existing publication if provided
           title: params.name || 'Share Link',
           expires_at: params.expires_date || null,
           max_downloads: null

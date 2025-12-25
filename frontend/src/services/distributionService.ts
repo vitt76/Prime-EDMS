@@ -176,10 +176,11 @@ class DistributionService {
 
   /**
    * Create a share link directly from document files (simplified)
-   * This automatically creates publication, adds files, generates renditions, and creates share link
+   * This automatically creates publication (if not provided), adds files, generates renditions, and creates share link
    */
   async createShareLinkSimple(data: {
     document_file_ids: number[]
+    publication_id?: number  // Use existing publication if provided
     title?: string
     expires_at?: string | null
     max_downloads?: number | null
