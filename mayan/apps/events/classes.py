@@ -414,14 +414,50 @@ class EventType:
             )
 
         for user in user_queryset:
+            # Check NotificationPreference BEFORE creating notification record.
+            # If user disabled notifications, skip creating DB record (optimization).
+            try:
+                from mayan.apps.notifications.models import NotificationPreference
+                preference = NotificationPreference.objects.filter(user=user).first()
+                if preference and not preference.notifications_enabled:
+                    # User disabled notifications - skip creating record
+                    logger.debug('Skipping notification for user=%s (notifications disabled)', user.id)
+                    continue
+            except Exception:
+                # If notifications app is not installed, continue normally
+                logger.debug('NotificationPreference check failed, continuing', exc_info=True)
+                pass
+
             if result.action_object:
-                Notification.objects.create(action=result, user=user)
+                base_notification = Notification.objects.create(action=result, user=user)
+                # Direct call to enhance notification immediately after creation
+                try:
+                    from mayan.apps.notifications.utils import create_enhanced_notification
+                    create_enhanced_notification(
+                        user=user,
+                        action=result,
+                        event_type=result.verb,
+                        template=None
+                    )
+                except Exception:
+                    logger.exception('Failed to enhance notification for user=%s, event=%s', user.id, result.verb)
                 # Don't check or add any other notification for the
                 # same user-event-object.
                 continue
 
             if result.target:
-                Notification.objects.create(action=result, user=user)
+                base_notification = Notification.objects.create(action=result, user=user)
+                # Direct call to enhance notification immediately after creation
+                try:
+                    from mayan.apps.notifications.utils import create_enhanced_notification
+                    create_enhanced_notification(
+                        user=user,
+                        action=result,
+                        event_type=result.verb,
+                        template=None
+                    )
+                except Exception:
+                    logger.exception('Failed to enhance notification for user=%s, event=%s', user.id, result.verb)
                 # Don't check or add any other notification for the
                 # same user-event-object.
                 continue

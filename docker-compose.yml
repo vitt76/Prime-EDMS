@@ -107,9 +107,9 @@ services:
       MAYAN_REDIS_DB_LOCKS: "2"
       MAYAN_CONFIGURATION_FILE: /opt/mayan-edms/config.yml
       MAYAN_SEARCH_BACKEND: mayan.apps.dynamic_search.backends.django.DjangoSearchBackend
-      MAYAN_WORKER_A_QUEUES: converter,sources_fast,distribution
+      MAYAN_WORKER_A_QUEUES: converter,sources_fast,distribution,notifications
       # Override the hardcoded supervisor config
-      COMMAND_WORKER_A: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker %(ENV_MAYAN_WORKER_A_CONCURRENCY)s --hostname=mayan-edms-worker_a.%%h --loglevel=ERROR -Ofair --queues=converter,sources_fast,distribution %(ENV_MAYAN_WORKER_A_MAX_MEMORY_PER_CHILD)s %(ENV_MAYAN_WORKER_A_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
+      COMMAND_WORKER_A: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker %(ENV_MAYAN_WORKER_A_CONCURRENCY)s --hostname=mayan-edms-worker_a.%%h --loglevel=ERROR -Ofair --queues=converter,sources_fast,distribution,notifications %(ENV_MAYAN_WORKER_A_MAX_MEMORY_PER_CHILD)s %(ENV_MAYAN_WORKER_A_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
       # Phase B4: Dedicated AI Analysis Worker (heavy tasks - separate from main workers)
       MAYAN_WORKER_D_QUEUES: ai_analysis
       MAYAN_WORKER_D_CONCURRENCY: "2"
@@ -159,6 +159,10 @@ services:
       - ./mayan/apps/api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/api
       - ./mayan/apps/storage:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/storage
       - ./mayan/apps/rest_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api
+      - ./mayan/apps/notifications:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/notifications
+      - ./mayan/apps/events:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/events
+      - ./mayan/settings/base.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
+      - ./mayan/asgi.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/asgi.py
     ports:
       - "8080:8000"
     depends_on:
@@ -175,3 +179,54 @@ services:
       timeout: 30s
       retries: 3
       start_period: 300s
+
+  # ASGI WebSocket server (Notification Center) - runs in parallel to Gunicorn app service.
+  # Intended for /ws/notifications/ connections.
+  app_websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: prime-edms_app_websocket_1
+    command: /opt/mayan-edms/bin/daphne -b 0.0.0.0 -p 8001 mayan.asgi:application
+    env_file:
+      - app.env
+    environment:
+      MAYAN_MEDIA_ROOT: '/var/lib/mayan'
+      MAYAN_SETTINGS_MODULE: 'mayan.settings'
+      MAYAN_PYTHON_BIN_DIR: '/opt/mayan-edms/bin/'
+      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan','PASSWORD':'mayandbpass','USER':'mayan','HOST':'postgresql','PORT':'5432'}}"
+      MAYAN_REDIS_HOST: redis
+      MAYAN_REDIS_PORT: "6379"
+      MAYAN_REDIS_PASSWORD: "${MAYAN_REDIS_PASSWORD:-mayanredispassword}"
+      MAYAN_REDIS_DB_CACHE: "0"
+      MAYAN_REDIS_DB_CELERY: "1"
+      MAYAN_REDIS_DB_LOCKS: "2"
+      PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
+    volumes:
+      - mayan_data:/var/lib/mayan
+      - ./config.yml:/opt/mayan-edms/config.yml:ro
+      - ./mayan/apps/converter_pipeline_extension:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/converter_pipeline_extension
+      - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
+      - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
+      - ./mayan/apps/dam:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
+      - ./mayan/apps/headless_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
+      - ./mayan/apps/autoadmin:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/autoadmin
+      - ./mayan/apps/cabinets:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/cabinets
+      - ./mayan/apps/dynamic_search:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dynamic_search
+      - ./mayan/apps/documents:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents
+      - ./mayan/apps/api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/api
+      - ./mayan/apps/storage:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/storage
+      - ./mayan/apps/rest_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api
+      - ./mayan/settings/base.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
+      - ./mayan/asgi.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/asgi.py
+      - ./mayan/apps/notifications:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/notifications
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped

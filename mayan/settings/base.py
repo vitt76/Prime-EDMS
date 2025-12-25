@@ -41,6 +41,10 @@ else:
 # Application definition
 
 INSTALLED_APPS = (
+    # ASGI / WebSocket (Notification Center)
+    # Note: daphne must be installed; it also provides the default ASGI server.
+    'daphne',
+    'channels',
     # Placed at the top so it can preload all events defined by apps.
     'mayan.apps.events',
     # Placed at the top so it can override any template.
@@ -99,6 +103,7 @@ INSTALLED_APPS = (
     'mayan.apps.quotas',
     'mayan.apps.rest_api',
     'mayan.apps.headless_api',  # SPA-friendly API endpoints
+    'mayan.apps.notifications',  # Notification Center (custom)
     'mayan.apps.smart_settings',
     'mayan.apps.storage',
     'mayan.apps.templating',
@@ -132,6 +137,27 @@ INSTALLED_APPS = (
     # Placed after rest_api to allow template overriding.
     'drf_yasg'
 )
+
+# ASGI (used by Django Channels / WebSocket)
+ASGI_APPLICATION = 'mayan.asgi.application'
+
+# Channels configuration (Redis channel layer).
+# Uses the same Redis host/password as the rest of the project.
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [
+                (
+                    os.environ.get('MAYAN_REDIS_HOST', 'redis'),
+                    int(os.environ.get('MAYAN_REDIS_PORT', 6379))
+                )
+            ],
+            'password': os.environ.get('MAYAN_REDIS_PASSWORD', ''),
+            'prefix': 'mayan_channels',
+        },
+    },
+}
 
 MIDDLEWARE = (
     'mayan.apps.logging.middleware.error_logging.ErrorLoggingMiddleware',
