@@ -71,7 +71,7 @@
               </div>
               
               <p class="mt-3 text-sm text-neutral-500">
-                UUID: <code class="font-mono text-xs">{{ link.uuid }}</code>
+                UUID: <code class="font-mono text-xs">{{ link.slug || link.uuid }}</code>
               </p>
             </div>
             
@@ -375,10 +375,14 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDistributionStore, type SharedLink } from '@/stores/distributionStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { distributionService } from '@/services/distributionService'
+import { adaptShareLink } from '@/utils/shareLinkAdapter'
+import { apiService } from '@/services/apiService'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
 
 // ============================================================================
 // PROPS & ROUTE
@@ -401,6 +405,7 @@ const isLoading = ref(true)
 const link = ref<SharedLink | null>(null)
 const showRevokeModal = ref(false)
 const showEditModal = ref(false)
+const assetPreviews = ref<Record<string, string>>({})
 
 const editForm = reactive({
   name: '',
@@ -418,18 +423,91 @@ async function loadLink() {
   
   try {
     const id = parseInt(props.id || route.params.id as string, 10)
-    await distributionStore.fetchSharedLinks()
-    link.value = distributionStore.getSharedLink(id) || null
+    
+    // Загружаем детали ссылки напрямую из API
+    const apiLink = await distributionService.getShareLinkById(id)
+    
+    // Адаптируем данные из API в формат SharedLink
+    const baseUrl = window.location.origin
+    link.value = adaptShareLink(apiLink, baseUrl)
     
     if (link.value) {
       editForm.name = link.value.name
       editForm.expires_date = link.value.expires_date ? link.value.expires_date.split('T')[0] : ''
       editForm.allow_download = link.value.allow_download
       editForm.allow_comment = link.value.allow_comment
+      
+      // Загружаем детали активов и их превью
+      await loadAssetDetails()
     }
+  } catch (error) {
+    console.error('Failed to load share link:', error)
+    link.value = null
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось загрузить данные ссылки'
+    })
   } finally {
     isLoading.value = false
   }
+}
+
+async function loadAssetDetails() {
+  if (!link.value || !link.value.assets || link.value.assets.length === 0) {
+    return
+  }
+  
+  const previews: Record<string, string> = {}
+  
+  for (const asset of link.value.assets) {
+    if (!asset.document_id) continue
+    
+    try {
+      // Загружаем детали документа для получения правильного названия
+      const docResponse: any = await apiService.get(
+        `/api/v4/documents/${asset.document_id}/`,
+        undefined,
+        false
+      )
+      
+      // Обновляем название актива
+      asset.label = docResponse.label || `Document #${asset.document_id}`
+      
+      // Получаем активную версию файла
+      const fileId = docResponse.version_active_file_id || asset.document_file_id || asset.file_id
+      
+      if (fileId) {
+        // Загружаем превью
+        try {
+          const blob = await apiService.get<Blob>(
+            `/api/v4/documents/${asset.document_id}/files/${fileId}/download/`,
+            { responseType: 'blob' } as any,
+            false
+          )
+          const objectUrl = window.URL.createObjectURL(blob)
+          previews[`${asset.document_id}-${fileId}`] = objectUrl
+          asset.thumbnail_url = objectUrl
+        } catch (e) {
+          // Fallback: используем resolveAssetImageUrl
+          const pseudoAsset: any = {
+            id: asset.document_id,
+            version_active_file_id: fileId,
+            file_latest_id: fileId
+          }
+          const imageUrl = resolveAssetImageUrl(pseudoAsset)
+          if (imageUrl && imageUrl !== '/placeholder-document.svg') {
+            previews[`${asset.document_id}-${fileId}`] = imageUrl
+            asset.thumbnail_url = imageUrl
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`Failed to load asset details for document ${asset.document_id}:`, e)
+    }
+  }
+  
+  assetPreviews.value = previews
 }
 
 function goBack() {
@@ -580,6 +658,20 @@ watch(
   () => props.id,
   () => loadLink()
 )
+
+onBeforeUnmount(() => {
+  // Очищаем blob URLs для превью активов
+  Object.values(assetPreviews.value).forEach(url => {
+    if (url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(url)
+      } catch {
+        // ignore
+      }
+    }
+  })
+  assetPreviews.value = {}
+})
 </script>
 
 <style scoped>
