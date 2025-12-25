@@ -1,7 +1,7 @@
 from django.urls import path
 
 from ..views import PublicationPortalView, download_rendition
-from ..views.portal_views import share_link_view
+from ..views.portal_views import share_link_view, check_share_link_password
 
 # Public URLs (no authentication required)
 urlpatterns = [
@@ -24,5 +24,12 @@ urlpatterns = [
         route='<str:token>/',
         view=share_link_view,
         name='share_link_direct'
+    ),
+
+    # Check password for share link (API endpoint)
+    path(
+        route='<str:token>/check-password/',
+        view=check_share_link_password,
+        name='check_share_link_password'
     ),
 ]

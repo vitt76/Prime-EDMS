@@ -405,7 +405,10 @@ export const useDistributionStore = defineStore(
           publication_id: params.publication_id, // Use existing publication if provided
           title: params.name || 'Share Link',
           expires_at: params.expires_date || null,
-          max_downloads: null
+          max_downloads: params.max_downloads || null,
+          max_views: params.max_views || null,
+          password: params.password,
+          allow_download: params.allow_download !== false
         })
         
         // Response can be a single link or multiple links
@@ -459,7 +462,7 @@ export const useDistributionStore = defineStore(
      */
     async function updateSharedLink(
       id: number,
-      updates: Partial<Pick<SharedLink, 'name' | 'expires_date' | 'allow_download' | 'allow_comment'>>
+      updates: Partial<Pick<SharedLink, 'name' | 'expires_date' | 'allow_download' | 'allow_comment' | 'max_views' | 'max_downloads'> & { password?: string }>
     ): Promise<SharedLink | undefined> {
       sharedLinksLoading.value = true
       sharedLinksError.value = null
@@ -469,10 +472,30 @@ export const useDistributionStore = defineStore(
         const apiUpdates: {
           expires_at?: string | null
           max_downloads?: number | null
+          max_views?: number | null
+          password?: string
+          allow_download?: boolean
         } = {}
         
         if (updates.expires_date !== undefined) {
-          apiUpdates.expires_at = updates.expires_date || null
+          // expires_date is already in ISO format from frontend
+          apiUpdates.expires_at = updates.expires_date
+        }
+        
+        if (updates.max_downloads !== undefined) {
+          apiUpdates.max_downloads = updates.max_downloads || null
+        }
+        
+        if (updates.max_views !== undefined) {
+          apiUpdates.max_views = updates.max_views || null
+        }
+        
+        if (updates.password !== undefined) {
+          apiUpdates.password = updates.password || undefined
+        }
+        
+        if (updates.allow_download !== undefined) {
+          apiUpdates.allow_download = updates.allow_download
         }
         
         // Update via API

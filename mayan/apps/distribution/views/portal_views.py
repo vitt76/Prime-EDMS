@@ -1,10 +1,13 @@
+import json
 import logging
 
 from django.contrib import messages
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from django.views.generic import DetailView
 
 from stronghold.decorators import public
@@ -39,7 +42,15 @@ class PublicationPortalView(DetailView):
 
         # Check if link is valid
         if not share_link.is_valid():
-            raise Http404(_("This link has expired or reached its download limit."))
+            raise Http404(_("This link has expired or reached its limit."))
+
+        # Check password if set
+        if share_link.password_hash:
+            password = self.request.GET.get('password') or self.request.POST.get('password')
+            if not password or not share_link.check_password(password):
+                # Store token in session for password form
+                self.request.session[f'share_link_{share_link.token}'] = True
+                raise Http404(_("Password required for this link."))
 
         return share_link
 
@@ -77,7 +88,19 @@ def share_link_view(request, token):
 
     # Check if link is valid
     if not share_link.is_valid():
-        raise Http404(_("This link has expired or reached its download limit."))
+        raise Http404(_("This link has expired or reached its limit."))
+
+    # Check password if set
+    if share_link.password_hash:
+        password = request.GET.get('password')
+        if not password or not share_link.check_password(password):
+            # Return JSON response for API requests, or redirect for browser
+            if request.headers.get('Accept', '').startswith('application/json'):
+                return JsonResponse(
+                    {'error': 'Password required', 'password_required': True},
+                    status=403
+                )
+            raise Http404(_("Password required for this link."))
 
     # Check if download is allowed (using can_download for consistency, though it's inline view)
     if not share_link.can_download():
@@ -123,6 +146,33 @@ def share_link_view(request, token):
 
 
 @public
+@csrf_exempt
+@require_http_methods(["POST"])
+def check_share_link_password(request, token):
+    """
+    API endpoint to check password for share link.
+    """
+    share_link = get_object_or_404(ShareLink, token=token)
+    
+    try:
+        data = json.loads(request.body)
+        password = data.get('password', '')
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse(
+            {'error': 'Invalid request data'},
+            status=400
+        )
+    
+    if share_link.check_password(password):
+        return JsonResponse({'valid': True})
+    else:
+        return JsonResponse(
+            {'valid': False, 'error': 'Invalid password'},
+            status=403
+        )
+
+
+@public
 def download_rendition(request, token, rendition_id):
     """
     Public view for downloading a specific rendition.
@@ -132,8 +182,15 @@ def download_rendition(request, token, rendition_id):
 
     # Check if link is valid
     if not share_link.is_valid():
-        messages.error(request, _("This link has expired or reached its download limit."))
+        messages.error(request, _("This link has expired or reached its limit."))
         return redirect('distribution:portal', token=token)
+
+    # Check password if set
+    if share_link.password_hash:
+        password = request.GET.get('password') or request.POST.get('password')
+        if not password or not share_link.check_password(password):
+            messages.error(request, _("Password required for this link."))
+            return redirect('distribution:portal', token=token)
 
     # Check if download is allowed
     if not share_link.can_download():

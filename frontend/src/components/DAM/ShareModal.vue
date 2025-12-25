@@ -283,6 +283,47 @@
                     />
                   </div>
 
+                  <!-- Limits -->
+                  <div class="space-y-4">
+                    <div>
+                      <label class="flex items-center gap-3 cursor-pointer mb-3">
+                        <input
+                          v-model="hasMaxViews"
+                          type="checkbox"
+                          class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span class="text-sm font-medium text-neutral-700">Ограничить просмотры</span>
+                      </label>
+                      <input
+                        v-if="hasMaxViews"
+                        v-model.number="maxViews"
+                        type="number"
+                        min="1"
+                        placeholder="Максимальное количество просмотров"
+                        class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label class="flex items-center gap-3 cursor-pointer mb-3">
+                        <input
+                          v-model="hasMaxDownloads"
+                          type="checkbox"
+                          class="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span class="text-sm font-medium text-neutral-700">Ограничить скачивания</span>
+                      </label>
+                      <input
+                        v-if="hasMaxDownloads"
+                        v-model.number="maxDownloads"
+                        type="number"
+                        min="1"
+                        placeholder="Максимальное количество скачиваний"
+                        class="w-full px-4 py-2.5 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
                   <!-- Permissions -->
                   <div>
                     <p class="text-sm font-medium text-neutral-700 mb-3">Разрешения</p>
@@ -499,6 +540,10 @@ const hasPassword = ref(false)
 const password = ref('')
 const allowDownload = ref(true)
 const allowComments = ref(false)
+const hasMaxViews = ref(false)
+const maxViews = ref<number | null>(null)
+const hasMaxDownloads = ref(false)
+const maxDownloads = ref<number | null>(null)
 
 // UI state
 const isCreating = ref(false)
@@ -657,7 +702,9 @@ async function handleCreateLink() {
       expires_date: hasExpiration.value ? expirationDate.value : null,
       password: hasPassword.value ? password.value : undefined,
       allow_download: allowDownload.value,
-      allow_comment: allowComments.value
+      allow_comment: allowComments.value,
+      max_views: hasMaxViews.value ? maxViews.value : null,
+      max_downloads: hasMaxDownloads.value ? maxDownloads.value : null
     })
 
     createdLink.value = newLink
