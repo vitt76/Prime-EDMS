@@ -197,6 +197,13 @@ function handleFolderSelect(folderId: string) {
 
 async function handleDrop(payload: { folderId: string; assetIds: number[] }) {
   const { folderId, assetIds } = payload
+  
+  // Проверяем, что assetIds существует и является массивом
+  if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
+    console.error('Invalid assetIds in drop payload:', payload)
+    return
+  }
+  
   if (assetIds.length === 1 && assetIds[0] !== undefined) {
     await folderStore.handleAssetDrop(assetIds[0], folderId)
   } else if (assetIds.length > 1) {
@@ -220,7 +227,6 @@ function buildParentOptions(folders: FolderNode[], prefix = ''): { id: string; l
 }
 
 async function handleCreateFolder(folderName: string, parentId: string | null) {
-
   // Создаем папку (только системные папки)
   const newFolder = await folderStore.createFolder(parentId, folderName, 'local')
   
@@ -228,6 +234,9 @@ async function handleCreateFolder(folderName: string, parentId: string | null) {
   showCreateModal.value = false
   
   if (newFolder) {
+    // Обновляем список родительских папок для будущих созданий
+    parentOptions.value = buildParentOptions(folderStore.systemFolders)
+    
     notificationStore.addNotification({
       type: 'success',
       title: 'Папка создана',

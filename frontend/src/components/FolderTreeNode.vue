@@ -62,16 +62,48 @@
       </span>
       
       <!-- Options Button (on hover) -->
-      <button
-        class="p-1 rounded opacity-0 group-hover:opacity-100 
-               hover:bg-neutral-300 dark:hover:bg-neutral-500 transition-all shrink-0"
-        @click.stop="showContextMenu"
-        title="Действия"
-      >
-        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-        </svg>
-      </button>
+      <div ref="menuRef" class="relative shrink-0">
+        <button
+          class="p-1 rounded opacity-0 group-hover:opacity-100 
+                 hover:bg-neutral-300 dark:hover:bg-neutral-500 transition-all"
+          @click.stop="toggleContextMenu"
+          title="Действия"
+        >
+          <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+          </svg>
+        </button>
+        
+        <!-- Context Menu -->
+        <Teleport to="body">
+          <Transition
+            enter-active-class="transition ease-out duration-100"
+            enter-from-class="opacity-0 scale-95"
+            enter-to-class="opacity-100 scale-100"
+            leave-active-class="transition ease-in duration-75"
+            leave-from-class="opacity-100 scale-100"
+            leave-to-class="opacity-0 scale-95"
+          >
+            <div
+              v-if="showMenu && sectionType === 'local' && folder.canDelete"
+              ref="contextMenuRef"
+              class="fixed bg-white dark:bg-neutral-800 rounded-lg shadow-lg border border-neutral-200 dark:border-neutral-700 py-1 z-[60] min-w-[160px]"
+              :style="contextMenuStyle"
+              @click.stop
+            >
+              <button
+                class="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                @click="handleDelete"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Удалить
+              </button>
+            </div>
+          </Transition>
+        </Teleport>
+      </div>
       
       <!-- Drop Indicator Line -->
       <div
@@ -97,18 +129,60 @@
           :depth="depth + 1"
           :section-type="sectionType"
           @select="$emit('select', $event)"
-          @drop="$emit('drop', $event.folderId, $event.assetIds)"
+          @drop="handleChildDrop"
         />
       </div>
     </Transition>
+    
+    <!-- Delete Confirmation Modal -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition ease-out duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition ease-in duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="fixed inset-0 bg-black/60" @click="showDeleteModal = false" />
+          <div class="relative w-full max-w-md bg-white dark:bg-neutral-800 rounded-2xl shadow-xl p-6">
+            <h3 class="text-lg font-semibold text-neutral-900 dark:text-white mb-4">Удалить папку?</h3>
+            <p class="text-sm text-neutral-600 dark:text-neutral-400 mb-6">
+              Папка "<strong>{{ folder.name }}</strong>" будет удалена. 
+              <span v-if="folder.assetCount > 0">
+                Все документы из этой папки ({{ folder.assetCount }}) будут перемещены на корневой уровень.
+              </span>
+            </p>
+            <div class="flex gap-3">
+              <button
+                type="button"
+                class="flex-1 px-4 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
+                @click="showDeleteModal = false"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors"
+                @click="confirmDelete"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { FolderIcon, CloudIcon, FolderOpenIcon } from '@heroicons/vue/24/solid'
 import { useFolderStore } from '@/stores/folderStore'
 import { useAssetStore } from '@/stores/assetStore'
+import { useNotificationStore } from '@/stores/notificationStore'
 import type { FolderNode, FolderSource } from '@/mocks/folders'
 
 interface Props {
@@ -126,7 +200,13 @@ const emit = defineEmits<{
 
 const folderStore = useFolderStore()
 const assetStore = useAssetStore()
+const notificationStore = useNotificationStore()
 const folderRef = ref<HTMLElement | null>(null)
+const showMenu = ref(false)
+const showDeleteModal = ref(false)
+const menuRef = ref<HTMLElement | null>(null)
+const contextMenuRef = ref<HTMLElement | null>(null)
+const contextMenuStyle = ref<{ top: string; left: string }>({ top: '0px', left: '0px' })
 
 // ============================================================================
 // COMPUTED
@@ -181,10 +261,96 @@ function toggleExpand() {
   folderStore.toggleFolder(props.folder.id)
 }
 
-function showContextMenu(event: MouseEvent) {
-  // TODO: Implement context menu
-  console.log('Context menu for:', props.folder.name)
+function toggleContextMenu(event: MouseEvent) {
+  event.stopPropagation()
+  
+  if (!showMenu.value) {
+    // Calculate position for context menu
+    const button = event.currentTarget as HTMLElement
+    const rect = button.getBoundingClientRect()
+    
+    // Position menu below the button, aligned to the right
+    const menuWidth = 160 // min-w-[160px]
+    const menuHeight = 40 // approximate height
+    const spacing = 4 // mt-1
+    
+    let left = rect.right - menuWidth
+    let top = rect.bottom + spacing
+    
+    // Check if menu would go off screen to the right
+    if (left < 0) {
+      left = rect.left
+    }
+    
+    // Check if menu would go off screen to the bottom
+    if (top + menuHeight > window.innerHeight) {
+      top = rect.top - menuHeight - spacing
+    }
+    
+    contextMenuStyle.value = {
+      top: `${top}px`,
+      left: `${left}px`
+    }
+  }
+  
+  showMenu.value = !showMenu.value
 }
+
+function handleDelete() {
+  showMenu.value = false
+  if (props.sectionType !== 'local' || !props.folder.canDelete) {
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Удаление запрещено',
+      message: 'Эту папку нельзя удалить'
+    })
+    return
+  }
+  showDeleteModal.value = true
+}
+
+async function confirmDelete() {
+  showDeleteModal.value = false
+  
+  try {
+    const success = await folderStore.deleteFolder(props.folder.id)
+    if (success) {
+      notificationStore.addNotification({
+        type: 'success',
+        title: 'Папка удалена',
+        message: `Папка "${props.folder.name}" удалена. Документы перемещены на корневой уровень.`
+      })
+    }
+  } catch (error: any) {
+    console.error('Failed to delete folder:', error)
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: 'Не удалось удалить папку'
+    })
+  }
+}
+
+// Close menu when clicking outside
+function handleClickOutside(event: MouseEvent) {
+  const target = event.target as Node
+  if (
+    menuRef.value && 
+    !menuRef.value.contains(target) &&
+    contextMenuRef.value &&
+    !contextMenuRef.value.contains(target)
+  ) {
+    showMenu.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 // ============================================================================
 // DRAG & DROP HANDLERS
@@ -232,14 +398,35 @@ function handleDropEvent(event: DragEvent) {
     const payload = JSON.parse(data)
     
     if (payload.type === 'asset' && payload.assetIds) {
-      emit('drop', {
-        folderId: props.folder.id,
-        assetIds: payload.assetIds,
-      })
+      // Убеждаемся, что assetIds является массивом
+      // Обрабатываем случаи, когда assetIds может быть числом или массивом
+      let assetIds: number[] = []
+      
+      if (Array.isArray(payload.assetIds)) {
+        assetIds = payload.assetIds
+      } else if (typeof payload.assetIds === 'number') {
+        // Если передан один ID как число, преобразуем в массив
+        assetIds = [payload.assetIds]
+      } else if (payload.assetIds !== null && payload.assetIds !== undefined) {
+        // Попытка преобразовать в массив, если это возможно
+        assetIds = [Number(payload.assetIds)].filter(id => !isNaN(id))
+      }
+      
+      if (assetIds.length > 0) {
+        emit('drop', {
+          folderId: props.folder.id,
+          assetIds: assetIds,
+        })
+      }
     }
   } catch (e) {
     console.error('Failed to parse drop data:', e)
   }
+}
+
+function handleChildDrop(event: { folderId: string; assetIds: number[] }) {
+  // Проксируем событие drop от дочернего компонента
+  emit('drop', event)
 }
 </script>
 

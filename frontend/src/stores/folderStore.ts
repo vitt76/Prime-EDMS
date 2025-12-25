@@ -395,16 +395,19 @@ export const useFolderStore = defineStore(
           parent: parentId ? Number(parentId) : null,
         })
 
-        if (parentId) {
-          const parent = findFolderInSections(parentId)
-          if (parent) {
-            parent.children.push(newFolder)
-            expandFolder(parentId)
-          }
+        // Подготавливаем список ID папок, которые должны быть раскрыты
+        const additionalExpandedIds = new Set<string>()
+        
+        // Если создаем корневую папку, добавляем её ID в список раскрытых
+        if (!parentId) {
+          additionalExpandedIds.add(newFolder.id.toString())
         } else {
-          const systemSection = getSystemSection()
-          systemSection.folders.push(newFolder)
+          // Если создаем дочернюю папку, раскрываем родительскую
+          additionalExpandedIds.add(parentId)
         }
+        
+        // Обновляем дерево с сервера, сохраняя состояние раскрытия и добавляя новые ID
+        await refreshFolders(true, additionalExpandedIds)
         
         notificationStore.addNotification({
           type: 'success',
@@ -412,7 +415,25 @@ export const useFolderStore = defineStore(
           message: `Папка "${name}" успешно создана`,
         })
 
-        return newFolder
+        // Находим созданную папку в обновленном дереве и раскрываем путь к ней
+        const createdFolder = findFolderInSections(newFolder.id.toString())
+        if (createdFolder) {
+          // Раскрываем путь к созданной папке (все родительские папки)
+          const path = getFolderPathFromSections(createdFolder.id)
+          for (const folder of path) {
+            expandFolder(folder.id)
+          }
+          console.log('[FolderStore] Created folder found and expanded:', createdFolder.id, createdFolder.name)
+        } else {
+          console.warn('[FolderStore] Created folder not found in tree after refresh:', {
+            folderId: newFolder.id,
+            folderName: newFolder.name,
+            parentId: parentId,
+            systemFolders: getSystemSection().folders.map(f => ({ id: f.id, name: f.name }))
+          })
+        }
+
+        return createdFolder || newFolder
       } catch (error) {
         notificationStore.addNotification({
           type: 'error',
@@ -495,32 +516,24 @@ export const useFolderStore = defineStore(
       try {
         await cabinetService.deleteCabinet(Number(folderId))
         
-        function removeFromTree(folders: FolderNode[]): boolean {
-          const index = folders.findIndex(f => f.id === folderId)
-          if (index > -1) {
-            folders.splice(index, 1)
-            return true
-          }
-          for (const f of folders) {
-            if (removeFromTree(f.children)) return true
-          }
-          return false
+        // Сохраняем состояние раскрытия перед обновлением
+        const systemSection = getSystemSection()
+        const expandedIds = saveExpansionState(systemSection.folders)
+        
+        // Очищаем выбор, если удаляемая папка была выбрана
+        if (selectedFolderId.value === folderId) {
+          selectedFolderId.value = null
         }
         
-        for (const section of sections.value) {
-          if (removeFromTree(section.folders)) {
-            if (selectedFolderId.value === folderId) {
-              selectedFolderId.value = null
-            }
-            
-            notificationStore.addNotification({
-              type: 'success',
-              title: 'Папка удалена',
-              message: `Папка "${folder.name}" удалена`,
-            })
-            return true
-          }
-        }
+        // Обновляем дерево с сервера, чтобы синхронизировать состояние
+        await refreshFolders(true, expandedIds)
+        
+        notificationStore.addNotification({
+          type: 'success',
+          title: 'Папка удалена',
+          message: `Папка "${folder.name}" удалена`,
+        })
+        return true
       } catch (error) {
         notificationStore.addNotification({
           type: 'error',
@@ -533,16 +546,78 @@ export const useFolderStore = defineStore(
     }
     
     /**
-     * Refresh folders from API
+     * Сохранить состояние раскрытия всех папок
      */
-    async function refreshFolders(): Promise<void> {
+    function saveExpansionState(folders: FolderNode[]): Set<string> {
+      const expandedIds = new Set<string>()
+      
+      function traverse(nodes: FolderNode[]) {
+        for (const folder of nodes) {
+          if (folder.expanded) {
+            expandedIds.add(folder.id)
+          }
+          if (folder.children && folder.children.length > 0) {
+            traverse(folder.children)
+          }
+        }
+      }
+      
+      traverse(folders)
+      return expandedIds
+    }
+    
+    /**
+     * Восстановить состояние раскрытия папок
+     */
+    function restoreExpansionState(folders: FolderNode[], expandedIds: Set<string>): void {
+      function traverse(nodes: FolderNode[]) {
+        for (const folder of nodes) {
+          if (expandedIds.has(folder.id)) {
+            folder.expanded = true
+          }
+          if (folder.children && folder.children.length > 0) {
+            traverse(folder.children)
+          }
+        }
+      }
+      
+      traverse(folders)
+    }
+    
+    /**
+     * Refresh folders from API
+     * @param preserveExpansion - сохранить ли состояние раскрытия (по умолчанию true)
+     * @param additionalExpandedIds - дополнительные ID папок для раскрытия
+     */
+    async function refreshFolders(
+      preserveExpansion: boolean = true,
+      additionalExpandedIds?: Set<string>
+    ): Promise<void> {
       isLoading.value = true
       
       const notificationStore = useNotificationStore()
       try {
-        const systemTree = await cabinetService.getCabinetTree()
         const systemSection = getSystemSection()
+        let expandedIds = new Set<string>()
+        
+        // Сохраняем состояние раскрытия перед обновлением, если нужно
+        if (preserveExpansion) {
+          expandedIds = saveExpansionState(systemSection.folders)
+        }
+        
+        // Добавляем дополнительные ID для раскрытия
+        if (additionalExpandedIds) {
+          additionalExpandedIds.forEach(id => expandedIds.add(id))
+        }
+        
+        // Загружаем новое дерево (без кеша для получения актуальных данных)
+        const systemTree = await cabinetService.getCabinetTree(false)
         systemSection.folders = systemTree
+        
+        // Восстанавливаем состояние раскрытия
+        if (expandedIds.size > 0) {
+          restoreExpansionState(systemSection.folders, expandedIds)
+        }
       } catch (error) {
         notificationStore.addNotification({
           type: 'error',
