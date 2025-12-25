@@ -321,17 +321,81 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
         existing_qs.exclude(document_file_id__in=file_ids).delete()
 
         # Добавляем недостающие
+        new_items_created = False
         for df_id in file_ids:
             if df_id not in existing_file_ids:
                 PublicationItem.objects.create(
                     publication=publication,
                     document_file_id=df_id
                 )
+                new_items_created = True
 
         # Синхронизируем метаданные публикации с кампанией
         publication.title = campaign.title or _('Campaign publication')
         publication.description = campaign.description or ''
         publication.save(update_fields=['title', 'description'])
+        
+        # Автоматически генерируем рендишены для всех файлов в публикации
+        # если были добавлены новые элементы или если у публикации нет пресетов
+        if new_items_created or not publication.presets.exists():
+            from ..models import RenditionPreset, Recipient
+            
+            # Если у публикации нет пресетов, создаем дефолтный пресет для изображений
+            if not publication.presets.exists():
+                # Ищем дефолтный пресет для изображений или создаем его
+                default_preset = RenditionPreset.objects.filter(
+                    resource_type='image',
+                    name__icontains='default'
+                ).first()
+                
+                if not default_preset:
+                    # Создаем или получаем дефолтного получателя для системных пресетов
+                    default_recipient, _ = Recipient.objects.get_or_create(
+                        email='system@mayan-edms.local',
+                        defaults={
+                            'name': 'System Default',
+                            'organization': 'Mayan EDMS'
+                        }
+                    )
+                    
+                    # Создаем дефолтный пресет для изображений
+                    default_preset = RenditionPreset.objects.create(
+                        resource_type='image',
+                        format='jpeg',
+                        name='Default JPEG',
+                        description='Default preset for campaign publications',
+                        quality=85,
+                        width=1920,
+                        height=None,  # Сохраняем пропорции
+                        crop=False,
+                        recipient=default_recipient
+                    )
+                    logger.info(f'[Campaign] Created default preset: {default_preset.name}')
+                
+                # Добавляем пресет к публикации
+                publication.presets.add(default_preset)
+                logger.info(f'[Campaign] Added default preset to publication {publication.id}')
+            
+            # Генерируем рендишены для всех элементов публикации
+            # generate_all_renditions() использует get_or_create, так что безопасно вызывать для всех
+            # Это гарантирует, что рендишены будут созданы для всех файлов, включая новые
+            try:
+                items_count = publication.items.count()
+                presets_count = publication.presets.count()
+                logger.info(
+                    f'[Campaign] Generating renditions for publication {publication.id}: '
+                    f'{items_count} items, {presets_count} presets'
+                )
+                publication.generate_all_renditions()
+                logger.info(
+                    f'[Campaign] Successfully queued rendition generation for publication {publication.id} '
+                    f'({items_count} items × {presets_count} presets = {items_count * presets_count} renditions)'
+                )
+            except Exception as exc:
+                logger.error(
+                    f'[Campaign] Failed to auto-generate renditions for publication {publication.id}: {exc}',
+                    exc_info=True
+                )
 
 
 class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):

@@ -1611,6 +1611,8 @@ async function saveCampaignAssets() {
       title: 'Кампания обновлена',
       message: 'Состав файлов кампании сохранён'
     })
+    // Закрываем модалку после успешного сохранения
+    closeCampaignDetailsModal()
   } catch (error) {
     notificationStore.addNotification({
       type: 'error',
@@ -1625,7 +1627,7 @@ function removeAssetFromCampaign(asset: any) {
   campaignDetailsAssets.value = campaignDetailsAssets.value.filter(a => a.id !== asset.id)
 }
 
-function addSelectedDocumentsToCampaign() {
+async function addSelectedDocumentsToCampaign() {
   if (!selectedDocumentIds.value.length) return
 
   const existingIds = new Set(
@@ -1635,16 +1637,24 @@ function addSelectedDocumentsToCampaign() {
   )
 
   const now = Date.now()
+  const newAssets: any[] = []
   selectedDocumentIds.value.forEach((docId, index) => {
     if (!existingIds.has(docId)) {
-      campaignDetailsAssets.value.push({
+      const newAsset = {
         id: `tmp-${now}-${index}-${docId}`,
         document_id: docId,
         document_label: `Документ #${docId}`,
         document_file_id: null
-      })
+      }
+      campaignDetailsAssets.value.push(newAsset)
+      newAssets.push(newAsset)
     }
   })
+  
+  // Загружаем превью для новых файлов сразу после добавления
+  if (newAssets.length > 0) {
+    await loadCampaignAssetPreviews()
+  }
 }
 
 function assetPreviewKey(asset: any, resolvedFileId?: number | null): string {

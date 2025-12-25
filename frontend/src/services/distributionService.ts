@@ -85,6 +85,28 @@ class DistributionService {
   }
 
   /**
+   * Generate renditions for a publication
+   */
+  async generatePublicationRenditions(id: number): Promise<{
+    status: string
+    message: string
+    publication_id: number
+    items_count: number
+    presets_count: number
+  }> {
+    return apiService.post<{
+      status: string
+      message: string
+      publication_id: number
+      items_count: number
+      presets_count: number
+    }>(
+      `/api/v4/distribution/publications/${id}/generate_renditions/`,
+      {}
+    )
+  }
+
+  /**
    * Delete a publication
    */
   async deletePublication(id: number): Promise<void> {
@@ -196,7 +218,7 @@ class DistributionService {
   /**
    * Create a share link for a publication
    */
-  async createShareLink(
+  async createShareLinkForPublication(
     publicationId: number,
     options?: {
       expires_at?: string
@@ -214,9 +236,9 @@ class DistributionService {
   }
 
   /**
-   * Delete a share link
+   * Delete a share link for a publication
    */
-  async deleteShareLink(
+  async deleteShareLinkForPublication(
     publicationId: number,
     linkId: number
   ): Promise<void> {
