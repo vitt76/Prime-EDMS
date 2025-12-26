@@ -65,7 +65,8 @@ export const useNotificationStore = defineStore(
     const centerFilteredNotifications = computed(() => {
       switch (centerFilter.value) {
         case 'unread':
-          return centerNotifications.value.filter((n) => n.state === 'SENT')
+          // Include both CREATED and SENT as unread (CREATED can be pending Celery task).
+          return centerNotifications.value.filter((n) => n.state === 'SENT' || n.state === 'CREATED')
         case 'important':
           return centerNotifications.value.filter((n) => n.priority === 'HIGH' || n.priority === 'URGENT')
         default:

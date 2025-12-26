@@ -32,6 +32,9 @@ def create_enhanced_notification(user, action, event_type: str, template: Option
     - NotificationPreference.notifications_enabled is checked BEFORE calling this function
       in EventType.commit() for DB optimization. If notification was created, user is
       subscribed and notifications are enabled.
+    - Enterprise reliability: if Celery is unavailable when enqueueing delivery tasks,
+      we fall back to synchronously marking the notification as SENT so the user can
+      still see it in the UI.
     """
 
     # Schema may not be migrated yet. Keep runtime safe.
@@ -116,5 +119,19 @@ def create_enhanced_notification(user, action, event_type: str, template: Option
         send_notification_async.apply_async(args=(notification.pk,), queue='notifications')
     except Exception:
         logger.exception('Failed to enqueue send_notification_async for notification=%s', notification.pk)
+        # Fallback for Enterprise: if Celery is unavailable, mark as SENT synchronously.
+        # This ensures notifications are visible to users even if async queue is down.
+        try:
+            from django.utils import timezone
+
+            notification.sent_at = timezone.now()
+            notification.state = 'SENT'
+            notification.save(update_fields=('sent_at', 'state'))
+            logger.warning(
+                'Notification id=%s marked as SENT synchronously (Celery unavailable)',
+                notification.pk
+            )
+        except Exception:
+            logger.exception('Failed to mark notification as SENT synchronously for notification=%s', notification.pk)
 
     return notification

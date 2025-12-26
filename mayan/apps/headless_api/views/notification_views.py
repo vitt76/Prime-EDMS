@@ -53,8 +53,13 @@ def _get_unread_counters(user) -> dict:
         cached = None
 
     if hasattr(EventNotification, 'state'):
-        unread_count = EventNotification.objects.filter(user=user, state='SENT').count()
-        urgent_count = EventNotification.objects.filter(user=user, state='SENT', priority='URGENT').count()
+        # Count both CREATED and SENT as unread:
+        # - CREATED: just created, may still be pending the Celery delivery task
+        # - SENT: delivered (email/WebSocket), still unread until READ
+        # Enterprise note: `create_enhanced_notification()` has a fallback that marks
+        # notifications as SENT synchronously if Celery is unavailable.
+        unread_count = EventNotification.objects.filter(user=user, state__in=['CREATED', 'SENT']).count()
+        urgent_count = EventNotification.objects.filter(user=user, state__in=['CREATED', 'SENT'], priority='URGENT').count()
     else:
         unread_count = EventNotification.objects.filter(user=user, read=False).count()
         urgent_count = 0
@@ -96,7 +101,12 @@ class HeadlessNotificationListView(APIView):
         if hasattr(EventNotification, 'state'):
             queryset = queryset.exclude(state='DELETED')
             if state and state != 'ALL':
-                queryset = queryset.filter(state=state)
+                # For 'SENT' state, include both CREATED and SENT so users see new
+                # notifications even before Celery delivery task runs.
+                if state == 'SENT':
+                    queryset = queryset.filter(state__in=['CREATED', 'SENT'])
+                else:
+                    queryset = queryset.filter(state=state)
             if event_type:
                 queryset = queryset.filter(event_type=event_type)
         else:
@@ -182,7 +192,8 @@ class HeadlessNotificationReadAllView(APIView):
             _invalidate_unread_cache(user_id=request.user.pk)
             return Response({'marked_count': marked_count, 'unread_count': 0})
 
-        queryset = EventNotification.objects.filter(user=request.user, state='SENT')
+        # Mark both CREATED and SENT as read (CREATED is pending, SENT is delivered)
+        queryset = EventNotification.objects.filter(user=request.user, state__in=['CREATED', 'SENT'])
         if filter_event_type:
             queryset = queryset.filter(event_type=filter_event_type)
 

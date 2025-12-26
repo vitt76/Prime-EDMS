@@ -31,6 +31,14 @@ from mayan.apps.headless_api.views.image_editor_views import (
     HeadlessImageEditorSessionDetailView,
     HeadlessImageEditorWatermarkListView
 )
+from mayan.apps.headless_api.views.notification_views import (
+    HeadlessNotificationDetailView,
+    HeadlessNotificationListView,
+    HeadlessNotificationPreferenceView,
+    HeadlessNotificationReadAllView,
+    HeadlessNotificationReadView,
+    HeadlessNotificationUnreadCountView,
+)
 from .literals import API_VERSION
 
 # #region agent log
@@ -212,6 +220,37 @@ api_version_urls = [
         regex=r'^headless/image-editor/watermarks/$',
         view=HeadlessImageEditorWatermarkListView.as_view(),
         name='headless-image-editor-watermarks'
+    ),
+    # Headless notification endpoints
+    url(
+        regex=r'^headless/notifications/$',
+        view=HeadlessNotificationListView.as_view(),
+        name='headless-notifications-list'
+    ),
+    url(
+        regex=r'^headless/notifications/(?P<notification_id>\d+)/$',
+        view=HeadlessNotificationDetailView.as_view(),
+        name='headless-notifications-detail'
+    ),
+    url(
+        regex=r'^headless/notifications/(?P<notification_id>\d+)/read/$',
+        view=HeadlessNotificationReadView.as_view(),
+        name='headless-notifications-read'
+    ),
+    url(
+        regex=r'^headless/notifications/read-all/$',
+        view=HeadlessNotificationReadAllView.as_view(),
+        name='headless-notifications-read-all'
+    ),
+    url(
+        regex=r'^headless/notifications/unread-count/$',
+        view=HeadlessNotificationUnreadCountView.as_view(),
+        name='headless-notifications-unread-count'
+    ),
+    url(
+        regex=r'^headless/notifications/preferences/$',
+        view=HeadlessNotificationPreferenceView.as_view(),
+        name='headless-notifications-preferences'
     )
 ]
 
