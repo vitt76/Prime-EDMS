@@ -218,10 +218,9 @@ async function loadLogs(page = 1): Promise<void> {
   isLoading.value = true
   try {
     const data = await apiService.get<ActivityFeedResponse>(
-      '/api/v4/headless/activity/feed/',
+      '/api/v4/headless/admin/logs/',
       {
         params: {
-          filter: 'all',
           page,
           page_size: pageSize.value,
           // Default (toggle OFF): show only meaningful events and hide system noise.

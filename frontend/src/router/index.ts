@@ -334,7 +334,15 @@ router.beforeEach(async (to, _from, next) => {
         String(p).startsWith('user_management.group_') ||
         String(p).startsWith('permissions.role_')
       )
-    const isAdmin = !!u && (u.is_staff === true || u.is_superuser === true || u.can_access_admin_panel === true || hasAdminPerm)
+    const groupNames = Array.isArray(u?.groups) ? u.groups.map((g: any) => String(g?.name || '').toLowerCase()) : []
+    const inAdminGroup = groupNames.includes('admin')
+    const isAdmin = !!u && (
+      u.is_staff === true ||
+      u.is_superuser === true ||
+      u.can_access_admin_panel === true ||
+      hasAdminPerm ||
+      inAdminGroup
+    )
 
     if (!isAdmin) {
       console.warn(

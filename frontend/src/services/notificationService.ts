@@ -61,8 +61,70 @@ export const notificationService = {
     page_size?: number
     event_type?: string
     filter_event?: string
+    category?: string
+    scope?: string
   }) {
-    return apiService.get<NotificationListResponse>('/api/v4/headless/notifications/', params)
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'D',
+        location: 'services/notificationService.ts:65',
+        message: 'Frontend: API request to getNotifications',
+        data: { params },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion
+    // IMPORTANT:
+    // apiService.get() expects Axios config as the 2nd arg, so query params must be passed via { params: ... }.
+    // Otherwise query params won't be sent and cacheKey collapses to just the URL.
+    return apiService
+      .get<NotificationListResponse>('/api/v4/headless/notifications/', { params } as any, false)
+      .then(response => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'run1',
+          hypothesisId: 'D',
+          location: 'services/notificationService.ts:75',
+          message: 'Frontend: API response from getNotifications',
+          data: {
+            results_count: response.results?.length || 0,
+            unread_count: response.unread_count || 0,
+            has_urgent: response.has_urgent || false,
+            count: response.count || 0,
+            first_result: response.results?.[0] || null
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+      return response
+    }).catch(error => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'debug-session',
+          runId: 'run1',
+          hypothesisId: 'D',
+          location: 'services/notificationService.ts:95',
+          message: 'Frontend: API error in getNotifications',
+          data: { error: String(error), error_message: error?.message, error_status: error?.response?.status },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+      throw error
+    })
   },
 
   getNotification(id: number) {
@@ -85,7 +147,8 @@ export const notificationService = {
   },
 
   getUnreadCount() {
-    return apiService.get<UnreadCountResponse>('/api/v4/headless/notifications/unread-count/')
+    // Unread count must be fresh; avoid cache.
+    return apiService.get<UnreadCountResponse>('/api/v4/headless/notifications/unread-count/', undefined, false)
   },
 
   getPreferences() {

@@ -19,6 +19,7 @@ from .views.conversion_views import HeadlessDocumentConvertView
 from .views.auth_views import HeadlessAuthMeView
 from .views.dashboard_stats_views import HeadlessDashboardStatsView
 from .views.task_status_views import HeadlessTaskStatusView
+from .views.admin_logs_views import HeadlessAdminLogsView
 from .views.notification_views import (
     HeadlessNotificationDetailView,
     HeadlessNotificationListView,
@@ -57,6 +58,11 @@ api_urls = [
         regex=r'^activity/feed/$',
         view=HeadlessActivityFeedView.as_view(),
         name='api-activity-feed'
+    ),
+    url(
+        regex=r'^admin/logs/$',
+        view=HeadlessAdminLogsView.as_view(),
+        name='api-admin-logs'
     ),
     url(
         regex=r'^dashboard/activity/$',

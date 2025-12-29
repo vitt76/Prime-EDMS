@@ -24,6 +24,7 @@ from mayan.apps.headless_api.views.dashboard_stats_views import HeadlessDashboar
 from mayan.apps.headless_api.views.auth_views import HeadlessAuthMeView
 from mayan.apps.headless_api.views.storage_views import HeadlessS3ConfigView, HeadlessS3StatsView
 from mayan.apps.headless_api.views.users_views import HeadlessUsersDetailView, HeadlessUsersListCreateView
+from mayan.apps.headless_api.views.admin_logs_views import HeadlessAdminLogsView
 from mayan.apps.headless_api.views.image_editor_views import (
     HeadlessImageEditorCommitView,
     HeadlessImageEditorPreviewView,
@@ -139,6 +140,11 @@ api_version_urls = [
         regex=r'^headless/activity/feed/$',
         view=HeadlessActivityFeedView.as_view(),
         name='headless-activity-feed'
+    ),
+    url(
+        regex=r'^headless/admin/logs/$',
+        view=HeadlessAdminLogsView.as_view(),
+        name='headless-admin-logs'
     ),
     url(
         regex=r'^headless/dashboard/activity/$',
