@@ -25,7 +25,10 @@ from mayan.apps.headless_api.views.auth_views import HeadlessAuthMeView
 from mayan.apps.headless_api.views.storage_views import HeadlessS3ConfigView, HeadlessS3StatsView
 from mayan.apps.headless_api.views.users_views import HeadlessUsersDetailView, HeadlessUsersListCreateView
 from mayan.apps.headless_api.views.admin_logs_views import HeadlessAdminLogsView
-from mayan.apps.headless_api.views.analytics_views import AssetBankViewSet
+from mayan.apps.headless_api.views.analytics_views import (
+    AssetBankViewSet, CampaignPerformanceViewSet, SearchAnalyticsViewSet,
+    UserActivityViewSet
+)
 from mayan.apps.headless_api.views.image_editor_views import (
     HeadlessImageEditorCommitView,
     HeadlessImageEditorPreviewView,
@@ -172,6 +175,54 @@ api_version_urls = [
         regex=r'^headless/analytics/dashboard/assets/most-downloaded/$',
         view=AssetBankViewSet.as_view({'get': 'most_downloaded'}),
         name='headless-analytics-asset-bank-most-downloaded'
+    ),
+    # Analytics (Phase 2 - Campaign Performance)
+    url(
+        regex=r'^headless/analytics/campaigns/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'campaigns'}),
+        name='headless-analytics-campaigns-list'
+    ),
+    url(
+        regex=r'^headless/analytics/campaigns/create/$',
+        view=CampaignPerformanceViewSet.as_view({'post': 'create_campaign'}),
+        name='headless-analytics-campaigns-create'
+    ),
+    url(
+        regex=r'^headless/analytics/campaigns/add-assets/$',
+        view=CampaignPerformanceViewSet.as_view({'post': 'add_assets'}),
+        name='headless-analytics-campaigns-add-assets'
+    ),
+    url(
+        regex=r'^headless/analytics/campaigns/update-financials/$',
+        view=CampaignPerformanceViewSet.as_view({'post': 'update_financials'}),
+        name='headless-analytics-campaigns-update-financials'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/campaigns/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'dashboard'}),
+        name='headless-analytics-campaigns-dashboard'
+    ),
+    # Analytics (Phase 2 - Search Analytics)
+    url(
+        regex=r'^headless/analytics/dashboard/search/top-queries/$',
+        view=SearchAnalyticsViewSet.as_view({'get': 'top_queries'}),
+        name='headless-analytics-search-top-queries'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/search/null-searches/$',
+        view=SearchAnalyticsViewSet.as_view({'get': 'null_searches'}),
+        name='headless-analytics-search-null-searches'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/search/daily/$',
+        view=SearchAnalyticsViewSet.as_view({'get': 'daily'}),
+        name='headless-analytics-search-daily'
+    ),
+    # Analytics (Phase 2 - User activity)
+    url(
+        regex=r'^headless/analytics/dashboard/users/adoption-heatmap/$',
+        view=UserActivityViewSet.as_view({'get': 'adoption_by_department'}),
+        name='headless-analytics-user-adoption-heatmap'
     ),
     url(
         regex=r'^headless/favorites/$',

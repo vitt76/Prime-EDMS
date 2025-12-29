@@ -151,6 +151,7 @@ services:
       - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
       - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
       - ./mayan/apps/dam:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
+      - ./mayan/apps/analytics:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/analytics
       - ./mayan/apps/headless_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
       - ./mayan/apps/autoadmin:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/autoadmin
       - ./mayan/apps/cabinets:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/cabinets                                                                  
@@ -209,6 +210,7 @@ services:
       - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
       - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
       - ./mayan/apps/dam:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
+      - ./mayan/apps/analytics:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/analytics
       - ./mayan/apps/headless_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
       - ./mayan/apps/autoadmin:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/autoadmin
       - ./mayan/apps/cabinets:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/cabinets

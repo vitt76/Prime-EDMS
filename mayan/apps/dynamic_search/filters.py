@@ -1,7 +1,9 @@
 import logging
 import operator
+import time
 
 from django.conf import settings
+from django.apps import apps
 
 from rest_framework.filters import BaseFilterBackend
 
@@ -14,6 +16,48 @@ logger = logging.getLogger(name=__name__)
 
 
 class RESTAPISearchFilter(BaseFilterBackend):
+    def _should_track_search(self, search_model):
+        try:
+            model = search_model.model
+        except Exception:
+            return False
+
+        # Track only document searches to avoid logging every list filter usage.
+        return (
+            model._meta.app_label == 'documents' and model._meta.model_name in ('document', 'documentsearchresult')
+        )
+
+    def _get_results_count(self, search_queryset):
+        try:
+            return search_queryset.count()
+        except Exception:
+            try:
+                return len(search_queryset)
+            except Exception:
+                return None
+
+    def _track_search_query(self, *, request, query_dict_cleaned, results_count, response_time_ms):
+        try:
+            SearchQuery = apps.get_model('analytics', 'SearchQuery')
+        except Exception:
+            return
+
+        query_text = query_dict_cleaned.get(QUERY_PARAMETER_ANY_FIELD) or ''
+        if not query_text:
+            query_text = ' '.join([str(value) for value in query_dict_cleaned.values()]).strip()
+
+        user = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+
+        SearchQuery.objects.create(
+            user=user,
+            query_text=(query_text or '')[:500],
+            search_type=SearchQuery.SEARCH_TYPE_KEYWORD,
+            results_count=results_count,
+            response_time_ms=response_time_ms,
+            filters_applied=query_dict_cleaned,
+            user_department=''
+        )
+
     def get_search_model(self, queryset):
         try:
             model = queryset.model
@@ -57,6 +101,7 @@ class RESTAPISearchFilter(BaseFilterBackend):
 
                 if query_dict_cleaned:
                     try:
+                        start = time.monotonic()
                         search_queryset = SearchBackend.get_instance().search(
                             global_and_search=global_and_search,
                             search_model=search_model,
@@ -72,6 +117,18 @@ class RESTAPISearchFilter(BaseFilterBackend):
                         )
                         return search_model.model._meta.default_manager.none()
                     else:
+                        if self._should_track_search(search_model=search_model):
+                            results_count = self._get_results_count(
+                                search_queryset=search_queryset
+                            )
+                            response_time_ms = int((time.monotonic() - start) * 1000)
+
+                            self._track_search_query(
+                                request=request,
+                                query_dict_cleaned=query_dict_cleaned,
+                                results_count=results_count,
+                                response_time_ms=response_time_ms
+                            )
                         return queryset.filter(pk__in=search_queryset)
                 else:
                     return queryset

@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Count, Sum
+from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -9,8 +9,14 @@ from rest_framework.response import Response
 
 from mayan.apps.documents.models import Document, DocumentFile
 
-from mayan.apps.analytics.models import AssetDailyMetrics, AssetEvent
-from mayan.apps.analytics.permissions import permission_analytics_view_asset_bank
+from mayan.apps.analytics.models import (
+    AssetDailyMetrics, AssetEvent, Campaign, CampaignAsset, SearchDailyMetrics,
+    SearchQuery, UserSession
+)
+from mayan.apps.analytics.permissions import (
+    permission_analytics_view_asset_bank, permission_analytics_view_campaign_performance,
+    permission_analytics_view_search_analytics, permission_analytics_view_user_activity
+)
 from mayan.apps.permissions import Permission
 
 
@@ -31,18 +37,25 @@ class AssetBankViewSet(viewsets.ViewSet):
             total=Sum('size')
         )['total'] or 0
 
-        # Phase 1: MAU and Search Success require Level 3/4 models; return 0 for now.
+        last_30_days = timezone.now() - timedelta(days=30)
+        mau = UserSession.objects.filter(
+            login_timestamp__gte=last_30_days
+        ).values('user_id').distinct().count()
+
+        search_qs = SearchQuery.objects.filter(timestamp__gte=last_30_days)
+        total_searches = search_qs.count()
+        successful_searches = search_qs.filter(results_count__gt=0).count()
+        search_success_rate = 0
+        if total_searches:
+            search_success_rate = round((successful_searches / total_searches) * 100, 2)
+
         return Response(
             data={
                 'total_assets': total_assets,
                 'storage_used_bytes': used_bytes,
-                'mau': 0,
-                'search_success_rate': 0,
+                'mau': mau,
+                'search_success_rate': search_success_rate,
                 'avg_find_time_minutes': None,
-                'notes': {
-                    'mau': 'Phase 2: will be calculated from analytics user sessions.',
-                    'search_success_rate': 'Phase 2: will be calculated from analytics search queries.',
-                }
             },
             status=status.HTTP_200_OK
         )
@@ -163,4 +176,280 @@ class AssetBankViewSet(viewsets.ViewSet):
             status=status.HTTP_200_OK
         )
 
+
+class CampaignPerformanceViewSet(viewsets.ViewSet):
+    """Headless API: Campaign Performance dashboard (Phase 2 / Level 2)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @action(detail=False, methods=('get',))
+    def campaigns(self, request):
+        """GET /api/v4/headless/analytics/campaigns/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_campaign_performance,), user=request.user
+        )
+        rows = Campaign.objects.order_by('-updated_at').values(
+            'id', 'label', 'status', 'start_date', 'end_date', 'updated_at',
+            'cost_amount', 'revenue_amount', 'currency'
+        )[:200]
+        return Response(data={'results': list(rows)}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=('post',))
+    def create_campaign(self, request):
+        """POST /api/v4/headless/analytics/campaigns/create/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_campaign_performance,), user=request.user
+        )
+        label = (request.data.get('label') or '').strip()
+        if not label:
+            return Response(
+                data={'detail': 'label is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        campaign = Campaign.objects.create(
+            label=label,
+            description=(request.data.get('description') or '').strip(),
+            status=request.data.get('status') or Campaign.STATUS_DRAFT,
+            start_date=request.data.get('start_date') or None,
+            end_date=request.data.get('end_date') or None,
+            created_by=request.user,
+            cost_amount=request.data.get('cost_amount') or None,
+            revenue_amount=request.data.get('revenue_amount') or None,
+            currency=request.data.get('currency') or 'RUB',
+        )
+
+        return Response(
+            data={
+                'id': str(campaign.id),
+                'label': campaign.label,
+                'status': campaign.status,
+                'roi': campaign.get_roi(),
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=False, methods=('post',))
+    def add_assets(self, request):
+        """POST /api/v4/headless/analytics/campaigns/add-assets/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_campaign_performance,), user=request.user
+        )
+        campaign_id = request.data.get('campaign_id')
+        document_ids = request.data.get('document_ids') or []
+        if not campaign_id or not document_ids:
+            return Response(
+                data={'detail': 'campaign_id and document_ids are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        campaign = Campaign.objects.filter(pk=campaign_id).first()
+        if not campaign:
+            return Response(data={'detail': 'campaign not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        created = 0
+        for doc_id in document_ids:
+            _, was_created = CampaignAsset.objects.get_or_create(
+                campaign=campaign, document_id=doc_id
+            )
+            if was_created:
+                created += 1
+
+        return Response(
+            data={'created': created},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=('post',))
+    def update_financials(self, request):
+        """POST /api/v4/headless/analytics/campaigns/update-financials/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_campaign_performance,), user=request.user
+        )
+        campaign_id = request.data.get('campaign_id')
+        if not campaign_id:
+            return Response(
+                data={'detail': 'campaign_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        campaign = Campaign.objects.filter(pk=campaign_id).first()
+        if not campaign:
+            return Response(data={'detail': 'campaign not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if 'cost_amount' in request.data:
+            campaign.cost_amount = request.data.get('cost_amount') or None
+        if 'revenue_amount' in request.data:
+            campaign.revenue_amount = request.data.get('revenue_amount') or None
+        if 'currency' in request.data:
+            campaign.currency = request.data.get('currency') or campaign.currency
+
+        campaign.save(update_fields=('cost_amount', 'revenue_amount', 'currency', 'updated_at'))
+
+        return Response(
+            data={
+                'id': str(campaign.id),
+                'roi': campaign.get_roi(),
+                'cost_amount': campaign.cost_amount,
+                'revenue_amount': campaign.revenue_amount,
+                'currency': campaign.currency,
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=('get',))
+    def dashboard(self, request):
+        """GET /api/v4/headless/analytics/dashboard/campaigns/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_campaign_performance,), user=request.user
+        )
+        campaign_id = request.query_params.get('campaign_id')
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now().date() - timedelta(days=days)
+
+        campaign = None
+        if campaign_id:
+            campaign = Campaign.objects.filter(pk=campaign_id).first()
+        if not campaign:
+            campaign = Campaign.objects.order_by('-updated_at').first()
+
+        if not campaign:
+            return Response(
+                data={'campaign': None, 'timeline': [], 'channels': []},
+                status=status.HTTP_200_OK
+            )
+
+        document_ids = list(
+            CampaignAsset.objects.filter(campaign=campaign).values_list('document_id', flat=True)
+        )
+
+        events_qs = AssetEvent.objects.filter(
+            document_id__in=document_ids,
+            timestamp__date__gte=date_from
+        )
+
+        timeline = list(
+            events_qs.values('timestamp__date').annotate(
+                views=Count('id', filter=Q(event_type=AssetEvent.EVENT_TYPE_VIEW)),
+                downloads=Count('id', filter=Q(event_type=AssetEvent.EVENT_TYPE_DOWNLOAD)),
+            ).order_by('timestamp__date')
+        )
+
+        channels = list(
+            events_qs.values('channel').annotate(
+                views=Count('id', filter=Q(event_type=AssetEvent.EVENT_TYPE_VIEW)),
+                downloads=Count('id', filter=Q(event_type=AssetEvent.EVENT_TYPE_DOWNLOAD)),
+            ).order_by('-downloads')
+        )
+
+        return Response(
+            data={
+                'campaign': {
+                    'id': str(campaign.id),
+                    'label': campaign.label,
+                    'status': campaign.status,
+                    'assets_count': len(document_ids),
+                    'roi': campaign.get_roi(),
+                    'cost_amount': campaign.cost_amount,
+                    'revenue_amount': campaign.revenue_amount,
+                    'currency': campaign.currency,
+                    'updated_at': campaign.updated_at,
+                },
+                'timeline': timeline,
+                'channels': channels,
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class SearchAnalyticsViewSet(viewsets.ViewSet):
+    """Headless API: Search Analytics (Phase 2 / Level 4)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @action(detail=False, methods=('get',))
+    def top_queries(self, request):
+        """GET /api/v4/headless/analytics/dashboard/search/top-queries/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_search_analytics,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now() - timedelta(days=days)
+        qs = SearchQuery.objects.filter(timestamp__gte=date_from)
+        rows = qs.values('query_text').annotate(
+            count=Count('id')
+        ).order_by('-count')[:50]
+        return Response(data={'results': list(rows)}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=('get',))
+    def null_searches(self, request):
+        """GET /api/v4/headless/analytics/dashboard/search/null-searches/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_search_analytics,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now() - timedelta(days=days)
+        qs = SearchQuery.objects.filter(timestamp__gte=date_from, results_count=0)
+        rows = qs.values('query_text').annotate(
+            count=Count('id')
+        ).order_by('-count')[:50]
+        return Response(data={'results': list(rows)}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=('get',))
+    def daily(self, request):
+        """GET /api/v4/headless/analytics/dashboard/search/daily/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_search_analytics,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now().date() - timedelta(days=days)
+        rows = SearchDailyMetrics.objects.filter(
+            date__gte=date_from
+        ).order_by('date').values(
+            'date', 'total_searches', 'successful_searches', 'null_searches',
+            'ctr', 'avg_response_time_ms'
+        )
+        return Response(data={'results': list(rows)}, status=status.HTTP_200_OK)
+
+
+class UserActivityViewSet(viewsets.ViewSet):
+    """Headless API: User activity / adoption (Phase 2 / Level 3)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @action(detail=False, methods=('get',))
+    def adoption_by_department(self, request):
+        """GET /api/v4/headless/analytics/dashboard/users/adoption-heatmap/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_user_activity,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now() - timedelta(days=days)
+
+        user_ids = list(
+            UserSession.objects.filter(login_timestamp__gte=date_from).values_list(
+                'user_id', flat=True
+            ).distinct()
+        )
+
+        UserModel = UserSession._meta.get_field('user').remote_field.model
+        user_map = {
+            user.pk: user for user in UserModel.objects.filter(pk__in=user_ids)
+        }
+
+        buckets = {}
+        for user_id in user_ids:
+            user = user_map.get(user_id)
+            department = ''
+            if user:
+                department = getattr(user, 'department', '') or ''
+
+            buckets.setdefault(department or '—', set()).add(user_id)
+
+        results = []
+        for department, ids in buckets.items():
+            results.append({'department': department, 'mau': len(ids)})
+
+        results.sort(key=lambda x: x['mau'], reverse=True)
+        return Response(data={'results': results}, status=status.HTTP_200_OK)
 

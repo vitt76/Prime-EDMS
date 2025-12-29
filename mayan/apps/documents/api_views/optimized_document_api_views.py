@@ -8,8 +8,10 @@ Created: Phase B2 of TRANSFORMATION_PLAN.md
 Author: Backend Performance Engineer
 """
 import logging
+import time
 
 from django.db.models import Prefetch, OuterRef, Subquery
+from django.apps import apps as django_apps
 
 from rest_framework.generics import get_object_or_404
 
@@ -173,6 +175,43 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
             queryset = queryset.order_by('-datetime_created')
         
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        """List documents and log search queries (Phase 2 analytics).
+
+        We log only when the unified query parameter `q` is present.
+        This endpoint is the primary search/list endpoint used by the Vue frontend.
+        """
+        start = time.monotonic()
+        response = super().list(request, *args, **kwargs)
+
+        query_text = (request.query_params.get('q') or '').strip()
+        if query_text:
+            try:
+                SearchQuery = django_apps.get_model('analytics', 'SearchQuery')
+            except Exception:
+                SearchQuery = None
+
+            if SearchQuery:
+                try:
+                    results_count = None
+                    if isinstance(getattr(response, 'data', None), dict):
+                        results_count = response.data.get('count')
+
+                    SearchQuery.objects.create(
+                        user=request.user if request.user.is_authenticated else None,
+                        query_text=query_text[:500],
+                        search_type=SearchQuery.SEARCH_TYPE_KEYWORD,
+                        results_count=results_count,
+                        response_time_ms=int((time.monotonic() - start) * 1000),
+                        filters_applied={},
+                        user_department=''
+                    )
+                except Exception:
+                    # Best-effort logging only; never break the endpoint.
+                    logger.exception('Unable to track search query analytics for optimized documents list.')
+
+        return response
     
     def _get_metadata_queryset(self):
         """Get optimized metadata queryset with metadata_type prefetch."""

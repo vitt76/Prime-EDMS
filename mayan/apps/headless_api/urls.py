@@ -28,7 +28,10 @@ from .views.notification_views import (
     HeadlessNotificationReadView,
     HeadlessNotificationUnreadCountView,
 )
-from .views.analytics_views import AssetBankViewSet
+from .views.analytics_views import (
+    AssetBankViewSet, CampaignPerformanceViewSet, SearchAnalyticsViewSet,
+    UserActivityViewSet
+)
 
 app_name = 'headless_api'
 
@@ -160,5 +163,48 @@ api_urls = [
         regex=r'^analytics/dashboard/assets/most-downloaded/$',
         view=AssetBankViewSet.as_view({'get': 'most_downloaded'}),
         name='api-analytics-asset-bank-most-downloaded'
+    ),
+    # Analytics (Phase 2 - Campaign Performance)
+    url(
+        regex=r'^analytics/campaigns/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'campaigns'}),
+        name='api-analytics-campaigns-list'
+    ),
+    url(
+        regex=r'^analytics/campaigns/create/$',
+        view=CampaignPerformanceViewSet.as_view({'post': 'create_campaign'}),
+        name='api-analytics-campaigns-create'
+    ),
+    url(
+        regex=r'^analytics/campaigns/add-assets/$',
+        view=CampaignPerformanceViewSet.as_view({'post': 'add_assets'}),
+        name='api-analytics-campaigns-add-assets'
+    ),
+    url(
+        regex=r'^analytics/dashboard/campaigns/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'dashboard'}),
+        name='api-analytics-campaigns-dashboard'
+    ),
+    # Analytics (Phase 2 - Search Analytics)
+    url(
+        regex=r'^analytics/dashboard/search/top-queries/$',
+        view=SearchAnalyticsViewSet.as_view({'get': 'top_queries'}),
+        name='api-analytics-search-top-queries'
+    ),
+    url(
+        regex=r'^analytics/dashboard/search/null-searches/$',
+        view=SearchAnalyticsViewSet.as_view({'get': 'null_searches'}),
+        name='api-analytics-search-null-searches'
+    ),
+    url(
+        regex=r'^analytics/dashboard/search/daily/$',
+        view=SearchAnalyticsViewSet.as_view({'get': 'daily'}),
+        name='api-analytics-search-daily'
+    ),
+    # Analytics (Phase 2 - User activity)
+    url(
+        regex=r'^analytics/dashboard/users/adoption-heatmap/$',
+        view=UserActivityViewSet.as_view({'get': 'adoption_by_department'}),
+        name='api-analytics-user-adoption-heatmap'
     ),
 ]

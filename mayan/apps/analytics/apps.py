@@ -16,4 +16,7 @@ class AnalyticsApp(MayanAppConfig):
     def ready(self):
         super().ready()
 
+        # Register signals (login/logout session tracking, etc.).
+        from . import signals  # noqa: F401
+
 
