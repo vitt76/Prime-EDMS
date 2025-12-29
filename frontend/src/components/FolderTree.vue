@@ -152,7 +152,11 @@ const hasLocalSection = computed(() => {
 })
 
 onMounted(async () => {
-  await folderStore.refreshFolders()
+  // Загружаем системные папки и Яндекс.Диск параллельно
+  await Promise.all([
+    folderStore.refreshFolders(),
+    folderStore.loadYandexRoot()
+  ])
   currentSection.value = folderStore.allSections[0] || null
   parentOptions.value = buildParentOptions(folderStore.systemFolders)
 })
@@ -195,22 +199,71 @@ function handleFolderSelect(folderId: string) {
   emit('folderSelect', folderId)
 }
 
-async function handleDrop(payload: { folderId: string; assetIds: number[] }) {
-  const { folderId, assetIds } = payload
-  
-  // Проверяем, что assetIds существует и является массивом
+type DropPayload = {
+  folderId: string
+  assetIds?: number[]
+  folderType?: 'local' | 'yandex'
+  yandexPath?: string
+  operation?: 'copy-from-yandex'
+}
+
+async function handleDrop(payload: DropPayload) {
+  const { folderId, assetIds, folderType, yandexPath, operation } = payload
+
+  // Копирование файлов из DAM в Яндекс.Диск (drag из галереи → папка Яндекс.Диска)
+  if (folderType === 'yandex' && assetIds && assetIds.length > 0 && !operation) {
+    // Здесь в будущем можно добавить выбор пути/подпапки Яндекс.Диска.
+    // Пока используем path, привязанный к папке (folderId как path).
+    const targetPath = yandexPath || folderId
+
+    // Копируем каждый документ в Яндекс.Диск
+    await Promise.all(
+      assetIds.map(async (assetId) => {
+        await folderStore.copyDAMFileToYandex(assetId, targetPath)
+      })
+    )
+
+    assetStore.clearSelection()
+    return
+  }
+
+  // Копирование файла из Яндекс.Диска в локальную папку (drag из списка Яндекса → системная папка)
+  if (operation === 'copy-from-yandex' && yandexPath && folderType === 'local') {
+    try {
+      // Получаем дефолтный тип документа
+      const documentTypeId = await folderStore.getDefaultDocumentType()
+      if (!documentTypeId) {
+        console.error('[FolderTree] No document type available')
+        return
+      }
+      
+      // Копируем файл из Яндекс.Диска в DAM в указанную папку
+      await folderStore.copyYandexFileToDAM(
+        yandexPath,
+        documentTypeId,
+        folderId ? parseInt(folderId) : undefined
+      )
+      
+      // Обновляем галерею после копирования
+      assetStore.fetchAssets()
+    } catch (error) {
+      console.error('[FolderTree] Failed to copy Yandex.Disk file to DAM:', error)
+    }
+    return
+  }
+
+  // Стандартное поведение для локальных папок
   if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
     console.error('Invalid assetIds in drop payload:', payload)
     return
   }
-  
+
   if (assetIds.length === 1 && assetIds[0] !== undefined) {
     await folderStore.handleAssetDrop(assetIds[0], folderId)
   } else if (assetIds.length > 1) {
     await folderStore.handleBulkAssetDrop(assetIds, folderId)
   }
-  
-  // Clear selection after drop
+
   assetStore.clearSelection()
 }
 

@@ -7,6 +7,8 @@ from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db.models import Count
 from django.utils import timezone
 
+from io import BytesIO
+
 from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.renderers import JSONRenderer
@@ -14,13 +16,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from mayan.apps.documents.models import Document
+from mayan.apps.documents.models import Document, DocumentType
 from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.document_comments.models import Comment
 from mayan.apps.rest_api import generics as mayan_generics
 from mayan.apps.rest_api.pagination import MayanPageNumberPagination
 
+from mayan.apps.cabinets.models import Cabinet
+
+from . import settings as dam_settings
 from .models import DocumentAIAnalysis, DAMMetadataPreset
 from .permissions import permission_ai_analysis_create
 from .serializers import (
@@ -1243,3 +1248,475 @@ class DAMDashboardStatsView(mayan_generics.GenericAPIView):
                 'last_24_hours': comments_last_24_hours
             }
         })
+
+
+class APIYandexDiskConfigView(generics.GenericAPIView):
+    """
+    get:
+    Get Yandex Disk configuration settings.
+    
+    Returns configuration including client_id, base_path, cabinet_root_label,
+    token status (without exposing the actual token), and connection status.
+    
+    patch:
+    Update Yandex Disk configuration settings.
+    
+    Accepts: client_id, client_secret, base_path, cabinet_root_label,
+    document_type_id, max_file_size_mb, file_limit, authorization_code (optional).
+    """
+    permission_classes = (IsAuthenticated,)
+    
+    def get(self, request, *args, **kwargs):
+        from .services.yandex_disk import YandexDiskClient
+        from mayan.apps.documents.models import DocumentType
+        
+        token = dam_settings.setting_yandex_disk_token.value
+        client_id = dam_settings.setting_yandex_disk_client_id.value or ''
+        base_path = dam_settings.setting_yandex_disk_base_path.value or 'disk:/'
+        cabinet_root_label = dam_settings.setting_yandex_disk_cabinet_root_label.value or 'Yandex Disk'
+        document_type_id = dam_settings.setting_yandex_disk_document_type_id.value
+        max_file_size_bytes = int(dam_settings.setting_yandex_disk_max_file_size.value or (20 * 1024 * 1024))
+        file_limit = int(dam_settings.setting_yandex_disk_file_limit.value or 0)
+        has_token = bool(token)
+        
+        # Get document type info if exists
+        document_type = None
+        if document_type_id:
+            try:
+                document_type = DocumentType.objects.get(pk=document_type_id)
+            except DocumentType.DoesNotExist:
+                pass
+        
+        # Check connection status if token exists
+        connection_status = 'disconnected'
+        if has_token:
+            try:
+                client = YandexDiskClient(token=token)
+                client.ping()  # Test connection
+                connection_status = 'connected'
+            except Exception as exc:
+                logger.warning('Yandex Disk connection test failed: %s', exc)
+                connection_status = 'error'
+        
+        return Response({
+            'client_id': client_id,
+            'base_path': base_path,
+            'cabinet_root_label': cabinet_root_label,
+            'document_type_id': int(document_type_id) if document_type_id else None,
+            'document_type_label': document_type.label if document_type else None,
+            'max_file_size_mb': max(1, int(max_file_size_bytes / (1024 * 1024))),
+            'file_limit': file_limit,
+            'has_token': has_token,
+            'connection_status': connection_status,
+            'enabled': has_token and connection_status == 'connected'
+        })
+    
+    def patch(self, request, *args, **kwargs):
+        from .services.yandex_disk import exchange_yandex_code_for_token, YandexDiskOAuthError
+        
+        data = request.data
+        
+        # Update settings
+        if 'client_id' in data:
+            dam_settings.setting_yandex_disk_client_id.value = data['client_id'] or ''
+        
+        if 'client_secret' in data:
+            dam_settings.setting_yandex_disk_client_secret.value = data['client_secret'] or ''
+        
+        if 'base_path' in data:
+            dam_settings.setting_yandex_disk_base_path.value = data['base_path'] or 'disk:/'
+        
+        if 'cabinet_root_label' in data:
+            dam_settings.setting_yandex_disk_cabinet_root_label.value = data['cabinet_root_label'] or 'Yandex Disk'
+        
+        if 'document_type_id' in data:
+            document_type_id = data['document_type_id']
+            if document_type_id:
+                dam_settings.setting_yandex_disk_document_type_id.value = str(document_type_id)
+            else:
+                dam_settings.setting_yandex_disk_document_type_id.value = ''
+        
+        if 'max_file_size_mb' in data:
+            max_file_size_mb = int(data['max_file_size_mb'] or 20)
+            dam_settings.setting_yandex_disk_max_file_size.value = str(max_file_size_mb * 1024 * 1024)
+        
+        if 'file_limit' in data:
+            file_limit = int(data['file_limit'] or 0)
+            dam_settings.setting_yandex_disk_file_limit.value = str(file_limit)
+        
+        # Handle token clearing
+        if data.get('clear_token', False):
+            dam_settings.setting_yandex_disk_token.value = ''
+            dam_settings.setting_yandex_disk_refresh_token.value = ''
+        
+        # Handle authorization code exchange
+        authorization_code = data.get('authorization_code')
+        if authorization_code:
+            client_id = data.get('client_id') or dam_settings.setting_yandex_disk_client_id.value
+            client_secret = data.get('client_secret') or dam_settings.setting_yandex_disk_client_secret.value
+            
+            if not client_id or not client_secret:
+                return Response(
+                    {'detail': 'Client ID and Client Secret are required to exchange authorization code.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                token_payload = exchange_yandex_code_for_token(
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    code=authorization_code
+                )
+                dam_settings.setting_yandex_disk_token.value = token_payload.get('access_token', '')
+                dam_settings.setting_yandex_disk_refresh_token.value = token_payload.get('refresh_token', '')
+            except YandexDiskOAuthError as exc:
+                return Response(
+                    {'detail': str(exc)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Save all settings
+        from mayan.apps.smart_settings.classes import Setting
+        Setting.save_configuration()
+        
+        # Return updated config
+        return self.get(request, *args, **kwargs)
+
+
+class YandexDiskBaseAPIView(generics.GenericAPIView):
+    """
+    Base helpers for Yandex Disk API views.
+    """
+    permission_classes = (IsAuthenticated,)
+
+    def get_client(self):
+        from .services.yandex_disk import YandexDiskClient
+
+        token = dam_settings.setting_yandex_disk_token.value
+        if not token:
+            logger.warning('Yandex Disk token is not configured.')
+            self.permission_denied(
+                self.request,
+                message='Yandex Disk token is not configured.'
+            )
+        return YandexDiskClient(token=token)
+
+
+class APIYandexDiskFolderDetailView(YandexDiskBaseAPIView):
+    """
+    get:
+    Return folder content (subfolders and files) for a given Yandex Disk path.
+
+    Path is passed as base64-encoded string in the URL for safety.
+    """
+
+    def get(self, request, encoded_path: str, *args, **kwargs):
+        import base64
+
+        try:
+            # Восстанавливаем padding, так как на фронтенде он убирается
+            padding = '=' * (-len(encoded_path) % 4)
+            encoded_with_padding = f'{encoded_path}{padding}'
+            raw_path = base64.urlsafe_b64decode(encoded_with_padding.encode()).decode()
+        except Exception:
+            return Response(
+                {'detail': 'Invalid folder path encoding.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        client = self.get_client()
+        try:
+            items = client.list_directory(path=raw_path)
+        except Exception as exc:
+            logger.error('Failed to list Yandex Disk directory %s: %s', raw_path, exc)
+            return Response(
+                {'detail': 'Failed to list Yandex Disk directory.'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        folders = []
+        files = []
+        for item in items:
+            entry = {
+                'name': item.get('name'),
+                'path': item.get('path'),
+                'type': item.get('type'),
+                'size': item.get('size'),
+            }
+            if item.get('type') == 'dir':
+                folders.append(entry)
+            elif item.get('type') == 'file':
+                files.append(entry)
+
+        return Response(
+            {
+                'path': raw_path,
+                'folders': folders,
+                'files': files,
+                'total_count': len(items),
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class APIYandexDiskFileDownloadView(YandexDiskBaseAPIView):
+    """
+    get:
+    Download a file from Yandex Disk.
+    
+    Path is passed as base64-encoded string in the URL.
+    """
+    
+    def get(self, request, encoded_path: str, *args, **kwargs):
+        import base64
+        from django.http import StreamingHttpResponse
+        
+        try:
+            # Add padding if needed for base64 decoding (same as in preview view)
+            encoded_path_padded = encoded_path
+            padding = len(encoded_path) % 4
+            if padding:
+                encoded_path_padded += '=' * (4 - padding)
+            raw_path = base64.urlsafe_b64decode(encoded_path_padded.encode()).decode()
+        except Exception as exc:
+            logger.error('Failed to decode Yandex Disk path %s: %s', encoded_path, exc)
+            return Response(
+                {'detail': 'Invalid file path encoding.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        client = self.get_client()
+        try:
+            # Get file stream from Yandex Disk
+            file_stream = client.iter_file(path=raw_path)
+            
+            # Get file info for headers
+            file_info_response = client.session.get(
+                url=f'{client.base_url}/resources',
+                params={'path': raw_path, 'fields': 'size'},
+                timeout=client.timeout
+            )
+            client._raise_for_status(file_info_response)
+            file_info = file_info_response.json()
+            filename = raw_path.split('/')[-1] or 'file'
+            
+            response = StreamingHttpResponse(file_stream, content_type='application/octet-stream')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            if file_info.get('size'):
+                response['Content-Length'] = str(file_info['size'])
+            
+            return response
+        except Exception as exc:
+            logger.error('Failed to download Yandex Disk file %s: %s', raw_path, exc)
+            return Response(
+                {'detail': 'Failed to download file from Yandex Disk.'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+
+class APIYandexDiskFilePreviewView(YandexDiskBaseAPIView):
+    """
+    get:
+    Get preview/thumbnail of an image file from Yandex Disk.
+    
+    Path is passed as base64-encoded string in the URL.
+    Supports query params: width, height
+    """
+    from rest_framework.renderers import JSONRenderer
+    renderer_classes = (JSONRenderer,)  # Required by DRF, but we'll bypass it
+    
+    def perform_content_negotiation(self, request, force=False):
+        """
+        Override to skip content negotiation - we return binary data.
+        """
+        # Return a dummy renderer and media type to satisfy DRF
+        from rest_framework.renderers import JSONRenderer
+        return (JSONRenderer(), 'application/json')
+    
+    def get(self, request, encoded_path: str, *args, **kwargs):
+        import base64
+        from django.http import StreamingHttpResponse
+        
+        try:
+            # Add padding if needed for base64 decoding
+            encoded_path_padded = encoded_path
+            padding = len(encoded_path) % 4
+            if padding:
+                encoded_path_padded += '=' * (4 - padding)
+            raw_path = base64.urlsafe_b64decode(encoded_path_padded.encode()).decode()
+        except Exception as exc:
+            logger.error('Failed to decode Yandex Disk path %s: %s', encoded_path, exc)
+            return Response(
+                {'detail': 'Invalid file path encoding.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        client = self.get_client()
+        try:
+            # Get preview URL from Yandex Disk (if available)
+            # For now, just return the file stream
+            # TODO: Implement proper preview with resizing if Yandex Disk API supports it
+            file_stream = client.iter_file(path=raw_path)
+            
+            # Determine content type from file extension
+            filename = raw_path.split('/')[-1] or 'file'
+            ext = filename.split('.')[-1].lower()
+            content_type = 'image/jpeg' if ext in ['jpg', 'jpeg'] else \
+                          'image/png' if ext == 'png' else \
+                          'image/gif' if ext == 'gif' else \
+                          'image/webp' if ext == 'webp' else \
+                          'application/octet-stream'
+            
+            response = StreamingHttpResponse(file_stream, content_type=content_type)
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
+            # Allow CORS if needed
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'GET'
+            response['Access-Control-Allow-Headers'] = 'Authorization'
+            
+            return response
+        except Exception as exc:
+            logger.error('Failed to get Yandex Disk file preview %s: %s', raw_path, exc)
+            return Response(
+                {'detail': 'Failed to get file preview from Yandex Disk.'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+
+class APIYandexDiskCopyToDAMView(YandexDiskBaseAPIView):
+    """
+    post:
+    Copy a file from Yandex Disk into DAM as a new Document.
+
+    Expected payload:
+    {
+        "yandex_path": "disk:/folder/file.jpg",
+        "document_type_id": 1,          # optional, defaults to first available
+        "cabinet_id": 5,                # optional
+        "label": "My File"              # optional
+    }
+    """
+
+    def post(self, request, *args, **kwargs):
+        from django.core.files import File
+
+        yandex_path = request.data.get('yandex_path')
+        if not yandex_path:
+            return Response(
+                {'detail': 'Field \"yandex_path\" is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        document_type_id = request.data.get('document_type_id')
+        cabinet_id = request.data.get('cabinet_id')
+        label = request.data.get('label')
+
+        document_type = None
+        if document_type_id:
+            document_type = DocumentType.objects.filter(pk=document_type_id).first()
+        if not document_type:
+            document_type = DocumentType.objects.order_by('label').first()
+        if not document_type:
+            return Response(
+                {'detail': 'No document type available for Yandex Disk import.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        client = self.get_client()
+
+        try:
+            chunks = client.iter_file(path=yandex_path)
+            buffer = BytesIO()
+            for chunk in chunks:
+                buffer.write(chunk)
+            buffer.seek(0)
+        except Exception as exc:
+            logger.error('Failed to download Yandex Disk file %s: %s', yandex_path, exc)
+            return Response(
+                {'detail': 'Failed to download file from Yandex Disk.'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        document_label = label or yandex_path.split('/')[-1] or 'Yandex Disk file'
+        document = Document.objects.create(
+            document_type=document_type,
+            label=document_label
+        )
+
+        document.file_new(
+            file_object=File(buffer, name=document_label),
+            filename=document_label
+        )
+
+        if cabinet_id:
+            try:
+                cabinet = Cabinet.objects.get(pk=cabinet_id)
+                cabinet.document_add(document)
+            except Cabinet.DoesNotExist:
+                logger.warning('Cabinet %s does not exist, skipping document_add.', cabinet_id)
+
+        return Response(
+            {'document_id': document.pk},
+            status=status.HTTP_201_CREATED
+        )
+
+
+class APIYandexDiskCopyFromDAMView(YandexDiskBaseAPIView):
+    """
+    post:
+    Copy a file from DAM into Yandex Disk.
+
+    Expected payload:
+    {
+        "document_id": 123,
+        "yandex_path": "disk:/folder/",
+        "filename": "copy.jpg"  # optional
+    }
+    """
+
+    def post(self, request, *args, **kwargs):
+        document_id = request.data.get('document_id')
+        yandex_path = request.data.get('yandex_path')
+        filename = request.data.get('filename')
+
+        if not document_id or not yandex_path:
+            return Response(
+                {'detail': 'Fields \"document_id\" and \"yandex_path\" are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            document = Document.objects.get(pk=document_id)
+        except Document.DoesNotExist:
+            return Response(
+                {'detail': 'Document does not exist.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        document_file = document.files.order_by('-timestamp').first()
+        if not document_file:
+            return Response(
+                {'detail': 'Document has no files to upload.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        target_filename = filename or document_file.filename or f'document-{document.pk}'
+        if not yandex_path.endswith('/'):
+            yandex_path = yandex_path + '/'
+        full_path = f'{yandex_path}{target_filename}'
+
+        client = self.get_client()
+        try:
+          with document_file.open() as file_object:
+              client.upload_file(path=full_path, file_data=file_object.read())
+        except Exception as exc:
+            logger.error('Failed to upload file %s to Yandex Disk: %s', full_path, exc)
+            return Response(
+                {'detail': 'Failed to upload file to Yandex Disk.'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        return Response(
+            {'path': full_path},
+            status=status.HTTP_201_CREATED
+        )

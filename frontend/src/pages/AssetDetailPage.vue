@@ -1695,16 +1695,32 @@ function handleTagsUpdated(tags: AITag[]) {
 async function loadAIAnalysis() {
   if (!asset.value?.id) return
   
+  // Skip AI analysis for Yandex.Disk files (they have negative IDs or source === 'yandex-disk')
+  const assetAny = asset.value as any
+  if (assetAny.source === 'yandex-disk' || assetAny.yandex_disk_path) {
+    if (import.meta.env.DEV) {
+      console.log('[AssetDetail] Skipping AI analysis for Yandex.Disk file')
+    }
+    aiAnalysis.value = null
+    isLoadingAIAnalysis.value = false
+    return
+  }
+  
+  // Skip AI analysis for assets with negative IDs (Yandex.Disk folders/files)
+  const documentId = Number(asset.value.id)
+  if (!Number.isFinite(documentId) || documentId <= 0) {
+    if (import.meta.env.DEV) {
+      console.warn('[AssetDetail] Invalid document ID for AI analysis:', asset.value.id)
+    }
+    aiAnalysis.value = null
+    isLoadingAIAnalysis.value = false
+    return
+  }
+  
   isLoadingAIAnalysis.value = true
   aiAnalysisError.value = null
   
   try {
-    const documentId = Number(asset.value.id)
-    if (!Number.isFinite(documentId) || documentId <= 0) {
-      console.warn('[AssetDetail] Invalid document ID for AI analysis:', asset.value.id)
-      return
-    }
-    
     const result = await aiAnalysisService.getAIAnalysis(documentId)
     if (import.meta.env.DEV) {
       console.log('[AssetDetail] AI analysis loaded:', result)

@@ -3,23 +3,42 @@ import { apiService } from './apiService'
 export interface DashboardStats {
   documents: {
     total: number
-    with_analysis: number
-    without_analysis: number
+    with_analysis?: number  // Optional - not provided by headless endpoint
+    without_analysis?: number  // Optional - not provided by headless endpoint
+    last_30_days?: number
+    prev_30_days?: number
+    growth_percent?: number | null
+    growth_label?: string
   }
-  analyses: {
+  analyses?: {
     completed: number
     processing: number
     pending: number
     failed: number
   }
-  providers: Array<{
+  providers?: Array<{
     provider: string
     count: number
   }>
-  comments: {
+  comments?: {
     last_7_days: number
     last_24_hours: number
   }
+  users?: {
+    total: number
+    active_total: number
+    last_30_days: number
+    prev_30_days: number
+    growth_percent: number | null
+    growth_label: string
+  }
+  storage?: {
+    used_bytes: number
+    total_bytes: number
+    unknown_size_files: number
+  }
+  generated_at?: string
+  window_days?: number
 }
 
 export interface ActivityItem {
@@ -50,11 +69,40 @@ class DashboardService {
    * Get dashboard statistics
    */
   async getDashboardStats(): Promise<DashboardStats> {
-    return apiService.get<DashboardStats>(
-      '/api/v4/dashboard-stats/',
+    // Use headless dashboard stats endpoint (same as admin panel)
+    const data = await apiService.get<any>(
+      '/api/v4/headless/dashboard/stats/',
       undefined,
       false // Don't cache - data should be up-to-date
     )
+    
+    // Adapt the response to match DashboardStats interface
+    return {
+      documents: {
+        total: data.documents?.total || 0,
+        with_analysis: 0,  // Not provided by headless endpoint
+        without_analysis: 0,  // Not provided by headless endpoint
+        last_30_days: data.documents?.last_30_days,
+        prev_30_days: data.documents?.prev_30_days,
+        growth_percent: data.documents?.growth_percent,
+        growth_label: data.documents?.growth_label
+      },
+      analyses: {
+        completed: 0,  // Not provided by headless endpoint
+        processing: 0,
+        pending: 0,
+        failed: 0
+      },
+      providers: [],  // Not provided by headless endpoint
+      comments: {
+        last_7_days: 0,  // Not provided by headless endpoint
+        last_24_hours: 0
+      },
+      users: data.users,
+      storage: data.storage,
+      generated_at: data.generated_at,
+      window_days: data.window_days
+    }
   }
 
   /**

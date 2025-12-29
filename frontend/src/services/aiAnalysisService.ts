@@ -10,9 +10,9 @@ class AIAnalysisService {
   async getAIAnalysis(assetId: number): Promise<AIAnalysis | null> {
     try {
       // Use DAM document detail endpoint which includes ai_analysis
-      // Note: DAM URLs are registered directly under /api/v4/ without 'dam/' prefix
+      // Correct path: /api/v4/dam/document-detail/{id}/
       const response = await apiService.get<{ ai_analysis: BackendAIAnalysis | null }>(
-        `/api/v4/document-detail/${assetId}/`,
+        `/api/v4/dam/document-detail/${assetId}/`,
         undefined,
         false // Don't cache AI analysis
       )

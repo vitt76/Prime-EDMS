@@ -257,8 +257,8 @@ function handleClick() {
   emit('select', props.folder.id)
 }
 
-function toggleExpand() {
-  folderStore.toggleFolder(props.folder.id)
+async function toggleExpand() {
+  await folderStore.toggleFolder(props.folder.id)
 }
 
 function toggleContextMenu(event: MouseEvent) {
@@ -358,21 +358,54 @@ onBeforeUnmount(() => {
 
 function handleDragEnter(event: DragEvent) {
   if (!event.dataTransfer) return
-  if (props.sectionType !== 'local' || !props.folder.canAddChildren) return
-  
-  // Check if dragging assets
+
+  const canAcceptDrop =
+    (props.sectionType === 'local' && props.folder.canAddChildren) ||
+    props.sectionType === 'yandex'
+
+  if (!canAcceptDrop) return
+
   if (event.dataTransfer.types.includes('application/json')) {
+    // Set appropriate drop effect
+    // For Yandex.Disk files, we use 'copy' even for local folders
+    // For regular DAM assets, use 'move' for local folders, 'copy' for Yandex folders
+    if (props.sectionType === 'yandex') {
+      event.dataTransfer.dropEffect = 'copy'
+    } else {
+      // For local folders, allow copy (for Yandex.Disk files)
+      event.dataTransfer.dropEffect = 'copy'
+    }
     folderStore.setDragOver(props.folder.id)
   }
 }
 
 function handleDragOver(event: DragEvent) {
   if (!event.dataTransfer) return
-  if (props.sectionType !== 'local' || !props.folder.canAddChildren) return
-  
-  // Indicate this is a valid drop target
+
+  const canAcceptDrop =
+    (props.sectionType === 'local' && props.folder.canAddChildren) ||
+    props.sectionType === 'yandex'
+
+  if (!canAcceptDrop) return
+
   if (event.dataTransfer.types.includes('application/json')) {
-    event.dataTransfer.dropEffect = 'move'
+    // Check if it's a Yandex.Disk file by trying to read the data
+    // Note: getData() doesn't work in dragover, but we can check types
+    // For Yandex.Disk files, we always use 'copy' effect
+    // For regular DAM assets, use 'move' for local folders, 'copy' for Yandex folders
+    let dropEffect: 'copy' | 'move' = 'move'
+    
+    // If dragging to Yandex folder, always copy
+    if (props.sectionType === 'yandex') {
+      dropEffect = 'copy'
+    } else {
+      // For local folders, check if it might be a Yandex.Disk file
+      // We can't read data in dragover, but we can set copy as default
+      // and let the drop handler verify
+      dropEffect = 'copy' // Allow copy for Yandex.Disk files to local folders
+    }
+    
+    event.dataTransfer.dropEffect = dropEffect
     folderStore.setDragOver(props.folder.id)
   }
 }
@@ -387,37 +420,51 @@ function handleDragLeave(event: DragEvent) {
 
 function handleDropEvent(event: DragEvent) {
   folderStore.setDragOver(null)
-  
+
   if (!event.dataTransfer) return
-  if (props.sectionType !== 'local' || !props.folder.canAddChildren) return
-  
+
+  const canAcceptDrop =
+    (props.sectionType === 'local' && props.folder.canAddChildren) ||
+    props.sectionType === 'yandex'
+
+  if (!canAcceptDrop) return
+
   try {
     const data = event.dataTransfer.getData('application/json')
     if (!data) return
-    
+
     const payload = JSON.parse(data)
-    
+
+    // Перетаскивание активов из DAM
     if (payload.type === 'asset' && payload.assetIds) {
-      // Убеждаемся, что assetIds является массивом
-      // Обрабатываем случаи, когда assetIds может быть числом или массивом
       let assetIds: number[] = []
-      
+
       if (Array.isArray(payload.assetIds)) {
         assetIds = payload.assetIds
       } else if (typeof payload.assetIds === 'number') {
-        // Если передан один ID как число, преобразуем в массив
         assetIds = [payload.assetIds]
       } else if (payload.assetIds !== null && payload.assetIds !== undefined) {
-        // Попытка преобразовать в массив, если это возможно
         assetIds = [Number(payload.assetIds)].filter(id => !isNaN(id))
       }
-      
+
       if (assetIds.length > 0) {
         emit('drop', {
           folderId: props.folder.id,
-          assetIds: assetIds,
+          assetIds,
+          folderType: props.sectionType,
+          yandexPath: props.sectionType === 'yandex' ? props.folder.id : undefined
         })
       }
+    }
+
+    // Перетаскивание файлов из Яндекс.Диска (на будущее)
+    if (payload.type === 'yandex-file' && payload.yandexPath) {
+      emit('drop', {
+        folderId: props.folder.id,
+        yandexPath: payload.yandexPath,
+        folderType: props.sectionType,
+        operation: 'copy-from-yandex'
+      })
     }
   } catch (e) {
     console.error('Failed to parse drop data:', e)

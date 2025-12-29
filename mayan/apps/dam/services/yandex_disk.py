@@ -88,6 +88,37 @@ class YandexDiskClient:
                 if chunk:
                     yield chunk
 
+    def get_upload_url(self, path: str, overwrite: bool = True) -> str:
+        """
+        Get a pre-signed upload URL for a given Yandex Disk path.
+        """
+        params = {
+            'path': path,
+            'overwrite': 'true' if overwrite else 'false'
+        }
+        response = self.session.get(
+            url=f'{self.base_url}/resources/upload',
+            params=params,
+            timeout=self.timeout
+        )
+        self._raise_for_status(response)
+        href = response.json().get('href')
+        if not href:
+            raise YandexDiskClientError(_('Upload URL missing for %s') % path)
+        return href
+
+    def upload_file(self, path: str, file_data: bytes, overwrite: bool = True) -> None:
+        """
+        Upload a file to Yandex Disk at the specified path.
+        """
+        href = self.get_upload_url(path=path, overwrite=overwrite)
+        try:
+            response = requests.put(href, data=file_data, timeout=self.timeout)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            logger.error('Yandex Disk upload error: %s', exc)
+            raise YandexDiskClientError(str(exc)) from exc
+
     @staticmethod
     def _raise_for_status(response: requests.Response) -> None:
         try:

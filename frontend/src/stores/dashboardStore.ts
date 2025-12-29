@@ -71,6 +71,19 @@ export const useDashboardStore = defineStore(
           comments: {
             last_7_days: 0,
             last_24_hours: 0
+          },
+          users: {
+            total: 0,
+            active_total: 0,
+            last_30_days: 0,
+            prev_30_days: 0,
+            growth_percent: null,
+            growth_label: '0%'
+          },
+          storage: {
+            used_bytes: 0,
+            total_bytes: 0,
+            unknown_size_files: 0
           }
         }
         lastUpdated.value = new Date()
