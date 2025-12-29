@@ -12,15 +12,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import {
-  FOLDER_TREE_SECTIONS,
   findFolderById,
   type FolderNode,
   type FolderTreeSection,
   type FolderSource,
 } from '@/mocks/folders'
-import {
-  cabinetService,
-} from '@/services/cabinetService'
+import { cabinetService } from '@/services/cabinetService'
+import { yandexDiskService } from '@/services/yandexDiskService'
+import { apiService } from '@/services/apiService'
 import { useNotificationStore } from './notificationStore'
 
 export const useFolderStore = defineStore(
@@ -30,12 +29,7 @@ export const useFolderStore = defineStore(
     // STATE
     // ========================================================================
     
-    // Helpers to keep Yandex data intact
-    const yandexSectionTemplate = FOLDER_TREE_SECTIONS.find(
-      section => section.type === 'yandex'
-    )
-
-    // Tree sections with folders (system from API, Yandex from mocks)
+    // Tree sections with folders (system from API, Yandex from API)
     const sections = ref<FolderTreeSection[]>([
       {
         id: 'section-system',
@@ -46,17 +40,15 @@ export const useFolderStore = defineStore(
         folders: [],
         expanded: true,
       },
-      yandexSectionTemplate
-        ? JSON.parse(JSON.stringify(yandexSectionTemplate))
-        : {
-            id: 'section-yandex',
-            name: 'Яндекс.Диск',
-            type: 'yandex' as FolderSource,
-            icon: 'cloud' as const,
-            color: 'blue',
-            folders: [],
-            expanded: true,
-          },
+      {
+        id: 'section-yandex',
+        name: 'Яндекс.Диск',
+        type: 'yandex' as FolderSource,
+        icon: 'cloud' as const,
+        color: 'blue',
+        folders: [],
+        expanded: true,
+      },
     ])
     
     // Currently selected folder
@@ -209,13 +201,25 @@ export const useFolderStore = defineStore(
     /**
      * Toggle folder expansion
      */
-    function toggleFolder(folderId: string): void {
+    async function toggleFolder(folderId: string): Promise<void> {
+      const folder = findFolderInSections(folderId)
+      if (!folder) return
+      
+      const wasExpanded = folder.expanded
+      
+      // Переключаем состояние
       for (const section of sections.value) {
         if (updateFolderInTree(section.folders, folderId, { 
-          expanded: !findFolderInSections(folderId)?.expanded 
+          expanded: !wasExpanded 
         })) {
           break
         }
+      }
+      
+      // Если папка Яндекс.Диска раскрывается и children еще не загружены - загружаем
+      if (!wasExpanded && folder.type === 'yandex' && folder.children.length === 0) {
+        console.log('[FolderStore] Loading Yandex Disk folder children on expand:', folderId)
+        await loadYandexFolderChildren(folderId)
       }
     }
     
@@ -594,26 +598,25 @@ export const useFolderStore = defineStore(
       additionalExpandedIds?: Set<string>
     ): Promise<void> {
       isLoading.value = true
-      
       const notificationStore = useNotificationStore()
       try {
         const systemSection = getSystemSection()
         let expandedIds = new Set<string>()
-        
+
         // Сохраняем состояние раскрытия перед обновлением, если нужно
         if (preserveExpansion) {
           expandedIds = saveExpansionState(systemSection.folders)
         }
-        
+
         // Добавляем дополнительные ID для раскрытия
         if (additionalExpandedIds) {
           additionalExpandedIds.forEach(id => expandedIds.add(id))
         }
-        
+
         // Загружаем новое дерево (без кеша для получения актуальных данных)
         const systemTree = await cabinetService.getCabinetTree(false)
         systemSection.folders = systemTree
-        
+
         // Восстанавливаем состояние раскрытия
         if (expandedIds.size > 0) {
           restoreExpansionState(systemSection.folders, expandedIds)
@@ -626,6 +629,206 @@ export const useFolderStore = defineStore(
         })
       } finally {
         isLoading.value = false
+      }
+    }
+
+    async function loadYandexRoot(): Promise<void> {
+      const notificationStore = useNotificationStore()
+      const section = sections.value.find(s => s.type === 'yandex')
+      if (!section) {
+        console.warn('[FolderStore] Yandex section not found')
+        return
+      }
+
+      console.log('[FolderStore] Loading Yandex Disk root folders...')
+      try {
+        const response = await yandexDiskService.getFolderContents('disk:/')
+        console.log('[FolderStore] Yandex Disk API response:', response)
+        
+        section.folders = response.folders.map(folder => ({
+          id: folder.path,
+          name: folder.name,
+          type: 'yandex' as FolderSource,
+          parentId: null,
+          children: [],
+          expanded: false,
+          assetCount: 0,
+          createdAt: '',
+          updatedAt: '',
+          canEdit: true,
+          canDelete: false,
+          canAddChildren: true
+        }))
+        
+        console.log('[FolderStore] Loaded Yandex Disk folders:', section.folders.length)
+      } catch (error: any) {
+        // Если токен не настроен или ошибка авторизации - просто оставляем пустой список
+        // Не показываем ошибку пользователю, так как это нормальная ситуация
+        if (error?.response?.status === 401 || error?.response?.status === 403) {
+          section.folders = []
+          console.log('[FolderStore] Yandex Disk not configured or unauthorized (401/403)')
+          return
+        }
+        
+        // Для других ошибок показываем уведомление
+        console.error('[FolderStore] Failed to load Yandex Disk folders:', error)
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Ошибка Яндекс.Диска',
+          message: error.message || 'Не удалось загрузить корневые папки Яндекс.Диска'
+        })
+        section.folders = []
+      }
+    }
+    
+    /**
+     * Загрузить подпапки для папки Яндекс.Диска (lazy loading)
+     */
+    async function loadYandexFolderChildren(folderPath: string): Promise<void> {
+      const notificationStore = useNotificationStore()
+      const folder = findFolderInSections(folderPath)
+      
+      if (!folder || folder.type !== 'yandex') {
+        console.warn('[FolderStore] Folder not found or not Yandex type:', folderPath)
+        return
+      }
+      
+      // Если уже загружены, не загружаем повторно
+      if (folder.children.length > 0 && folder.children[0].id !== 'loading') {
+        console.log('[FolderStore] Yandex folder children already loaded:', folderPath)
+        return
+      }
+      
+      console.log('[FolderStore] Loading Yandex Disk folder children:', folderPath)
+      
+      try {
+        const response = await yandexDiskService.getFolderContents(folderPath)
+        console.log('[FolderStore] Yandex Disk folder children response:', response)
+        
+        folder.children = response.folders.map(subFolder => ({
+          id: subFolder.path,
+          name: subFolder.name,
+          type: 'yandex' as FolderSource,
+          parentId: folderPath,
+          children: [],
+          expanded: false,
+          assetCount: 0,
+          createdAt: '',
+          updatedAt: '',
+          canEdit: true,
+          canDelete: false,
+          canAddChildren: true
+        }))
+        
+        console.log('[FolderStore] Loaded Yandex Disk folder children:', folder.children.length, 'for', folderPath)
+      } catch (error: any) {
+        console.error('[FolderStore] Failed to load Yandex Disk folder children:', error)
+        folder.children = []
+        
+        // Не показываем ошибку для 401/403 (токен не настроен)
+        if (error?.response?.status !== 401 && error?.response?.status !== 403) {
+          notificationStore.addNotification({
+            type: 'error',
+            title: 'Ошибка загрузки',
+            message: `Не удалось загрузить содержимое папки "${folder.name}"`
+          })
+        }
+      }
+    }
+    
+    /**
+     * Копировать файл из DAM в Яндекс.Диск
+     */
+    async function copyDAMFileToYandex(
+      documentId: number,
+      yandexPath: string
+    ): Promise<boolean> {
+      const notificationStore = useNotificationStore()
+      
+      try {
+        await yandexDiskService.copyFromDAM({
+          documentId,
+          yandexPath
+        })
+        
+        notificationStore.addNotification({
+          type: 'success',
+          title: 'Файл загружен',
+          message: `Файл успешно загружен в Яндекс.Диск: ${yandexPath}`
+        })
+        
+        return true
+      } catch (error: any) {
+        console.error('Failed to copy file to Yandex Disk:', error)
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Ошибка загрузки',
+          message: error.message || 'Не удалось загрузить файл в Яндекс.Диск'
+        })
+        return false
+      }
+    }
+    
+    /**
+     * Копировать файл из Яндекс.Диска в DAM
+     */
+    async function copyYandexFileToDAM(
+      yandexPath: string,
+      documentTypeId: number,
+      cabinetId?: number
+    ): Promise<boolean> {
+      const notificationStore = useNotificationStore()
+      
+      try {
+        const result = await yandexDiskService.copyToDAM({
+          yandexPath,
+          documentTypeId,
+          cabinetId
+        })
+        
+        notificationStore.addNotification({
+          type: 'success',
+          title: 'Файл скопирован',
+          message: `Файл добавлен в DAM (ID: ${result.documentId})`
+        })
+        
+        // Обновить счетчик файлов в папке
+        if (cabinetId) {
+          await refreshFolders()
+        }
+        
+        return true
+      } catch (error: any) {
+        console.error('Failed to copy file from Yandex Disk:', error)
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Ошибка копирования',
+          message: error.message || 'Не удалось скопировать файл из Яндекс.Диска'
+        })
+        return false
+      }
+    }
+    
+    /**
+     * Get default document type ID
+     */
+    async function getDefaultDocumentType(): Promise<number> {
+      try {
+        // Try to get document types from API
+        const response = await apiService.get<any[]>('/api/v4/document-types/')
+        const types = Array.isArray(response) ? response : (response as any)?.results || []
+        
+        if (types.length > 0) {
+          return types[0].id || types[0].pk || 1
+        }
+        
+        // Fallback to 1 if no types available
+        console.warn('[FolderStore] No document types found, using default 1')
+        return 1
+      } catch (error) {
+        console.error('[FolderStore] Failed to get document types:', error)
+        // Fallback to 1 on error
+        return 1
       }
     }
     
@@ -681,6 +884,11 @@ export const useFolderStore = defineStore(
       deleteFolder,
       refreshFolders,
       setSearchQuery,
+      loadYandexRoot,
+      loadYandexFolderChildren,
+      copyDAMFileToYandex,
+      copyYandexFileToDAM,
+      getDefaultDocumentType,
       clearSelection,
     }
   },

@@ -126,7 +126,8 @@ class APIShareLinkListView(generics.ListCreateAPIView):
     get: Return a list of share links.
     post: Create a new share link.
     """
-    throttle_classes = [DistributionThrottle]
+    # Temporarily disabled throttle to debug 500 error
+    # throttle_classes = [DistributionThrottle]
     mayan_object_permissions = {'GET': (permission_publication_api_view,)}
     mayan_view_permissions = {'POST': (permission_publication_api_create,)}
     queryset = ShareLink.objects.all()
@@ -194,7 +195,8 @@ class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
     patch: Edit the properties of a share link.
     delete: Delete a share link.
     """
-    throttle_classes = [DistributionThrottle]
+    # Temporarily disabled throttle to debug 500 error
+    # throttle_classes = [DistributionThrottle]
     mayan_object_permissions = {
         'GET': (permission_publication_api_view,),
         'PUT': (permission_publication_api_edit,),

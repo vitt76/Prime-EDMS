@@ -1,12 +1,15 @@
 <template>
   <div
     :class="cardClasses"
+    :draggable="isYandexDiskFile"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
     @click="handleClick"
     @dblclick="handleDoubleClick"
     @keydown.enter="handleClick"
     @keydown.space.prevent="handleClick"
+    @dragstart="handleDragStart"
+    @dragend="handleDragEnd"
     role="button"
     tabindex="0"
     :aria-label="`Актив: ${asset.label}`"
@@ -34,8 +37,8 @@
     <div class="asset-card__thumbnail">
       <!-- Image -->
       <img
-        v-if="asset.thumbnail_url"
-        :src="asset.thumbnail_url"
+        v-if="thumbnailUrl && thumbnailUrl !== '/placeholder-document.svg'"
+        :src="thumbnailUrl"
         :alt="asset.label"
         class="asset-card__image"
         loading="lazy"
@@ -171,9 +174,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h } from 'vue'
+import { ref, computed, h, watch, onMounted, onUnmounted } from 'vue'
 import type { Asset } from '@/types/api'
 import { formatFileSize } from '@/utils/formatters'
+import { resolveAssetImageUrl } from '@/utils/imageUtils'
+import { apiService } from '@/services/apiService'
 
 // ============================================================================
 // PROPS & EMITS
@@ -205,6 +210,7 @@ const emit = defineEmits<{
 
 const isHovered = ref(false)
 const imageError = ref(false)
+const blobUrl = ref<string | null>(null)
 
 // ============================================================================
 // COMPUTED
@@ -218,6 +224,11 @@ const cardClasses = computed(() => [
 ])
 
 const fileType = computed(() => {
+  // Check if it's a Yandex Disk folder
+  if ((props.asset as any).yandex_disk_type === 'folder' || props.asset.mime_type === 'application/x-directory') {
+    return 'folder'
+  }
+  
   const type = props.asset.metadata?.type as string
   if (type) return type
   
@@ -234,6 +245,21 @@ const isVideo = computed(() => fileType.value === 'video')
 const hasAIAnalysis = computed(() => 
   props.asset.ai_analysis?.status === 'completed'
 )
+
+const isYandexDiskFile = computed(() => {
+  const assetAny = props.asset as any
+  const result = (assetAny.source === 'yandex-disk' && assetAny.yandex_disk_type === 'file') || 
+                 (assetAny.yandex_disk_path && assetAny.yandex_disk_type === 'file')
+  if (import.meta.env.DEV && result) {
+    console.log('[AssetCardEnhanced] isYandexDiskFile computed:', {
+      source: assetAny.source,
+      yandex_disk_type: assetAny.yandex_disk_type,
+      yandex_disk_path: assetAny.yandex_disk_path,
+      result
+    })
+  }
+  return result
+})
 
 const displayTags = computed(() => {
   const tags: string[] = []
@@ -254,8 +280,108 @@ const statusLabel = computed(() => {
 })
 
 // File type icons as render functions
+const thumbnailUrl = computed(() => {
+  // For Yandex.Disk files, use blob URL if available, otherwise use resolved URL
+  if (blobUrl.value) {
+    return blobUrl.value
+  }
+  // Use resolveAssetImageUrl to properly handle both DAM and Yandex.Disk assets
+  return resolveAssetImageUrl(props.asset)
+})
+
+// Load Yandex.Disk images as blob to include auth headers
+async function loadYandexDiskImage() {
+  const asset = props.asset as any
+  if (asset.source !== 'yandex-disk' || asset.yandex_disk_type !== 'file' || props.asset.type !== 'image') {
+    return
+  }
+  
+  const previewUrl = asset.preview_url || asset.thumbnail_url
+  if (!previewUrl) {
+    return
+  }
+  
+  try {
+    // Get full URL (resolveAssetImageUrl already handles base URL)
+    const fullUrl = resolveAssetImageUrl(props.asset)
+    if (!fullUrl || fullUrl === '/placeholder-document.svg') {
+      return
+    }
+    
+    // Use fetch with auth headers from apiService
+    const { getToken } = await import('@/services/authService')
+    const token = getToken()
+    
+    // Build headers object (only add Authorization if token exists)
+    const headers: HeadersInit = {}
+    if (token) {
+      headers['Authorization'] = `Token ${token}`
+    }
+    // Explicitly set Accept header to accept any image type
+    headers['Accept'] = 'image/*,*/*'
+    
+    const response = await fetch(fullUrl, {
+      headers,
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      // Don't throw error for 406 - image might still load via <img> tag
+      if (response.status === 406) {
+        console.warn('[AssetCard] 406 Not Acceptable for Yandex.Disk image, falling back to direct <img> load')
+        return
+      }
+      throw new Error(`Failed to load image: ${response.status} ${response.statusText}`)
+    }
+    
+    // Create blob URL
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    blobUrl.value = url
+    
+    console.log('[AssetCard] Loaded Yandex.Disk image as blob:', {
+      name: props.asset.name,
+      blobUrl: url
+    })
+  } catch (error) {
+    // Don't set imageError for 406 - image might still load via <img> tag
+    if (error instanceof Error && error.message.includes('406')) {
+      console.warn('[AssetCard] 406 error for Yandex.Disk image, falling back to direct <img> load')
+      return
+    }
+    console.error('[AssetCard] Failed to load Yandex.Disk image:', error)
+    imageError.value = true
+  }
+}
+
+// Watch for asset changes and load blob URL
+watch(() => props.asset.id, () => {
+  blobUrl.value = null
+  imageError.value = false
+  if ((props.asset as any).source === 'yandex-disk') {
+    loadYandexDiskImage()
+  }
+}, { immediate: true })
+
+onMounted(() => {
+  if ((props.asset as any).source === 'yandex-disk') {
+    loadYandexDiskImage()
+  }
+})
+
+onUnmounted(() => {
+  // Clean up blob URL to prevent memory leaks
+  if (blobUrl.value) {
+    URL.revokeObjectURL(blobUrl.value)
+    blobUrl.value = null
+  }
+})
+
 const fileTypeIcon = computed(() => {
   const icons: Record<string, any> = {
+    folder: () => h('svg', { class: 'w-full h-full', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+      h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' })
+    ]),
     image: () => h('svg', { class: 'w-full h-full', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
       h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' })
     ]),
@@ -309,6 +435,61 @@ function handleDoubleClick(): void {
 
 function handleImageError(): void {
   imageError.value = true
+}
+
+// ============================================================================
+// DRAG & DROP HANDLERS
+// ============================================================================
+
+function handleDragStart(event: DragEvent) {
+  if (!event.dataTransfer) return
+  
+  // Check if this is a Yandex.Disk file using computed property
+  if (!isYandexDiskFile.value) {
+    // Not a Yandex.Disk file, don't handle drag
+    return
+  }
+  
+  const assetAny = props.asset as any
+  const yandexPath = assetAny.yandex_disk_path
+  
+  if (!yandexPath) {
+    console.warn('[AssetCardEnhanced] Yandex.Disk file missing path:', assetAny)
+    return
+  }
+  
+  console.log('[AssetCardEnhanced] Starting drag for Yandex.Disk file:', {
+    path: yandexPath,
+    label: props.asset.label || props.asset.name
+  })
+  
+  // Set drag data for Yandex.Disk file
+  event.dataTransfer.effectAllowed = 'copy'
+  event.dataTransfer.setData('application/json', JSON.stringify({
+    type: 'yandex-file',
+    yandexPath: yandexPath,
+    label: props.asset.label || props.asset.name
+  }))
+  
+  // Create custom drag image
+  const dragImage = document.createElement('div')
+  dragImage.className = 'px-3 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg shadow-lg'
+  dragImage.textContent = props.asset.label || props.asset.name
+  dragImage.style.position = 'absolute'
+  dragImage.style.top = '-1000px'
+  document.body.appendChild(dragImage)
+  event.dataTransfer.setDragImage(dragImage, 0, 0)
+  
+  // Remove drag image after a short delay
+  setTimeout(() => {
+    if (document.body.contains(dragImage)) {
+      document.body.removeChild(dragImage)
+    }
+  }, 0)
+}
+
+function handleDragEnd() {
+  // Cleanup if needed
 }
 </script>
 

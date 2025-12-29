@@ -34,6 +34,7 @@ import {
   deleteDocument as deleteDocumentApi,
   type UploadProgress
 } from '@/services/uploadService'
+import { yandexDiskService, type YandexDiskEntry } from '@/services/yandexDiskService'
 
 // Import auth store for logout on 401
 import { useAuthStore } from '@/stores/authStore'
@@ -246,6 +247,7 @@ export const useAssetStore = defineStore(
     /**
      * Fetch assets from real Mayan EDMS API
      * Uses optimized endpoint: GET /api/v4/documents/optimized/
+     * Or Yandex Disk API if folderFilterType === 'yandex'
      */
     async function fetchAssets(params?: GetAssetsParams): Promise<void> {
       isLoading.value = true
@@ -260,6 +262,12 @@ export const useAssetStore = defineStore(
           const authStore = useAuthStore()
           await authStore.logout()
           error.value = 'Необходимо войти в систему'
+          return
+        }
+        
+        // Если выбрана папка Яндекс.Диска - загружаем файлы из Яндекс.Диска
+        if (folderFilterId.value && folderFilterType.value === 'yandex') {
+          await fetchYandexDiskFiles(folderFilterId.value, params)
           return
         }
         
@@ -325,6 +333,255 @@ export const useAssetStore = defineStore(
     }
     
     /**
+     * Recursively fetch all folders and files from Yandex Disk folder and subfolders
+     */
+    async function fetchYandexDiskRecursive(
+      folderPath: string,
+      allFolders: YandexDiskEntry[] = [],
+      allFiles: YandexDiskEntry[] = [],
+      visitedPaths: Set<string> = new Set(),
+      rootPath: string = folderPath
+    ): Promise<{ folders: YandexDiskEntry[], files: YandexDiskEntry[] }> {
+      // Avoid infinite loops
+      if (visitedPaths.has(folderPath)) {
+        console.warn('[AssetStore] Circular reference detected:', folderPath)
+        return { folders: allFolders, files: allFiles }
+      }
+      visitedPaths.add(folderPath)
+      
+      try {
+        const response = await yandexDiskService.getFolderContents(folderPath)
+        
+        // Add folders from current folder (skip root folder itself)
+        if (folderPath !== rootPath) {
+          allFolders.push(...response.folders)
+        } else {
+          // For root folder, add all subfolders
+          allFolders.push(...response.folders)
+        }
+        
+        // Add files from current folder
+        allFiles.push(...response.files)
+        
+        // Recursively process subfolders
+        for (const subFolder of response.folders) {
+          await fetchYandexDiskRecursive(subFolder.path, allFolders, allFiles, visitedPaths, rootPath)
+        }
+        
+        return { folders: allFolders, files: allFiles }
+      } catch (error: any) {
+        console.error(`[AssetStore] Failed to fetch folder ${folderPath}:`, error)
+        return { folders: allFolders, files: allFiles }
+      }
+    }
+    
+    /**
+     * Fetch files from Yandex Disk folder and convert to Asset format
+     * Recursively includes all files from subfolders
+     */
+    async function fetchYandexDiskFiles(folderPath: string, params?: GetAssetsParams): Promise<void> {
+      try {
+        // Decode URL-encoded path if needed
+        let decodedPath = folderPath
+        try {
+          decodedPath = decodeURIComponent(folderPath)
+        } catch (e) {
+          // Path might already be decoded or not URL-encoded
+          console.log('[AssetStore] Path not URL-encoded or already decoded:', folderPath)
+        }
+        
+        console.log('[AssetStore] Fetching Yandex Disk folders and files recursively from:', decodedPath)
+        
+        // Recursively fetch all folders and files from all subfolders
+        const { folders: allFolders, files: allFiles } = await fetchYandexDiskRecursive(decodedPath)
+        
+        console.log(`[AssetStore] Found ${allFolders.length} folders and ${allFiles.length} files recursively in ${decodedPath}`)
+        
+        // Convert all Yandex Disk folders to Asset format (as clickable folder items)
+        let folderIndex = 0
+        const folderAssets: Asset[] = allFolders.map((folder: YandexDiskEntry) => {
+          const folderId = -(Date.now() + folderIndex++ + 1000000) // Negative IDs starting from -1000000 for folders
+          
+          // Include folder path in label for nested folders
+          const pathParts = folder.path.split('/')
+          const parentFolderName = pathParts.length > 2 ? pathParts[pathParts.length - 2] : ''
+          const rootFolderName = decodedPath.split('/').pop() || ''
+          const displayLabel = parentFolderName && parentFolderName !== rootFolderName
+            ? `${parentFolderName} / ${folder.name}`
+            : folder.name
+          
+          return {
+            id: folderId,
+            label: displayLabel,
+            name: folder.name,
+            type: 'folder' as any,
+            size: 0,
+            mime_type: 'application/x-directory',
+            file_latest_id: folderId,
+            file_details: {
+              id: folderId,
+              filename: folder.name,
+              size: 0,
+              mimetype: 'application/x-directory',
+            },
+            thumbnail_url: null,
+            preview_url: null,
+            download_url: null,
+            datetime_created: new Date().toISOString(),
+            datetime_modified: new Date().toISOString(),
+            tags: [],
+            is_favorite: false,
+            isFavorite: false,
+            yandex_disk_path: folder.path,
+            yandex_disk_type: 'folder',
+            source: 'yandex-disk' as const,
+          } as Asset
+        })
+        
+        // Convert all Yandex Disk files (including from subfolders) to Asset format
+        let fileIndex = 0
+        const fileAssets: Asset[] = allFiles.map((file: YandexDiskEntry) => {
+          // Generate a unique ID for Yandex Disk files (negative to avoid conflicts with DAM IDs)
+          const yandexId = -(Date.now() + fileIndex++)
+          
+          // Determine file type from extension
+          const extension = file.name.split('.').pop()?.toLowerCase() || ''
+          const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension)
+          const isVideo = ['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(extension)
+          const isDocument = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(extension)
+          
+          // Include folder path in label for files from subfolders
+          const pathParts = file.path.split('/')
+          const folderName = pathParts.length > 2 ? pathParts[pathParts.length - 2] : ''
+          const displayLabel = folderName && folderName !== decodedPath.split('/').pop() 
+            ? `${folderName} / ${file.name}` 
+            : file.name
+          
+          // Generate preview URL for images
+          const encodedPath = yandexDiskService.encodePath(file.path)
+          const previewUrl = isImage ? `/api/v4/dam/yandex-disk/files/${encodedPath}/preview/` : null
+          
+          // Debug logging
+          if (isImage) {
+            console.log('[AssetStore] Yandex.Disk image file:', {
+              name: file.name,
+              path: file.path,
+              encodedPath,
+              previewUrl,
+              extension,
+              isImage
+            })
+          }
+          
+          return {
+            id: yandexId,
+            label: displayLabel,
+            name: file.name,
+            type: isImage ? 'image' : isVideo ? 'video' : isDocument ? 'document' : 'file',
+            size: file.size || 0,
+            mime_type: getMimeTypeFromExtension(extension),
+            file_latest_id: yandexId,
+            file_details: {
+              id: yandexId,
+              filename: file.name,
+              size: file.size || 0,
+              mimetype: getMimeTypeFromExtension(extension),
+            },
+            thumbnail_url: previewUrl,
+            preview_url: previewUrl,
+            download_url: `/api/v4/dam/yandex-disk/files/${encodedPath}/download/`,
+            datetime_created: new Date().toISOString(),
+            datetime_modified: new Date().toISOString(),
+            tags: [],
+            is_favorite: false,
+            isFavorite: false,
+            yandex_disk_path: file.path,
+            yandex_disk_type: 'file',
+            source: 'yandex-disk' as const,
+          } as Asset
+        })
+        
+        // Combine folders and files (folders first)
+        const yandexAssets = [...folderAssets, ...fileAssets]
+        
+        // Apply search filter if present
+        let filteredAssets = yandexAssets
+        if (searchQuery.value.trim()) {
+          const query = searchQuery.value.toLowerCase()
+          filteredAssets = yandexAssets.filter(asset => 
+            asset.name.toLowerCase().includes(query) ||
+            asset.label.toLowerCase().includes(query)
+          )
+        }
+        
+        // Apply type filter if present
+        if (filters.value.type?.length) {
+          filteredAssets = filteredAssets.filter(asset => 
+            filters.value.type!.includes(asset.type)
+          )
+        }
+        
+        // Sort assets
+        filteredAssets.sort((a, b) => {
+          const field = sort.value.field
+          const direction = sort.value.direction === 'asc' ? 1 : -1
+          
+          if (field === 'name') {
+            return direction * a.name.localeCompare(b.name)
+          } else if (field === 'size') {
+            return direction * ((a.size || 0) - (b.size || 0))
+          } else if (field === 'date_added') {
+            return direction * (new Date(a.datetime_created).getTime() - new Date(b.datetime_created).getTime())
+          }
+          return 0
+        })
+        
+        // Simple pagination (client-side for Yandex Disk)
+        const page = params?.page || currentPage.value
+        const startIndex = (page - 1) * pageSize.value
+        const endIndex = startIndex + pageSize.value
+        
+        assets.value = filteredAssets.slice(startIndex, endIndex)
+        totalCount.value = filteredAssets.length
+        totalPages.value = Math.ceil(filteredAssets.length / pageSize.value)
+        currentPage.value = page
+        
+        console.log(`[AssetStore] Loaded ${assets.value.length} Yandex Disk files (${totalCount.value} total)`)
+        
+      } catch (err: any) {
+        console.error('[AssetStore] Failed to fetch Yandex Disk files:', err)
+        await handleApiError(err)
+        assets.value = []
+        totalCount.value = 0
+        totalPages.value = 0
+      } finally {
+        isLoading.value = false
+      }
+    }
+    
+    /**
+     * Get MIME type from file extension
+     */
+    function getMimeTypeFromExtension(ext: string): string {
+      const mimeTypes: Record<string, string> = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'pdf': 'application/pdf',
+        'doc': 'application/msword',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls': 'application/vnd.ms-excel',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'mp4': 'video/mp4',
+        'avi': 'video/x-msvideo',
+        'mov': 'video/quicktime',
+      }
+      return mimeTypes[ext] || 'application/octet-stream'
+    }
+    
+    /**
      * Load more assets (infinite scroll)
      */
     async function loadMore(): Promise<void> {
@@ -361,7 +618,7 @@ export const useAssetStore = defineStore(
     
     /**
      * Get single asset details
-     * First tries enriched endpoint (/api/v4/document-detail/) for full document details
+     * First tries enriched endpoint (/api/v4/dam/document-detail/) for full document details
      * Falls back to standard endpoint if DAM endpoint unavailable
      */
     async function getAssetDetail(id: number, forceReload = false): Promise<Asset | null> {
@@ -383,7 +640,7 @@ export const useAssetStore = defineStore(
         
         try {
           response = await axios.get<BackendOptimizedDocument>(
-            `/api/v4/document-detail/${id}/`,
+            `/api/v4/dam/document-detail/${id}/`,
             { headers: getAuthHeaders() }
           )
           if (debugMode.value) {

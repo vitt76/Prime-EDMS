@@ -1,7 +1,21 @@
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_BASE_URL ||
-  (import.meta as any)?.env?.VITE_API_URL ||
-  'http://localhost:8000'
+// Use the same API base URL logic as apiService.ts
+// For relative URLs, we need to prepend the backend URL
+const getApiBase = (): string => {
+  const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL || (import.meta as any)?.env?.VITE_API_URL
+  if (envUrl) return envUrl
+  
+  // Fallback: use backend port (8080) instead of frontend dev server (5173)
+  if (typeof window !== 'undefined') {
+    // In dev mode, frontend runs on 5173, backend on 8080
+    if (window.location.port === '5173' || window.location.port === '5174') {
+      return 'http://localhost:8080'
+    }
+    return window.location.origin
+  }
+  return 'http://localhost:8080'
+}
+
+const API_BASE = getApiBase()
 
 const PLACEHOLDER = '/placeholder-document.svg'
 

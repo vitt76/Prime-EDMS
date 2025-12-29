@@ -258,7 +258,10 @@
       <!-- Assets Grid -->
       <div
         v-else
-        :class="['dam-gallery__grid', viewMode === 'list' && 'dam-gallery__grid--list']"
+        :class="['dam-gallery__grid', viewMode === 'list' && 'dam-gallery__grid--list', isDragOverGallery && 'dam-gallery__grid--drag-over']"
+        @dragover.prevent="handleGalleryDragOver"
+        @dragleave="handleGalleryDragLeave"
+        @drop.prevent="handleGalleryDrop"
       >
         <AssetCardEnhanced
           v-for="asset in assetStore.assets"
@@ -354,7 +357,7 @@
                     <span class="dam-gallery__modal-meta-label">Тип:</span>
                     <span>{{ previewAsset.mime_type }}</span>
                   </div>
-                  <div class="dam-gallery__modal-meta-item">
+                  <div v-if="previewAsset.date_added" class="dam-gallery__modal-meta-item">
                     <span class="dam-gallery__modal-meta-label">Добавлен:</span>
                     <span>{{ formatDate(previewAsset.date_added) }}</span>
                   </div>
@@ -447,6 +450,8 @@ import AssetCardEnhanced from '@/components/DAM/AssetCardEnhanced.vue'
 import ConfirmModal from '@/components/Common/ConfirmModal.vue'
 import type { Asset } from '@/types/api'
 import { findFolderById } from '@/mocks/folders'
+import { yandexDiskService } from '@/services/yandexDiskService'
+import { apiService } from '@/services/apiService'
 
 // ============================================================================
 // COMPOSABLES
@@ -523,7 +528,7 @@ function pluralize(count: number, one: string, few: string, many: string): strin
 }
 
 function applyFolderFilterFromRoute(): void {
-  const folderId = route.query.folder as string | undefined
+  let folderId = route.query.folder as string | undefined
 
   if (!folderId) {
     assetStore.setFolderFilter(null, null)
@@ -531,11 +536,27 @@ function applyFolderFilterFromRoute(): void {
     return
   }
 
-  // Try to resolve folder type to ensure we filter only system folders
-  const systemSection = folderStore.sections.find(section => section.type === 'local')
-  const foundFolder = systemSection
-    ? findFolderById(systemSection.folders, folderId) 
-    : null
+  // Decode URL-encoded folder ID (for Yandex Disk paths)
+  try {
+    folderId = decodeURIComponent(folderId)
+  } catch (e) {
+    console.warn('[DAMGallery] Failed to decode folder ID:', folderId)
+  }
+
+  // Try to find folder in all sections (local and yandex)
+  let foundFolder = null
+  for (const section of folderStore.sections) {
+    foundFolder = findFolderById(section.folders, folderId)
+    if (foundFolder) break
+  }
+
+  // If folder not found but it's a Yandex Disk path (starts with disk:/), use it directly
+  if (!foundFolder && folderId.startsWith('disk:/')) {
+    console.log('[DAMGallery] Using Yandex Disk path directly:', folderId)
+    assetStore.setFolderFilter(folderId, 'yandex')
+    assetStore.fetchAssets({ page: 1 })
+    return
+  }
 
   // (debug ingest removed)
 
@@ -635,6 +656,17 @@ function handleAssetSelect(asset: Asset): void {
 }
 
 function handleAssetOpen(asset: Asset): void {
+  // If it's a Yandex Disk folder, navigate to that folder
+  if ((asset as any).yandex_disk_type === 'folder' && (asset as any).yandex_disk_path) {
+    const folderPath = (asset as any).yandex_disk_path
+    router.push({
+      path: '/dam/gallery',
+      query: { folder: encodeURIComponent(folderPath) }
+    })
+    return
+  }
+  
+  // Otherwise, navigate to asset detail page
   router.push(`/dam/assets/${asset.id}`)
 }
 
@@ -655,11 +687,33 @@ async function handleAssetDownload(asset: Asset): Promise<void> {
     asset.label ||
     `document-${asset.id}`
 
-  const url =
-    (asset as any).download_url ||
-    (asset as any).file_latest_id
-      ? `/api/v4/documents/${asset.id}/files/${(asset as any).file_latest_id}/download/`
-      : `/api/v4/documents/${asset.id}/files/latest/download/`
+  const assetAny = asset as any
+  
+  // Determine download URL
+  let url: string
+  
+  // Check if it's a Yandex.Disk file (has download_url set to Yandex.Disk endpoint or has yandex_disk_path)
+  if (assetAny.download_url && assetAny.download_url.includes('/yandex-disk/files/')) {
+    // Use the Yandex.Disk download URL directly
+    url = assetAny.download_url
+  } else if (assetAny.source === 'yandex-disk' || assetAny.yandex_disk_path) {
+    // Fallback: construct Yandex.Disk URL if download_url is missing
+    const encodedPath = assetAny.yandex_disk_encoded_path || 
+                        (assetAny.yandex_disk_path ? yandexDiskService.encodePath(assetAny.yandex_disk_path) : null)
+    
+    if (!encodedPath) {
+      console.error('[DAMGallery] Yandex.Disk file missing encoded path')
+      return
+    }
+    
+    url = `/api/v4/dam/yandex-disk/files/${encodedPath}/download/`
+  } else {
+    // Standard DAM document download
+    url = assetAny.download_url ||
+          (assetAny.file_latest_id
+            ? `/api/v4/documents/${asset.id}/files/${assetAny.file_latest_id}/download/`
+            : `/api/v4/documents/${asset.id}/files/latest/download/`)
+  }
 
   try {
     const blob = await apiService.get<Blob>(url, {
@@ -682,6 +736,74 @@ async function handleAssetDownload(asset: Asset): Promise<void> {
 function handleAssetShare(asset: Asset): void {
   console.log('Share:', asset.label)
   // TODO: Open share modal
+}
+
+// ============================================================================
+// DRAG & DROP HANDLERS FOR YANDEX.DISK FILES
+// ============================================================================
+
+const isDragOverGallery = ref(false)
+
+function handleGalleryDragOver(event: DragEvent) {
+  if (!event.dataTransfer) return
+  
+  // Check if it's a Yandex.Disk file by checking dataTransfer types
+  // Note: getData() doesn't work in dragover, we need to check types
+  const types = Array.from(event.dataTransfer.types || [])
+  if (types.includes('application/json')) {
+    // Set drop effect to copy for Yandex.Disk files
+    event.dataTransfer.dropEffect = 'copy'
+    isDragOverGallery.value = true
+  }
+}
+
+function handleGalleryDragLeave(event: DragEvent) {
+  // Only clear drag over if we're leaving the gallery container itself
+  const relatedTarget = event.relatedTarget as HTMLElement
+  if (!relatedTarget || !event.currentTarget?.contains(relatedTarget)) {
+    isDragOverGallery.value = false
+  }
+}
+
+async function handleGalleryDrop(event: DragEvent) {
+  isDragOverGallery.value = false
+  
+  if (!event.dataTransfer) return
+  
+  try {
+    const data = event.dataTransfer.getData('application/json')
+    if (!data) return
+    
+    const payload = JSON.parse(data)
+    if (payload.type === 'yandex-file' && payload.yandexPath) {
+      // Copy Yandex.Disk file to DAM (without folder)
+      const documentTypeId = await folderStore.getDefaultDocumentType()
+      if (!documentTypeId) {
+        notificationStore.addNotification({
+          type: 'error',
+          title: 'Ошибка',
+          message: 'Не удалось получить тип документа'
+        })
+        return
+      }
+      
+      await folderStore.copyYandexFileToDAM(
+        payload.yandexPath,
+        documentTypeId,
+        undefined // No folder - copy to root gallery
+      )
+      
+      // Refresh gallery to show new file
+      await assetStore.fetchAssets()
+    }
+  } catch (error: any) {
+    console.error('[DAMGallery] Failed to handle drop:', error)
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: error.message || 'Не удалось скопировать файл'
+    })
+  }
 }
 
 async function togglePreviewFavorite(): Promise<void> {
@@ -788,6 +910,37 @@ watch(loadMoreTrigger, () => {
     setupInfiniteScroll()
   }
 })
+
+// Watch for folder selection changes (including Yandex Disk folders)
+watch(
+  () => folderStore.selectedFolder,
+  (selectedFolder) => {
+    if (selectedFolder) {
+      console.log('[DAMGallery] Folder selected:', selectedFolder.id, selectedFolder.type)
+      
+      // Set folder filter and fetch assets
+      assetStore.setFolderFilter(selectedFolder.id, selectedFolder.type)
+      assetStore.fetchAssets({ page: 1 })
+      
+      // Update route query if needed
+      if (route.query.folder !== selectedFolder.id) {
+        router.replace({
+          query: { ...route.query, folder: selectedFolder.id }
+        })
+      }
+    } else {
+      // Clear folder filter if no folder selected
+      assetStore.setFolderFilter(null, null)
+      assetStore.fetchAssets({ page: 1 })
+      
+      // Remove folder from route query
+      const newQuery = { ...route.query }
+      delete newQuery.folder
+      router.replace({ query: newQuery })
+    }
+  },
+  { immediate: false }
+)
 
 // ============================================================================
 // LIFECYCLE
@@ -1052,6 +1205,11 @@ watch(
 
 .dam-gallery__grid--list {
   @apply grid-cols-1 gap-2;
+}
+
+.dam-gallery__grid--drag-over {
+  @apply border-2 border-dashed border-primary-500 bg-primary-50/50 rounded-lg;
+  transition: all 0.2s ease;
 }
 
 /* Skeleton Loading */
