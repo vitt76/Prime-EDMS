@@ -28,6 +28,8 @@
     "@vueuse/router": "^10.7.2",
     "axios": "^1.6.5",
     "chart.js": "^4.4.1",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
     "pinia": "^2.1.7",
     "pinia-plugin-persistedstate": "^3.2.1",
     "vue": "^3.4.21",

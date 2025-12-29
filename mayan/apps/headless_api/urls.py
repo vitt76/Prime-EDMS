@@ -30,7 +30,7 @@ from .views.notification_views import (
 )
 from .views.analytics_views import (
     AssetBankViewSet, CampaignPerformanceViewSet, SearchAnalyticsViewSet,
-    UserActivityViewSet
+    ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet
 )
 
 app_name = 'headless_api'
@@ -164,6 +164,21 @@ api_urls = [
         view=AssetBankViewSet.as_view({'get': 'most_downloaded'}),
         name='api-analytics-asset-bank-most-downloaded'
     ),
+    url(
+        regex=r'^analytics/dashboard/assets/reuse-metrics/$',
+        view=AssetBankViewSet.as_view({'get': 'reuse_metrics'}),
+        name='api-analytics-asset-bank-reuse-metrics'
+    ),
+    url(
+        regex=r'^analytics/dashboard/assets/storage-trends/$',
+        view=AssetBankViewSet.as_view({'get': 'storage_trends'}),
+        name='api-analytics-asset-bank-storage-trends'
+    ),
+    url(
+        regex=r'^analytics/dashboard/assets/alerts/$',
+        view=AssetBankViewSet.as_view({'get': 'alerts'}),
+        name='api-analytics-asset-bank-alerts'
+    ),
     # Analytics (Phase 2 - Campaign Performance)
     url(
         regex=r'^analytics/campaigns/$',
@@ -184,6 +199,16 @@ api_urls = [
         regex=r'^analytics/dashboard/campaigns/$',
         view=CampaignPerformanceViewSet.as_view({'get': 'dashboard'}),
         name='api-analytics-campaigns-dashboard'
+    ),
+    url(
+        regex=r'^analytics/dashboard/campaigns/top-assets/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'top_assets'}),
+        name='api-analytics-campaigns-top-assets'
+    ),
+    url(
+        regex=r'^analytics/dashboard/campaigns/timeline/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'timeline'}),
+        name='api-analytics-campaigns-timeline'
     ),
     # Analytics (Phase 2 - Search Analytics)
     url(
@@ -206,5 +231,16 @@ api_urls = [
         regex=r'^analytics/dashboard/users/adoption-heatmap/$',
         view=UserActivityViewSet.as_view({'get': 'adoption_by_department'}),
         name='api-analytics-user-adoption-heatmap'
+    ),
+    # Analytics (Phase 2 - Approval workflow)
+    url(
+        regex=r'^analytics/dashboard/approvals/summary/$',
+        view=ApprovalAnalyticsViewSet.as_view({'get': 'summary'}),
+        name='api-analytics-approvals-summary'
+    ),
+    url(
+        regex=r'^analytics/dashboard/roi/summary/$',
+        view=ROIDashboardViewSet.as_view({'get': 'summary'}),
+        name='api-analytics-roi-summary'
     ),
 ]

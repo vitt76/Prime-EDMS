@@ -1,4 +1,5 @@
 import uuid
+import math
 
 from django.conf import settings
 from django.db import models
@@ -110,6 +111,32 @@ class AssetDailyMetrics(models.Model):
 
     def __str__(self):
         return f'{self.document_id} - {self.date}'
+
+    def calculate_performance_score(self) -> float:
+        """Calculate composite performance score (0-10) for the day.
+
+        The score is a weighted, capped aggregation of the most important usage
+        signals. We use logarithmic scaling for high-volume metrics to avoid
+        outliers dominating the score.
+
+        Weights (Phase 1-2 default):
+        - Downloads: 40%
+        - Views: 30%
+        - Shares: 20%
+        - CDN Bandwidth: 10%
+        """
+        downloads_score = min(10.0, math.log1p(self.downloads) * 2.0) if self.downloads else 0.0
+        views_score = min(10.0, math.log1p(self.views) * 1.5) if self.views else 0.0
+        shares_score = min(10.0, float(self.shares) * 2.0) if self.shares else 0.0
+        bandwidth_score = min(10.0, float(self.cdn_bandwidth_gb) * 0.5) if self.cdn_bandwidth_gb else 0.0
+
+        score = (
+            downloads_score * 0.4 +
+            views_score * 0.3 +
+            shares_score * 0.2 +
+            bandwidth_score * 0.1
+        )
+        return round(float(score), 2)
 
 
 class Campaign(models.Model):
@@ -311,6 +338,134 @@ class UserDailyMetrics(models.Model):
 
     def __str__(self):
         return f'{self.user_id} - {self.date}'
+
+
+class ApprovalWorkflowEvent(models.Model):
+    """Approval workflow analytics events (Level 3).
+
+    This model captures key timestamps for approval cycles:
+    submission -> approval/rejection, plus attempt numbers for first-time-right.
+    """
+
+    STATUS_PENDING = 'pending'
+    STATUS_APPROVED = 'approved'
+    STATUS_REJECTED = 'rejected'
+
+    STATUS_CHOICES = (
+        (STATUS_PENDING, _('Pending')),
+        (STATUS_APPROVED, _('Approved')),
+        (STATUS_REJECTED, _('Rejected')),
+    )
+
+    document = models.ForeignKey(
+        to='documents.Document',
+        on_delete=models.CASCADE,
+        related_name='analytics_approval_events',
+        verbose_name=_('Document')
+    )
+    workflow_instance = models.ForeignKey(
+        to='document_states.WorkflowInstance',
+        on_delete=models.CASCADE,
+        related_name='analytics_approval_events',
+        verbose_name=_('Workflow instance')
+    )
+    submitter = models.ForeignKey(
+        to=settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='analytics_approval_submissions',
+        verbose_name=_('Submitter')
+    )
+    approver = models.ForeignKey(
+        to=settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='analytics_approval_actions',
+        verbose_name=_('Approver')
+    )
+
+    submitted_at = models.DateTimeField(db_index=True, verbose_name=_('Submitted at'))
+    approved_at = models.DateTimeField(blank=True, null=True, db_index=True, verbose_name=_('Approved at'))
+    rejected_at = models.DateTimeField(blank=True, null=True, db_index=True, verbose_name=_('Rejected at'))
+    approval_time_days = models.FloatField(blank=True, null=True, verbose_name=_('Approval time (days)'))
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, db_index=True, verbose_name=_('Status'))
+    rejection_reason = models.TextField(blank=True, default='', verbose_name=_('Rejection reason'))
+    attempt_number = models.PositiveIntegerField(default=1, verbose_name=_('Attempt number'))
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name=_('Created at'))
+
+    class Meta:
+        db_table = 'analytics_approval_workflow_events'
+        verbose_name = _('Approval workflow event')
+        verbose_name_plural = _('Approval workflow events')
+        indexes = (
+            models.Index(fields=('document', '-submitted_at')),
+            models.Index(fields=('workflow_instance', '-submitted_at')),
+            models.Index(fields=('status', '-submitted_at')),
+        )
+
+    def __str__(self):
+        return f'{self.document_id} - {self.status} - {self.submitted_at}'
+
+
+class AnalyticsAlert(models.Model):
+    """Analytics-driven alerts (Phase 2+)."""
+
+    ALERT_TYPE_UNDERPERFORMING = 'underperforming_asset'
+    ALERT_TYPE_NO_DOWNLOADS = 'no_downloads'
+    ALERT_TYPE_APPROVAL_REJECTED = 'approval_rejected'
+    ALERT_TYPE_STORAGE_LIMIT = 'storage_limit'
+
+    SEVERITY_CRITICAL = 'critical'
+    SEVERITY_WARNING = 'warning'
+    SEVERITY_INFO = 'info'
+
+    SEVERITY_CHOICES = (
+        (SEVERITY_CRITICAL, _('Critical')),
+        (SEVERITY_WARNING, _('Warning')),
+        (SEVERITY_INFO, _('Info')),
+    )
+
+    alert_type = models.CharField(max_length=50, db_index=True, verbose_name=_('Alert type'))
+    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, db_index=True, verbose_name=_('Severity'))
+    title = models.CharField(max_length=255, verbose_name=_('Title'))
+    message = models.TextField(blank=True, default='', verbose_name=_('Message'))
+
+    document = models.ForeignKey(
+        to='documents.Document',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='analytics_alerts',
+        verbose_name=_('Document')
+    )
+    campaign = models.ForeignKey(
+        to='analytics.Campaign',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='analytics_alerts',
+        verbose_name=_('Campaign')
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name=_('Created at'))
+    resolved_at = models.DateTimeField(blank=True, null=True, db_index=True, verbose_name=_('Resolved at'))
+    metadata = models.JSONField(blank=True, default=dict, verbose_name=_('Metadata'))
+
+    class Meta:
+        db_table = 'analytics_alerts'
+        verbose_name = _('Analytics alert')
+        verbose_name_plural = _('Analytics alerts')
+        indexes = (
+            models.Index(fields=('alert_type', '-created_at')),
+            models.Index(fields=('severity', '-created_at')),
+            models.Index(fields=('resolved_at',)),
+        )
+
+    def __str__(self):
+        return f'{self.alert_type} - {self.title}'
 
 
 class SearchQuery(models.Model):

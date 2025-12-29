@@ -124,6 +124,24 @@ class DocumentFileDownloadView(SingleObjectDownloadView):
                     'document_file_id': instance.pk,
                 }
             )
+
+            # Track delivered bandwidth (best-effort) for internal downloads.
+            try:
+                from mayan.apps.analytics.utils import track_cdn_delivery
+
+                size_bytes = int(instance.size or 0)
+                if size_bytes:
+                    track_cdn_delivery(
+                        document=instance.document,
+                        bandwidth_bytes=size_bytes,
+                        user=self.request.user,
+                        channel='dam_interface',
+                        metadata={
+                            'document_file_id': instance.pk,
+                        }
+                    )
+            except Exception:
+                pass
         except Exception:
             # Never block downloads due to analytics failures.
             pass

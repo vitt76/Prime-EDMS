@@ -191,6 +191,30 @@ def create_share_link_simple(request):
                 max_downloads=max_downloads
             )
             share_links.append(share_link)
+
+            # Analytics (Level 1): track share link creation as a "share" event.
+            try:
+                from mayan.apps.analytics.models import AssetEvent
+                from mayan.apps.analytics.utils import track_asset_event
+
+                document = item.document_file.document
+                user = request.user if request.user.is_authenticated else None
+                track_asset_event(
+                    document=document,
+                    event_type=AssetEvent.EVENT_TYPE_SHARE,
+                    user=user,
+                    channel='public_link',
+                    metadata={
+                        'share_link_id': share_link.pk,
+                        'rendition_id': rendition.pk,
+                        'publication_id': publication.pk,
+                        'document_file_id': item.document_file_id,
+                        'preset': getattr(preset, 'name', ''),
+                    }
+                )
+            except Exception:
+                # Best-effort only; never fail share link creation due to analytics.
+                pass
         
         # Serialize the first share link (or return all if multiple)
         if len(share_links) == 1:

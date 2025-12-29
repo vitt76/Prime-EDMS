@@ -2,13 +2,29 @@
   <Card padding="lg">
     <div class="flex items-center justify-between gap-4 mb-4">
       <h3 class="text-base font-semibold text-neutral-900">Most Downloaded Assets</h3>
-      <button
-        class="px-3 py-2 text-sm rounded-md border border-neutral-300 hover:bg-neutral-50"
-        :disabled="rows.length === 0"
-        @click="exportCsv"
-      >
-        Export CSV
-      </button>
+      <div class="flex items-center gap-2">
+        <button
+          class="px-3 py-2 text-sm rounded-md border border-neutral-300 hover:bg-neutral-50"
+          :disabled="rows.length === 0"
+          @click="exportCsv"
+        >
+          CSV
+        </button>
+        <button
+          class="px-3 py-2 text-sm rounded-md border border-neutral-300 hover:bg-neutral-50"
+          :disabled="rows.length === 0"
+          @click="exportJson"
+        >
+          JSON
+        </button>
+        <button
+          class="px-3 py-2 text-sm rounded-md border border-neutral-300 hover:bg-neutral-50"
+          :disabled="rows.length === 0"
+          @click="exportPdf"
+        >
+          PDF
+        </button>
+      </div>
     </div>
 
     <div class="overflow-auto border border-neutral-200 rounded-lg">
@@ -151,6 +167,55 @@ function exportCsv(): void {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+function exportJson(): void {
+  const payload = rowsSorted.value.map((row) => ({
+    document_id: row.document_id,
+    label: row.document__label || '',
+    downloads: row.downloads,
+    views: row.views,
+    shares: row.shares,
+  }))
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'most-downloaded-assets.json'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+async function exportPdf(): Promise<void> {
+  const { jsPDF } = await import('jspdf')
+  const autoTable = (await import('jspdf-autotable')).default
+
+  const doc = new jsPDF({ orientation: 'landscape' })
+  doc.setFontSize(14)
+  doc.text('Most Downloaded Assets', 14, 14)
+
+  const head = [['ID', 'Asset', 'Downloads', 'Views', 'Shares']]
+  const body = rowsSorted.value.map((row) => [
+    String(row.document_id),
+    row.document__label || `Document #${row.document_id}`,
+    String(row.downloads ?? 0),
+    String(row.views ?? 0),
+    String(row.shares ?? 0),
+  ])
+
+  autoTable(doc, {
+    head,
+    body,
+    startY: 20,
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [245, 245, 245], textColor: [17, 24, 39] },
+    alternateRowStyles: { fillColor: [250, 250, 250] },
+  })
+
+  doc.save('most-downloaded-assets.pdf')
 }
 </script>
 

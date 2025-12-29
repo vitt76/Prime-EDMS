@@ -23,6 +23,18 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, title: 'Analytics — Asset Bank' }
   },
   {
+    path: '/analytics/campaign-performance',
+    name: 'analytics-campaign-performance',
+    component: () => import('@/pages/analytics/CampaignPerformancePage.vue'),
+    meta: { requiresAuth: true, title: 'Analytics — Campaign Performance' }
+  },
+  {
+    path: '/analytics/roi',
+    name: 'analytics-roi',
+    component: () => import('@/pages/analytics/ROIPage.vue'),
+    meta: { requiresAuth: true, title: 'Analytics — ROI' }
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/pages/LoginPage.vue'),

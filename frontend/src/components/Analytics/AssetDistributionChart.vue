@@ -21,6 +21,10 @@ const props = defineProps<{
   distribution: AssetDistributionItem[]
 }>()
 
+const emit = defineEmits<{
+  selectType: [type: AssetDistributionItem['type']]
+}>()
+
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let chartInstance: import('chart.js').Chart | null = null
 
@@ -86,6 +90,15 @@ async function renderChart(): Promise<void> {
             },
           },
         },
+      },
+      onClick: (_event: any, elements: any[]) => {
+        const first = elements?.[0]
+        if (!first) return
+        const index = first.index
+        const selected = items[index]
+        if (selected?.type) {
+          emit('selectType', selected.type)
+        }
       },
     },
   })

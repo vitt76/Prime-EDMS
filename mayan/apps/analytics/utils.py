@@ -52,3 +52,37 @@ def track_asset_event(
     )
 
 
+def track_cdn_delivery(
+    *,
+    document,
+    bandwidth_bytes: int,
+    user: Optional[User] = None,
+    channel: str = 'cdn',
+    metadata: Optional[Dict[str, Any]] = None
+) -> AssetEvent:
+    """Track a CDN delivery event (Level 1).
+
+    This is a lightweight helper for integrations that can report delivery
+    bandwidth per asset. In Phase 1-2 this is typically fed by internal
+    distribution/public links; Phase 3 can integrate external CDN billing.
+
+    Args:
+        document: Instance of `documents.Document`.
+        bandwidth_bytes: Delivered bandwidth in bytes.
+        user: Optional user that triggered the delivery.
+        channel: Delivery channel identifier (cdn/public_link/etc).
+        metadata: Arbitrary JSON-serializable metadata.
+
+    Returns:
+        Created AssetEvent instance.
+    """
+    return track_asset_event(
+        document=document,
+        event_type=AssetEvent.EVENT_TYPE_DELIVER,
+        user=user,
+        channel=channel,
+        bandwidth_bytes=bandwidth_bytes,
+        metadata=metadata or {}
+    )
+
+
