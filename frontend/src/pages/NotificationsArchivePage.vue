@@ -51,8 +51,9 @@ import NotificationEmpty from '@/components/Notifications/NotificationEmpty.vue'
 const store = useNotificationStore()
 const authStore = useAuthStore()
 const items = computed(() => store.centerFilteredNotifications)
-const category = computed(() => store.centerCategory)
-const scope = computed(() => store.centerScope)
+// NOTE: store fields are refs; read `.value` to make template bindings work.
+const category = computed(() => store.centerCategory.value)
+const scope = computed(() => store.centerScope.value)
 
 const setCategory = (value: 'all' | 'uploads' | 'processing' | 'views' | 'downloads' | 'lifecycle') =>
   store.setCenterCategory(value)

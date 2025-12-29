@@ -102,9 +102,12 @@ defineEmits<{ close: [] }>()
 const store = useNotificationStore()
 const authStore = useAuthStore()
 
-const filter = computed(() => store.centerFilter)
-const category = computed(() => store.centerCategory)
-const scope = computed(() => store.centerScope)
+// NOTE: Pinia setup-store state fields here are `ref`s. We must read `.value`,
+// otherwise template comparisons like `scope === 'all'` will compare objects
+// and the toggle will never switch back to 'dam'.
+const filter = computed(() => store.centerFilter.value)
+const category = computed(() => store.centerCategory.value)
+const scope = computed(() => store.centerScope.value)
 const unreadCount = computed(() => store.centerUnreadCount)
 const items = computed(() => store.centerFilteredNotifications)
 
