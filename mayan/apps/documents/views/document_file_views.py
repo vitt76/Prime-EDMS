@@ -110,6 +110,23 @@ class DocumentFileDownloadView(SingleObjectDownloadView):
         instance = self.get_object()
         instance._event_action_object = instance.document
         instance._event_actor = self.request.user
+        # Analytics (Level 1): track download.
+        try:
+            from mayan.apps.analytics.models import AssetEvent
+            from mayan.apps.analytics.utils import track_asset_event
+
+            track_asset_event(
+                document=instance.document,
+                event_type=AssetEvent.EVENT_TYPE_DOWNLOAD,
+                user=self.request.user,
+                channel='dam_interface',
+                metadata={
+                    'document_file_id': instance.pk,
+                }
+            )
+        except Exception:
+            # Never block downloads due to analytics failures.
+            pass
         return instance.get_download_file_object()
 
     def get_download_filename(self):

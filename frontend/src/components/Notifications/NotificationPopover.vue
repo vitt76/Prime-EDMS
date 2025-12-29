@@ -40,6 +40,32 @@
       >
         Важные
       </button>
+
+      <div class="ml-auto flex items-center gap-2">
+        <select
+          class="text-xs px-2 py-1 rounded-md border border-gray-200 bg-white text-gray-700"
+          :value="category"
+          @change="setCategory(($event.target as HTMLSelectElement).value as any)"
+          title="Категория"
+        >
+          <option value="all">Все категории</option>
+          <option value="uploads">Загрузка</option>
+          <option value="processing">Обработка</option>
+          <option value="views">Просмотры</option>
+          <option value="downloads">Скачивания</option>
+          <option value="lifecycle">Жизненный цикл</option>
+        </select>
+
+        <label v-if="isAdmin" class="inline-flex items-center gap-1 text-xs text-gray-600 select-none">
+          <input
+            type="checkbox"
+            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            :checked="scope === 'all'"
+            @change="toggleScope"
+          />
+          Системные
+        </label>
+      </div>
     </div>
 
     <div class="max-h-[420px] overflow-auto">
@@ -65,23 +91,51 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { useAuthStore } from '@/stores/authStore'
 import NotificationCard from './NotificationCard.vue'
 import NotificationEmpty from './NotificationEmpty.vue'
 
 defineEmits<{ close: [] }>()
 
 const store = useNotificationStore()
+const authStore = useAuthStore()
 
-const filter = computed(() => store.centerFilter)
-const unreadCount = computed(() => store.centerUnreadCount)
-const items = computed(() => store.centerFilteredNotifications)
+// Use storeToRefs() to avoid ambiguity between Pinia-unwrapped values and refs.
+const {
+  centerFilter: filter,
+  centerCategory: category,
+  centerScope: scope,
+  centerUnreadCount: unreadCount,
+  centerFilteredNotifications: items
+} = storeToRefs(store)
 
 const setFilter = (value: 'all' | 'unread' | 'important') => store.setCenterFilter(value)
+const setCategory = (value: 'all' | 'uploads' | 'processing' | 'views' | 'downloads' | 'lifecycle') =>
+  store.setCenterCategory(value, 'SENT')
 const markRead = (id: number) => store.markCenterAsRead(id)
 const markAll = () => store.markAllCenterAsRead()
 const deleteOne = (id: number) => store.deleteCenterNotification(id)
+
+const isAdmin = computed(() => {
+  const user = authStore.user as any
+  const groups = (user?.groups || []) as Array<{ name: string }>
+  return !!(user?.is_staff || user?.is_superuser || groups.some((g) => (g?.name || '').toLowerCase() === 'admin'))
+})
+
+const toggleScope = () => {
+  // Popover is the "recent" view, keep SENT state.
+  store.setCenterScope(scope.value === 'all' ? 'dam' : 'all', 'SENT')
+}
+
+onMounted(() => {
+  // When opening the popover we want the "recent" view (SENT) regardless of
+  // what the archive last fetched (ALL). This also keeps the popover in sync
+  // when switching the same scope toggle in the archive page.
+  store.fetchCenterNotifications('SENT', 1)
+})
 </script>
 
 

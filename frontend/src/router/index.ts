@@ -17,6 +17,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/analytics/asset-bank',
+    name: 'analytics-asset-bank',
+    component: () => import('@/pages/analytics/AssetBankPage.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Analytics — Asset Bank' }
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/pages/LoginPage.vue'),
@@ -334,7 +340,15 @@ router.beforeEach(async (to, _from, next) => {
         String(p).startsWith('user_management.group_') ||
         String(p).startsWith('permissions.role_')
       )
-    const isAdmin = !!u && (u.is_staff === true || u.is_superuser === true || u.can_access_admin_panel === true || hasAdminPerm)
+    const groupNames = Array.isArray(u?.groups) ? u.groups.map((g: any) => String(g?.name || '').toLowerCase()) : []
+    const inAdminGroup = groupNames.includes('admin')
+    const isAdmin = !!u && (
+      u.is_staff === true ||
+      u.is_superuser === true ||
+      u.can_access_admin_panel === true ||
+      hasAdminPerm ||
+      inAdminGroup
+    )
 
     if (!isAdmin) {
       console.warn(

@@ -459,9 +459,40 @@ class DocumentFile(
 
             if new_document_file:
                 # Only do this for new documents.
+                # #region agent log
+                import json
+                try:
+                    with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json.dumps({
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'A',
+                            'location': 'documents/models/document_file_models.py:462',
+                            'message': 'Calling event_document_file_created.commit',
+                            'data': {'document_id': self.document.pk, 'document_file_id': self.pk, 'user_id': user.pk if user else None, 'user_username': user.username if user else None},
+                            'timestamp': int(__import__('time').time() * 1000)
+                        }) + '\n')
+                except Exception:
+                    pass
+                # #endregion
                 event_document_file_created.commit(
                     actor=user, target=self, action_object=self.document
                 )
+                # #region agent log
+                try:
+                    with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json.dumps({
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'A',
+                            'location': 'documents/models/document_file_models.py:465',
+                            'message': 'event_document_file_created.commit completed',
+                            'data': {'document_id': self.document.pk, 'document_file_id': self.pk},
+                            'timestamp': int(__import__('time').time() * 1000)
+                        }) + '\n')
+                except Exception:
+                    pass
+                # #endregion
 
                 with transaction.atomic():
                     self.checksum_update(save=False)

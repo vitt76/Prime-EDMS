@@ -24,12 +24,22 @@ from mayan.apps.headless_api.views.dashboard_stats_views import HeadlessDashboar
 from mayan.apps.headless_api.views.auth_views import HeadlessAuthMeView
 from mayan.apps.headless_api.views.storage_views import HeadlessS3ConfigView, HeadlessS3StatsView
 from mayan.apps.headless_api.views.users_views import HeadlessUsersDetailView, HeadlessUsersListCreateView
+from mayan.apps.headless_api.views.admin_logs_views import HeadlessAdminLogsView
+from mayan.apps.headless_api.views.analytics_views import AssetBankViewSet
 from mayan.apps.headless_api.views.image_editor_views import (
     HeadlessImageEditorCommitView,
     HeadlessImageEditorPreviewView,
     HeadlessImageEditorSessionCreateView,
     HeadlessImageEditorSessionDetailView,
     HeadlessImageEditorWatermarkListView
+)
+from mayan.apps.headless_api.views.notification_views import (
+    HeadlessNotificationDetailView,
+    HeadlessNotificationListView,
+    HeadlessNotificationPreferenceView,
+    HeadlessNotificationReadAllView,
+    HeadlessNotificationReadView,
+    HeadlessNotificationUnreadCountView,
 )
 from .literals import API_VERSION
 
@@ -133,6 +143,11 @@ api_version_urls = [
         name='headless-activity-feed'
     ),
     url(
+        regex=r'^headless/admin/logs/$',
+        view=HeadlessAdminLogsView.as_view(),
+        name='headless-admin-logs'
+    ),
+    url(
         regex=r'^headless/dashboard/activity/$',
         view=DashboardActivityView.as_view(),
         name='headless-dashboard-activity'
@@ -141,6 +156,22 @@ api_version_urls = [
         regex=r'^headless/dashboard/stats/$',
         view=HeadlessDashboardStatsView.as_view(),
         name='headless-dashboard-stats'
+    ),
+    # Analytics (Asset Bank, Phase 1)
+    url(
+        regex=r'^headless/analytics/dashboard/assets/top-metrics/$',
+        view=AssetBankViewSet.as_view({'get': 'top_metrics'}),
+        name='headless-analytics-asset-bank-top-metrics'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/assets/distribution/$',
+        view=AssetBankViewSet.as_view({'get': 'asset_distribution'}),
+        name='headless-analytics-asset-bank-distribution'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/assets/most-downloaded/$',
+        view=AssetBankViewSet.as_view({'get': 'most_downloaded'}),
+        name='headless-analytics-asset-bank-most-downloaded'
     ),
     url(
         regex=r'^headless/favorites/$',
@@ -212,6 +243,37 @@ api_version_urls = [
         regex=r'^headless/image-editor/watermarks/$',
         view=HeadlessImageEditorWatermarkListView.as_view(),
         name='headless-image-editor-watermarks'
+    ),
+    # Headless notification endpoints
+    url(
+        regex=r'^headless/notifications/$',
+        view=HeadlessNotificationListView.as_view(),
+        name='headless-notifications-list'
+    ),
+    url(
+        regex=r'^headless/notifications/(?P<notification_id>\d+)/$',
+        view=HeadlessNotificationDetailView.as_view(),
+        name='headless-notifications-detail'
+    ),
+    url(
+        regex=r'^headless/notifications/(?P<notification_id>\d+)/read/$',
+        view=HeadlessNotificationReadView.as_view(),
+        name='headless-notifications-read'
+    ),
+    url(
+        regex=r'^headless/notifications/read-all/$',
+        view=HeadlessNotificationReadAllView.as_view(),
+        name='headless-notifications-read-all'
+    ),
+    url(
+        regex=r'^headless/notifications/unread-count/$',
+        view=HeadlessNotificationUnreadCountView.as_view(),
+        name='headless-notifications-unread-count'
+    ),
+    url(
+        regex=r'^headless/notifications/preferences/$',
+        view=HeadlessNotificationPreferenceView.as_view(),
+        name='headless-notifications-preferences'
     )
 ]
 

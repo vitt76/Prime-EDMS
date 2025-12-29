@@ -357,6 +357,40 @@ class EventType:
         return '{}: {}'.format(self.namespace.label, self.label)
 
     def commit(self, actor=None, action_object=None, target=None):
+        # #region agent log
+        import json as json_module
+        import time as time_module
+        try:
+            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json_module.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'A',
+                    'location': 'events/classes.py:350',
+                    'message': 'EventType.commit() called',
+                    'data': {'event_type': self.name, 'actor_id': actor.pk if actor else None, 'action_object_id': action_object.pk if action_object else None, 'target_id': target.pk if target else None},
+                    'timestamp': int(time_module.time() * 1000)
+                }) + '\n')
+                f.flush()
+        except Exception:
+            pass
+        # #endregion
+        try:
+            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json_module.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'A',
+                    'location': 'events/classes.py:359',
+                    'message': 'EventType.commit called',
+                    'data': {'event_id': self.id, 'actor_id': actor.pk if actor else None, 'actor_username': actor.username if actor else None, 'target_id': target.pk if target else None, 'action_object_id': action_object.pk if action_object else None},
+                    'timestamp': int(time_module.time() * 1000)
+                }) + '\n')
+        except Exception:
+            pass
+        # Also log via Django logger (works in Celery)
+        logger.info('DEBUG: EventType.commit called: event_id=%s, actor_id=%s, target_id=%s', self.id, actor.pk if actor else None, target.pk if target else None)
+        # #endregion
         EventSubscription = apps.get_model(
             app_label='events', model_name='EventSubscription'
         )
@@ -387,38 +421,133 @@ class EventType:
         # Create notifications for the actions created by the event committed.
 
         # Gather the users subscribed globally to the event.
+        global_subscriptions = EventSubscription.objects.filter(
+            stored_event_type__name=result.verb
+        )
+        # #region agent log
+        try:
+            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json_module.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'F',
+                    'location': 'events/classes.py:391',
+                    'message': 'EventType.commit: checking global subscriptions',
+                    'data': {'event_verb': result.verb, 'global_subscriptions_count': global_subscriptions.count(), 'subscribed_user_ids': list(global_subscriptions.values_list('user_id', flat=True))},
+                    'timestamp': int(time_module.time() * 1000)
+                }) + '\n')
+        except Exception:
+            pass
+        # #endregion
         user_queryset = User.objects.filter(
-            id__in=EventSubscription.objects.filter(
-                stored_event_type__name=result.verb
-            ).values('user')
+            id__in=global_subscriptions.values('user')
         )
 
         # Gather the users subscribed to the target object event.
         if result.target:
+            target_subscriptions = ObjectEventSubscription.objects.filter(
+                content_type=result.target_content_type,
+                object_id=result.target.pk,
+                stored_event_type__name=result.verb
+            )
+            # #region agent log
+            try:
+                with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json_module.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'F',
+                        'location': 'events/classes.py:399',
+                        'message': 'EventType.commit: checking target subscriptions',
+                        'data': {'event_verb': result.verb, 'target_id': result.target.pk, 'target_type': str(result.target_content_type), 'target_subscriptions_count': target_subscriptions.count(), 'subscribed_user_ids': list(target_subscriptions.values_list('user_id', flat=True))},
+                        'timestamp': int(time_module.time() * 1000)
+                    }) + '\n')
+            except Exception:
+                pass
+            # #endregion
             user_queryset = user_queryset | User.objects.filter(
-                id__in=ObjectEventSubscription.objects.filter(
-                    content_type=result.target_content_type,
-                    object_id=result.target.pk,
-                    stored_event_type__name=result.verb
-                ).values('user')
+                id__in=target_subscriptions.values('user')
             )
 
         # Gather the users subscribed to the action object event.
         if result.action_object:
+            action_object_subscriptions = ObjectEventSubscription.objects.filter(
+                content_type=result.action_object_content_type,
+                object_id=result.action_object.pk,
+                stored_event_type__name=result.verb
+            )
+            # #region agent log
+            try:
+                with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json_module.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'F',
+                        'location': 'events/classes.py:409',
+                        'message': 'EventType.commit: checking action_object subscriptions',
+                        'data': {'event_verb': result.verb, 'action_object_id': result.action_object.pk, 'action_object_type': str(result.action_object_content_type), 'action_object_subscriptions_count': action_object_subscriptions.count(), 'subscribed_user_ids': list(action_object_subscriptions.values_list('user_id', flat=True))},
+                        'timestamp': int(time_module.time() * 1000)
+                    }) + '\n')
+            except Exception:
+                pass
+            # #endregion
             user_queryset = user_queryset | User.objects.filter(
-                id__in=ObjectEventSubscription.objects.filter(
-                    content_type=result.action_object_content_type,
-                    object_id=result.action_object.pk,
-                    stored_event_type__name=result.verb
-                ).values('user')
+                id__in=action_object_subscriptions.values('user')
             )
 
+        # #region agent log
+        try:
+            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json_module.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'F',
+                    'location': 'events/classes.py:415',
+                    'message': 'EventType.commit: final user_queryset',
+                    'data': {'event_verb': result.verb, 'user_queryset_count': user_queryset.count(), 'user_ids': list(user_queryset.values_list('id', flat=True))},
+                    'timestamp': int(time_module.time() * 1000)
+                }) + '\n')
+        except Exception:
+            pass
+        # #endregion
+
         for user in user_queryset:
+            # #region agent log
+            try:
+                with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json_module.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'E',
+                        'location': 'events/classes.py:416',
+                        'message': 'EventType.commit: processing user',
+                        'data': {'user_id': user.id, 'username': user.username, 'event_verb': result.verb, 'has_action_object': bool(result.action_object), 'has_target': bool(result.target)},
+                        'timestamp': int(time_module.time() * 1000)
+                    }) + '\n')
+            except Exception:
+                pass
+            # #endregion
+            
             # Check NotificationPreference BEFORE creating notification record.
             # If user disabled notifications, skip creating DB record (optimization).
             try:
                 from mayan.apps.notifications.models import NotificationPreference
                 preference = NotificationPreference.objects.filter(user=user).first()
+                # #region agent log
+                try:
+                    with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json_module.dumps({
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'E',
+                            'location': 'events/classes.py:422',
+                            'message': 'NotificationPreference check',
+                            'data': {'user_id': user.id, 'preference_exists': preference is not None, 'notifications_enabled': getattr(preference, 'notifications_enabled', None) if preference else None},
+                            'timestamp': int(time_module.time() * 1000)
+                        }) + '\n')
+                except Exception:
+                    pass
+                # #endregion
                 if preference and not preference.notifications_enabled:
                     # User disabled notifications - skip creating record
                     logger.debug('Skipping notification for user=%s (notifications disabled)', user.id)
@@ -430,34 +559,154 @@ class EventType:
 
             if result.action_object:
                 base_notification = Notification.objects.create(action=result, user=user)
+                # #region agent log
+                try:
+                    with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json_module.dumps({
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'A',
+                            'location': 'events/classes.py:432',
+                            'message': 'Base notification created (action_object)',
+                            'data': {'notification_id': base_notification.pk, 'user_id': user.id, 'action_id': result.id, 'event_verb': result.verb},
+                            'timestamp': int(time_module.time() * 1000)
+                        }) + '\n')
+                except Exception:
+                    pass
+                # #endregion
                 # Direct call to enhance notification immediately after creation
                 try:
                     from mayan.apps.notifications.utils import create_enhanced_notification
-                    create_enhanced_notification(
+                    # #region agent log
+                    try:
+                        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps({
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'A',
+                                'location': 'events/classes.py:436',
+                                'message': 'Calling create_enhanced_notification (action_object)',
+                                'data': {'user_id': user.id, 'action_id': result.id, 'event_verb': result.verb},
+                                'timestamp': int(time_module.time() * 1000)
+                            }) + '\n')
+                    except Exception:
+                        pass
+                    # #endregion
+                    enhanced = create_enhanced_notification(
                         user=user,
                         action=result,
                         event_type=result.verb,
                         template=None
                     )
+                    # #region agent log
+                    try:
+                        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps({
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'A',
+                                'location': 'events/classes.py:441',
+                                'message': 'create_enhanced_notification returned',
+                                'data': {'user_id': user.id, 'action_id': result.id, 'enhanced_id': enhanced.pk if enhanced else None, 'enhanced_title': getattr(enhanced, 'title', None) if enhanced else None},
+                                'timestamp': int(time_module.time() * 1000)
+                            }) + '\n')
+                    except Exception:
+                        pass
+                    # #endregion
                 except Exception:
                     logger.exception('Failed to enhance notification for user=%s, event=%s', user.id, result.verb)
+                    # #region agent log
+                    try:
+                        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps({
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'A',
+                                'location': 'events/classes.py:443',
+                                'message': 'Exception in create_enhanced_notification (action_object)',
+                                'data': {'user_id': user.id, 'action_id': result.id, 'event_verb': result.verb},
+                                'timestamp': int(time_module.time() * 1000)
+                            }) + '\n')
+                    except Exception:
+                        pass
+                    # #endregion
                 # Don't check or add any other notification for the
                 # same user-event-object.
                 continue
 
             if result.target:
                 base_notification = Notification.objects.create(action=result, user=user)
+                # #region agent log
+                try:
+                    with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json_module.dumps({
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'A',
+                            'location': 'events/classes.py:449',
+                            'message': 'Base notification created (target)',
+                            'data': {'notification_id': base_notification.pk, 'user_id': user.id, 'action_id': result.id, 'event_verb': result.verb},
+                            'timestamp': int(time_module.time() * 1000)
+                        }) + '\n')
+                except Exception:
+                    pass
+                # #endregion
                 # Direct call to enhance notification immediately after creation
                 try:
                     from mayan.apps.notifications.utils import create_enhanced_notification
-                    create_enhanced_notification(
+                    # #region agent log
+                    try:
+                        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps({
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'A',
+                                'location': 'events/classes.py:453',
+                                'message': 'Calling create_enhanced_notification (target)',
+                                'data': {'user_id': user.id, 'action_id': result.id, 'event_verb': result.verb},
+                                'timestamp': int(time_module.time() * 1000)
+                            }) + '\n')
+                    except Exception:
+                        pass
+                    # #endregion
+                    enhanced = create_enhanced_notification(
                         user=user,
                         action=result,
                         event_type=result.verb,
                         template=None
                     )
+                    # #region agent log
+                    try:
+                        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps({
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'A',
+                                'location': 'events/classes.py:458',
+                                'message': 'create_enhanced_notification returned',
+                                'data': {'user_id': user.id, 'action_id': result.id, 'enhanced_id': enhanced.pk if enhanced else None, 'enhanced_title': getattr(enhanced, 'title', None) if enhanced else None},
+                                'timestamp': int(time_module.time() * 1000)
+                            }) + '\n')
+                    except Exception:
+                        pass
+                    # #endregion
                 except Exception:
                     logger.exception('Failed to enhance notification for user=%s, event=%s', user.id, result.verb)
+                    # #region agent log
+                    try:
+                        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps({
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'A',
+                                'location': 'events/classes.py:460',
+                                'message': 'Exception in create_enhanced_notification (target)',
+                                'data': {'user_id': user.id, 'action_id': result.id, 'event_verb': result.verb},
+                                'timestamp': int(time_module.time() * 1000)
+                            }) + '\n')
+                    except Exception:
+                        pass
+                    # #endregion
                 # Don't check or add any other notification for the
                 # same user-event-object.
                 continue

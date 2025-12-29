@@ -51,6 +51,11 @@ export const useNotificationStore = defineStore(
     const centerHasUrgent = ref(false)
     const centerIsLoading = ref(false)
     const centerFilter = ref<'all' | 'unread' | 'important'>('unread')
+    const centerCategory = ref<
+      'all' | 'uploads' | 'processing' | 'views' | 'downloads' | 'lifecycle'
+    >('all')
+    const centerScope = ref<'dam' | 'all'>('dam')
+    const centerLastState = ref<'SENT' | 'ALL' | 'READ'>('SENT')
     const preferences = ref<any | null>(null)
 
     // Getters
@@ -63,13 +68,65 @@ export const useNotificationStore = defineStore(
     })
 
     const centerFilteredNotifications = computed(() => {
+      const categoryForEventType = (eventType: string): typeof centerCategory.value | 'unknown' => {
+        const value = (eventType || '').toLowerCase()
+
+        // Upload / ingest
+        if (value.includes('document_create') || value.includes('document_file_created')) return 'uploads'
+
+        // Processing / versioning
+        if (value.includes('document_version_') || value.includes('document_version_page_')) return 'processing'
+
+        // Views
+        if (value.includes('document_view')) return 'views'
+
+        // Downloads
+        if (value.includes('document_file_downloaded')) return 'downloads'
+
+        // Lifecycle / trash
+        if (value.includes('trashed') || value.includes('trash')) return 'lifecycle'
+
+        return 'unknown'
+      }
+
+      const byScope = (items: NotificationCenterItem[]) => {
+        // When scope is 'dam', we must not show "system" / raw events.
+        // In practice, those are usually the untemplated items with fallback titles
+        // like "Событие: documents...." or events outside our DAM taxonomy.
+        if (centerScope.value === 'all') {
+          return items
+        }
+
+        const is_system_like = (n: NotificationCenterItem) => {
+          const title = (n.title || '').trim()
+          if (title.startsWith('Событие:')) return true
+          return categoryForEventType(n.event_type) === 'unknown'
+        }
+
+        return items.filter((n) => !is_system_like(n))
+      }
+
+      const byCategory = (items: NotificationCenterItem[]) => {
+        if (centerCategory.value === 'all') {
+          return items
+        }
+
+        // Client-side fallback category filter.
+        // We *also* send `category` to the backend, but depending on deployment/version
+        // the API may ignore it. This makes the UI filtering deterministic.
+        return items.filter((n) => categoryForEventType(n.event_type) === centerCategory.value)
+      }
+
+      const base = byCategory(byScope(centerNotifications.value))
+
       switch (centerFilter.value) {
         case 'unread':
-          return centerNotifications.value.filter((n) => n.state === 'SENT')
+          // Include both CREATED and SENT as unread (CREATED can be pending Celery task).
+          return base.filter((n) => n.state === 'SENT' || n.state === 'CREATED')
         case 'important':
-          return centerNotifications.value.filter((n) => n.priority === 'HIGH' || n.priority === 'URGENT')
+          return base.filter((n) => n.priority === 'HIGH' || n.priority === 'URGENT')
         default:
-          return centerNotifications.value
+          return base
       }
     })
 
@@ -131,15 +188,40 @@ export const useNotificationStore = defineStore(
       wsConnected.value = value
     }
 
-    async function fetchCenterNotifications(state = 'SENT', page = 1) {
+    async function fetchCenterNotifications(state: 'SENT' | 'ALL' | 'READ' = 'SENT', page = 1) {
       centerIsLoading.value = true
+      centerLastState.value = state
       try {
         const { notificationService } = await import('@/services/notificationService')
         const response = await notificationService.getNotifications({
           state,
           page,
-          page_size: 20
+          page_size: 20,
+          scope: centerScope.value,
+          category: centerCategory.value === 'all' ? undefined : centerCategory.value
         })
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'debug-session',
+            runId: 'run1',
+            hypothesisId: 'D',
+            location: 'stores/notificationStore.ts:144',
+            message: 'Frontend: API response received',
+            data: {
+              results_count: response.results?.length || 0,
+              unread_count: response.unread_count || 0,
+              has_urgent: response.has_urgent || false,
+              first_result_id: response.results?.[0]?.id,
+              first_result_state: response.results?.[0]?.state,
+              first_result_title: response.results?.[0]?.title
+            },
+            timestamp: Date.now()
+          })
+        }).catch(() => {})
+        // #endregion
         centerNotifications.value = response.results || []
         centerUnreadCount.value = response.unread_count || 0
         centerHasUrgent.value = !!response.has_urgent
@@ -147,6 +229,21 @@ export const useNotificationStore = defineStore(
         // Keep UX stable; toast errors are handled elsewhere
         // eslint-disable-next-line no-console
         console.error('Failed to fetch Notification Center notifications', error)
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'debug-session',
+            runId: 'run1',
+            hypothesisId: 'D',
+            location: 'stores/notificationStore.ts:150',
+            message: 'Frontend: API error',
+            data: { error: String(error) },
+            timestamp: Date.now()
+          })
+        }).catch(() => {})
+        // #endregion
       } finally {
         centerIsLoading.value = false
       }
@@ -253,6 +350,20 @@ export const useNotificationStore = defineStore(
       centerFilter.value = filter
     }
 
+    function setCenterCategory(
+      category: 'all' | 'uploads' | 'processing' | 'views' | 'downloads' | 'lifecycle',
+      stateOverride?: 'SENT' | 'ALL' | 'READ'
+    ) {
+      centerCategory.value = category
+      // Refresh the list using the last requested state (popover uses SENT, archive uses ALL).
+      fetchCenterNotifications(stateOverride || centerLastState.value, 1)
+    }
+
+    function setCenterScope(scope: 'dam' | 'all', stateOverride?: 'SENT' | 'ALL' | 'READ') {
+      centerScope.value = scope
+      fetchCenterNotifications(stateOverride || centerLastState.value, 1)
+    }
+
     return {
       // State
       notifications,
@@ -262,6 +373,8 @@ export const useNotificationStore = defineStore(
       centerHasUrgent,
       centerIsLoading,
       centerFilter,
+      centerCategory,
+      centerScope,
       preferences,
       // Getters
       unreadCount,
@@ -284,12 +397,15 @@ export const useNotificationStore = defineStore(
       fetchPreferences,
       updatePreferences,
       handleNewCenterNotification,
-      setCenterFilter
+      setCenterFilter,
+      setCenterCategory,
+      setCenterScope
     }
   },
   {
     persist: {
-      paths: ['notifications'] // Persist toast notifications only
+      // Keep UI filters stable across reloads; do NOT persist fetched items.
+      paths: ['notifications', 'centerFilter', 'centerCategory', 'centerScope']
     }
   }
 )

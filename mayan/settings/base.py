@@ -104,6 +104,7 @@ INSTALLED_APPS = (
     'mayan.apps.rest_api',
     'mayan.apps.headless_api',  # SPA-friendly API endpoints
     'mayan.apps.notifications',  # Notification Center (custom)
+    'mayan.apps.analytics',  # Corporate analytics (custom)
     'mayan.apps.smart_settings',
     'mayan.apps.storage',
     'mayan.apps.templating',

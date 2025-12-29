@@ -9,7 +9,10 @@ class EnhancedNotificationManager(BaseNotificationManager):
 
         # Prefer new state-based unread if present; fallback to legacy `read`.
         if hasattr(self.model, 'state'):
-            return queryset.filter(state='SENT')
+            # Include both CREATED and SENT as unread:
+            # - CREATED: just created, pending Celery delivery task
+            # - SENT: delivered to user (email/WebSocket)
+            return queryset.filter(state__in=('CREATED', 'SENT'))
 
         return queryset.filter(read=False)
 

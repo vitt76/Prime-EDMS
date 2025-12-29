@@ -191,6 +191,24 @@ class Document(
         expand=False, _user=None
     ):
         logger.info('Creating new document file for document: %s', self)
+        # #region agent log
+        import json as json_module
+        import time as time_module
+        try:
+            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json_module.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'A',
+                    'location': 'documents/models/document_models.py:189',
+                    'message': 'Document.file_new() called',
+                    'data': {'document_id': self.pk, 'user_id': _user.pk if _user else None},
+                    'timestamp': int(time_module.time() * 1000)
+                }) + '\n')
+                f.flush()
+        except Exception as e:
+            logger.exception('Failed to write debug log in file_new: %s', e)
+        # #endregion
 
         if not action:
             action = DocumentFileActionUseNewPages.backend_id
