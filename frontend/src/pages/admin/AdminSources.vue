@@ -56,19 +56,10 @@
             >
               {{ source.enabled ? 'Активен' : 'Отключён' }}
             </span>
-            <button
-              type="button"
-              class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              @click="editSource(source)"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
           </div>
         </div>
 
-        <div class="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-4 text-sm">
+        <div v-if="source.source_type !== 'yandex_disk'" class="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-4 text-sm">
           <div>
             <p class="text-gray-500">Последняя синхронизация</p>
             <p class="font-medium text-gray-900">{{ source.last_sync ? formatDate(source.last_sync) : 'Никогда' }}</p>
@@ -81,20 +72,37 @@
 
         <div class="mt-4 flex items-center gap-2">
           <button
-            type="button"
-            class="flex-1 px-3 py-2 text-sm font-medium text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
-            @click="editSource(source)"
-          >
-            Настроить
-          </button>
-          <button
-            v-if="source.enabled"
+            v-if="source.enabled && source.source_type !== 'yandex_disk'"
             type="button"
             class="flex-1 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
             @click="syncSource(source)"
           >
             {{ syncingId === source.id ? 'Синхронизация...' : 'Запустить синхронизацию' }}
           </button>
+          <div v-else class="flex-1"></div>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              @click="editSource(source)"
+              title="Настроить"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+            <button
+              v-if="source.source_type === 'yandex_disk'"
+              type="button"
+              class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              @click="openDeleteConfirm(source)"
+              title="Удалить источник"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -147,12 +155,62 @@
               </select>
             </div>
 
-            <div v-if="sourceForm.source_type === 'watch_folder' || sourceForm.source_type === 'staging_folder' || sourceForm.source_type === 'yandex_disk'">
+            <!-- Yandex.Disk specific fields -->
+            <template v-if="sourceForm.source_type === 'yandex_disk'">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+                <input
+                  v-model="sourceForm.client_id"
+                  type="text"
+                  required
+                  placeholder="OAuth Client ID от Яндекса"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+                <input
+                  v-model="sourceForm.client_secret"
+                  type="password"
+                  placeholder="OAuth Client Secret (оставьте пустым, чтобы не менять)"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Код авторизации (опционально)</label>
+                <div class="flex gap-2">
+                  <input
+                    v-model="sourceForm.authorization_code"
+                    type="text"
+                    placeholder="Одноразовый код из https://oauth.yandex.ru/verification_code"
+                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  />
+                  <button
+                    type="button"
+                    :disabled="!sourceForm.client_id"
+                    class="px-4 py-2 text-sm font-medium text-violet-600 bg-violet-50 hover:bg-violet-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed rounded-lg transition-colors border border-violet-200 disabled:border-gray-200 flex items-center gap-2"
+                    @click="getAuthorizationCode"
+                    title="Откроет страницу oauth.yandex.ru в новом окне"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    Получить код
+                  </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Используется для автоматического получения токена. Кнопка откроет страницу oauth.yandex.ru в новом окне.</p>
+              </div>
+            </template>
+
+            <!-- Other source types -->
+            <div v-if="sourceForm.source_type === 'watch_folder' || sourceForm.source_type === 'staging_folder'">
               <label class="block text-sm font-medium text-gray-700 mb-1">Путь</label>
               <input
                 v-model="sourceForm.path"
                 type="text"
-                :placeholder="sourceForm.source_type === 'yandex_disk' ? '/Marketing' : '/var/incoming'"
+                placeholder="/var/incoming"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </div>
@@ -187,6 +245,18 @@
       </div>
     </Teleport>
 
+    <!-- Delete Confirm Modal -->
+    <ConfirmModal
+      :is-open="showDeleteConfirm"
+      title="Удалить источник Яндекс.Диск?"
+      :message="deleteConfirmMessage"
+      confirm-text="Удалить"
+      cancel-text="Отмена"
+      confirm-variant="danger"
+      @close="showDeleteConfirm = false"
+      @confirm="handleDeleteConfirm"
+    />
+
     <!-- Toast -->
     <Teleport to="body">
       <Transition name="toast">
@@ -203,12 +273,17 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import { ref, reactive, h } from 'vue'
+import { ref, reactive, h, onMounted, computed } from 'vue'
 import type { Source, SourceType } from '@/types/admin'
+import { yandexDiskService } from '@/services/yandexDiskService'
+import { apiService } from '@/services/apiService'
+import ConfirmModal from '@/components/Common/ConfirmModal.vue'
 
 const showCreateModal = ref(false)
 const editingSource = ref<Source | null>(null)
 const syncingId = ref<number | null>(null)
+const showDeleteConfirm = ref(false)
+const deleteTarget = ref<Source | null>(null)
 
 const toast = reactive({
   show: false,
@@ -219,7 +294,11 @@ const sourceForm = ref({
   label: '',
   source_type: 'web_form' as SourceType,
   path: '',
-  enabled: true
+  enabled: true,
+  // Yandex.Disk specific fields
+  client_id: '',
+  client_secret: '',
+  authorization_code: ''
 })
 
 // Icons
@@ -271,47 +350,54 @@ const sourceTypeLabels: Record<SourceType, string> = {
   yandex_disk: 'Яндекс.Диск'
 }
 
-// Mock data
-const sources = ref<Source[]>([
-  {
-    id: 1,
-    label: 'Веб-загрузка',
-    enabled: true,
-    backend_path: 'mayan.apps.sources.backends.WebFormSource',
-    backend_data: {},
-    source_type: 'web_form',
-    documents_imported: 3421
-  },
-  {
-    id: 2,
-    label: 'Яндекс.Диск (Маркетинг)',
-    enabled: true,
-    backend_path: 'mayan.apps.dam.backends.YandexDiskSource',
-    backend_data: { path: '/Marketing' },
-    source_type: 'yandex_disk',
-    last_sync: new Date(Date.now() - 2 * 3600000).toISOString(),
-    documents_imported: 1245
-  },
-  {
-    id: 3,
-    label: 'Папка входящих',
-    enabled: true,
-    backend_path: 'mayan.apps.sources.backends.WatchFolderSource',
-    backend_data: { path: '/var/incoming' },
-    source_type: 'watch_folder',
-    last_sync: new Date(Date.now() - 30 * 60000).toISOString(),
-    documents_imported: 567
-  },
-  {
-    id: 4,
-    label: 'Импорт по Email',
-    enabled: false,
-    backend_path: 'mayan.apps.sources.backends.EmailSource',
-    backend_data: {},
-    source_type: 'email',
-    documents_imported: 0
+// Sources data - loaded from API
+const sources = ref<Source[]>([])
+
+// Computed property for delete confirmation message
+const deleteConfirmMessage = computed(() => {
+  if (deleteTarget.value) {
+    return `Источник "${deleteTarget.value.label}" будет удалён. Все настройки подключения будут очищены. Действие необратимо.`
   }
-])
+  return 'Удалить источник?'
+})
+
+// Load sources from API
+async function loadSources() {
+  try {
+    // Load Yandex.Disk configuration
+    const yandexConfig = await yandexDiskService.getConfig()
+    
+    // Build sources list
+    const loadedSources: Source[] = []
+    
+    // Add Yandex.Disk source if configured
+    if (yandexConfig.client_id || yandexConfig.has_token) {
+      loadedSources.push({
+        id: 1,
+        label: yandexConfig.cabinet_root_label || 'Яндекс.Диск',
+        enabled: yandexConfig.enabled,
+        backend_path: 'mayan.apps.dam.backends.YandexDiskSource',
+        backend_data: { 
+          path: yandexConfig.base_path || 'disk:/',
+          client_id: yandexConfig.client_id
+        },
+        source_type: 'yandex_disk',
+        last_sync: null, // TODO: Add last sync tracking
+        documents_imported: 0 // TODO: Add import count tracking
+      })
+    }
+    
+    sources.value = loadedSources
+  } catch (error) {
+    console.error('[AdminSources] Failed to load sources:', error)
+    // On error, show empty list
+    sources.value = []
+  }
+}
+
+onMounted(async () => {
+  await loadSources()
+})
 
 // Methods
 function showToast(message: string) {
@@ -335,59 +421,103 @@ function formatNumber(num: number): string {
   return new Intl.NumberFormat('ru-RU').format(num)
 }
 
-function editSource(source: Source) {
+async function editSource(source: Source) {
   editingSource.value = source
   sourceForm.value = {
     label: source.label,
     source_type: source.source_type,
     path: (source.backend_data as { path?: string }).path || '',
-    enabled: source.enabled
+    enabled: source.enabled,
+    client_id: '',
+    client_secret: '',
+    authorization_code: ''
+  }
+  
+  // Load Yandex.Disk config if editing Yandex.Disk source
+  if (source.source_type === 'yandex_disk') {
+    try {
+      const config = await yandexDiskService.getConfig()
+      sourceForm.value.client_id = config.client_id || ''
+      sourceForm.value.label = config.cabinet_root_label || 'Яндекс.Диск'
+    } catch (error) {
+      console.error('[AdminSources] Failed to load Yandex.Disk config:', error)
+    }
   }
 }
 
 function closeModal() {
   showCreateModal.value = false
   editingSource.value = null
-  sourceForm.value = { label: '', source_type: 'web_form', path: '', enabled: true }
+  sourceForm.value = { 
+    label: '', 
+    source_type: 'web_form', 
+    path: '', 
+    enabled: true,
+    client_id: '',
+    client_secret: '',
+    authorization_code: ''
+  }
 }
 
-function saveSource() {
-  if (editingSource.value) {
-    // Update existing
-    const idx = sources.value.findIndex(s => s.id === editingSource.value!.id)
-    if (idx > -1) {
-      sources.value[idx] = {
-        ...sources.value[idx],
-        label: sourceForm.value.label,
-        source_type: sourceForm.value.source_type,
-        enabled: sourceForm.value.enabled,
-        backend_data: sourceForm.value.path ? { path: sourceForm.value.path } : {}
+async function saveSource() {
+  try {
+    // If editing Yandex.Disk source, save via API
+    if (editingSource.value?.source_type === 'yandex_disk') {
+      await yandexDiskService.updateConfig({
+        client_id: sourceForm.value.client_id,
+        client_secret: sourceForm.value.client_secret || undefined,
+        cabinet_root_label: sourceForm.value.label,
+        authorization_code: sourceForm.value.authorization_code || undefined
+      })
+      
+      // Reload sources to get updated data
+      await loadSources()
+      showToast('Настройки Яндекс.Диска обновлены')
+      closeModal()
+      return
+    }
+    
+    // For other source types, use local state (mock behavior)
+    if (editingSource.value) {
+      // Update existing
+      const idx = sources.value.findIndex(s => s.id === editingSource.value!.id)
+      if (idx > -1) {
+        sources.value[idx] = {
+          ...sources.value[idx],
+          label: sourceForm.value.label,
+          source_type: sourceForm.value.source_type,
+          enabled: sourceForm.value.enabled,
+          backend_data: sourceForm.value.path ? { path: sourceForm.value.path } : {}
+        }
       }
-    }
-    showToast('Источник обновлён')
-  } else {
-    // Create new
-    const backendPaths: Record<SourceType, string> = {
-      web_form: 'mayan.apps.sources.backends.WebFormSource',
-      email: 'mayan.apps.sources.backends.EmailSource',
-      staging_folder: 'mayan.apps.sources.backends.StagingFolderSource',
-      watch_folder: 'mayan.apps.sources.backends.WatchFolderSource',
-      yandex_disk: 'mayan.apps.dam.backends.YandexDiskSource'
-    }
+      showToast('Источник обновлён')
+    } else {
+      // Create new (only for non-Yandex.Disk sources)
+      const backendPaths: Record<SourceType, string> = {
+        web_form: 'mayan.apps.sources.backends.WebFormSource',
+        email: 'mayan.apps.sources.backends.EmailSource',
+        staging_folder: 'mayan.apps.sources.backends.StagingFolderSource',
+        watch_folder: 'mayan.apps.sources.backends.WatchFolderSource',
+        yandex_disk: 'mayan.apps.dam.backends.YandexDiskSource'
+      }
 
-    const newSource: Source = {
-      id: Date.now(),
-      label: sourceForm.value.label,
-      enabled: sourceForm.value.enabled,
-      backend_path: backendPaths[sourceForm.value.source_type],
-      backend_data: sourceForm.value.path ? { path: sourceForm.value.path } : {},
-      source_type: sourceForm.value.source_type,
-      documents_imported: 0
+      const newSource: Source = {
+        id: Date.now(),
+        label: sourceForm.value.label,
+        enabled: sourceForm.value.enabled,
+        backend_path: backendPaths[sourceForm.value.source_type],
+        backend_data: sourceForm.value.path ? { path: sourceForm.value.path } : {},
+        source_type: sourceForm.value.source_type,
+        documents_imported: 0
+      }
+      sources.value.push(newSource)
+      showToast('Источник создан')
     }
-    sources.value.push(newSource)
-    showToast('Источник создан')
+    closeModal()
+  } catch (error: any) {
+    console.error('[AdminSources] Failed to save source:', error)
+    showToast(error.message || 'Ошибка при сохранении')
   }
-  closeModal()
 }
 
 async function syncSource(source: Source) {
@@ -402,6 +532,51 @@ async function syncSource(source: Source) {
   
   syncingId.value = null
   showToast('Синхронизация завершена')
+}
+
+function getAuthorizationCode() {
+  if (!sourceForm.value.client_id) {
+    showToast('Сначала укажите Client ID')
+    return
+  }
+  
+  const authUrl = `https://oauth.yandex.ru/authorize?response_type=code&client_id=${encodeURIComponent(sourceForm.value.client_id)}`
+  window.open(authUrl, '_blank')
+}
+
+function openDeleteConfirm(source: Source) {
+  deleteTarget.value = source
+  showDeleteConfirm.value = true
+}
+
+async function handleDeleteConfirm() {
+  if (!deleteTarget.value || deleteTarget.value.source_type !== 'yandex_disk') {
+    showDeleteConfirm.value = false
+    return
+  }
+
+  try {
+    // Clear Yandex.Disk configuration and token
+    await yandexDiskService.updateConfig({
+      client_id: '',
+      client_secret: '',
+      base_path: 'disk:/',
+      cabinet_root_label: 'Yandex Disk',
+      document_type_id: null,
+      max_file_size_mb: 20,
+      file_limit: 0,
+      clear_token: true
+    })
+    
+    // Reload sources to reflect the deletion
+    await loadSources()
+    showToast('Источник Яндекс.Диск удалён')
+    showDeleteConfirm.value = false
+    deleteTarget.value = null
+  } catch (error: any) {
+    console.error('[AdminSources] Failed to delete Yandex.Disk source:', error)
+    showToast(error.message || 'Ошибка при удалении источника')
+  }
 }
 </script>
 

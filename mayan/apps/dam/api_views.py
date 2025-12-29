@@ -1250,6 +1250,139 @@ class DAMDashboardStatsView(mayan_generics.GenericAPIView):
         })
 
 
+class APIYandexDiskConfigView(generics.GenericAPIView):
+    """
+    get:
+    Get Yandex Disk configuration settings.
+    
+    Returns configuration including client_id, base_path, cabinet_root_label,
+    token status (without exposing the actual token), and connection status.
+    
+    patch:
+    Update Yandex Disk configuration settings.
+    
+    Accepts: client_id, client_secret, base_path, cabinet_root_label,
+    document_type_id, max_file_size_mb, file_limit, authorization_code (optional).
+    """
+    permission_classes = (IsAuthenticated,)
+    
+    def get(self, request, *args, **kwargs):
+        from .services.yandex_disk import YandexDiskClient
+        from mayan.apps.documents.models import DocumentType
+        
+        token = dam_settings.setting_yandex_disk_token.value
+        client_id = dam_settings.setting_yandex_disk_client_id.value or ''
+        base_path = dam_settings.setting_yandex_disk_base_path.value or 'disk:/'
+        cabinet_root_label = dam_settings.setting_yandex_disk_cabinet_root_label.value or 'Yandex Disk'
+        document_type_id = dam_settings.setting_yandex_disk_document_type_id.value
+        max_file_size_bytes = int(dam_settings.setting_yandex_disk_max_file_size.value or (20 * 1024 * 1024))
+        file_limit = int(dam_settings.setting_yandex_disk_file_limit.value or 0)
+        has_token = bool(token)
+        
+        # Get document type info if exists
+        document_type = None
+        if document_type_id:
+            try:
+                document_type = DocumentType.objects.get(pk=document_type_id)
+            except DocumentType.DoesNotExist:
+                pass
+        
+        # Check connection status if token exists
+        connection_status = 'disconnected'
+        if has_token:
+            try:
+                client = YandexDiskClient(token=token)
+                client.ping()  # Test connection
+                connection_status = 'connected'
+            except Exception as exc:
+                logger.warning('Yandex Disk connection test failed: %s', exc)
+                connection_status = 'error'
+        
+        return Response({
+            'client_id': client_id,
+            'base_path': base_path,
+            'cabinet_root_label': cabinet_root_label,
+            'document_type_id': int(document_type_id) if document_type_id else None,
+            'document_type_label': document_type.label if document_type else None,
+            'max_file_size_mb': max(1, int(max_file_size_bytes / (1024 * 1024))),
+            'file_limit': file_limit,
+            'has_token': has_token,
+            'connection_status': connection_status,
+            'enabled': has_token and connection_status == 'connected'
+        })
+    
+    def patch(self, request, *args, **kwargs):
+        from .services.yandex_disk import exchange_yandex_code_for_token, YandexDiskOAuthError
+        
+        data = request.data
+        
+        # Update settings
+        if 'client_id' in data:
+            dam_settings.setting_yandex_disk_client_id.value = data['client_id'] or ''
+        
+        if 'client_secret' in data:
+            dam_settings.setting_yandex_disk_client_secret.value = data['client_secret'] or ''
+        
+        if 'base_path' in data:
+            dam_settings.setting_yandex_disk_base_path.value = data['base_path'] or 'disk:/'
+        
+        if 'cabinet_root_label' in data:
+            dam_settings.setting_yandex_disk_cabinet_root_label.value = data['cabinet_root_label'] or 'Yandex Disk'
+        
+        if 'document_type_id' in data:
+            document_type_id = data['document_type_id']
+            if document_type_id:
+                dam_settings.setting_yandex_disk_document_type_id.value = str(document_type_id)
+            else:
+                dam_settings.setting_yandex_disk_document_type_id.value = ''
+        
+        if 'max_file_size_mb' in data:
+            max_file_size_mb = int(data['max_file_size_mb'] or 20)
+            dam_settings.setting_yandex_disk_max_file_size.value = str(max_file_size_mb * 1024 * 1024)
+        
+        if 'file_limit' in data:
+            file_limit = int(data['file_limit'] or 0)
+            dam_settings.setting_yandex_disk_file_limit.value = str(file_limit)
+        
+        # Handle token clearing
+        if data.get('clear_token', False):
+            dam_settings.setting_yandex_disk_token.value = ''
+            dam_settings.setting_yandex_disk_refresh_token.value = ''
+        
+        # Handle authorization code exchange
+        authorization_code = data.get('authorization_code')
+        if authorization_code:
+            client_id = data.get('client_id') or dam_settings.setting_yandex_disk_client_id.value
+            client_secret = data.get('client_secret') or dam_settings.setting_yandex_disk_client_secret.value
+            
+            if not client_id or not client_secret:
+                return Response(
+                    {'detail': 'Client ID and Client Secret are required to exchange authorization code.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                token_payload = exchange_yandex_code_for_token(
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    code=authorization_code
+                )
+                dam_settings.setting_yandex_disk_token.value = token_payload.get('access_token', '')
+                dam_settings.setting_yandex_disk_refresh_token.value = token_payload.get('refresh_token', '')
+            except YandexDiskOAuthError as exc:
+                return Response(
+                    {'detail': str(exc)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Save all settings
+        from mayan.apps.smart_settings.classes import Setting
+        Setting.save_configuration()
+        
+        # Return updated config
+        return self.get(request, *args, **kwargs)
+
+
 class YandexDiskBaseAPIView(generics.GenericAPIView):
     """
     Base helpers for Yandex Disk API views.

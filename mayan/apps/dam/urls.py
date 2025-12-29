@@ -5,6 +5,7 @@ from rest_framework import routers
 app_name = 'dam'
 
 from .api_views import (  # noqa: E402
+    APIYandexDiskConfigView,
     APIYandexDiskCopyFromDAMView,
     APIYandexDiskCopyToDAMView,
     APIYandexDiskFileDownloadView,
@@ -47,6 +48,11 @@ api_urlpatterns = [
     # OCR extraction endpoint
     path('documents/<int:document_id>/ocr/extract/', DocumentOCRExtractView.as_view(), name='document-ocr-extract'),
     # Yandex Disk integration
+    path(
+        'yandex-disk/config/',
+        APIYandexDiskConfigView.as_view(),
+        name='yandex-disk-config'
+    ),
     path(
         'yandex-disk/folders/<str:encoded_path>/',
         APIYandexDiskFolderDetailView.as_view(),

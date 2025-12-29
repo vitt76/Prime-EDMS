@@ -84,6 +84,46 @@ class YandexDiskService {
       path: result.path
     }
   }
+
+  async getConfig(): Promise<{
+    client_id: string
+    base_path: string
+    cabinet_root_label: string
+    document_type_id: number | null
+    document_type_label: string | null
+    max_file_size_mb: number
+    file_limit: number
+    has_token: boolean
+    connection_status: 'connected' | 'disconnected' | 'error'
+    enabled: boolean
+  }> {
+    return apiService.get('/api/v4/dam/yandex-disk/config/')
+  }
+
+  async updateConfig(payload: {
+    client_id?: string
+    client_secret?: string
+    base_path?: string
+    cabinet_root_label?: string
+    document_type_id?: number | null
+    max_file_size_mb?: number
+    file_limit?: number
+    authorization_code?: string
+    clear_token?: boolean
+  }): Promise<{
+    client_id: string
+    base_path: string
+    cabinet_root_label: string
+    document_type_id: number | null
+    document_type_label: string | null
+    max_file_size_mb: number
+    file_limit: number
+    has_token: boolean
+    connection_status: 'connected' | 'disconnected' | 'error'
+    enabled: boolean
+  }> {
+    return apiService.patch('/api/v4/dam/yandex-disk/config/', payload)
+  }
 }
 
 export const yandexDiskService = new YandexDiskService()
