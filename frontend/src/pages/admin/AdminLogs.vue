@@ -42,6 +42,11 @@
 
     <!-- Logs Table -->
     <div class="bg-white rounded-xl border border-gray-200">
+      <div v-if="loadError" class="px-5 py-4 border-b border-gray-100">
+        <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {{ loadError }}
+        </div>
+      </div>
       <div class="overflow-x-auto">
         <table class="w-full">
           <thead>
@@ -85,7 +90,9 @@
         <svg class="mx-auto w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <p class="mt-4 text-sm text-gray-500">Логи не найдены</p>
+        <p class="mt-4 text-sm text-gray-500">
+          {{ loadError ? 'Не удалось загрузить логи' : 'Логи не найдены' }}
+        </p>
       </div>
     </div>
 
@@ -172,6 +179,7 @@ const totalCount = ref(0)
 const totalPages = ref(1)
 const isLoading = ref(false)
 const showSystemEvents = ref(false)
+const loadError = ref<string>('')
 
 type ActivityActor = {
   id: number | null
@@ -216,6 +224,7 @@ const logs = ref<ActivityLogEntry[]>([])
 
 async function loadLogs(page = 1): Promise<void> {
   isLoading.value = true
+  loadError.value = ''
   try {
     const data = await apiService.get<ActivityFeedResponse>(
       '/api/v4/headless/admin/logs/',
@@ -248,6 +257,15 @@ async function loadLogs(page = 1): Promise<void> {
     console.warn('[AdminLogs] Failed to load activity logs', err)
     totalCount.value = 0
     logs.value = []
+    const anyErr = err as any
+    const status = anyErr?.response?.status ?? anyErr?.details?.status
+    if (status === 401 || status === 403) {
+      loadError.value = 'Недостаточно прав для просмотра системных логов.'
+    } else if (status === 404) {
+      loadError.value = 'Endpoint системных логов недоступен (404). Проверьте, что бэкенд перезапущен и URL зарегистрирован.'
+    } else {
+      loadError.value = 'Ошибка загрузки логов.'
+    }
   } finally {
     isLoading.value = false
   }
