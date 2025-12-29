@@ -166,6 +166,14 @@ const SettingsIcon = {
   `
 }
 
+const AnalyticsIcon = {
+  template: `
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-4M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
+    </svg>
+  `
+}
+
 const UploadIcon = {
   template: `
     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -201,6 +209,7 @@ const ShareIcon = {
 const navigationItems = [
   { path: '/', label: 'Главная', icon: DashboardIcon },
   { path: '/dam', label: 'Галерея', icon: DAMIcon },
+  { path: '/analytics/asset-bank', label: 'Аналитика', icon: AnalyticsIcon },
   { path: '/sharing', label: 'Распространение', icon: DistributionIcon },
   { path: '/settings', label: 'Настройки', icon: SettingsIcon }
 ]

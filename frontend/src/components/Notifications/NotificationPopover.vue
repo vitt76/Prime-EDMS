@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -129,6 +129,13 @@ const toggleScope = () => {
   // Popover is the "recent" view, keep SENT state.
   store.setCenterScope(scope.value === 'all' ? 'dam' : 'all', 'SENT')
 }
+
+onMounted(() => {
+  // When opening the popover we want the "recent" view (SENT) regardless of
+  // what the archive last fetched (ALL). This also keeps the popover in sync
+  // when switching the same scope toggle in the archive page.
+  store.fetchCenterNotifications('SENT', 1)
+})
 </script>
 
 

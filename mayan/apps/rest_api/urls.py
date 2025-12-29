@@ -25,6 +25,7 @@ from mayan.apps.headless_api.views.auth_views import HeadlessAuthMeView
 from mayan.apps.headless_api.views.storage_views import HeadlessS3ConfigView, HeadlessS3StatsView
 from mayan.apps.headless_api.views.users_views import HeadlessUsersDetailView, HeadlessUsersListCreateView
 from mayan.apps.headless_api.views.admin_logs_views import HeadlessAdminLogsView
+from mayan.apps.headless_api.views.analytics_views import AssetBankViewSet
 from mayan.apps.headless_api.views.image_editor_views import (
     HeadlessImageEditorCommitView,
     HeadlessImageEditorPreviewView,
@@ -155,6 +156,22 @@ api_version_urls = [
         regex=r'^headless/dashboard/stats/$',
         view=HeadlessDashboardStatsView.as_view(),
         name='headless-dashboard-stats'
+    ),
+    # Analytics (Asset Bank, Phase 1)
+    url(
+        regex=r'^headless/analytics/dashboard/assets/top-metrics/$',
+        view=AssetBankViewSet.as_view({'get': 'top_metrics'}),
+        name='headless-analytics-asset-bank-top-metrics'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/assets/distribution/$',
+        view=AssetBankViewSet.as_view({'get': 'asset_distribution'}),
+        name='headless-analytics-asset-bank-distribution'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/assets/most-downloaded/$',
+        view=AssetBankViewSet.as_view({'get': 'most_downloaded'}),
+        name='headless-analytics-asset-bank-most-downloaded'
     ),
     url(
         regex=r'^headless/favorites/$',

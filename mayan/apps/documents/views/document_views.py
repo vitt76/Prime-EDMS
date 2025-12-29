@@ -201,6 +201,23 @@ class DocumentPropertiesView(SingleObjectDetailView):
     def dispatch(self, request, *args, **kwargs):
         result = super().dispatch(request, *args, **kwargs)
         self.object.add_as_recent_document_for_user(request.user)
+        # Analytics (Level 1): track document view.
+        try:
+            from mayan.apps.analytics.models import AssetEvent
+            from mayan.apps.analytics.utils import track_asset_event
+
+            track_asset_event(
+                document=self.object,
+                event_type=AssetEvent.EVENT_TYPE_VIEW,
+                user=request.user,
+                channel='mayan_ui',
+                metadata={
+                    'view': 'document_properties',
+                }
+            )
+        except Exception:
+            # Never break document view due to analytics issues.
+            pass
         return result
 
     def get_extra_context(self):

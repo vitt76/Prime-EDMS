@@ -28,6 +28,7 @@ from .views.notification_views import (
     HeadlessNotificationReadView,
     HeadlessNotificationUnreadCountView,
 )
+from .views.analytics_views import AssetBankViewSet
 
 app_name = 'headless_api'
 
@@ -143,5 +144,21 @@ api_urls = [
         regex=r'^notifications/preferences/$',
         view=HeadlessNotificationPreferenceView.as_view(),
         name='api-notifications-preferences'
+    ),
+    # Analytics (Asset Bank, Phase 1)
+    url(
+        regex=r'^analytics/dashboard/assets/top-metrics/$',
+        view=AssetBankViewSet.as_view({'get': 'top_metrics'}),
+        name='api-analytics-asset-bank-top-metrics'
+    ),
+    url(
+        regex=r'^analytics/dashboard/assets/distribution/$',
+        view=AssetBankViewSet.as_view({'get': 'asset_distribution'}),
+        name='api-analytics-asset-bank-distribution'
+    ),
+    url(
+        regex=r'^analytics/dashboard/assets/most-downloaded/$',
+        view=AssetBankViewSet.as_view({'get': 'most_downloaded'}),
+        name='api-analytics-asset-bank-most-downloaded'
     ),
 ]

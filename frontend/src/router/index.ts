@@ -17,6 +17,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/analytics/asset-bank',
+    name: 'analytics-asset-bank',
+    component: () => import('@/pages/analytics/AssetBankPage.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Analytics — Asset Bank' }
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/pages/LoginPage.vue'),

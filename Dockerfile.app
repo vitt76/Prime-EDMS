@@ -63,7 +63,9 @@ COPY mayan/apps/lock_manager/apps.py /opt/mayan-edms/lib/python3.9/site-packages
 COPY mayan/apps/task_manager/apps.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/task_manager/apps.py
 COPY mayan/apps/distribution /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
 COPY mayan/apps/notifications /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/notifications
+COPY mayan/apps/analytics /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/analytics
 COPY mayan/apps/events /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/events
+COPY mayan/apps/rest_api/urls.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api/urls.py
 COPY mayan/settings/base.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
 COPY mayan/asgi.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/asgi.py
 

@@ -1,0 +1,54 @@
+from typing import Any, Dict, Optional
+
+from django.contrib.auth import get_user_model
+
+from .models import AssetEvent
+
+
+User = get_user_model()
+
+
+def track_asset_event(
+    *,
+    document,
+    event_type: str,
+    user: Optional[User] = None,
+    channel: str = 'dam_interface',
+    intended_use: str = '',
+    bandwidth_bytes: Optional[int] = None,
+    latency_seconds: Optional[int] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> AssetEvent:
+    """Create a raw asset analytics event (Level 1).
+
+    Args:
+        document: Instance of `documents.Document`.
+        event_type: One of the AssetEvent.EVENT_TYPE_* constants.
+        user: Optional user that triggered the event.
+        channel: Source channel (dam_interface/public_link/api/etc).
+        intended_use: Optional intended use of downloaded asset (email/social/etc).
+        bandwidth_bytes: Optional bandwidth used for delivery events.
+        latency_seconds: Optional latency metric for search-to-download.
+        metadata: Arbitrary JSON-serializable metadata.
+
+    Returns:
+        Created AssetEvent instance.
+    """
+    user_department = ''
+    if user:
+        # Department might not exist on all deployments; keep best-effort.
+        user_department = getattr(user, 'department', '') or ''
+
+    return AssetEvent.objects.create(
+        document=document,
+        event_type=event_type,
+        user=user,
+        user_department=user_department,
+        channel=channel or '',
+        intended_use=intended_use or '',
+        bandwidth_bytes=bandwidth_bytes,
+        latency_seconds=latency_seconds,
+        metadata=metadata or {}
+    )
+
+
