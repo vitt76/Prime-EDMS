@@ -68,6 +68,44 @@ export const useNotificationStore = defineStore(
     })
 
     const centerFilteredNotifications = computed(() => {
+      const categoryForEventType = (eventType: string): typeof centerCategory.value | 'unknown' => {
+        const value = (eventType || '').toLowerCase()
+
+        // Upload / ingest
+        if (value.includes('document_create') || value.includes('document_file_created')) return 'uploads'
+
+        // Processing / versioning
+        if (value.includes('document_version_') || value.includes('document_version_page_')) return 'processing'
+
+        // Views
+        if (value.includes('document_view')) return 'views'
+
+        // Downloads
+        if (value.includes('document_file_downloaded')) return 'downloads'
+
+        // Lifecycle / trash
+        if (value.includes('trashed') || value.includes('trash')) return 'lifecycle'
+
+        return 'unknown'
+      }
+
+      const byScope = (items: NotificationCenterItem[]) => {
+        // When scope is 'dam', we must not show "system" / raw events.
+        // In practice, those are usually the untemplated items with fallback titles
+        // like "Событие: documents...." or events outside our DAM taxonomy.
+        if (centerScope.value === 'all') {
+          return items
+        }
+
+        const is_system_like = (n: NotificationCenterItem) => {
+          const title = (n.title || '').trim()
+          if (title.startsWith('Событие:')) return true
+          return categoryForEventType(n.event_type) === 'unknown'
+        }
+
+        return items.filter((n) => !is_system_like(n))
+      }
+
       const byCategory = (items: NotificationCenterItem[]) => {
         if (centerCategory.value === 'all') {
           return items
@@ -76,31 +114,10 @@ export const useNotificationStore = defineStore(
         // Client-side fallback category filter.
         // We *also* send `category` to the backend, but depending on deployment/version
         // the API may ignore it. This makes the UI filtering deterministic.
-        const categoryForEventType = (eventType: string): typeof centerCategory.value | 'unknown' => {
-          const value = (eventType || '').toLowerCase()
-
-          // Upload / ingest
-          if (value.includes('document_create') || value.includes('document_file_created')) return 'uploads'
-
-          // Processing / versioning
-          if (value.includes('document_version_') || value.includes('document_version_page_')) return 'processing'
-
-          // Views
-          if (value.includes('document_view')) return 'views'
-
-          // Downloads
-          if (value.includes('document_file_downloaded')) return 'downloads'
-
-          // Lifecycle / trash
-          if (value.includes('trashed') || value.includes('trash')) return 'lifecycle'
-
-          return 'unknown'
-        }
-
         return items.filter((n) => categoryForEventType(n.event_type) === centerCategory.value)
       }
 
-      const base = byCategory(centerNotifications.value)
+      const base = byCategory(byScope(centerNotifications.value))
 
       switch (centerFilter.value) {
         case 'unread':
@@ -333,15 +350,18 @@ export const useNotificationStore = defineStore(
       centerFilter.value = filter
     }
 
-    function setCenterCategory(category: 'all' | 'uploads' | 'processing' | 'views' | 'downloads' | 'lifecycle') {
+    function setCenterCategory(
+      category: 'all' | 'uploads' | 'processing' | 'views' | 'downloads' | 'lifecycle',
+      stateOverride?: 'SENT' | 'ALL' | 'READ'
+    ) {
       centerCategory.value = category
       // Refresh the list using the last requested state (popover uses SENT, archive uses ALL).
-      fetchCenterNotifications(centerLastState.value, 1)
+      fetchCenterNotifications(stateOverride || centerLastState.value, 1)
     }
 
-    function setCenterScope(scope: 'dam' | 'all') {
+    function setCenterScope(scope: 'dam' | 'all', stateOverride?: 'SENT' | 'ALL' | 'READ') {
       centerScope.value = scope
-      fetchCenterNotifications(centerLastState.value, 1)
+      fetchCenterNotifications(stateOverride || centerLastState.value, 1)
     }
 
     return {
@@ -384,7 +404,8 @@ export const useNotificationStore = defineStore(
   },
   {
     persist: {
-      paths: ['notifications'] // Persist toast notifications only
+      // Keep UI filters stable across reloads; do NOT persist fetched items.
+      paths: ['notifications', 'centerFilter', 'centerCategory', 'centerScope']
     }
   }
 )

@@ -43,6 +43,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useAuthStore } from '@/stores/authStore'
 import NotificationCard from '@/components/Notifications/NotificationCard.vue'
@@ -50,13 +51,11 @@ import NotificationEmpty from '@/components/Notifications/NotificationEmpty.vue'
 
 const store = useNotificationStore()
 const authStore = useAuthStore()
-const items = computed(() => store.centerFilteredNotifications)
-// NOTE: store fields are refs; read `.value` to make template bindings work.
-const category = computed(() => store.centerCategory.value)
-const scope = computed(() => store.centerScope.value)
+
+const { centerFilteredNotifications: items, centerCategory: category, centerScope: scope } = storeToRefs(store)
 
 const setCategory = (value: 'all' | 'uploads' | 'processing' | 'views' | 'downloads' | 'lifecycle') =>
-  store.setCenterCategory(value)
+  store.setCenterCategory(value, 'ALL')
 
 const isAdmin = computed(() => {
   const user = authStore.user as any
@@ -65,7 +64,8 @@ const isAdmin = computed(() => {
 })
 
 const toggleScope = () => {
-  store.setCenterScope(scope.value === 'all' ? 'dam' : 'all')
+  // Archive must always keep ALL state; otherwise it can accidentally reuse SENT from popover.
+  store.setCenterScope(scope.value === 'all' ? 'dam' : 'all', 'ALL')
 }
 
 const markRead = (id: number) => store.markCenterAsRead(id)

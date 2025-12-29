@@ -92,6 +92,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useAuthStore } from '@/stores/authStore'
 import NotificationCard from './NotificationCard.vue'
@@ -102,18 +103,18 @@ defineEmits<{ close: [] }>()
 const store = useNotificationStore()
 const authStore = useAuthStore()
 
-// NOTE: Pinia setup-store state fields here are `ref`s. We must read `.value`,
-// otherwise template comparisons like `scope === 'all'` will compare objects
-// and the toggle will never switch back to 'dam'.
-const filter = computed(() => store.centerFilter.value)
-const category = computed(() => store.centerCategory.value)
-const scope = computed(() => store.centerScope.value)
-const unreadCount = computed(() => store.centerUnreadCount)
-const items = computed(() => store.centerFilteredNotifications)
+// Use storeToRefs() to avoid ambiguity between Pinia-unwrapped values and refs.
+const {
+  centerFilter: filter,
+  centerCategory: category,
+  centerScope: scope,
+  centerUnreadCount: unreadCount,
+  centerFilteredNotifications: items
+} = storeToRefs(store)
 
 const setFilter = (value: 'all' | 'unread' | 'important') => store.setCenterFilter(value)
 const setCategory = (value: 'all' | 'uploads' | 'processing' | 'views' | 'downloads' | 'lifecycle') =>
-  store.setCenterCategory(value)
+  store.setCenterCategory(value, 'SENT')
 const markRead = (id: number) => store.markCenterAsRead(id)
 const markAll = () => store.markAllCenterAsRead()
 const deleteOne = (id: number) => store.deleteCenterNotification(id)
@@ -125,7 +126,8 @@ const isAdmin = computed(() => {
 })
 
 const toggleScope = () => {
-  store.setCenterScope(scope.value === 'all' ? 'dam' : 'all')
+  // Popover is the "recent" view, keep SENT state.
+  store.setCenterScope(scope.value === 'all' ? 'dam' : 'all', 'SENT')
 }
 </script>
 
