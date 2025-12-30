@@ -1,8 +1,8 @@
 # BACKEND_AUDIT_V1.md
 
 **Дата аудита:** 2025-12-09  
-**Версия:** 1.9  
-**Последнее обновление:** 2025-12-23 (реализованы TODO задачи: интеграция AI-метаданных с Mayan, подсчет документов для пресета с ACL и кешированием, удаление deprecated ImageEditorSaveView)  
+**Версия:** 2.0  
+**Последнее обновление:** 2025-12-23 (добавлены модули analytics и notifications: модели, API endpoints, Celery tasks, сигналы, интеграция с headless_api)  
 **Статус:** Полный технический аудит бэкенда
 
 ---
@@ -82,6 +82,16 @@
    - **Назначение:** Server-side редактор изображений
    - **Особенность:** Функционал экспонируется через `headless_api` endpoints (`/api/v4/headless/image-editor/...`)
 
+9. **`mayan.apps.analytics`** — Корпоративная аналитика (Asset Bank, Campaign Performance, Search Analytics)
+   - **Способ установки:** Явно в INSTALLED_APPS (строка 107)
+   - **Назначение:** Сбор и агрегация аналитических данных (события активов, кампании, поисковые сессии, workflow-аналитика, CDN-метрики)
+   - **Особенность:** Интегрируется через `headless_api` endpoints (`/api/v4/headless/analytics/...`), имеет middleware для отслеживания использования функций
+
+10. **`mayan.apps.notifications`** — Центр уведомлений (Notification Center)
+    - **Способ установки:** Явно в INSTALLED_APPS (строка 106)
+    - **Назначение:** Расширенная система уведомлений с шаблонами, настройками пользователей, email-рассылкой и WebSocket-доставкой
+    - **Особенность:** Интегрируется через `headless_api` endpoints (`/api/v4/headless/notifications/...`), расширяет стандартную систему уведомлений Mayan
+
 ### 1.3. Конфигурация Инфраструктуры
 
 #### Celery
@@ -90,8 +100,10 @@
 - **Lock Manager:** Redis (`redis://:mayanredispassword@redis:6379/2`)
 - **Queues:**
   - `tools` — AI-анализ (`mayan.apps.dam.tasks.analyze_document_with_ai`)
-  - `converter` — Конвертация файлов (`mayan.apps.distribution.tasks.generate_rendition_task`)
+  - `converter` — Конвертация файлов (`mayan.apps.distribution.tasks.generate_rendition_task`, `mayan.apps.headless_api.tasks.process_editor_version_task`)
   - `distribution` — Распространение (transient queue)
+  - `documents` — Агрегация аналитики (`mayan.apps.analytics.tasks.aggregate_daily_metrics`, `aggregate_search_daily_metrics`, `aggregate_user_daily_metrics`, `calculate_cdn_daily_costs`, `generate_analytics_alerts`, `cleanup_old_events`, `aggregate_campaign_engagement_daily_metrics`)
+  - `notifications` — Доставка уведомлений (`mayan.apps.notifications.tasks.send_notification_async`, `send_notification_email`, `send_websocket_notification`, `cleanup_old_notifications`)
 
 #### База Данных
 - **Engine:** `django.db.backends.postgresql`
@@ -498,6 +510,505 @@ def trigger_ai_analysis(sender, instance, created, **kwargs):
 
 ---
 
+### 2.5. `mayan.apps.analytics` — Corporate Analytics
+
+**Назначение:** Корпоративная аналитика для DAM-системы: сбор событий активов, метрики кампаний, аналитика поиска, workflow-аналитика, CDN-метрики, отслеживание использования функций.
+
+#### Ключевые Модели
+
+##### `AssetEvent` (`models.py:9`)
+**Связь:** `ForeignKey(Document, related_name='analytics_events')`
+
+**Поля:**
+- `document` — ForeignKey(Document)
+- `event_type` — CharField (download/view/share/upload/deliver)
+- `user` — ForeignKey(User, null=True)
+- `user_department` — CharField
+- `channel` — CharField (dam_interface/public_link/portal/api)
+- `intended_use` — CharField (email/social/print/web)
+- `bandwidth_bytes` — BigIntegerField
+- `latency_seconds` — IntegerField
+- `timestamp` — DateTimeField (auto_now_add, indexed)
+- `metadata` — JSONField
+
+**Индексы:** `(document, -timestamp)`, `(event_type, timestamp)`, `(user, timestamp)`
+
+##### `AssetDailyMetrics` (`models.py:86`)
+**Связь:** `ForeignKey(Document, related_name='analytics_daily_metrics')`
+
+**Поля:**
+- `document` — ForeignKey(Document)
+- `date` — DateField (indexed)
+- `downloads`, `views`, `shares` — PositiveIntegerField
+- `cdn_bandwidth_gb` — FloatField
+- `performance_score` — FloatField (0-10, вычисляется через `calculate_performance_score()`)
+- `top_channel` — CharField
+
+**Unique together:** `(document, date)`
+
+##### `Campaign` (`models.py:142`)
+**Поля:**
+- `id` — UUIDField (primary key)
+- `label` — CharField
+- `description` — TextField
+- `status` — CharField (draft/active/completed/archived)
+- `start_date`, `end_date` — DateField
+- `created_by` — ForeignKey(User)
+- `cost_amount`, `revenue_amount` — DecimalField (ROI inputs)
+- `currency` — CharField (default: 'RUB')
+- `created_at`, `updated_at` — DateTimeField
+
+**Методы:** `get_roi()` — возвращает ROI ratio (revenue / cost)
+
+##### `CampaignAsset` (`models.py:211`)
+**Связь:** Many-to-Many между Campaign и Document
+
+**Поля:**
+- `campaign` — ForeignKey(Campaign)
+- `document` — ForeignKey(Document)
+- `sequence` — PositiveIntegerField
+- `added_at` — DateTimeField
+
+**Unique together:** `(campaign, document)`
+
+##### `CampaignDailyMetrics` (`models.py:243`)
+**Связь:** `ForeignKey(Campaign, related_name='daily_metrics')`
+
+**Поля:**
+- `campaign` — ForeignKey(Campaign)
+- `date` — DateField
+- `views`, `downloads`, `shares` — PositiveIntegerField
+- `roi` — FloatField
+- `top_document` — ForeignKey(Document, null=True)
+- `channel_breakdown` — JSONField
+- `avg_engagement_minutes` — FloatField
+
+##### `UserSession` (`models.py:283`)
+**Связь:** `ForeignKey(User, related_name='analytics_sessions')`
+
+**Поля:**
+- `user` — ForeignKey(User)
+- `session_key` — CharField
+- `login_timestamp`, `logout_timestamp` — DateTimeField
+- `session_duration_seconds` — IntegerField
+- `geo_country`, `geo_city` — CharField
+- `ip_address` — GenericIPAddressField (анонимизированный)
+- `user_agent` — TextField
+
+##### `UserDailyMetrics` (`models.py:315`)
+**Связь:** `ForeignKey(User, related_name='analytics_daily_metrics')`
+
+**Поля:**
+- `user` — ForeignKey(User)
+- `date` — DateField
+- `logins`, `searches`, `downloads` — PositiveIntegerField
+- `search_success_rate` — FloatField
+- `avg_search_to_find_minutes` — IntegerField
+- `user_department` — CharField
+
+**Unique together:** `(user, date)`
+
+##### `SearchQuery` (`models.py:524`)
+**Связь:** `ForeignKey(User, related_name='analytics_search_queries', null=True)`
+
+**Поля:**
+- `user` — ForeignKey(User, null=True)
+- `query_text` — CharField (indexed)
+- `search_type` — CharField (keyword/filter/faceted/ai)
+- `results_count` — IntegerField
+- `response_time_ms` — IntegerField
+- `filters_applied` — JSONField
+- `search_session_id` — UUIDField
+- `was_clicked_result_document_id` — IntegerField
+- `click_position` — IntegerField
+- `time_to_click_seconds` — IntegerField
+- `was_downloaded` — BooleanField
+- `time_to_download_seconds` — IntegerField
+- `timestamp` — DateTimeField (auto_now_add, indexed)
+- `user_department` — CharField
+
+##### `SearchSession` (`models.py:346`)
+**Связь:** `ForeignKey(User, related_name='analytics_search_sessions')`
+
+**Поля:**
+- `id` — UUIDField (primary key)
+- `user` — ForeignKey(User)
+- `started_at`, `ended_at` — DateTimeField
+- `first_search_query` — ForeignKey(SearchQuery, null=True)
+- `last_download_event` — ForeignKey(AssetEvent, null=True)
+- `time_to_find_seconds` — IntegerField (Search-to-Find Time)
+
+##### `ApprovalWorkflowEvent` (`models.py:396`)
+**Связь:** `ForeignKey(Document, related_name='analytics_approval_events')`
+
+**Поля:**
+- `document` — ForeignKey(Document)
+- `workflow_instance` — ForeignKey(WorkflowInstance)
+- `submitter`, `approver` — ForeignKey(User, null=True)
+- `submitted_at`, `approved_at`, `rejected_at` — DateTimeField
+- `approval_time_days` — FloatField
+- `status` — CharField (pending/approved/rejected)
+- `rejection_reason` — TextField
+- `attempt_number` — PositiveIntegerField
+- `created_at` — DateTimeField
+
+##### `AnalyticsAlert` (`models.py:466`)
+**Связь:** `ForeignKey(Document, related_name='analytics_alerts', null=True)`, `ForeignKey(Campaign, related_name='analytics_alerts', null=True)`
+
+**Поля:**
+- `alert_type` — CharField (underperforming_asset/no_downloads/approval_rejected/storage_limit)
+- `severity` — CharField (critical/warning/info)
+- `title`, `message` — CharField/TextField
+- `document`, `campaign` — ForeignKey (optional)
+- `created_at`, `resolved_at` — DateTimeField
+- `metadata` — JSONField
+
+##### `SearchDailyMetrics` (`models.py:582`)
+**Поля:**
+- `date` — DateField (primary key)
+- `total_searches`, `successful_searches`, `null_searches` — PositiveIntegerField
+- `ctr` — FloatField (Click-Through Rate)
+- `avg_response_time_ms` — IntegerField
+- `top_queries`, `null_queries` — JSONField (список топ-запросов)
+
+##### `CDNRate` (`models.py:603`)
+**Поля:**
+- `region` — CharField
+- `channel` — CharField
+- `cost_per_gb_usd` — DecimalField
+- `effective_from`, `effective_to` — DateField
+
+**Unique together:** `(region, channel, effective_from)`
+
+##### `CDNDailyCost` (`models.py:627`)
+**Поля:**
+- `date` — DateField
+- `region`, `channel` — CharField
+- `bandwidth_gb` — FloatField
+- `cost_usd` — DecimalField
+
+**Unique together:** `(date, region, channel)`
+
+##### `FeatureUsage` (`models.py:650`)
+**Связь:** `ForeignKey(User, related_name='analytics_feature_usage', null=True)`
+
+**Поля:**
+- `user` — ForeignKey(User, null=True)
+- `feature_name` — CharField (indexed)
+- `timestamp` — DateTimeField (auto_now_add, indexed)
+- `was_successful` — BooleanField
+- `metadata` — JSONField
+
+##### `CampaignEngagementEvent` (`models.py:679`)
+**Связь:** `ForeignKey(Campaign, related_name='engagement_events')`
+
+**Поля:**
+- `campaign` — ForeignKey(Campaign)
+- `user` — ForeignKey(User, null=True)
+- `started_at`, `ended_at` — DateTimeField
+- `duration_seconds` — PositiveIntegerField
+- `metadata` — JSONField
+
+##### `DistributionEvent` (`models.py:714`)
+**Связь:** `ForeignKey(Document, related_name='analytics_distribution_events', null=True)`, `ForeignKey(Campaign, related_name='analytics_distribution_events', null=True)`
+
+**Поля:**
+- `channel` — CharField (indexed)
+- `event_type` — CharField (synced/converted/published/delivered/error)
+- `status` — CharField (ok/warning/error/syncing)
+- `document`, `campaign` — ForeignKey (optional)
+- `views`, `clicks`, `conversions` — PositiveIntegerField
+- `revenue_amount` — DecimalField
+- `currency` — CharField
+- `bandwidth_bytes` — BigIntegerField
+- `latency_ms` — IntegerField
+- `external_id` — CharField (indexed)
+- `occurred_at` — DateTimeField (indexed)
+- `metadata` — JSONField
+
+#### API Эндпоинты
+**Интегрированы в headless_api через `*AnalyticsViewSet`:**
+
+##### Asset Bank (Phase 1 / Level 1)
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/analytics/dashboard/assets/top-metrics/` | GET | `AssetBankViewSet.top_metrics` | Топ-метрики активов (total assets, storage used, downloads/views за 30 дней) |
+| `/api/v4/headless/analytics/dashboard/assets/distribution/` | GET | `AssetBankViewSet.distribution` | Распределение активов по типам документов |
+| `/api/v4/headless/analytics/dashboard/assets/distribution-trend/` | GET | `AssetBankViewSet.distribution_trend` | Тренд распределения активов по времени |
+| `/api/v4/headless/analytics/dashboard/assets/most-downloaded/` | GET | `AssetBankViewSet.most_downloaded` | Самые скачиваемые активы |
+| `/api/v4/headless/analytics/dashboard/assets/detail/` | GET | `AssetBankViewSet.asset_detail` | Детальная аналитика по активу (document_id) |
+| `/api/v4/headless/analytics/dashboard/assets/reuse-metrics/` | GET | `AssetBankViewSet.reuse_metrics` | Метрики повторного использования активов |
+| `/api/v4/headless/analytics/dashboard/assets/storage-trends/` | GET | `AssetBankViewSet.storage_trends` | Тренды использования хранилища |
+| `/api/v4/headless/analytics/dashboard/assets/alerts/` | GET | `AssetBankViewSet.alerts` | Алерты по активам (underperforming, no downloads, etc.) |
+
+##### Campaign Performance (Phase 2 / Level 2)
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/analytics/campaigns/` | GET | `CampaignPerformanceViewSet.list` | Список кампаний |
+| `/api/v4/headless/analytics/campaigns/create/` | POST | `CampaignPerformanceViewSet.create` | Создание кампании |
+| `/api/v4/headless/analytics/campaigns/add-assets/` | POST | `CampaignPerformanceViewSet.add_assets` | Добавление активов в кампанию |
+| `/api/v4/headless/analytics/campaigns/update-financials/` | POST | `CampaignPerformanceViewSet.update_financials` | Обновление финансовых данных (cost/revenue) |
+| `/api/v4/headless/analytics/campaigns/{campaign_id}/engagement/` | POST | `CampaignPerformanceViewSet.engagement` | Отслеживание engagement события |
+| `/api/v4/headless/analytics/dashboard/campaigns/` | GET | `CampaignPerformanceViewSet.dashboard` | Дашборд кампаний |
+| `/api/v4/headless/analytics/dashboard/campaigns/top-assets/` | GET | `CampaignPerformanceViewSet.top_assets` | Топ-активы кампании |
+| `/api/v4/headless/analytics/dashboard/campaigns/timeline/` | GET | `CampaignPerformanceViewSet.timeline` | Временная линия кампании |
+| `/api/v4/headless/analytics/dashboard/campaigns/geography/` | GET | `CampaignPerformanceViewSet.geography` | Географическое распределение |
+
+##### Search Analytics (Phase 2 / Level 4)
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/analytics/dashboard/search/top-queries/` | GET | `SearchAnalyticsViewSet.top_queries` | Топ-поисковые запросы |
+| `/api/v4/headless/analytics/dashboard/search/null-searches/` | GET | `SearchAnalyticsViewSet.null_searches` | Поисковые запросы без результатов |
+| `/api/v4/headless/analytics/dashboard/search/daily/` | GET | `SearchAnalyticsViewSet.daily` | Ежедневные метрики поиска |
+| `/api/v4/headless/analytics/track/search/click/` | POST | `SearchAnalyticsViewSet.click` | Отслеживание клика по результату поиска |
+
+##### User Activity (Phase 2 / Level 3)
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/analytics/dashboard/users/adoption-heatmap/` | GET | `UserActivityViewSet.adoption_heatmap` | Heatmap принятия функций пользователями |
+| `/api/v4/headless/analytics/dashboard/users/login-patterns/` | GET | `UserActivityViewSet.login_patterns` | Паттерны входа пользователей |
+| `/api/v4/headless/analytics/dashboard/users/cohorts/` | GET | `UserActivityViewSet.cohorts` | Когорты пользователей |
+| `/api/v4/headless/analytics/dashboard/users/feature-adoption/` | GET | `UserActivityViewSet.feature_adoption` | Принятие функций пользователями |
+
+##### Approval Workflow Analytics (Phase 2 / Level 3)
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/analytics/dashboard/approvals/summary/` | GET | `ApprovalAnalyticsViewSet.summary` | Сводка по workflow-аналитике |
+| `/api/v4/headless/analytics/dashboard/approvals/timeseries/` | GET | `ApprovalAnalyticsViewSet.timeseries` | Временные ряды workflow-событий |
+| `/api/v4/headless/analytics/dashboard/approvals/recommendations/` | GET | `ApprovalAnalyticsViewSet.recommendations` | Рекомендации по оптимизации workflow |
+
+##### ROI Dashboard (Phase 2)
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/analytics/dashboard/roi/summary/` | GET | `ROIDashboardViewSet.summary` | Сводка ROI по кампаниям |
+
+##### Distribution Analytics (Release 3)
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/analytics/dashboard/distribution/` | GET | `DistributionAnalyticsViewSet.dashboard` | Дашборд распределения по каналам |
+| `/api/v4/headless/analytics/ingest/distribution-events/` | POST | `DistributionAnalyticsViewSet.ingest` | Импорт событий распределения из внешних источников |
+
+##### Content Intelligence (Release 3)
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/analytics/dashboard/content-intel/content-gaps/` | GET | `ContentIntelligenceViewSet.content_gaps` | Выявление пробелов в контенте |
+| `/api/v4/headless/analytics/dashboard/content-intel/compliance/metadata/` | GET | `ContentIntelligenceViewSet.metadata_compliance` | Соответствие метаданных требованиям |
+
+#### Фоновые Задачи
+
+##### `aggregate_daily_metrics` (`tasks.py:25`)
+- **Queue:** `documents`
+- **Retries:** 3 (max_retries=3, default_retry_delay=60)
+- **Триггер:** Периодическая задача (по умолчанию ежедневно для вчерашнего дня)
+- **Логика:**
+  1. Агрегация `AssetEvent` за указанную дату в `AssetDailyMetrics`
+  2. Подсчет downloads, views, shares, bandwidth_bytes по document_id
+  3. Вычисление `performance_score` через `calculate_performance_score()` (weighted log-scale)
+  4. Определение `top_channel` для каждого документа
+  5. Upsert в `AssetDailyMetrics` (unique_together: document, date)
+  6. Уведомление через WebSocket (`notify_analytics_refresh`)
+
+##### `aggregate_search_daily_metrics` (`tasks.py:92`)
+- **Queue:** `documents`
+- **Триггер:** Периодическая задача (ежедневно)
+- **Логика:**
+  1. Агрегация `SearchQuery` за указанную дату в `SearchDailyMetrics`
+  2. Подсчет total_searches, successful_searches (was_downloaded=True или was_clicked=True), null_searches (results_count=0)
+  3. Вычисление CTR (Click-Through Rate)
+  4. Вычисление avg_response_time_ms
+  5. Топ-20 запросов и null-запросов
+  6. Upsert в `SearchDailyMetrics` (date как primary key)
+
+##### `aggregate_user_daily_metrics` (`tasks.py:399`)
+- **Queue:** `documents`
+- **Триггер:** Периодическая задача (ежедневно)
+- **Логика:**
+  1. Агрегация `SearchSession` за указанную дату
+  2. Вычисление avg_search_to_find_minutes для каждого пользователя
+  3. Upsert в `UserDailyMetrics` (unique_together: user, date)
+
+##### `calculate_cdn_daily_costs` (`tasks.py:444`)
+- **Queue:** `documents`
+- **Триггер:** Периодическая задача (ежедневно)
+- **Логика:**
+  1. Получение `CDNRate` для указанной даты (effective_from <= date <= effective_to)
+  2. Агрегация `AssetDailyMetrics.cdn_bandwidth_gb` по channel
+  3. Расчет cost_usd = bandwidth_gb * cost_per_gb_usd
+  4. Upsert в `CDNDailyCost` (unique_together: date, region, channel)
+
+##### `generate_analytics_alerts` (`tasks.py:246`)
+- **Queue:** `documents`
+- **Триггер:** Периодическая задача (по умолчанию каждые 90 дней)
+- **Логика:**
+  1. Генерация алертов для активов без downloads (из `AssetDailyMetrics`)
+  2. Генерация алертов для недавних rejections (из `ApprovalWorkflowEvent`)
+  3. Генерация алертов для storage limit (из `DocumentFile.size` aggregate)
+  4. Генерация алертов для metadata completeness (из `DocumentMetadata`)
+  5. Создание записей в `AnalyticsAlert` (без дубликатов для unresolved alerts)
+
+##### `cleanup_old_events` (`tasks.py:174`)
+- **Queue:** `documents`
+- **Триггер:** Периодическая задача (по умолчанию retention_days=90)
+- **Логика:**
+  1. Удаление `AssetEvent`, `SearchQuery`, `SearchSession` старше retention_days
+  2. Опциональное удаление агрегированных метрик старше `ANALYTICS_AGGREGATED_RETENTION_DAYS` (по умолчанию 365 дней)
+  3. Возврат словаря с количеством удаленных записей
+
+##### `aggregate_campaign_engagement_daily_metrics` (`tasks.py:513`)
+- **Queue:** `documents`
+- **Триггер:** Периодическая задача (ежедневно)
+- **Логика:**
+  1. Агрегация `CampaignEngagementEvent` за указанную дату
+  2. Вычисление avg_engagement_minutes для каждой кампании
+  3. Upsert в `CampaignDailyMetrics.avg_engagement_minutes`
+
+#### Утилиты
+- **`mayan.apps.analytics.utils`** (`utils.py`) — утилиты для отслеживания событий:
+  - `track_asset_event(...)` — создание `AssetEvent` (download/view/share/upload/deliver)
+  - `track_cdn_delivery(...)` — отслеживание CDN-доставки (helper для `track_asset_event` с event_type=deliver)
+  - `anonymize_ip_address(ip_address)` — анонимизация IP-адресов для GDPR (IPv4: первые 2 октета, IPv6: первые 4 hextets)
+- **`mayan.apps.analytics.services`** (`services.py`) — сервисы для связывания событий:
+  - `link_download_to_latest_search_session(...)` — связывание download события с открытой поисковой сессией для вычисления Search-to-Find Time
+  - `track_feature_usage(...)` — отслеживание использования функций (создание `FeatureUsage`)
+
+#### Middleware
+- **`mayan.apps.analytics.middleware.FeatureUsageMiddleware`** (`middleware.py`) — отслеживание использования функций через HTTP-запросы (регистрируется в `MIDDLEWARE`, строка 178 `base.py`)
+
+#### Использование Core Mayan
+- **Модели:** `Document`, `DocumentFile`, `User`, `WorkflowInstance` (из `document_states`)
+- **Signals:** 
+  - `user_logged_in` (`signals.py:42`) — создание `UserSession` при входе пользователя
+  - `user_logged_out` (`signals.py:78`) — закрытие `UserSession` при выходе
+  - `post_save` на `DocumentFile` (`signals.py:105`) — создание `AssetEvent(EVENT_TYPE_UPLOAD)` при загрузке файла
+  - `post_save` на `WorkflowInstanceLogEntry` (`signals.py:148`) — создание/обновление `ApprovalWorkflowEvent` при переходах workflow
+- **ACL:** Не используется напрямую (аналитика доступна через permissions)
+- **Permissions:** 
+  - `permission_analytics_view_asset_bank`
+  - `permission_analytics_view_campaign_performance`
+  - `permission_analytics_view_search_analytics`
+  - `permission_analytics_view_user_activity`
+  - `permission_analytics_view_content_intelligence`
+  - `permission_analytics_view_distribution`
+- **Интеграция с другими модулями:**
+  - `dam` — отслеживание download/view через `track_asset_event()` в `DocumentFileDownloadView`, `DocumentDetailView`
+  - `distribution` — отслеживание share/deliver через `track_asset_event()` в `ShareLink` views и models
+  - `headless_api` — экспонирование аналитики через REST API endpoints
+
+---
+
+### 2.6. `mayan.apps.notifications` — Notification Center
+
+**Назначение:** Расширенная система уведомлений с шаблонами, настройками пользователей, email-рассылкой и WebSocket-доставкой. Интегрируется со стандартной системой уведомлений Mayan (`events.Notification`).
+
+#### Ключевые Модели
+
+##### `NotificationTemplate` (`models.py:8`)
+**Поля:**
+- `event_type` — CharField (unique, indexed) — тип события (например, 'documents.document_created')
+- `title_template` — CharField — шаблон заголовка уведомления
+- `message_template` — TextField — шаблон сообщения
+- `icon_type` — CharField (default: 'info') — тип иконки
+- `icon_url` — URLField — URL иконки
+- `default_priority` — CharField (default: 'NORMAL') — приоритет по умолчанию
+- `recipients_config` — JSONField — конфигурация получателей
+- `actions` — JSONField — список действий (кнопки/ссылки)
+- `is_active` — BooleanField (default: True)
+- `created_at`, `updated_at` — DateTimeField
+
+**Индексы:** `(event_type,)`
+
+##### `NotificationPreference` (`models.py:55`)
+**Связь:** `OneToOneField(User, related_name='notification_preference')`
+
+**Поля:**
+- `user` — OneToOneField(User)
+- `notifications_enabled` — BooleanField (default: True)
+- `email_notifications_enabled` — BooleanField (default: True)
+- `push_notifications_enabled` — BooleanField (default: True)
+- `email_digest_enabled` — BooleanField (default: False)
+- `email_digest_frequency` — CharField (default: 'never')
+- `quiet_hours_enabled` — BooleanField (default: False)
+- `quiet_hours_start`, `quiet_hours_end` — TimeField (optional)
+- `notification_language` — CharField (default: 'ru')
+- `created_at`, `updated_at` — DateTimeField
+
+**Примечание:** Подписки на события управляются через стандартную систему Mayan (`EventSubscription`), эта модель хранит только дополнительные настройки доставки.
+
+##### `NotificationLog` (`models.py:101`)
+**Связь:** `ForeignKey(events.Notification, related_name='logs')`
+
+**Поля:**
+- `notification` — ForeignKey(events.Notification)
+- `action` — CharField (read/deleted/etc.)
+- `action_data` — JSONField
+- `timestamp` — DateTimeField (auto_now_add)
+- `uuid` — UUIDField (для идемпотентности/внешней корреляции)
+
+**Индексы:** `(notification, -timestamp)`
+
+#### API Эндпоинты
+**Интегрированы в headless_api через `HeadlessNotification*View`:**
+
+| URL | Метод | View | Описание |
+|-----|-------|------|----------|
+| `/api/v4/headless/notifications/` | GET | `HeadlessNotificationsListView.list` | Список уведомлений пользователя (с пагинацией, фильтрацией по state/event_type) |
+| `/api/v4/headless/notifications/{id}/` | GET | `HeadlessNotificationsDetailView.retrieve` | Детали уведомления |
+| `/api/v4/headless/notifications/{id}/read/` | PATCH | `HeadlessNotificationsDetailView.mark_read` | Отметить уведомление как прочитанное |
+| `/api/v4/headless/notifications/read-all/` | POST | `HeadlessNotificationsReadAllView.read_all` | Отметить все уведомления как прочитанные |
+| `/api/v4/headless/notifications/unread-count/` | GET | `HeadlessNotificationsUnreadCountView.unread_count` | Количество непрочитанных уведомлений |
+| `/api/v4/headless/notifications/preferences/` | GET, PATCH | `HeadlessNotificationPreferenceView` | Получение/обновление настроек уведомлений пользователя |
+
+#### Фоновые Задачи
+
+##### `send_notification_async` (`tasks.py:14`)
+- **Queue:** `notifications` (по умолчанию)
+- **Retries:** 3 (max_retries=3, default_retry_delay=60)
+- **Триггер:** Через сигналы или прямой вызов при создании уведомления
+- **Логика:**
+  1. Получение `EventNotification` по ID
+  2. Проверка `NotificationPreference.notifications_enabled`
+  3. Установка `sent_at` и `state='SENT'`
+  4. Запуск `send_notification_email.apply_async()` если `email_notifications_enabled=True`
+  5. Запуск `send_websocket_notification.apply_async()` если `push_notifications_enabled=True`
+
+##### `send_notification_email` (`tasks.py:46`)
+- **Queue:** `notifications`
+- **Триггер:** Из `send_notification_async`
+- **Логика:**
+  1. Получение `EventNotification` по ID
+  2. Проверка наличия email у пользователя
+  3. Рендеринг HTML-шаблона `notifications/notification_email.html`
+  4. Отправка email через `django.core.mail.send_mail()`
+
+##### `send_websocket_notification` (`tasks.py:102`)
+- **Queue:** `notifications`
+- **Триггер:** Из `send_notification_async`
+- **Логика:**
+  1. Получение `EventNotification` по ID
+  2. Отправка в Channels group `notifications_{user_id}` через `channel_layer.group_send()`
+  3. Тип сообщения: `notification.new` с данными (id, title, message, priority, icon_type, created_at)
+
+##### `cleanup_old_notifications` (`tasks.py:84`)
+- **Queue:** `notifications`
+- **Триггер:** Периодическая задача (по умолчанию каждые 90 дней)
+- **Логика:**
+  1. Удаление `EventNotification` старше 90 дней со статусом `ARCHIVED` или `DELETED`
+  2. Использует `action.timestamp` для определения возраста
+
+#### Сериализаторы
+- **`NotificationSerializer`** (`serializers.py:19`) — полный сериализатор уведомления с fallback для legacy уведомлений (без title)
+- **`NotificationListSerializer`** (`serializers.py:70`) — оптимизированный сериализатор для списка (popover)
+- **`NotificationPreferenceSerializer`** (`serializers.py:112`) — сериализатор настроек пользователя
+
+#### Использование Core Mayan
+- **Модели:** `events.Notification` (расширяется через миграции), `events.EventSubscription`, `events.StoredEventType`
+- **Signals:** 
+  - `post_save` на `User` (`signals.py:12`) — автоматическое создание `NotificationPreference` для новых пользователей и подписка на стандартные события документов (`documents.document_file_created`, `documents.document_created`, `documents.document_edited`, `documents.document_version_created`)
+- **Интеграция:** Расширяет стандартную систему уведомлений Mayan через миграции (добавление полей `title`, `message`, `priority`, `icon_type`, `icon_url`, `state`, `actions` в `events.Notification`)
+- **Permissions:** Использует стандартные permissions Mayan для уведомлений
+
+---
+
 ## 3. Анализ Использования Core Mayan
 
 ### 3.1. Расширение Моделей
@@ -549,6 +1060,40 @@ ai_analysis = document.ai_analysis  # через related_name
 - При сохранении или удалении пресета вызывается `invalidate_preset_count_cache(preset_id)`
 - Кеш инвалидируется для всех пользователей (user-specific кеши будут обновлены при следующем запросе)
 
+#### `user_logged_in` / `user_logged_out` (`analytics/signals.py:42, 78`)
+**Назначение:** Отслеживание пользовательских сессий для аналитики.
+
+**Логика:**
+- `user_logged_in`: Создание `UserSession` с данными о входе (session_key, login_timestamp, geo_country, geo_city, ip_address анонимизированный, user_agent)
+- `user_logged_out`: Закрытие последней открытой `UserSession` (установка logout_timestamp и session_duration_seconds)
+
+#### `post_save` на `DocumentFile` (`analytics/signals.py:105`)
+**Назначение:** Отслеживание загрузки файлов как аналитических событий.
+
+**Логика:**
+- При создании нового `DocumentFile` создается `AssetEvent(EVENT_TYPE_UPLOAD)` через `track_asset_event()`
+- Канал: `dam_interface`
+- Метаданные: document_file_id, mimetype, size
+
+#### `post_save` на `WorkflowInstanceLogEntry` (`analytics/signals.py:148`)
+**Назначение:** Отслеживание workflow-переходов для аналитики approval процессов.
+
+**Логика:**
+- Эвристическое определение типа перехода (submit/approve/reject) по имени/лейблу перехода
+- При submit: создание нового `ApprovalWorkflowEvent` со статусом `pending` (increment attempt_number)
+- При approve/reject: обновление последнего pending `ApprovalWorkflowEvent` (установка approver, approved_at/rejected_at, approval_time_days)
+
+#### `post_save` на `User` (`notifications/signals.py:12`)
+**Назначение:** Автоматическое создание настроек уведомлений для новых пользователей.
+
+**Логика:**
+- При создании нового пользователя создается `NotificationPreference` с настройками по умолчанию
+- Автоматическая подписка на стандартные события документов через `EventSubscription`:
+  - `documents.document_file_created`
+  - `documents.document_created`
+  - `documents.document_edited`
+  - `documents.document_version_created`
+
 ### 3.3. Использование ACL (Access Control Lists)
 
 #### Паттерны использования ACL
@@ -593,6 +1138,14 @@ AccessControlList.objects.check_access(
 - `permission_ai_analysis_edit`
 - `permission_ai_analysis_delete`
 - `permission_metadata_preset_view/create/edit/delete`
+
+**Кастомные permissions в `analytics/permissions.py`:**
+- `permission_analytics_view_asset_bank` — просмотр Asset Bank dashboard
+- `permission_analytics_view_campaign_performance` — просмотр Campaign Performance dashboard
+- `permission_analytics_view_search_analytics` — просмотр Search Analytics dashboard
+- `permission_analytics_view_user_activity` — просмотр User Activity dashboard
+- `permission_analytics_view_content_intelligence` — просмотр Content Intelligence dashboard
+- `permission_analytics_view_distribution` — просмотр Distribution Analytics dashboard
 
 **Core permissions (из Mayan):**
 - `permission_document_view`
@@ -1098,7 +1651,7 @@ image_editor
 ---
 
 **Документ составлен:** 2025-12-09  
-**Последнее обновление:** 2025-12-23 (реализованы TODO задачи: интеграция AI-метаданных с Mayan, подсчет документов для пресета с ACL и кешированием, удаление deprecated ImageEditorSaveView)  
+**Последнее обновление:** 2025-12-23 (добавлены модули analytics и notifications: модели, API endpoints, Celery tasks, сигналы, интеграция с headless_api)  
 **Автор аудита:** Senior Backend Architect  
-**Версия:** 1.9
+**Версия:** 2.0
 

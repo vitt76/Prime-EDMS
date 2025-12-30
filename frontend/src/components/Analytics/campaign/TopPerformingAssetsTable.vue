@@ -33,7 +33,7 @@
             <td class="px-3 py-2">{{ row.downloads }}</td>
             <td class="px-3 py-2">{{ row.views }}</td>
             <td class="px-3 py-2">
-              <Sparkline :values="row.sparkline_data || []" />
+              <TrendSparkline :values="row.sparkline_data || []" />
             </td>
           </tr>
         </tbody>
@@ -44,7 +44,7 @@
 
 <script setup lang="ts">
 import Card from '@/components/Common/Card.vue'
-import Sparkline from '@/components/Analytics/campaign/Sparkline.vue'
+import TrendSparkline from '@/components/Common/TrendSparkline.vue'
 import type { CampaignTopAssetRow } from '@/stores/analyticsStore'
 
 defineProps<{

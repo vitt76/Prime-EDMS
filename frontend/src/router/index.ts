@@ -24,7 +24,26 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/AnalyticsLayout.vue'),
     meta: { requiresAuth: true, title: 'Аналитика' },
     children: [
-      { path: '', redirect: '/analytics/overview' },
+      {
+        path: '',
+        redirect: (to) => {
+          const tab = String((to.query as any)?.tab || '').toLowerCase()
+          const section = String((to.query as any)?.section || '').toLowerCase()
+          const metric = String((to.query as any)?.metric || '').toLowerCase()
+
+          if (tab === 'marketing') {
+            if (section === 'distribution') return '/analytics/marketing/distribution'
+            if (section === 'roi') return '/analytics/marketing/roi'
+            if (section === 'campaigns') return '/analytics/marketing/campaigns'
+            if (metric === 'views') return '/analytics/marketing/campaigns'
+            return '/analytics/marketing/campaigns'
+          }
+
+          if (tab === 'content-ai') return '/analytics/content-ai'
+          if (tab === 'operations') return '/analytics/operations/users'
+          return '/analytics/overview'
+        }
+      },
       {
         path: 'overview',
         name: 'analytics-overview',

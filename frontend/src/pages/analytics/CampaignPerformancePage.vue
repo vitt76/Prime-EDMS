@@ -39,10 +39,12 @@
         <CampaignSummaryCards :campaign="analyticsStore.campaignDashboard?.campaign || null" />
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          <ViewsDownloadsChart
-            :timeline="analyticsStore.campaignDashboard?.timeline || []"
-            :baseline="analyticsStore.campaignDashboard?.baseline || null"
-          />
+          <div id="analytics-views-downloads">
+            <ViewsDownloadsChart
+              :timeline="analyticsStore.campaignDashboard?.timeline || []"
+              :baseline="analyticsStore.campaignDashboard?.baseline || null"
+            />
+          </div>
           <ChannelDistributionChart :channels="analyticsStore.campaignDashboard?.channels || []" />
         </div>
 
@@ -63,6 +65,7 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import Card from '@/components/Common/Card.vue'
 import AudienceGeographyMap from '@/components/Analytics/campaign/AudienceGeographyMap.vue'
@@ -75,6 +78,7 @@ import { analyticsService } from '@/services/analyticsService'
 import { useAnalyticsStore } from '@/stores/analyticsStore'
 
 const analyticsStore = useAnalyticsStore()
+const route = useRoute()
 function formatCampaignStatus(status: string): string {
   const s = String(status || '').toLowerCase()
   if (s === 'draft') return 'Черновик'
@@ -98,6 +102,14 @@ async function onSelectCampaign(id: string | null): Promise<void> {
 
 onMounted(async () => {
   await refresh()
+  // Deep link support: /analytics?tab=marketing&metric=views
+  if (String(route.query?.metric || '').toLowerCase() === 'views') {
+    // Best-effort: bring the Views/Downloads chart into view.
+    requestAnimationFrame(() => {
+      const el = document.getElementById('analytics-views-downloads')
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 })
 
 async function exportPdf(): Promise<void> {
