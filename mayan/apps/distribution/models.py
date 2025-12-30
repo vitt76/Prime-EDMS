@@ -472,6 +472,30 @@ class ShareLink(models.Model):
             timestamp=timezone.now()
         )
 
+        # Analytics (Level 1): track view via share link as a "view" event.
+        try:
+            from mayan.apps.analytics.models import AssetEvent
+            from mayan.apps.analytics.utils import track_asset_event
+
+            document = self.rendition.publication_item.document_file.document
+            user = getattr(request, 'user', None)
+            if user and not user.is_authenticated:
+                user = None
+
+            track_asset_event(
+                document=document,
+                event_type=AssetEvent.EVENT_TYPE_VIEW,
+                user=user,
+                channel='public_link',
+                metadata={
+                    'share_link_id': self.pk,
+                    'rendition_id': self.rendition_id,
+                }
+            )
+        except Exception:
+            # Best-effort only; never break public access due to analytics.
+            pass
+
     def get_unique_visitors_count(self):
         """
         Get count of unique visitors based on IP addresses.
@@ -503,6 +527,54 @@ class ShareLink(models.Model):
             user_agent=request.META.get('HTTP_USER_AGENT', ''),
             timestamp=timezone.now()
         )
+
+        # Analytics (Level 1): track download via share link as a "download" event.
+        try:
+            from mayan.apps.analytics.models import AssetEvent
+            from mayan.apps.analytics.utils import track_asset_event
+
+            document = self.rendition.publication_item.document_file.document
+            user = getattr(request, 'user', None)
+            if user and not user.is_authenticated:
+                user = None
+
+            track_asset_event(
+                document=document,
+                event_type=AssetEvent.EVENT_TYPE_DOWNLOAD,
+                user=user,
+                channel='public_link',
+                metadata={
+                    'share_link_id': self.pk,
+                    'rendition_id': self.rendition_id,
+                }
+            )
+
+            # Also track delivery bandwidth (best-effort). Prefer rendition file size.
+            bandwidth_bytes = None
+            try:
+                bandwidth_bytes = int(getattr(rendition or self.rendition, 'file_size', 0) or 0)
+            except Exception:
+                bandwidth_bytes = 0
+
+            try:
+                from mayan.apps.analytics.utils import track_cdn_delivery
+
+                if bandwidth_bytes:
+                    track_cdn_delivery(
+                        document=document,
+                        bandwidth_bytes=bandwidth_bytes,
+                        user=user,
+                        channel='public_link',
+                        metadata={
+                            'share_link_id': self.pk,
+                            'rendition_id': self.rendition_id,
+                        }
+                    )
+            except Exception:
+                pass
+        except Exception:
+            # Best-effort only; never break downloads due to analytics.
+            pass
 
     def _get_client_ip(self, request):
         """
