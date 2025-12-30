@@ -438,6 +438,9 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
   metadata.language = backendDoc.language
   metadata.uuid = backendDoc.uuid
   
+  // Extract document_type_id from backend response (could be in document_type object or as separate field)
+  const documentTypeId = (backendDoc as any)?.document_type_id || backendDoc.document_type?.id
+  
   // Determine processing status
   const status = mapProcessingState(
     backendDoc.processing_state,
@@ -533,7 +536,14 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
     ai_analysis: adaptBackendAIAnalysis(backendDoc.ai_analysis),
     access_level: 'internal',
     file_details: file_details,
-  }
+    // Add document_type_id and document_type for workflow widget
+    document_type_id: documentTypeId,
+    document_type: backendDoc.document_type ? {
+      id: backendDoc.document_type.id,
+      label: backendDoc.document_type.label,
+      internal_name: (backendDoc.document_type as any)?.internal_name
+    } : undefined,
+  } as Asset & { document_type_id?: number; document_type?: { id: number; label: string; internal_name?: string } }
 }
 
 /**

@@ -318,7 +318,8 @@
 
                 <DisclosurePanel class="p-0">
             <WorkflowWidget 
-              :asset-id="assetId" 
+              :asset-id="assetId"
+              :document-type-id="(asset as any)?.document_type_id || (asset as any)?.document_type?.id || (asset as any)?.document_type_id"
               @status-change="handleWorkflowStatusChange"
             />
                 </DisclosurePanel>
@@ -1120,6 +1121,11 @@ async function loadAsset() {
     
     if (storeAsset) {
       console.log('[AssetDetail] Loaded from real API:', storeAsset)
+      console.log('[AssetDetail] Document type info:', {
+        document_type_id: (storeAsset as any)?.document_type_id,
+        document_type: (storeAsset as any)?.document_type,
+        document_type_obj: (storeAsset as any)?.document_type
+      })
       asset.value = storeAsset as Asset
 
       // Если бэкенд прислал ID файла активной версии, используем его

@@ -386,6 +386,8 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
     description = serializers.CharField(allow_blank=True)
     asset_type = serializers.SerializerMethodField()
     asset_status = serializers.SerializerMethodField()
+    document_type_id = serializers.SerializerMethodField()
+    document_type = serializers.SerializerMethodField()
 
     file_id = serializers.SerializerMethodField()
     filename = serializers.SerializerMethodField()
@@ -419,7 +421,7 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
     class Meta:
         fields = (
             'id', 'title', 'description',
-            'asset_type', 'asset_status',
+            'asset_type', 'asset_status', 'document_type_id', 'document_type',
             'file_id', 'filename', 'file_size', 'mime_type',
             # Phase B1: URL fields
             'thumbnail_url', 'preview_url', 'download_url',
@@ -439,6 +441,20 @@ class DAMDocumentDetailSerializer(serializers.Serializer):
 
     def get_asset_status(self, obj):
         return 'archived' if getattr(obj, 'in_trash', False) else 'active'
+
+    def get_document_type_id(self, obj):
+        document_type = getattr(obj, 'document_type', None)
+        return document_type.pk if document_type else None
+
+    def get_document_type(self, obj):
+        document_type = getattr(obj, 'document_type', None)
+        if document_type:
+            return {
+                'id': document_type.pk,
+                'label': document_type.label,
+                'internal_name': getattr(document_type, 'internal_name', None)
+            }
+        return None
 
     def _latest_file(self, document):
         return document.files.order_by('-timestamp').first()
