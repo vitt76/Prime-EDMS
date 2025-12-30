@@ -9,9 +9,12 @@ Author: Backend Performance Engineer
 """
 import logging
 import time
+import uuid
+from datetime import timedelta
 
 from django.db.models import Prefetch, OuterRef, Subquery
 from django.apps import apps as django_apps
+from django.utils import timezone
 
 from rest_framework.generics import get_object_or_404
 
@@ -191,6 +194,10 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
                 SearchQuery = django_apps.get_model('analytics', 'SearchQuery')
             except Exception:
                 SearchQuery = None
+            try:
+                SearchSession = django_apps.get_model('analytics', 'SearchSession')
+            except Exception:
+                SearchSession = None
 
             if SearchQuery:
                 try:
@@ -198,15 +205,55 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
                     if isinstance(getattr(response, 'data', None), dict):
                         results_count = response.data.get('count')
 
-                    SearchQuery.objects.create(
+                    user = request.user if request.user.is_authenticated else None
+
+                    # Best-effort: open/reuse a search session for click/CTR/time-to-click metrics.
+                    search_session_id = None
+                    if user and SearchSession is not None:
+                        now = timezone.now()
+                        window_start = now - timedelta(minutes=30)
+                        session = (
+                            SearchSession.objects.filter(
+                                user=user, ended_at__isnull=True, started_at__gte=window_start
+                            )
+                            .order_by('-started_at')
+                            .first()
+                        )
+                        if not session:
+                            session = SearchSession.objects.create(id=uuid.uuid4(), user=user, started_at=now)
+                        search_session_id = session.pk
+
+                    filters_applied = request.query_params.dict().copy()
+                    filters_applied.pop('page', None)
+                    filters_applied.pop('page_size', None)
+                    filters_applied.pop('limit', None)
+                    filters_applied.pop('offset', None)
+
+                    created = SearchQuery.objects.create(
                         user=request.user if request.user.is_authenticated else None,
                         query_text=query_text[:500],
                         search_type=SearchQuery.SEARCH_TYPE_KEYWORD,
                         results_count=results_count,
                         response_time_ms=int((time.monotonic() - start) * 1000),
-                        filters_applied={},
+                        filters_applied=filters_applied,
+                        search_session_id=search_session_id,
                         user_department=''
                     )
+
+                    if user and SearchSession is not None and search_session_id:
+                        try:
+                            SearchSession.objects.filter(pk=search_session_id, first_search_query__isnull=True).update(
+                                first_search_query=created
+                            )
+                        except Exception:
+                            pass
+
+                    # Attach analytics context for SPA click tracking.
+                    if isinstance(getattr(response, 'data', None), dict):
+                        response.data['analytics'] = {
+                            'search_query_id': created.pk,
+                            'search_session_id': str(search_session_id) if search_session_id else None,
+                        }
                 except Exception:
                     # Best-effort logging only; never break the endpoint.
                     logger.exception('Unable to track search query analytics for optimized documents list.')

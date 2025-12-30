@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db.models import Avg, Count, Q, Sum
+from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
@@ -14,13 +15,18 @@ from mayan.apps.documents.models import Document, DocumentFile
 
 from mayan.apps.analytics.models import (
     AssetDailyMetrics, AssetEvent, Campaign, CampaignAsset, SearchDailyMetrics,
-    ApprovalWorkflowEvent, AnalyticsAlert, SearchQuery, UserSession
+    ApprovalWorkflowEvent, AnalyticsAlert, CDNDailyCost, SearchQuery,
+    CampaignDailyMetrics, CampaignEngagementEvent, FeatureUsage, SearchSession,
+    DistributionEvent, UserDailyMetrics, UserSession
 )
+from mayan.apps.analytics.utils import track_asset_event
 from mayan.apps.analytics.permissions import (
     permission_analytics_view_asset_bank, permission_analytics_view_campaign_performance,
-    permission_analytics_view_search_analytics, permission_analytics_view_user_activity
+    permission_analytics_view_search_analytics, permission_analytics_view_user_activity,
+    permission_analytics_view_content_intelligence, permission_analytics_view_distribution
 )
 from mayan.apps.permissions import Permission
+from mayan.apps.analytics.realtime import notify_analytics_refresh
 
 
 class AssetBankViewSet(viewsets.ViewSet):
@@ -48,10 +54,35 @@ class AssetBankViewSet(viewsets.ViewSet):
 
         search_qs = SearchQuery.objects.filter(timestamp__gte=last_30_days)
         total_searches = search_qs.count()
-        successful_searches = search_qs.filter(results_count__gt=0).count()
+        successful_searches = search_qs.filter(
+            Q(was_downloaded=True) | Q(was_clicked_result_document_id__isnull=False)
+        ).count()
         search_success_rate = 0
         if total_searches:
             search_success_rate = round((successful_searches / total_searches) * 100, 2)
+
+        # Avg Search-to-Find Time (minutes) based on aggregated UserDailyMetrics.
+        avg_find_time_minutes = None
+        try:
+            avg_find_time_minutes = UserDailyMetrics.objects.filter(
+                date__gte=last_30_days.date(),
+                avg_search_to_find_minutes__isnull=False
+            ).aggregate(avg=Avg('avg_search_to_find_minutes'))['avg']
+            if avg_find_time_minutes is not None:
+                avg_find_time_minutes = round(float(avg_find_time_minutes), 2)
+        except Exception:
+            avg_find_time_minutes = None
+
+        # CDN cost per month (USD), based on daily rollups.
+        cdn_cost_per_month = None
+        try:
+            cdn_cost_total = CDNDailyCost.objects.filter(
+                date__gte=last_30_days.date()
+            ).aggregate(total=Sum('cost_usd'))['total']
+            if cdn_cost_total is not None:
+                cdn_cost_per_month = float(cdn_cost_total)
+        except Exception:
+            cdn_cost_per_month = None
 
         return Response(
             data={
@@ -59,7 +90,8 @@ class AssetBankViewSet(viewsets.ViewSet):
                 'storage_used_bytes': used_bytes,
                 'mau': mau,
                 'search_success_rate': search_success_rate,
-                'avg_find_time_minutes': None,
+                'avg_find_time_minutes': avg_find_time_minutes,
+                'cdn_cost_per_month': cdn_cost_per_month,
             },
             status=status.HTTP_200_OK
         )
@@ -122,6 +154,7 @@ class AssetBankViewSet(viewsets.ViewSet):
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         asset_type = (request.query_params.get('asset_type') or '').strip().lower()
+        department = (request.query_params.get('department') or '').strip()
 
         # Default window: last 30 days.
         if not date_from and not date_to:
@@ -156,7 +189,7 @@ class AssetBankViewSet(viewsets.ViewSet):
         if document_ids_by_type is not None:
             metrics_qs = metrics_qs.filter(document_id__in=document_ids_by_type)
 
-        if metrics_qs.exists():
+        if metrics_qs.exists() and not department:
             rows = metrics_qs.values(
                 'document_id',
                 'document__label'
@@ -179,6 +212,8 @@ class AssetBankViewSet(viewsets.ViewSet):
             events_qs = events_qs.filter(timestamp__date__lte=date_to)
         if document_ids_by_type is not None:
             events_qs = events_qs.filter(document_id__in=document_ids_by_type)
+        if department:
+            events_qs = events_qs.filter(user_department=department)
 
         rows = events_qs.values('document_id').annotate(
             downloads=Count('id')
@@ -205,6 +240,140 @@ class AssetBankViewSet(viewsets.ViewSet):
             data={'results': results, 'source': 'raw_events'},
             status=status.HTTP_200_OK
         )
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def asset_detail(self, request):
+        """GET /api/v4/headless/analytics/dashboard/assets/detail/?document_id=123"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_asset_bank,), user=request.user
+        )
+        document_id = int(request.query_params.get('document_id') or 0)
+        days = int(request.query_params.get('days') or 30)
+        if not document_id:
+            return Response({'detail': 'document_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        date_from = timezone.now() - timedelta(days=days)
+
+        document = Document.valid.filter(pk=document_id).first()
+        if not document:
+            return Response({'detail': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        daily_series = list(
+            AssetDailyMetrics.objects.filter(
+                document_id=document_id,
+                date__gte=date_from.date()
+            ).order_by('date').values(
+                'date', 'views', 'downloads', 'shares', 'performance_score',
+                'cdn_bandwidth_gb', 'top_channel'
+            )
+        )
+
+        channel_rows = list(
+            AssetEvent.objects.filter(
+                document_id=document_id,
+                timestamp__gte=date_from
+            ).values(
+                'channel', 'event_type'
+            ).annotate(
+                count=Count('id'),
+                bandwidth_bytes=Sum('bandwidth_bytes')
+            ).order_by('-count')[:50]
+        )
+
+        # Best-effort: search queries that led to a download for this asset.
+        session_ids = list(
+            SearchSession.objects.filter(
+                last_download_event__document_id=document_id,
+                ended_at__gte=date_from
+            ).values_list('pk', flat=True)[:5000]
+        )
+        search_referrers = list(
+            SearchQuery.objects.filter(
+                search_session_id__in=session_ids
+            ).values('query_text').annotate(
+                count=Count('id')
+            ).order_by('-count')[:20]
+        ) if session_ids else []
+
+        return Response(
+            data={
+                'document': {'id': document.pk, 'label': document.label},
+                'daily_series': daily_series,
+                'channels': channel_rows,
+                'search_referrers': search_referrers,
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def distribution_trend(self, request):
+        """GET /api/v4/headless/analytics/dashboard/assets/distribution-trend/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_asset_bank,), user=request.user
+        )
+
+        today = timezone.now().date()
+
+        def month_start(d):
+            return d.replace(day=1)
+
+        def add_months(d, months):
+            year = d.year + (d.month - 1 + months) // 12
+            month = (d.month - 1 + months) % 12 + 1
+            return d.replace(year=year, month=month, day=1)
+
+        def bucket_for_mimetype(mimetype: str) -> str:
+            mimetype = (mimetype or '').lower()
+            if mimetype.startswith('image/'):
+                return 'images'
+            if mimetype.startswith('video/'):
+                return 'videos'
+            if mimetype.startswith('application/') or mimetype.startswith('text/'):
+                return 'documents'
+            return 'other'
+
+        start_month = add_months(month_start(today), -11)
+        months = [add_months(start_month, i) for i in range(12)]
+
+        baseline = {'images': 0, 'videos': 0, 'documents': 0, 'other': 0}
+        for row in DocumentFile.valid.filter(timestamp__date__lt=start_month).values('mimetype').annotate(
+            count=Count('id')
+        ):
+            baseline[bucket_for_mimetype(row.get('mimetype') or '')] += int(row.get('count') or 0)
+
+        monthly_additions = {m.strftime('%Y-%m'): {'images': 0, 'videos': 0, 'documents': 0, 'other': 0} for m in months}
+        for row in DocumentFile.valid.filter(timestamp__date__gte=start_month).annotate(
+            month=TruncMonth('timestamp')
+        ).values('month', 'mimetype').annotate(
+            count=Count('id')
+        ):
+            month = row.get('month')
+            if not month:
+                continue
+            key = month.date().strftime('%Y-%m')
+            if key not in monthly_additions:
+                continue
+            monthly_additions[key][bucket_for_mimetype(row.get('mimetype') or '')] += int(row.get('count') or 0)
+
+        cumulative = dict(baseline)
+        trend = []
+        for m in months:
+            key = m.strftime('%Y-%m')
+            additions = monthly_additions.get(key) or {}
+            for bucket in cumulative.keys():
+                cumulative[bucket] += int(additions.get(bucket) or 0)
+            trend.append(
+                {
+                    'month': key,
+                    'distribution': [
+                        {'type': t, 'count': cumulative[t]} for t in ('images', 'videos', 'documents', 'other')
+                    ]
+                }
+            )
+
+        return Response(data={'trend': trend}, status=status.HTTP_200_OK)
 
     @method_decorator(cache_page(600))
     @action(detail=False, methods=('get',))
@@ -544,6 +713,61 @@ class CampaignPerformanceViewSet(viewsets.ViewSet):
             status=status.HTTP_200_OK
         )
 
+    @action(detail=False, methods=('post',))
+    def engagement(self, request, campaign_id: str = ''):
+        """POST /api/v4/headless/analytics/campaigns/<campaign_id>/engagement/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_campaign_performance,), user=request.user
+        )
+
+        campaign = Campaign.objects.filter(pk=campaign_id).first()
+        if not campaign:
+            return Response(data={'detail': 'campaign not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        def parse_dt(value):
+            if not value:
+                return None
+            text = str(value).strip()
+            if text.endswith('Z'):
+                text = text.replace('Z', '+00:00')
+            try:
+                dt = timezone.datetime.fromisoformat(text)
+                if timezone.is_naive(dt):
+                    dt = timezone.make_aware(dt)
+                return dt
+            except Exception:
+                return None
+
+        duration_seconds = int(request.data.get('duration_seconds') or 0)
+        if duration_seconds <= 0:
+            return Response(data={'detail': 'duration_seconds must be > 0'}, status=status.HTTP_400_BAD_REQUEST)
+
+        session_start = parse_dt(request.data.get('session_start'))
+        session_end = parse_dt(request.data.get('session_end'))
+        if not session_end:
+            session_end = timezone.now()
+        if not session_start:
+            session_start = session_end - timedelta(seconds=duration_seconds)
+
+        # Safety: clamp duration to computed difference if provided.
+        computed = int((session_end - session_start).total_seconds())
+        if computed > 0:
+            duration_seconds = computed
+
+        event = CampaignEngagementEvent.objects.create(
+            campaign=campaign,
+            user=request.user,
+            started_at=session_start,
+            ended_at=session_end,
+            duration_seconds=duration_seconds,
+            metadata={'source': 'frontend', 'path': request.path},
+        )
+
+        return Response(
+            data={'id': event.pk, 'duration_seconds': duration_seconds},
+            status=status.HTTP_201_CREATED
+        )
+
     @method_decorator(cache_page(600))
     @action(detail=False, methods=('get',))
     def dashboard(self, request):
@@ -590,6 +814,38 @@ class CampaignPerformanceViewSet(viewsets.ViewSet):
             ).order_by('-downloads')
         )
 
+        # Baseline: previous campaign timeline for comparison (best-effort).
+        previous_campaign = Campaign.objects.filter(
+            updated_at__lt=campaign.updated_at
+        ).order_by('-updated_at').first()
+        baseline = None
+        if previous_campaign:
+            prev_doc_ids = list(
+                CampaignAsset.objects.filter(campaign=previous_campaign).values_list('document_id', flat=True)
+            )
+            if prev_doc_ids:
+                prev_events_qs = AssetEvent.objects.filter(
+                    document_id__in=prev_doc_ids,
+                    timestamp__date__gte=date_from
+                )
+                baseline_timeline = list(
+                    prev_events_qs.values('timestamp__date').annotate(
+                        views=Count('id', filter=Q(event_type=AssetEvent.EVENT_TYPE_VIEW)),
+                        downloads=Count('id', filter=Q(event_type=AssetEvent.EVENT_TYPE_DOWNLOAD)),
+                    ).order_by('timestamp__date')
+                )
+                baseline = {
+                    'campaign': {'id': str(previous_campaign.id), 'label': previous_campaign.label},
+                    'timeline': baseline_timeline,
+                }
+
+        avg_engagement_minutes = CampaignDailyMetrics.objects.filter(
+            campaign=campaign,
+            date__gte=date_from
+        ).aggregate(avg=Avg('avg_engagement_minutes'))['avg']
+        if avg_engagement_minutes is not None:
+            avg_engagement_minutes = round(float(avg_engagement_minutes), 3)
+
         return Response(
             data={
                 'campaign': {
@@ -598,6 +854,7 @@ class CampaignPerformanceViewSet(viewsets.ViewSet):
                     'status': campaign.status,
                     'assets_count': len(document_ids),
                     'roi': campaign.get_roi(),
+                    'avg_engagement_minutes': avg_engagement_minutes,
                     'cost_amount': campaign.cost_amount,
                     'revenue_amount': campaign.revenue_amount,
                     'currency': campaign.currency,
@@ -605,7 +862,67 @@ class CampaignPerformanceViewSet(viewsets.ViewSet):
                 },
                 'timeline': timeline,
                 'channels': channels,
+                'baseline': baseline,
             },
+            status=status.HTTP_200_OK
+        )
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def geography(self, request):
+        """GET /api/v4/headless/analytics/dashboard/campaigns/geography/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_campaign_performance,), user=request.user
+        )
+        campaign_id = request.query_params.get('campaign_id')
+        days = int(request.query_params.get('days') or 30)
+        date_from_dt = timezone.now() - timedelta(days=days)
+
+        campaign = None
+        if campaign_id:
+            campaign = Campaign.objects.filter(pk=campaign_id).first()
+        if not campaign:
+            campaign = Campaign.objects.order_by('-updated_at').first()
+
+        if not campaign:
+            return Response(data={'campaign': None, 'countries': []}, status=status.HTTP_200_OK)
+
+        document_ids = list(
+            CampaignAsset.objects.filter(campaign=campaign).values_list('document_id', flat=True)
+        )
+        if not document_ids:
+            return Response(data={'campaign': {'id': str(campaign.id)}, 'countries': []}, status=status.HTTP_200_OK)
+
+        user_ids = list(
+            AssetEvent.objects.filter(
+                document_id__in=document_ids,
+                timestamp__gte=date_from_dt,
+                user_id__isnull=False
+            ).values_list('user_id', flat=True).distinct()
+        )
+        if not user_ids:
+            return Response(data={'campaign': {'id': str(campaign.id)}, 'countries': []}, status=status.HTTP_200_OK)
+
+        user_country_map = {}
+        for row in UserSession.objects.filter(
+            user_id__in=user_ids, login_timestamp__gte=date_from_dt
+        ).exclude(geo_country='').order_by('-login_timestamp').values('user_id', 'geo_country'):
+            user_id = row.get('user_id')
+            if user_id in user_country_map:
+                continue
+            user_country_map[user_id] = row.get('geo_country') or ''
+
+        counts = {}
+        for country in user_country_map.values():
+            if not country:
+                continue
+            counts[country] = counts.get(country, 0) + 1
+
+        countries = [{'geo_country': k, 'mau': v} for k, v in counts.items()]
+        countries.sort(key=lambda x: x['mau'], reverse=True)
+
+        return Response(
+            data={'campaign': {'id': str(campaign.id), 'label': campaign.label}, 'countries': countries},
             status=status.HTTP_200_OK
         )
 
@@ -835,6 +1152,73 @@ class SearchAnalyticsViewSet(viewsets.ViewSet):
         )
         return Response(data={'results': list(rows)}, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=('post',))
+    def click(self, request):
+        """POST /api/v4/headless/analytics/track/search/click/
+
+        Records a search result click for CTR and Search Success metrics.
+        """
+        search_query_id = request.data.get('search_query_id')
+        search_session_id = request.data.get('search_session_id')
+        document_id = int(request.data.get('document_id') or 0)
+        click_position = request.data.get('click_position')
+        time_to_click_seconds = request.data.get('time_to_click_seconds')
+
+        if not document_id:
+            return Response({'detail': 'document_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        query = None
+        if search_query_id:
+            try:
+                query = SearchQuery.objects.filter(pk=int(search_query_id)).first()
+            except Exception:
+                query = None
+
+        if not query and search_session_id:
+            try:
+                query = (
+                    SearchQuery.objects.filter(
+                        user=request.user,
+                        search_session_id=search_session_id
+                    )
+                    .order_by('-timestamp')
+                    .first()
+                )
+            except Exception:
+                query = None
+
+        if query and query.user_id and query.user_id != request.user.pk:
+            return Response({'detail': 'not allowed'}, status=status.HTTP_403_FORBIDDEN)
+
+        if query:
+            try:
+                query.was_clicked_result_document_id = document_id
+                query.click_position = int(click_position) if click_position is not None else None
+                query.time_to_click_seconds = int(time_to_click_seconds) if time_to_click_seconds is not None else None
+                query.save(update_fields=('was_clicked_result_document_id', 'click_position', 'time_to_click_seconds'))
+            except Exception:
+                pass
+
+        # Count click as a view event for "success-by-action" and downstream analytics.
+        try:
+            document = Document.valid.filter(pk=document_id).first()
+            if document:
+                track_asset_event(
+                    document=document,
+                    event_type=AssetEvent.EVENT_TYPE_VIEW,
+                    user=request.user,
+                    channel='dam_search',
+                    metadata={
+                        'search_query_id': int(search_query_id) if search_query_id else None,
+                        'search_session_id': str(search_session_id) if search_session_id else None,
+                        'click_position': int(click_position) if click_position is not None else None,
+                    }
+                )
+        except Exception:
+            pass
+
+        return Response({'status': 'ok'}, status=status.HTTP_200_OK)
+
 
 class UserActivityViewSet(viewsets.ViewSet):
     """Headless API: User activity / adoption (Phase 2 / Level 3)."""
@@ -898,15 +1282,174 @@ class UserActivityViewSet(viewsets.ViewSet):
             for (d, r), count in heatmap_buckets.items()
         ]
 
+        geo_data = list(
+            UserSession.objects.filter(login_timestamp__gte=date_from)
+            .exclude(geo_country='')
+            .values('geo_country')
+            .annotate(mau=Count('user_id', distinct=True))
+            .order_by('-mau')
+        )
+
         return Response(
             data={
                 'results': results,  # backwards-compatible
                 'heatmap_data': heatmap_data,
                 'departments': departments,
                 'regions': regions,
+                'geo_data': geo_data,
             },
             status=status.HTTP_200_OK
         )
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def login_patterns(self, request):
+        """GET /api/v4/headless/analytics/dashboard/users/login-patterns/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_user_activity,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        date_from_dt = timezone.now() - timedelta(days=days)
+
+        # DAU series (daily distinct users).
+        dau_rows = list(
+            UserSession.objects.filter(login_timestamp__gte=date_from_dt)
+            .annotate(day=TruncDate('login_timestamp'))
+            .values('day')
+            .annotate(active_users=Count('user_id', distinct=True))
+            .order_by('day')
+        )
+        dau_series = [
+            {'date': row['day'].date().isoformat() if row.get('day') else None, 'active_users': row['active_users']}
+            for row in dau_rows
+        ]
+
+        # Login frequency buckets (by distinct active days per user).
+        distinct_days = (
+            UserSession.objects.filter(login_timestamp__gte=date_from_dt)
+            .annotate(day=TruncDate('login_timestamp'))
+            .values('user_id', 'day')
+            .distinct()
+        )
+        per_user_days = {}
+        for row in distinct_days:
+            user_id = row.get('user_id')
+            per_user_days[user_id] = per_user_days.get(user_id, 0) + 1
+
+        buckets = {'daily': 0, 'weekly': 0, 'monthly': 0, 'rare': 0}
+        for days_active in per_user_days.values():
+            if days_active >= 20:
+                buckets['daily'] += 1
+            elif days_active >= 8:
+                buckets['weekly'] += 1
+            elif days_active >= 2:
+                buckets['monthly'] += 1
+            else:
+                buckets['rare'] += 1
+
+        return Response(
+            data={
+                'window_days': days,
+                'dau_series': dau_series,
+                'frequency_buckets': buckets,
+                'unique_users': len(per_user_days),
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @method_decorator(cache_page(3600))
+    @action(detail=False, methods=('get',))
+    def cohorts(self, request):
+        """GET /api/v4/headless/analytics/dashboard/users/cohorts/
+
+        Cohorts by first-login week, retention measured by weekly activity.
+        """
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_user_activity,), user=request.user
+        )
+        cohort_weeks = int(request.query_params.get('cohort_weeks') or 8)
+        retention_weeks = int(request.query_params.get('retention_weeks') or 8)
+
+        now = timezone.now()
+        start = now - timedelta(weeks=cohort_weeks + retention_weeks + 1)
+
+        sessions = list(
+            UserSession.objects.filter(login_timestamp__gte=start)
+            .values('user_id', 'login_timestamp')
+        )
+        if not sessions:
+            return Response({'cohorts': []}, status=status.HTTP_200_OK)
+
+        def week_start(dt):
+            # ISO week start (Monday).
+            d = dt.date()
+            return d - timedelta(days=d.weekday())
+
+        first_week = {}
+        active_weeks = {}
+        for row in sessions:
+            user_id = row['user_id']
+            ts = row['login_timestamp']
+            w = week_start(ts)
+            if user_id not in first_week or w < first_week[user_id]:
+                first_week[user_id] = w
+            active_weeks.setdefault(user_id, set()).add(w)
+
+        # Build cohort map: cohort_week -> users
+        cohort_map = {}
+        for user_id, w0 in first_week.items():
+            cohort_map.setdefault(w0, set()).add(user_id)
+
+        cohort_rows = []
+        for cohort_week in sorted(cohort_map.keys(), reverse=True)[:cohort_weeks]:
+            users = cohort_map[cohort_week]
+            cohort_size = len(users)
+            if not cohort_size:
+                continue
+            retention = []
+            for i in range(retention_weeks):
+                target_week = cohort_week + timedelta(weeks=i)
+                active = 0
+                for user_id in users:
+                    if target_week in active_weeks.get(user_id, set()):
+                        active += 1
+                retention.append(
+                    {
+                        'week_index': i,
+                        'week_start': target_week.isoformat(),
+                        'active_users': active,
+                        'retention_rate': round((active / cohort_size) * 100, 2) if cohort_size else 0.0,
+                    }
+                )
+
+            cohort_rows.append(
+                {
+                    'cohort_week_start': cohort_week.isoformat(),
+                    'cohort_size': cohort_size,
+                    'retention': retention,
+                }
+            )
+
+        return Response({'cohorts': cohort_rows}, status=status.HTTP_200_OK)
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def feature_adoption(self, request):
+        """GET /api/v4/headless/analytics/dashboard/users/feature-adoption/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_user_activity,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now() - timedelta(days=days)
+
+        rows = FeatureUsage.objects.filter(
+            timestamp__gte=date_from
+        ).values('feature_name').annotate(
+            total=Count('id'),
+            unique_users=Count('user_id', distinct=True)
+        ).order_by('-total')[:100]
+
+        return Response(data={'results': list(rows)}, status=status.HTTP_200_OK)
 
 
 class ApprovalAnalyticsViewSet(viewsets.ViewSet):
@@ -951,6 +1494,324 @@ class ApprovalAnalyticsViewSet(viewsets.ViewSet):
                 'total_approved': total_approved,
                 'total_rejected': rejected_qs.count(),
                 'rejection_reasons': rejection_reasons,
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class DistributionAnalyticsViewSet(viewsets.ViewSet):
+    """Headless API: Distribution analytics (Release 3 foundation)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def dashboard(self, request):
+        """GET /api/v4/headless/analytics/dashboard/distribution/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_distribution,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 7)
+        date_from = timezone.now() - timedelta(days=days)
+
+        qs = DistributionEvent.objects.filter(occurred_at__gte=date_from)
+
+        # Matrix: last status per channel.
+        channels = list(qs.values_list('channel', flat=True).distinct())
+        matrix = []
+        for channel in channels:
+            last = qs.filter(channel=channel).order_by('-occurred_at').first()
+            if not last:
+                continue
+            issues = qs.filter(channel=channel, status=DistributionEvent.STATUS_ERROR).count()
+            matrix.append(
+                {
+                    'channel': channel,
+                    'status': last.status,
+                    'last_sync': last.occurred_at,
+                    'events': qs.filter(channel=channel).count(),
+                    'issues': issues,
+                }
+            )
+
+        # Conversion success rate (converted events).
+        conv_qs = qs.filter(event_type=DistributionEvent.EVENT_TYPE_CONVERTED)
+        conv_rows = list(
+            conv_qs.values('channel').annotate(
+                total=Count('id'),
+                ok=Count('id', filter=Q(status=DistributionEvent.STATUS_OK)),
+                error=Count('id', filter=Q(status=DistributionEvent.STATUS_ERROR)),
+            ).order_by('-total')
+        )
+        conversion = []
+        for row in conv_rows:
+            total = int(row.get('total') or 0)
+            ok = int(row.get('ok') or 0)
+            conversion.append(
+                {
+                    'channel': row['channel'],
+                    'success_rate': round((ok / total) * 100, 2) if total else None,
+                    'total': total,
+                    'failed': int(row.get('error') or 0),
+                }
+            )
+
+        # CDN performance (delivered events, aggregated).
+        cdn_qs = qs.filter(event_type=DistributionEvent.EVENT_TYPE_DELIVERED)
+        cdn_rows = list(
+            cdn_qs.values('channel').annotate(
+                bandwidth_bytes=Sum('bandwidth_bytes'),
+                avg_latency_ms=Avg('latency_ms'),
+                events=Count('id'),
+            ).order_by('-bandwidth_bytes')
+        )
+        cdn_perf = []
+        for row in cdn_rows:
+            bw = int(row.get('bandwidth_bytes') or 0)
+            cdn_perf.append(
+                {
+                    'channel': row['channel'],
+                    'bandwidth_gb': round(float(bw) / (1024 ** 3), 3) if bw else 0.0,
+                    'avg_latency_ms': int(row['avg_latency_ms']) if row.get('avg_latency_ms') is not None else None,
+                    'events': int(row.get('events') or 0),
+                }
+            )
+
+        return Response(
+            data={
+                'window_days': days,
+                'matrix': matrix,
+                'conversion_success': conversion,
+                'cdn_performance': cdn_perf,
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=('post',))
+    def ingest(self, request):
+        """POST /api/v4/headless/analytics/ingest/distribution-events/
+
+        Generic ingestion endpoint for Website/CMS + CDN vendors (Release 3).
+        """
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_distribution,), user=request.user
+        )
+        channel = (request.data.get('channel') or '').strip()
+        events = request.data.get('events') or []
+        if not channel:
+            return Response({'detail': 'channel is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(events, list) or not events:
+            return Response({'detail': 'events must be a non-empty list'}, status=status.HTTP_400_BAD_REQUEST)
+
+        created = 0
+        for ev in events[:1000]:
+            try:
+                occurred_at = ev.get('occurred_at') or ev.get('timestamp')
+                if occurred_at:
+                    occurred_at_dt = timezone.datetime.fromisoformat(str(occurred_at).replace('Z', '+00:00'))
+                else:
+                    occurred_at_dt = timezone.now()
+
+                DistributionEvent.objects.create(
+                    channel=channel,
+                    event_type=ev.get('event_type') or DistributionEvent.EVENT_TYPE_SYNCED,
+                    status=ev.get('status') or DistributionEvent.STATUS_OK,
+                    document_id=ev.get('document_id') or None,
+                    campaign_id=ev.get('campaign_id') or None,
+                    views=ev.get('views'),
+                    clicks=ev.get('clicks'),
+                    conversions=ev.get('conversions'),
+                    revenue_amount=ev.get('revenue_amount'),
+                    currency=ev.get('currency') or '',
+                    bandwidth_bytes=ev.get('bandwidth_bytes'),
+                    latency_ms=ev.get('latency_ms'),
+                    external_id=ev.get('external_id') or '',
+                    occurred_at=occurred_at_dt,
+                    metadata=ev.get('metadata') or {},
+                )
+                created += 1
+            except Exception:
+                continue
+
+        try:
+            notify_analytics_refresh(reason='distribution_ingest')
+        except Exception:
+            pass
+
+        return Response({'created': created}, status=status.HTTP_200_OK)
+
+
+class ContentIntelligenceViewSet(viewsets.ViewSet):
+    """Headless API: Content Intelligence MVP (Release 3 foundation)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def content_gaps(self, request):
+        """GET /api/v4/headless/analytics/dashboard/content-intel/content-gaps/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_content_intelligence,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now() - timedelta(days=days)
+
+        qs = SearchQuery.objects.filter(timestamp__gte=date_from, results_count=0)
+        rows = list(
+            qs.values('query_text').annotate(count=Count('id')).order_by('-count')[:50]
+        )
+        recommendations = []
+        for row in rows[:20]:
+            q = row['query_text']
+            recommendations.append(
+                {
+                    'query': q,
+                    'count': int(row.get('count') or 0),
+                    'recommendation': 'Проверьте taxonomy/синонимы и добавьте релевантные теги/metadata. Если контента нет — поставить задачу на производство.',
+                }
+            )
+
+        return Response(
+            data={'window_days': days, 'top_null_queries': rows, 'recommendations': recommendations},
+            status=status.HTTP_200_OK
+        )
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def metadata_compliance(self, request):
+        """GET /api/v4/headless/analytics/dashboard/content-intel/compliance/metadata/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_content_intelligence,), user=request.user
+        )
+        limit = int(request.query_params.get('limit') or 50)
+        rows = list(
+            AnalyticsAlert.objects.filter(alert_type='metadata_incomplete')
+            .order_by('-created_at')[:limit]
+            .values('id', 'severity', 'title', 'message', 'document_id', 'created_at', 'metadata')
+        )
+        return Response({'results': rows}, status=status.HTTP_200_OK)
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def timeseries(self, request):
+        """GET /api/v4/headless/analytics/dashboard/approvals/timeseries/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_user_activity,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 90)
+        date_from = timezone.now() - timedelta(days=days)
+
+        qs = ApprovalWorkflowEvent.objects.filter(submitted_at__gte=date_from)
+
+        rows = list(
+            qs.annotate(day=TruncDate('submitted_at')).values('day').annotate(
+                submitted=Count('id'),
+                approved=Count('id', filter=Q(status=ApprovalWorkflowEvent.STATUS_APPROVED)),
+                rejected=Count('id', filter=Q(status=ApprovalWorkflowEvent.STATUS_REJECTED)),
+                first_time_right=Count(
+                    'id',
+                    filter=Q(status=ApprovalWorkflowEvent.STATUS_APPROVED, attempt_number=1)
+                ),
+                avg_cycle=Avg('approval_time_days', filter=Q(approval_time_days__isnull=False)),
+            ).order_by('day')
+        )
+
+        out = []
+        for row in rows:
+            approved = int(row.get('approved') or 0)
+            ftr = int(row.get('first_time_right') or 0)
+            ftr_rate = round((ftr / approved) * 100, 2) if approved else None
+            avg_cycle = row.get('avg_cycle')
+            if avg_cycle is not None:
+                avg_cycle = round(float(avg_cycle), 3)
+            out.append(
+                {
+                    'date': row['day'].date().isoformat() if row.get('day') else None,
+                    'submitted': int(row.get('submitted') or 0),
+                    'approved': approved,
+                    'rejected': int(row.get('rejected') or 0),
+                    'first_time_right_rate': ftr_rate,
+                    'approval_cycle_time_days': avg_cycle,
+                }
+            )
+
+        return Response({'results': out}, status=status.HTTP_200_OK)
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def recommendations(self, request):
+        """GET /api/v4/headless/analytics/dashboard/approvals/recommendations/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_user_activity,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now() - timedelta(days=days)
+
+        qs = ApprovalWorkflowEvent.objects.filter(submitted_at__gte=date_from)
+        approved_qs = qs.filter(status=ApprovalWorkflowEvent.STATUS_APPROVED, approval_time_days__isnull=False)
+        rejected_qs = qs.filter(status=ApprovalWorkflowEvent.STATUS_REJECTED)
+
+        avg_cycle = approved_qs.aggregate(avg=Avg('approval_time_days'))['avg']
+        avg_cycle = round(float(avg_cycle), 3) if avg_cycle is not None else None
+
+        total_approved = approved_qs.count()
+        ftr = approved_qs.filter(attempt_number=1).count()
+        ftr_rate = round((ftr / total_approved) * 100, 2) if total_approved else None
+
+        top_reasons = list(
+            rejected_qs.exclude(rejection_reason='').values('rejection_reason').annotate(
+                count=Count('id')
+            ).order_by('-count')[:5]
+        )
+
+        recs = []
+        if avg_cycle is not None and avg_cycle > 2.5:
+            recs.append(
+                {
+                    'type': 'cycle_time',
+                    'severity': 'warning',
+                    'title': 'Высокое среднее время согласования',
+                    'message': f'Approval Cycle Time = {avg_cycle} дней. Рекомендуется добавить SLA по ролям, автоматизировать pre-checks и убрать ручные step-ы без ценности.',
+                }
+            )
+        if ftr_rate is not None and ftr_rate < 70:
+            recs.append(
+                {
+                    'type': 'first_time_right',
+                    'severity': 'warning',
+                    'title': 'Низкий First-Time-Right Approval Rate',
+                    'message': f'FTR = {ftr_rate}%. Рекомендуется внедрить чеклист перед отправкой на согласование и шаблоны требований к ассетам (metadata, размеры, бренд).',
+                }
+            )
+
+        for row in top_reasons:
+            reason = row.get('rejection_reason') or ''
+            count = int(row.get('count') or 0)
+            msg = 'Добавьте гайдлайн/шаблон и автоматическую проверку перед отправкой.'
+            low = reason.lower()
+            if 'метад' in low or 'metadata' in low:
+                msg = 'Включите обязательность полей metadata (schema), автозаполнение и подсказки. Добавьте alert “metadata completeness”.'
+            elif 'логотип' in low or 'brand' in low:
+                msg = 'Добавьте бренд-чеклист и (позже) CV compliance проверки; сейчас — минимум: metadata флаг “brand_reviewed”.'
+            elif 'размер' in low or 'format' in low:
+                msg = 'Добавьте пресеты каналов (target formats) и автоконвертацию; показывайте требования перед upload.'
+
+            recs.append(
+                {
+                    'type': 'rejection_reason',
+                    'severity': 'info',
+                    'title': f'Топ причина отклонений: “{reason}”',
+                    'message': f'{count} случаев за {days} дней. {msg}',
+                    'metadata': {'reason': reason, 'count': count},
+                }
+            )
+
+        return Response(
+            data={
+                'window_days': days,
+                'approval_cycle_time_days': avg_cycle,
+                'first_time_right_rate': ftr_rate,
+                'top_rejection_reasons': top_reasons,
+                'recommendations': recs,
             },
             status=status.HTTP_200_OK
         )

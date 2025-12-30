@@ -16,24 +16,69 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/DashboardPage.vue'),
     meta: { requiresAuth: true }
   },
+  // ---------------------------------------------------------------------------
+  // Analytics (Single Entry Point + nested dashboards)
+  // ---------------------------------------------------------------------------
   {
-    path: '/analytics/asset-bank',
-    name: 'analytics-asset-bank',
-    component: () => import('@/pages/analytics/AssetBankPage.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: 'Analytics — Asset Bank' }
+    path: '/analytics',
+    component: () => import('@/layouts/AnalyticsLayout.vue'),
+    meta: { requiresAuth: true, title: 'Аналитика' },
+    children: [
+      { path: '', redirect: '/analytics/overview' },
+      {
+        path: 'overview',
+        name: 'analytics-overview',
+        component: () => import('@/pages/analytics/AssetBankPage.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true, title: 'Аналитика — Обзор' }
+      },
+      { path: 'marketing', redirect: '/analytics/marketing/campaigns' },
+      {
+        path: 'marketing/campaigns',
+        name: 'analytics-marketing-campaigns',
+        component: () => import('@/pages/analytics/CampaignPerformancePage.vue'),
+        meta: { requiresAuth: true, title: 'Аналитика — Кампании' }
+      },
+      {
+        path: 'marketing/roi',
+        name: 'analytics-marketing-roi',
+        component: () => import('@/pages/analytics/ROIPage.vue'),
+        meta: { requiresAuth: true, title: 'Аналитика — ROI' }
+      },
+      {
+        path: 'marketing/distribution',
+        name: 'analytics-marketing-distribution',
+        component: () => import('@/pages/analytics/DistributionAnalyticsPage.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true, title: 'Аналитика — Дистрибуция' }
+      },
+      {
+        path: 'content-ai',
+        name: 'analytics-content-ai',
+        component: () => import('@/pages/analytics/ContentIntelligencePage.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true, title: 'Аналитика — Content AI' }
+      },
+      { path: 'operations', redirect: '/analytics/operations/users' },
+      {
+        path: 'operations/users',
+        name: 'analytics-operations-users',
+        component: () => import('@/pages/analytics/UserActivityPage.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true, title: 'Аналитика — Пользователи' }
+      },
+      {
+        path: 'operations/approvals',
+        name: 'analytics-operations-approvals',
+        component: () => import('@/pages/analytics/ApprovalAnalyticsPage.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true, title: 'Аналитика — Согласования' }
+      },
+    ]
   },
-  {
-    path: '/analytics/campaign-performance',
-    name: 'analytics-campaign-performance',
-    component: () => import('@/pages/analytics/CampaignPerformancePage.vue'),
-    meta: { requiresAuth: true, title: 'Analytics — Campaign Performance' }
-  },
-  {
-    path: '/analytics/roi',
-    name: 'analytics-roi',
-    component: () => import('@/pages/analytics/ROIPage.vue'),
-    meta: { requiresAuth: true, title: 'Analytics — ROI' }
-  },
+  // Legacy redirects (backward compatibility)
+  { path: '/analytics/asset-bank', redirect: '/analytics/overview' },
+  { path: '/analytics/campaign-performance', redirect: '/analytics/marketing/campaigns' },
+  { path: '/analytics/roi', redirect: '/analytics/marketing/roi' },
+  { path: '/analytics/distribution', redirect: '/analytics/marketing/distribution' },
+  { path: '/analytics/content-intelligence', redirect: '/analytics/content-ai' },
+  { path: '/analytics/user-activity', redirect: '/analytics/operations/users' },
+  { path: '/analytics/approvals', redirect: '/analytics/operations/approvals' },
   {
     path: '/login',
     name: 'login',

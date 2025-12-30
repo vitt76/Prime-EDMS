@@ -19,6 +19,7 @@ try:
     from django.urls import path
 
     from mayan.apps.notifications.consumers import NotificationConsumer
+    from mayan.apps.analytics.consumers import AnalyticsDashboardConsumer
 except Exception:
     # Fallback: allow the project to run without channels installed.
     application = django_asgi_app
@@ -30,6 +31,7 @@ else:
                 URLRouter(
                     [
                         path('ws/notifications/', NotificationConsumer.as_asgi()),
+                        path('ws/analytics/', AnalyticsDashboardConsumer.as_asgi()),
                     ]
                 )
             ),

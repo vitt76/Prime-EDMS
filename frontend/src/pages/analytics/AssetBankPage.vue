@@ -1,15 +1,11 @@
 <template>
-  <div class="min-h-screen bg-neutral-50">
-    <div class="container mx-auto px-4 py-8">
-      <div class="mb-6">
-        <h1 class="text-2xl font-bold text-neutral-900">Analytics</h1>
-        <p class="text-neutral-600">Asset Bank (Phase 1)</p>
-      </div>
+  <div class="container mx-auto px-4 py-6">
 
       <FilterBar
         class="mb-6"
         :date-range="analyticsStore.filters.dateRange"
         :asset-type="analyticsStore.filters.assetType"
+        :department="analyticsStore.filters.department"
         @apply="handleApplyFilters"
         @clear="handleClearFilters"
       />
@@ -25,9 +21,13 @@
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <AssetDistributionChart
           :distribution="analyticsStore.assetDistribution"
+          :trend="analyticsStore.assetDistributionTrend"
           @select-type="handleSelectAssetType"
         />
-        <MostDownloadedAssetsTable :rows="analyticsStore.mostDownloadedAssets" />
+        <MostDownloadedAssetsTable
+          :rows="analyticsStore.mostDownloadedAssets"
+          @select="handleSelectAsset"
+        />
       </div>
 
       <div class="mt-6">
@@ -57,14 +57,21 @@
       <div class="mt-6">
         <AlertsList :rows="analyticsStore.assetBankAlerts" />
       </div>
-    </div>
   </div>
+
+  <AssetDetailModal
+    :open="assetDetailModalOpen"
+    :document-id="selectedAsset?.document_id ?? null"
+    :document-label="selectedAsset?.document__label ?? null"
+    @close="assetDetailModalOpen = false"
+  />
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 import AssetDistributionChart from '@/components/Analytics/AssetDistributionChart.vue'
+import AssetDetailModal from '@/components/Analytics/AssetDetailModal.vue'
 import AssetReuseMetricsChart from '@/components/Analytics/AssetReuseMetricsChart.vue'
 import AlertsList from '@/components/Analytics/AlertsList.vue'
 import FilterBar from '@/components/Analytics/FilterBar.vue'
@@ -73,8 +80,12 @@ import StorageTrendsChart from '@/components/Analytics/StorageTrendsChart.vue'
 import TopMetricsCard from '@/components/Analytics/TopMetricsCard.vue'
 import UserAdoptionHeatMap from '@/components/Analytics/UserAdoptionHeatMap.vue'
 import { useAnalyticsStore } from '@/stores/analyticsStore'
+import type { MostDownloadedAssetRow } from '@/stores/analyticsStore'
 
 const analyticsStore = useAnalyticsStore()
+const selectedAsset = ref<MostDownloadedAssetRow | null>(null)
+const assetDetailModalOpen = ref(false)
+let ws: WebSocket | null = null
 
 async function refreshAll(): Promise<void> {
   await analyticsStore.fetchAssetBankAll()
@@ -83,15 +94,18 @@ async function refreshAll(): Promise<void> {
 async function handleApplyFilters(payload: {
   dateRange: [string, string] | null
   assetType: 'images' | 'videos' | 'documents' | 'other' | null
+  department: string | null
 }): Promise<void> {
   analyticsStore.setDateRange(payload.dateRange)
   analyticsStore.setAssetType(payload.assetType)
+  analyticsStore.setDepartment(payload.department)
   await analyticsStore.applyFilters()
 }
 
 async function handleClearFilters(): Promise<void> {
   analyticsStore.setDateRange(null)
   analyticsStore.setAssetType(null)
+  analyticsStore.setDepartment(null)
   await analyticsStore.applyFilters()
 }
 
@@ -100,8 +114,40 @@ async function handleSelectAssetType(type: 'images' | 'videos' | 'documents' | '
   await analyticsStore.applyFilters()
 }
 
+function handleSelectAsset(row: MostDownloadedAssetRow): void {
+  selectedAsset.value = row
+  assetDetailModalOpen.value = true
+}
+
 onMounted(async () => {
   await refreshAll()
+
+  // Real-time updates (best-effort). Requires backend Channels route: /ws/analytics/
+  try {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    ws = new WebSocket(`${protocol}://${window.location.host}/ws/analytics/`)
+    ws.onmessage = async (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}')
+        if (payload?.type === 'refresh' && !analyticsStore.isLoading) {
+          await refreshAll()
+        }
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    ws = null
+  }
+})
+
+onUnmounted(() => {
+  try {
+    ws?.close()
+  } catch {
+    // ignore
+  }
+  ws = null
 })
 </script>
 

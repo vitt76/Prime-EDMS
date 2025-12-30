@@ -2,7 +2,7 @@
   <Card padding="lg">
     <div class="flex items-center justify-between gap-4 mb-4">
       <div>
-        <h2 class="text-lg font-semibold text-neutral-900">Asset Bank</h2>
+        <h2 class="text-lg font-semibold text-neutral-900">Медиатека</h2>
         <p v-if="lastUpdated" class="text-xs text-neutral-500">
           Обновлено: {{ formatDateTime(lastUpdated) }}
         </p>
@@ -16,44 +16,48 @@
       </button>
     </div>
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
       <div class="rounded-lg border border-neutral-200 p-4">
-        <div class="text-xs text-neutral-500 mb-1">Total Assets</div>
-        <div class="text-2xl font-bold text-neutral-900">
+        <div class="text-xs text-neutral-500 mb-1">Всего файлов</div>
+        <div class="text-3xl font-semibold text-neutral-900 tracking-tight">
           {{ metrics?.total_assets ?? '—' }}
         </div>
       </div>
 
       <div class="rounded-lg border border-neutral-200 p-4">
-        <div class="text-xs text-neutral-500 mb-1">Storage Used</div>
-        <div class="text-2xl font-bold text-neutral-900">
+        <div class="text-xs text-neutral-500 mb-1">Занято места</div>
+        <div class="text-3xl font-semibold text-neutral-900 tracking-tight">
           {{ metrics ? formatBytes(metrics.storage_used_bytes) : '—' }}
         </div>
       </div>
 
       <div class="rounded-lg border border-neutral-200 p-4">
-        <div class="text-xs text-neutral-500 mb-1">MAU</div>
-        <div class="text-2xl font-bold text-neutral-900">
+        <div class="text-xs text-neutral-500 mb-1">Активные (MAU)</div>
+        <div class="text-3xl font-semibold text-neutral-900 tracking-tight">
           {{ metrics?.mau ?? '—' }}
-        </div>
-        <div v-if="metrics && metrics.mau === 0" class="text-xs text-neutral-500 mt-1">
-          (Phase 2)
         </div>
       </div>
 
       <div class="rounded-lg border border-neutral-200 p-4">
-        <div class="text-xs text-neutral-500 mb-1">Search Success</div>
-        <div class="text-2xl font-bold text-neutral-900">
+        <div class="text-xs text-neutral-500 mb-1">Успешность поиска</div>
+        <div class="text-3xl font-semibold text-neutral-900 tracking-tight">
           {{ metrics ? formatPercent(metrics.search_success_rate) : '—' }}
         </div>
-        <div v-if="metrics && metrics.search_success_rate === 0" class="text-xs text-neutral-500 mt-1">
-          (Phase 2)
+      </div>
+
+      <div class="rounded-lg border border-neutral-200 p-4">
+        <div class="text-xs text-neutral-500 mb-1">Ср. время поиска</div>
+        <div class="text-3xl font-semibold text-neutral-900 tracking-tight">
+          {{ metrics?.avg_find_time_minutes != null ? `${metrics.avg_find_time_minutes.toFixed(1)} мин` : '—' }}
         </div>
       </div>
-    </div>
 
-    <div v-if="error" class="mt-4 text-sm text-red-600">
-      {{ error }}
+      <div class="rounded-lg border border-neutral-200 p-4">
+        <div class="text-xs text-neutral-500 mb-1">CDN: стоимость/мес</div>
+        <div class="text-3xl font-semibold text-neutral-900 tracking-tight">
+          {{ metrics?.cdn_cost_per_month != null ? formatMoney(metrics.cdn_cost_per_month) : '—' }}
+        </div>
+      </div>
     </div>
   </Card>
 </template>
@@ -88,6 +92,11 @@ function formatBytes(bytes: number): string {
 function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return '—'
   return `${value.toFixed(1)}%`
+}
+
+function formatMoney(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'USD' }).format(value)
 }
 
 function formatDateTime(date: Date): string {

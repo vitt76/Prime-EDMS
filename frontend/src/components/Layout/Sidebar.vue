@@ -209,9 +209,7 @@ const ShareIcon = {
 const navigationItems = [
   { path: '/', label: 'Главная', icon: DashboardIcon },
   { path: '/dam', label: 'Галерея', icon: DAMIcon },
-  { path: '/analytics/asset-bank', label: 'Аналитика', icon: AnalyticsIcon },
-  { path: '/analytics/campaign-performance', label: 'Кампании', icon: AnalyticsIcon },
-  { path: '/analytics/roi', label: 'ROI', icon: AnalyticsIcon },
+  { path: '/analytics', label: 'Аналитика', icon: AnalyticsIcon },
   { path: '/sharing', label: 'Распространение', icon: DistributionIcon },
   { path: '/settings', label: 'Настройки', icon: SettingsIcon }
 ]

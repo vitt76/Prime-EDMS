@@ -1,23 +1,23 @@
 <template>
   <Card padding="lg">
     <div class="flex items-center justify-between gap-4 mb-4">
-      <h3 class="text-base font-semibold text-neutral-900">Top Performing Assets</h3>
-      <div class="text-xs text-neutral-500">with sparklines</div>
+      <h3 class="text-base font-semibold text-neutral-900">ТОП файлов кампании</h3>
+      <div class="text-xs text-neutral-500">7-дневный тренд</div>
     </div>
 
     <div class="overflow-auto border border-neutral-200 rounded-lg">
       <table class="min-w-full text-sm">
         <thead class="bg-neutral-50">
           <tr class="text-left">
-            <th class="px-3 py-2 font-semibold text-neutral-700">Asset</th>
-            <th class="px-3 py-2 font-semibold text-neutral-700">Downloads</th>
-            <th class="px-3 py-2 font-semibold text-neutral-700">Views</th>
-            <th class="px-3 py-2 font-semibold text-neutral-700">Trend (7d)</th>
+            <th class="px-3 py-2 font-semibold text-neutral-700">Файл</th>
+            <th class="px-3 py-2 font-semibold text-neutral-700">Скачивания</th>
+            <th class="px-3 py-2 font-semibold text-neutral-700">Просмотры</th>
+            <th class="px-3 py-2 font-semibold text-neutral-700">Тренд (7 дней)</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="rows.length === 0">
-            <td class="px-3 py-4 text-neutral-500" colspan="4">Нет данных</td>
+            <td class="px-3 py-4 text-neutral-500" colspan="4">Нет данных за выбранный период</td>
           </tr>
           <tr
             v-for="row in rows"

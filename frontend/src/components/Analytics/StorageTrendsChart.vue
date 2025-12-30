@@ -2,18 +2,23 @@
   <Card padding="lg">
     <div class="flex items-center justify-between gap-4 mb-4">
       <div>
-        <h3 class="text-base font-semibold text-neutral-900">Storage Trends</h3>
+        <h3 class="text-base font-semibold text-neutral-900">Динамика хранилища</h3>
         <p class="text-xs text-neutral-500">история (12 мес) + прогноз (6 мес)</p>
       </div>
       <div
         v-if="isNearLimit"
         class="text-xs px-2 py-1 rounded-md bg-red-50 text-red-700 border border-red-200"
       >
-        Risk: storage nearing limit
+        Риск: приближение к лимиту
       </div>
     </div>
 
-    <div v-if="labels.length === 0" class="text-sm text-neutral-500">Нет данных</div>
+    <div v-if="labels.length === 0" class="py-10 text-center text-neutral-500">
+      <svg class="w-10 h-10 mx-auto text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-4M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      </svg>
+      <div class="mt-3 text-sm">Нет данных за выбранный период</div>
+    </div>
     <div v-else class="h-72">
       <canvas ref="canvasRef" aria-label="Storage trends chart" />
     </div>
@@ -68,6 +73,12 @@ async function renderChart(): Promise<void> {
     'documents',
     'other',
   ]
+  const typeLabels: Record<string, string> = {
+    images: 'Изображения',
+    videos: 'Видео',
+    documents: 'Документы',
+    other: 'Другое',
+  }
   const colors: Record<string, string> = {
     images: 'rgba(59, 130, 246, 0.35)',
     videos: 'rgba(16, 185, 129, 0.35)',
@@ -89,7 +100,7 @@ async function renderChart(): Promise<void> {
     const foreData = (props.forecast || []).map((p) => p.by_type[t] ?? 0)
 
     datasets.push({
-      label: `${t} (history)`,
+      label: `${typeLabels[t] || t} (история)`,
       data: [...histData, ...new Array(foreLen).fill(null)],
       backgroundColor: color,
       borderColor,
@@ -100,7 +111,7 @@ async function renderChart(): Promise<void> {
     })
 
     datasets.push({
-      label: `${t} (forecast)`,
+      label: `${typeLabels[t] || t} (прогноз)`,
       data: [...new Array(histLen).fill(null), ...foreData],
       backgroundColor: forecastFill,
       borderColor,
@@ -116,7 +127,7 @@ async function renderChart(): Promise<void> {
   const totalHist = (props.historical || []).map((p) => p.total_gb ?? 0)
   const totalFore = (props.forecast || []).map((p) => p.total_gb ?? 0)
   datasets.push({
-    label: 'Total (history)',
+    label: 'Итого (история)',
     data: [...totalHist, ...new Array(foreLen).fill(null)],
     borderColor: '#111827',
     backgroundColor: 'transparent',
@@ -126,7 +137,7 @@ async function renderChart(): Promise<void> {
     yAxisID: 'y',
   })
   datasets.push({
-    label: 'Total (forecast)',
+    label: 'Итого (прогноз)',
     data: [...new Array(histLen).fill(null), ...totalFore],
     borderColor: '#111827',
     borderDash: [6, 6],
