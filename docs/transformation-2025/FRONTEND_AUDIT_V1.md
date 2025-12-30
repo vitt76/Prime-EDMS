@@ -1,7 +1,8 @@
 # FRONTEND_AUDIT_V1.md
 
 **Дата аудита:** 2025-12-09  
-**Версия:** 1.0  
+**Версия:** 2.0  
+**Последнее обновление:** 2025-12-23 (добавлены модули Analytics и Notifications, обновлена архитектура интеграции с бэкендом, добавлена поддержка WebSocket)  
 **Статус:** Полный аудит кодовой базы фронтенда
 
 ---
@@ -21,10 +22,13 @@
 | **UI Framework** | Tailwind CSS | 3.4.1 | Utility-first CSS framework |
 | **UI Components** | Headless UI | 1.7.16 | Unstyled accessible components |
 | **Icons** | Heroicons | 2.1.1 | SVG-иконки |
-| **Charts** | Chart.js | 4.4.1 | Визуализация данных |
+| **Charts** | Chart.js | 4.4.1 | Визуализация данных (аналитика, дашборды) |
+| **PDF Generation** | jsPDF | 2.5.2 | Генерация PDF-отчетов |
+| **PDF Tables** | jsPDF AutoTable | 3.8.4 | Таблицы в PDF |
 | **Testing** | Vitest | 4.0.14 | Unit-тесты |
 | **E2E Testing** | Playwright | 1.41.2 | End-to-end тесты |
 | **Storybook** | 8.4.5 | Документация компонентов |
+| **Vue Utilities** | @vueuse/core | 10.7.2 | Composition API утилиты |
 
 ### 1.2. Структура папок
 
@@ -32,6 +36,7 @@
 frontend/src/
 ├── components/          # Vue-компоненты
 │   ├── admin/          # Админ-панель компоненты
+│   ├── Analytics/      # Компоненты аналитики (Asset Bank, Campaigns, ROI, User Activity)
 │   ├── asset/          # Компоненты для работы с активами
 │   ├── collections/    # Коллекции и папки
 │   ├── Common/         # Переиспользуемые UI-компоненты
@@ -39,15 +44,27 @@ frontend/src/
 │   ├── Distribution/    # Распространение и публикации
 │   ├── Layout/         # Layout-компоненты (Header, Sidebar)
 │   ├── modals/         # Модальные окна
+│   ├── Notifications/  # Компоненты центра уведомлений (Bell, Popover, Card)
 │   └── workflow/       # Workflow-компоненты
 ├── composables/        # Vue Composition API hooks
-├── layouts/            # Layout-обертки (AdminLayout)
+├── layouts/            # Layout-обертки (AdminLayout, AnalyticsLayout)
 ├── pages/              # Страницы приложения (route components)
+│   ├── analytics/      # Страницы аналитики (AssetBankPage, CampaignPerformancePage, ROIPage, etc.)
+│   ├── admin/          # Страницы админ-панели
+│   └── collections/    # Страницы коллекций
 ├── router/             # Конфигурация роутинга
 ├── services/           # Бизнес-логика и API-интеграция
-│   └── adapters/      # Адаптеры для трансформации данных
+│   ├── adapters/      # Адаптеры для трансформации данных
+│   ├── analyticsService.ts    # Сервис для аналитики (30+ методов)
+│   ├── notificationService.ts # Сервис для уведомлений (8 методов)
+│   └── websocketService.ts    # WebSocket-сервис для real-time уведомлений
 ├── stores/             # Pinia stores
+│   ├── analyticsStore.ts    # Store для аналитики (Asset Bank, Campaigns, ROI)
+│   ├── notificationStore.ts # Store для уведомлений (Notification Center)
+│   └── ... (другие stores)
 ├── types/              # TypeScript типы и интерфейсы
+├── hooks/              # Vue Composition API hooks
+│   └── useWebSocket.ts # Hook для WebSocket-подключения
 ├── utils/              # Утилиты и хелперы
 ├── styles/             # Глобальные стили
 └── mocks/              # Mock-данные для разработки
@@ -59,10 +76,24 @@ frontend/src/
 
 **Архитектура:**
 1. **`apiService.ts`** — единый Axios-инстанс с interceptors:
-   - Request interceptor: добавляет `Authorization: Token <token>`, CSRF-токен
-   - Response interceptor: обработка 401/403/404, retry логика (3 попытки для 5xx/network errors)
-   - Кеширование GET-запросов через `cacheService`
-   - Логирование запросов/ответов в dev-режиме
+   - **Request interceptor:**
+     - Добавляет `Authorization: Token <token>` (DRF Token authentication)
+     - Добавляет CSRF-токен из cookie или meta tag (`X-CSRFToken`)
+     - Устанавливает `withCredentials: true` для session cookies
+     - Логирование запросов в dev-режиме (через `localStorage.getItem('maddam_debug')`)
+   - **Response interceptor:**
+     - Обработка 401 Unauthorized: очистка токена (кроме menu requests для предотвращения premature logout)
+     - Обработка 403 Forbidden: возврат структурированной ошибки
+     - Обработка 404 для headless endpoints: специальная ошибка `HEADLESS_NOT_AVAILABLE`
+     - **Retry логика:**
+       - Автоматический retry для network errors и 5xx ошибок (до 3 попыток)
+       - Расширенный retry для 429 Rate Limit (до 5 попыток с exponential backoff)
+       - Использование `retry-after` заголовка для rate limit delays
+       - Exponential backoff: `RETRY_DELAY * 2^(retryCount - 1)`
+     - Обработка структурированных ошибок: `{ error: { code, message, details } }`
+     - Логирование ответов/ошибок в dev-режиме
+   - **Кеширование:** GET-запросы кешируются через `cacheService` (опционально, по умолчанию `useCache=true`)
+   - **Timeout:** 30 секунд для всех запросов
 
 2. **Сервисы** (`services/*.ts`):
    - `authService.ts` — аутентификация (Token-based, DRF)
@@ -71,6 +102,9 @@ frontend/src/
    - `editorService.ts` — редактирование изображений
    - `distributionService.ts` — публикации и share links
    - `adminService.ts` — админ-функции
+   - **`analyticsService.ts`** — корпоративная аналитика (30+ методов для Asset Bank, Campaigns, Search, User Activity, ROI, Distribution, Content Intelligence)
+   - **`notificationService.ts`** — центр уведомлений (8 методов: getNotifications, getNotification, markAsRead, markAllAsRead, deleteNotification, getUnreadCount, getPreferences, updatePreferences)
+   - `websocketService.ts` — WebSocket-подключение для real-time уведомлений
    - И другие...
 
 3. **Адаптеры** (`services/adapters/`):
@@ -82,11 +116,23 @@ frontend/src/
    - Используют сервисы для получения данных
    - Управляют локальным состоянием (pagination, filters, selection)
    - Персистентность через `pinia-plugin-persistedstate`
+   - **`analyticsStore`** — состояние аналитики (Asset Bank metrics, Campaigns, Search queries, User activity)
+   - **`notificationStore`** — состояние уведомлений (centerNotifications, unreadCount, preferences, WebSocket connection state)
+
+5. **WebSocket Integration:**
+   - **`hooks/useWebSocket.ts`** — Composition API hook для WebSocket-подключения
+   - Подключение к `/ws/notifications/?token=<token>` для real-time уведомлений
+   - Heartbeat ping каждые 30 секунд
+   - Обработка сообщений типа `notification.new` с автоматическим обновлением `notificationStore`
+   - Автоматическое переподключение при разрыве соединения
 
 **API Endpoints:**
 - Базовый URL: `VITE_API_URL` (env) или `http://localhost:8080`
 - Версионирование: `/api/v4/`
 - Headless endpoints: `/api/v4/headless/` (BFF-адаптер)
+  - Analytics: `/api/v4/headless/analytics/` (30+ endpoints)
+  - Notifications: `/api/v4/headless/notifications/` (6 endpoints)
+- WebSocket URL: `WS_URL` (env) или `ws://localhost:8080/ws`
 
 ---
 
@@ -423,6 +469,178 @@ frontend/src/
 
 ---
 
+### 2.8. Analytics Module (Corporate Analytics)
+
+**Описание:** Корпоративная аналитика для DAM-системы: Asset Bank (метрики активов, распределение, тренды), Campaign Performance (кампании, ROI, engagement), Search Analytics (топ-запросы, null searches, CTR), User Activity (adoption heatmap, login patterns, cohorts), Approval Workflow Analytics, Distribution Analytics, Content Intelligence.
+
+**Ключевые компоненты:**
+- `pages/analytics/AssetBankPage.vue` — Asset Bank dashboard (обзор активов)
+- `pages/analytics/CampaignPerformancePage.vue` — Campaign Performance dashboard
+- `pages/analytics/ROIPage.vue` — ROI dashboard
+- `pages/analytics/DistributionAnalyticsPage.vue` — Distribution Analytics dashboard
+- `pages/analytics/ContentIntelligencePage.vue` — Content Intelligence dashboard
+- `pages/analytics/UserActivityPage.vue` — User Activity dashboard
+- `pages/analytics/ApprovalAnalyticsPage.vue` — Approval Workflow Analytics dashboard
+- `components/Analytics/AnalyticsNavigation.vue` — навигация по разделам аналитики
+- `components/Analytics/TopMetricsCard.vue` — карточка топ-метрик
+- `components/Analytics/AssetDistributionChart.vue` — график распределения активов
+- `components/Analytics/MostDownloadedAssetsTable.vue` — таблица самых скачиваемых активов
+- `components/Analytics/StorageTrendsChart.vue` — график трендов хранилища
+- `components/Analytics/ROIDashboard.vue` — ROI dashboard компонент
+- `components/Analytics/UserAdoptionHeatMap.vue` — heatmap принятия функций
+- `components/Analytics/campaign/*` — компоненты для кампаний (Timeline, Geography, Top Assets, etc.)
+- `layouts/AnalyticsLayout.vue` — layout для аналитики с навигацией и обработкой ошибок
+
+**State Management:**
+- `stores/analyticsStore.ts` — основной store:
+  - `assetBankTopMetrics: AssetBankTopMetrics | null` — топ-метрики Asset Bank
+  - `assetDistribution: AssetDistributionItem[]` — распределение активов по типам
+  - `mostDownloadedAssets: MostDownloadedAssetRow[]` — самые скачиваемые активы
+  - `storageTrends: StorageTrendsResponse | null` — тренды хранилища
+  - `campaigns: CampaignListItem[]` — список кампаний
+  - `currentCampaign: CampaignDashboardResponse | null` — текущая кампания
+  - `roiSummary: any | null` — сводка ROI
+  - `approvalSummary: any | null` — сводка workflow-аналитики
+  - `error: string | null` — ошибка загрузки данных
+  - Actions: `fetchAssetBankTopMetrics()`, `fetchAssetDistribution()`, `fetchCampaigns()`, `fetchCampaignDashboard()`, `fetchROISummary()`, `fetchApprovalSummary()`, `trackSearchClick()`, и другие
+
+**Сценарии использования:**
+1. **Asset Bank Dashboard:**
+   - При монтировании `AssetBankPage` → `analyticsStore.fetchAssetBankTopMetrics()`
+   - GET `/api/v4/headless/analytics/dashboard/assets/top-metrics/`
+   - Отображение метрик: total_assets, storage_used_bytes, mau, search_success_rate, avg_find_time_minutes
+   - Загрузка распределения активов → `fetchAssetDistribution()` → GET `/api/v4/headless/analytics/dashboard/assets/distribution/`
+   - Загрузка самых скачиваемых → `fetchMostDownloadedAssets()` → GET `/api/v4/headless/analytics/dashboard/assets/most-downloaded/`
+   - Загрузка трендов хранилища → `fetchStorageTrends()` → GET `/api/v4/headless/analytics/dashboard/assets/storage-trends/`
+
+2. **Campaign Performance:**
+   - `CampaignPerformancePage` → `analyticsStore.fetchCampaigns()`
+   - GET `/api/v4/headless/analytics/campaigns/`
+   - Выбор кампании → `fetchCampaignDashboard(campaignId)` → GET `/api/v4/headless/analytics/dashboard/campaigns/?campaign_id={id}`
+   - Отслеживание engagement → `postCampaignEngagement()` → POST `/api/v4/headless/analytics/campaigns/{id}/engagement/`
+
+3. **Search Analytics:**
+   - Отслеживание клика по результату поиска → `analyticsService.trackSearchClick()`
+   - POST `/api/v4/headless/analytics/track/search/click/` с данными: document_id, search_query_id, search_session_id, click_position, time_to_click_seconds
+
+4. **ROI Dashboard:**
+   - `ROIPage` → `analyticsStore.fetchROISummary()`
+   - GET `/api/v4/headless/analytics/dashboard/roi/summary/`
+   - Отображение ROI по кампаниям, расчет экономии
+
+5. **User Activity:**
+   - `UserActivityPage` → `fetchUserAdoptionHeatmap()` → GET `/api/v4/headless/analytics/dashboard/users/adoption-heatmap/`
+   - Загрузка login patterns → GET `/api/v4/headless/analytics/dashboard/users/login-patterns/`
+   - Загрузка cohorts → GET `/api/v4/headless/analytics/dashboard/users/cohorts/`
+
+6. **Approval Analytics:**
+   - `ApprovalAnalyticsPage` → `fetchApprovalSummary()` → GET `/api/v4/headless/analytics/dashboard/approvals/summary/`
+   - Загрузка timeseries → GET `/api/v4/headless/analytics/dashboard/approvals/timeseries/`
+   - Загрузка рекомендаций → GET `/api/v4/headless/analytics/dashboard/approvals/recommendations/`
+
+**API Endpoints:**
+- Asset Bank: `/api/v4/headless/analytics/dashboard/assets/top-metrics/`, `/distribution/`, `/most-downloaded/`, `/detail/`, `/reuse-metrics/`, `/storage-trends/`, `/alerts/`
+- Campaigns: `/api/v4/headless/analytics/campaigns/`, `/campaigns/create/`, `/campaigns/add-assets/`, `/dashboard/campaigns/`, `/dashboard/campaigns/top-assets/`, `/dashboard/campaigns/timeline/`, `/dashboard/campaigns/geography/`
+- Search: `/api/v4/headless/analytics/dashboard/search/top-queries/`, `/dashboard/search/null-searches/`, `/dashboard/search/daily/`, `/track/search/click/`
+- User Activity: `/api/v4/headless/analytics/dashboard/users/adoption-heatmap/`, `/dashboard/users/login-patterns/`, `/dashboard/users/cohorts/`, `/dashboard/users/feature-adoption/`
+- Approvals: `/api/v4/headless/analytics/dashboard/approvals/summary/`, `/dashboard/approvals/timeseries/`, `/dashboard/approvals/recommendations/`
+- ROI: `/api/v4/headless/analytics/dashboard/roi/summary/`
+- Distribution: `/api/v4/headless/analytics/dashboard/distribution/`, `/ingest/distribution-events/`
+- Content Intelligence: `/api/v4/headless/analytics/dashboard/content-intel/content-gaps/`, `/dashboard/content-intel/compliance/metadata/`
+
+**Особенности:**
+- Кеширование аналитических данных через `apiService` (TTL 10 минут для большинства endpoints)
+- Обработка ошибок через `analyticsStore.error` с отображением banner в `AnalyticsLayout`
+- Deep linking через query parameters (`?tab=marketing&section=campaigns`)
+- Интеграция с Chart.js для визуализации данных
+
+---
+
+### 2.9. Notifications Module (Notification Center)
+
+**Описание:** Центр уведомлений с интеграцией серверных уведомлений Mayan EDMS, real-time доставкой через WebSocket, фильтрацией по категориям (uploads, processing, views, downloads, lifecycle), настройками пользователя (email, push, quiet hours).
+
+**Ключевые компоненты:**
+- `components/Notifications/NotificationBell.vue` — иконка колокольчика с счетчиком непрочитанных
+- `components/Notifications/NotificationPopover.vue` — popover со списком уведомлений
+- `components/Notifications/NotificationCard.vue` — карточка уведомления
+- `components/Notifications/NotificationEmpty.vue` — пустое состояние
+- `pages/NotificationsArchivePage.vue` — архив уведомлений
+- `pages/NotificationsSettingsPage.vue` — настройки уведомлений
+
+**State Management:**
+- `stores/notificationStore.ts` — основной store:
+  - `notifications: Notification[]` — локальные уведомления (toast-style, для UI feedback)
+  - `centerNotifications: NotificationCenterItem[]` — серверные уведомления из Mayan
+  - `centerUnreadCount: number` — количество непрочитанных
+  - `centerHasUrgent: boolean` — наличие срочных уведомлений
+  - `centerIsLoading: boolean` — состояние загрузки
+  - `centerFilter: 'all' | 'unread' | 'important'` — фильтр по статусу
+  - `centerCategory: 'all' | 'uploads' | 'processing' | 'views' | 'downloads' | 'lifecycle'` — фильтр по категории
+  - `centerScope: 'dam' | 'all'` — фильтр по области (DAM-only или все события)
+  - `preferences: NotificationPreferences | null` — настройки пользователя
+  - `wsConnected: boolean` — статус WebSocket-подключения
+  - Actions: `fetchCenterNotifications()`, `markAsRead()`, `markAllAsRead()`, `deleteNotification()`, `fetchUnreadCount()`, `fetchPreferences()`, `updatePreferences()`, `handleNewCenterNotification()` (WebSocket handler)
+
+**Сценарии использования:**
+1. **Просмотр уведомлений:**
+   - Клик на `NotificationBell` → открытие `NotificationPopover`
+   - `NotificationPopover` → `notificationStore.fetchCenterNotifications('SENT', 1)`
+   - GET `/api/v4/headless/notifications/?state=SENT&page=1&page_size=20`
+   - Отображение списка с фильтрацией по `centerFilter` и `centerCategory`
+   - Client-side фильтрация по scope (DAM-only скрывает системные события)
+
+2. **Real-time уведомления:**
+   - При инициализации приложения → `useWebSocket().connect()`
+   - Подключение к WebSocket: `ws://{WS_URL}/ws/notifications/?token={token}`
+   - Heartbeat ping каждые 30 секунд
+   - При получении `notification.new` → `notificationStore.handleNewCenterNotification(data)`
+   - Автоматическое обновление `centerUnreadCount` и добавление в `centerNotifications`
+
+3. **Отметка как прочитанное:**
+   - Клик на уведомление → `notificationService.markAsRead(id)`
+   - PATCH `/api/v4/headless/notifications/{id}/read/`
+   - Обновление `centerNotifications` и `centerUnreadCount`
+
+4. **Отметить все как прочитанные:**
+   - Кнопка "Отметить все" → `notificationService.markAllAsRead()`
+   - POST `/api/v4/headless/notifications/read-all/`
+   - Обновление всех уведомлений со статусом `SENT` → `READ`
+
+5. **Настройки уведомлений:**
+   - `NotificationsSettingsPage` → `notificationStore.fetchPreferences()`
+   - GET `/api/v4/headless/notifications/preferences/`
+   - Обновление → `updatePreferences()` → PATCH `/api/v4/headless/notifications/preferences/`
+   - Настройки: `notifications_enabled`, `email_notifications_enabled`, `push_notifications_enabled`, `email_digest_enabled`, `quiet_hours_enabled`, `notification_language`
+
+6. **Архив уведомлений:**
+   - `NotificationsArchivePage` → `fetchCenterNotifications('ALL', page)`
+   - GET `/api/v4/headless/notifications/?state=ALL&page={page}`
+
+**API Endpoints:**
+- `GET /api/v4/headless/notifications/` — список уведомлений (с пагинацией, фильтрацией по state/event_type/category/scope)
+- `GET /api/v4/headless/notifications/{id}/` — детали уведомления
+- `PATCH /api/v4/headless/notifications/{id}/read/` — отметка как прочитанное
+- `POST /api/v4/headless/notifications/read-all/` — отметить все как прочитанные
+- `DELETE /api/v4/headless/notifications/{id}/` — удаление уведомления
+- `GET /api/v4/headless/notifications/unread-count/` — количество непрочитанных (без кеширования)
+- `GET /api/v4/headless/notifications/preferences/` — настройки пользователя
+- `PATCH /api/v4/headless/notifications/preferences/` — обновление настроек
+
+**WebSocket Integration:**
+- Endpoint: `ws://{WS_URL}/ws/notifications/?token={token}`
+- Тип сообщения: `notification.new` с данными: `{ id, title, message, priority, icon_type, created_at }`
+- Автоматическое переподключение при разрыве соединения
+- Heartbeat ping каждые 30 секунд для поддержания соединения
+
+**Особенности:**
+- Client-side фильтрация по категориям (эвристическое определение категории по `event_type`)
+- Фильтрация по scope: `dam` скрывает системные события (с fallback title "Событие: ...")
+- Fallback для legacy уведомлений (без title) через сериализатор на backend
+- Автоматическое обновление `unreadCount` через polling (каждые 60 секунд) или WebSocket
+
+---
+
 ## 3. Реестр компонентов (Component Registry)
 
 ### 3.1. Бизнес-компоненты
@@ -657,6 +875,50 @@ frontend/src/
 - `GET /api/v4/headless/dashboard/activity/` — активность дашборда
 - `GET /api/v4/headless/activity/feed/` — полная лента активности
 
+#### Analytics (Corporate Analytics)
+- `GET /api/v4/headless/analytics/dashboard/assets/top-metrics/` — топ-метрики Asset Bank
+- `GET /api/v4/headless/analytics/dashboard/assets/distribution/` — распределение активов по типам
+- `GET /api/v4/headless/analytics/dashboard/assets/distribution-trend/` — тренд распределения
+- `GET /api/v4/headless/analytics/dashboard/assets/most-downloaded/` — самые скачиваемые активы
+- `GET /api/v4/headless/analytics/dashboard/assets/detail/` — детальная аналитика по активу
+- `GET /api/v4/headless/analytics/dashboard/assets/reuse-metrics/` — метрики повторного использования
+- `GET /api/v4/headless/analytics/dashboard/assets/storage-trends/` — тренды хранилища
+- `GET /api/v4/headless/analytics/dashboard/assets/alerts/` — алерты по активам
+- `GET /api/v4/headless/analytics/campaigns/` — список кампаний
+- `POST /api/v4/headless/analytics/campaigns/create/` — создание кампании
+- `POST /api/v4/headless/analytics/campaigns/add-assets/` — добавление активов в кампанию
+- `POST /api/v4/headless/analytics/campaigns/{id}/engagement/` — отслеживание engagement
+- `GET /api/v4/headless/analytics/dashboard/campaigns/` — дашборд кампании
+- `GET /api/v4/headless/analytics/dashboard/campaigns/top-assets/` — топ-активы кампании
+- `GET /api/v4/headless/analytics/dashboard/campaigns/timeline/` — временная линия кампании
+- `GET /api/v4/headless/analytics/dashboard/campaigns/geography/` — географическое распределение
+- `GET /api/v4/headless/analytics/dashboard/search/top-queries/` — топ-поисковые запросы
+- `GET /api/v4/headless/analytics/dashboard/search/null-searches/` — поисковые запросы без результатов
+- `GET /api/v4/headless/analytics/dashboard/search/daily/` — ежедневные метрики поиска
+- `POST /api/v4/headless/analytics/track/search/click/` — отслеживание клика по результату поиска
+- `GET /api/v4/headless/analytics/dashboard/users/adoption-heatmap/` — heatmap принятия функций
+- `GET /api/v4/headless/analytics/dashboard/users/login-patterns/` — паттерны входа
+- `GET /api/v4/headless/analytics/dashboard/users/cohorts/` — когорты пользователей
+- `GET /api/v4/headless/analytics/dashboard/users/feature-adoption/` — принятие функций
+- `GET /api/v4/headless/analytics/dashboard/approvals/summary/` — сводка workflow-аналитики
+- `GET /api/v4/headless/analytics/dashboard/approvals/timeseries/` — временные ряды workflow
+- `GET /api/v4/headless/analytics/dashboard/approvals/recommendations/` — рекомендации по оптимизации
+- `GET /api/v4/headless/analytics/dashboard/roi/summary/` — сводка ROI по кампаниям
+- `GET /api/v4/headless/analytics/dashboard/distribution/` — дашборд распределения по каналам
+- `POST /api/v4/headless/analytics/ingest/distribution-events/` — импорт событий распределения
+- `GET /api/v4/headless/analytics/dashboard/content-intel/content-gaps/` — выявление пробелов в контенте
+- `GET /api/v4/headless/analytics/dashboard/content-intel/compliance/metadata/` — соответствие метаданных
+
+#### Notifications (Notification Center)
+- `GET /api/v4/headless/notifications/` — список уведомлений (с пагинацией, фильтрацией по state/event_type/category/scope)
+- `GET /api/v4/headless/notifications/{id}/` — детали уведомления
+- `PATCH /api/v4/headless/notifications/{id}/read/` — отметка как прочитанное
+- `POST /api/v4/headless/notifications/read-all/` — отметить все как прочитанные
+- `DELETE /api/v4/headless/notifications/{id}/` — удаление уведомления
+- `GET /api/v4/headless/notifications/unread-count/` — количество непрочитанных (без кеширования)
+- `GET /api/v4/headless/notifications/preferences/` — настройки уведомлений
+- `PATCH /api/v4/headless/notifications/preferences/` — обновление настроек
+
 #### Admin
 - `GET /api/v4/users/` — список пользователей
 - `POST /api/v4/users/` — создание
@@ -665,6 +927,50 @@ frontend/src/
 - `GET /api/v4/roles/` — список ролей
 - `GET /api/v4/metadata/types/` — типы метаданных
 - `GET /api/v4/workflows/` — workflows
+
+#### Analytics (Corporate Analytics)
+- `GET /api/v4/headless/analytics/dashboard/assets/top-metrics/` — топ-метрики Asset Bank
+- `GET /api/v4/headless/analytics/dashboard/assets/distribution/` — распределение активов по типам
+- `GET /api/v4/headless/analytics/dashboard/assets/distribution-trend/` — тренд распределения
+- `GET /api/v4/headless/analytics/dashboard/assets/most-downloaded/` — самые скачиваемые активы
+- `GET /api/v4/headless/analytics/dashboard/assets/detail/` — детальная аналитика по активу
+- `GET /api/v4/headless/analytics/dashboard/assets/reuse-metrics/` — метрики повторного использования
+- `GET /api/v4/headless/analytics/dashboard/assets/storage-trends/` — тренды хранилища
+- `GET /api/v4/headless/analytics/dashboard/assets/alerts/` — алерты по активам
+- `GET /api/v4/headless/analytics/campaigns/` — список кампаний
+- `POST /api/v4/headless/analytics/campaigns/create/` — создание кампании
+- `POST /api/v4/headless/analytics/campaigns/add-assets/` — добавление активов в кампанию
+- `POST /api/v4/headless/analytics/campaigns/{id}/engagement/` — отслеживание engagement
+- `GET /api/v4/headless/analytics/dashboard/campaigns/` — дашборд кампании
+- `GET /api/v4/headless/analytics/dashboard/campaigns/top-assets/` — топ-активы кампании
+- `GET /api/v4/headless/analytics/dashboard/campaigns/timeline/` — временная линия кампании
+- `GET /api/v4/headless/analytics/dashboard/campaigns/geography/` — географическое распределение
+- `GET /api/v4/headless/analytics/dashboard/search/top-queries/` — топ-поисковые запросы
+- `GET /api/v4/headless/analytics/dashboard/search/null-searches/` — поисковые запросы без результатов
+- `GET /api/v4/headless/analytics/dashboard/search/daily/` — ежедневные метрики поиска
+- `POST /api/v4/headless/analytics/track/search/click/` — отслеживание клика по результату поиска
+- `GET /api/v4/headless/analytics/dashboard/users/adoption-heatmap/` — heatmap принятия функций
+- `GET /api/v4/headless/analytics/dashboard/users/login-patterns/` — паттерны входа
+- `GET /api/v4/headless/analytics/dashboard/users/cohorts/` — когорты пользователей
+- `GET /api/v4/headless/analytics/dashboard/users/feature-adoption/` — принятие функций
+- `GET /api/v4/headless/analytics/dashboard/approvals/summary/` — сводка workflow-аналитики
+- `GET /api/v4/headless/analytics/dashboard/approvals/timeseries/` — временные ряды workflow
+- `GET /api/v4/headless/analytics/dashboard/approvals/recommendations/` — рекомендации по оптимизации
+- `GET /api/v4/headless/analytics/dashboard/roi/summary/` — сводка ROI по кампаниям
+- `GET /api/v4/headless/analytics/dashboard/distribution/` — дашборд распределения по каналам
+- `POST /api/v4/headless/analytics/ingest/distribution-events/` — импорт событий распределения
+- `GET /api/v4/headless/analytics/dashboard/content-intel/content-gaps/` — выявление пробелов в контенте
+- `GET /api/v4/headless/analytics/dashboard/content-intel/compliance/metadata/` — соответствие метаданных
+
+#### Notifications (Notification Center)
+- `GET /api/v4/headless/notifications/` — список уведомлений (с пагинацией, фильтрацией)
+- `GET /api/v4/headless/notifications/{id}/` — детали уведомления
+- `PATCH /api/v4/headless/notifications/{id}/read/` — отметка как прочитанное
+- `POST /api/v4/headless/notifications/read-all/` — отметить все как прочитанные
+- `DELETE /api/v4/headless/notifications/{id}/` — удаление уведомления
+- `GET /api/v4/headless/notifications/unread-count/` — количество непрочитанных
+- `GET /api/v4/headless/notifications/preferences/` — настройки уведомлений
+- `PATCH /api/v4/headless/notifications/preferences/` — обновление настроек
 
 #### Configuration
 - `GET /api/v4/headless/config/document_types/` — конфигурация типов документов (BFF)
@@ -702,7 +1008,7 @@ frontend/src/
 **Критичные:**
 1. `MediaEditorModal.vue:1715` — fallback на `document_type_id = 1` вместо разрешения типа документа
 2. `uploadService.ts:713` — отсутствует вызов abort endpoint для cleanup частичной загрузки
-3. `notificationStore.ts:78,83` — WebSocket-подключение не реализовано
+3. ~~`notificationStore.ts:78,83` — WebSocket-подключение не реализовано~~ ✅ **ЧАСТИЧНО РЕШЕНО:** Реализован `hooks/useWebSocket.ts` с подключением к `/ws/notifications/`, но интеграция в компоненты требует доработки
 
 **Средние:**
 4. `GalleryView.vue:429,486` — открытие preview modal и more actions menu не реализовано
@@ -714,8 +1020,10 @@ frontend/src/
 10. `App.vue:119,138,158` — toggle filters panel, notifications center, create folder modal не реализованы
 
 **Низкие:**
-11. `FolderTreeNode.vue:185` — context menu не реализован
-12. `aiAnalysisService.ts:140,152` — tag acceptance/rejection не реализовано на backend
+13. `FolderTreeNode.vue:185` — context menu не реализован
+14. `aiAnalysisService.ts:140,152` — tag acceptance/rejection не реализовано на backend
+15. `analyticsStore.ts` — отсутствует обработка ошибок для некоторых методов (требуется try-catch в actions)
+16. `AnalyticsLayout.vue` — banner с ошибкой требует улучшения UX (автоматическое скрытие после исправления)
 
 ### 5.2. Плохая типизация
 
@@ -791,13 +1099,15 @@ frontend/src/
    - Убрать прямые вызовы `axios`, использовать `apiService`
    - Вынести логику загрузки метаданных/тегов в отдельные методы
 
-5. **Реализация WebSocket:**
-   - Подключить `websocketService` в `notificationStore`
-   - Реализовать real-time уведомления
+5. ~~**Реализация WebSocket:**~~ ✅ **ЧАСТИЧНО РЕШЕНО**
+   - Реализован `hooks/useWebSocket.ts` с подключением к `/ws/notifications/`
+   - Реализована обработка сообщений `notification.new` в `notificationStore.handleNewCenterNotification()`
+   - **Осталось:** Интегрировать `useWebSocket()` в `App.vue` или root component для автоматического подключения при инициализации приложения
 
 6. **Улучшение типизации:**
-   - Типизировать все `any` в `editorService`, `distributionStore`
+   - Типизировать все `any` в `editorService`, `distributionStore`, `analyticsService`
    - Добавить типы для `EditorState`, `Publication`, `SharedLink`
+   - Создать типы для Analytics API responses в `types/analytics.ts` (Campaign, Search, User Activity, ROI, Distribution, Content Intelligence)
 
 #### Приоритет 3 (Желательно)
 7. **Оптимизация производительности:**
@@ -846,22 +1156,26 @@ frontend/src/
 
 1. **Немедленно:**
    - Исправить fallback на `document_type_id = 1`
-   - Типизировать все `any` в критичных модулях (auth, assets)
+   - Типизировать все `any` в критичных модулях (auth, assets, analytics)
    - Централизовать обработку ошибок API
+   - Интегрировать WebSocket в `App.vue` для автоматического подключения при инициализации
 
 2. **В ближайшее время:**
    - Рефакторинг `assetStore` (убрать прямые вызовы axios)
-   - Реализовать WebSocket для уведомлений
-   - Увеличить покрытие тестами
+   - Создать типы для Analytics API responses (`types/analytics.ts`)
+   - Увеличить покрытие тестами (особенно для новых модулей Analytics и Notifications)
+   - Улучшить обработку ошибок в `analyticsStore` (try-catch в actions)
 
 3. **В будущем:**
    - Реализовать все TODO/FIXME
-   - Оптимизация производительности
-   - Улучшение UX (toast notifications, skeleton loaders)
+   - Оптимизация производительности (виртуализация для больших списков в Analytics)
+   - Улучшение UX (toast notifications, skeleton loaders для Analytics dashboards)
+   - Реализовать polling fallback для WebSocket при недоступности соединения
 
 ---
 
 **Документ составлен:** 2025-12-09  
+**Последнее обновление:** 2025-12-23 (добавлены модули Analytics и Notifications, обновлена архитектура интеграции с бэкендом, добавлена поддержка WebSocket)  
 **Автор аудита:** Senior Frontend Architect  
-**Версия:** 1.0
+**Версия:** 2.0
 
