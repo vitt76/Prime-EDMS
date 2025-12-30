@@ -32,11 +32,14 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import AnalyticsNavigation from '@/components/Analytics/AnalyticsNavigation.vue'
 import { useAnalyticsStore } from '@/stores/analyticsStore'
 
 const analyticsStore = useAnalyticsStore()
+const route = useRoute()
+const router = useRouter()
 const dismissed = ref(false)
 
 watch(
@@ -49,6 +52,35 @@ watch(
 const bannerVisible = computed(() => {
   return !!analyticsStore.error && dismissed.value === false
 })
+
+function applyDeepLink(): void {
+  const q = route.query as Record<string, any>
+  const tab = String(q.tab || '').toLowerCase()
+  const section = String(q.section || '').toLowerCase()
+  const metric = String(q.metric || '').toLowerCase()
+
+  // We only redirect when user lands on the Analytics entry point (or default overview).
+  const isEntry = route.path === '/analytics' || route.path === '/analytics/overview'
+  if (!isEntry) return
+
+  if (tab === 'marketing') {
+    let target = '/analytics/marketing/campaigns'
+    if (section === 'distribution') target = '/analytics/marketing/distribution'
+    if (section === 'roi') target = '/analytics/marketing/roi'
+    if (section === 'campaigns') target = '/analytics/marketing/campaigns'
+    if (metric === 'views') target = '/analytics/marketing/campaigns'
+
+    if (route.path !== target) {
+      router.replace({ path: target, query: route.query })
+    }
+  }
+}
+
+watch(
+  () => [route.path, route.query],
+  () => applyDeepLink(),
+  { deep: true, immediate: true }
+)
 </script>
 
 

@@ -104,12 +104,10 @@
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <div 
           class="bg-white rounded-xl border border-neutral-200 p-4 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
-          @click="setActiveTab('all')"
+          @click="goToAnalytics({ tab: 'marketing', section: 'distribution' })"
         >
           <div class="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
-            <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
+            <IconLink class="w-6 h-6 text-primary-600" />
           </div>
           <div>
             <p class="text-2xl font-bold text-neutral-900">{{ stats.totalLinks }}</p>
@@ -144,12 +142,12 @@
             <p class="text-sm text-neutral-500">Истекших</p>
           </div>
         </div>
-      <div class="bg-white rounded-xl border border-neutral-200 p-4 flex items-center gap-3">
+      <div
+          class="bg-white rounded-xl border border-neutral-200 p-4 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
+          @click="goToAnalytics({ tab: 'marketing', metric: 'views' })"
+        >
           <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
+            <IconEye class="w-6 h-6 text-blue-600" />
           </div>
           <div>
             <p class="text-2xl font-bold text-neutral-900">{{ stats.totalViews.toLocaleString() }}</p>
@@ -158,7 +156,7 @@
         </div>
         <div 
           class="bg-white rounded-xl border border-neutral-200 p-4 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
-          @click="setActiveTab('campaigns')"
+          @click="goToAnalytics({ tab: 'marketing', section: 'campaigns' })"
         >
           <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
             <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -642,10 +640,7 @@
                 <td class="px-4 py-4">
                   <div class="flex items-center gap-4 text-sm text-neutral-600">
                     <span class="flex items-center gap-1.5" title="Просмотры">
-                      <svg class="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
+                      <IconEye class="w-4 h-4 text-neutral-400" />
                       {{ formatNumber(link.views || 0) }}
                     </span>
                     <span class="flex items-center gap-1.5" title="Скачивания">
@@ -653,6 +648,9 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
                       {{ formatNumber(link.downloads || 0) }}
+                    </span>
+                    <span class="hidden lg:inline-flex items-center gap-2 text-xs text-neutral-500" title="Мини‑тренд (условный)">
+                      <TrendSparkline :values="[0, link.views || 0, link.downloads || 0]" :width="72" :height="20" color="#64748b" />
                     </span>
                   </div>
                 </td>
@@ -1206,6 +1204,9 @@ import { useAssetStore } from '@/stores/assetStore'
 import ShareModal from '@/components/DAM/ShareModal.vue'
 import { apiService } from '@/services/apiService'
 import { resolveAssetImageUrl } from '@/utils/imageUtils'
+import TrendSparkline from '@/components/Common/TrendSparkline.vue'
+import IconEye from '@/components/Common/icons/IconEye.vue'
+import IconLink from '@/components/Common/icons/IconLink.vue'
 
 // ============================================================================
 // STORES & ROUTER
@@ -1293,6 +1294,17 @@ const stats = computed(() => ({
   totalViews: distributionStore.sharedLinks.reduce((sum, l) => sum + (l.views || 0), 0),
   campaigns: distributionStore.campaigns.length
 }))
+
+function goToAnalytics(params: { tab: 'marketing'; section?: 'campaigns' | 'distribution'; metric?: 'views' }): void {
+  router.push({
+    path: '/analytics',
+    query: {
+      tab: params.tab,
+      ...(params.section ? { section: params.section } : {}),
+      ...(params.metric ? { metric: params.metric } : {}),
+    },
+  })
+}
 
 const filteredLinks = computed(() => {
   let links = [...distributionStore.sharedLinks]

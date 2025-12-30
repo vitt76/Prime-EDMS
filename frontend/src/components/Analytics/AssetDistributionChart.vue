@@ -34,12 +34,13 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 const trendCanvasRef = ref<HTMLCanvasElement | null>(null)
 let chartInstance: import('chart.js').Chart | null = null
 let trendChartInstance: import('chart.js').Chart | null = null
+let isUnmounted = false
 
 const TYPE_LABELS: Record<string, string> = {
-  images: 'Images',
-  videos: 'Videos',
-  documents: 'Documents',
-  other: 'Other',
+  images: 'Изображения',
+  videos: 'Видео',
+  documents: 'Документы',
+  other: 'Другое',
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -50,10 +51,15 @@ const TYPE_COLORS: Record<string, string> = {
 }
 
 async function renderChart(): Promise<void> {
-  if (!canvasRef.value) return
+  const canvas = canvasRef.value
+  if (!canvas) return
 
+  // Chart.js is loaded async; by the time it's ready the component might be unmounted.
   const Chart = (await import('chart.js/auto')).default
-  const ctx = canvasRef.value.getContext('2d')
+  if (isUnmounted) return
+  if (canvasRef.value !== canvas) return
+
+  const ctx = canvas.getContext('2d')
   if (!ctx) return
 
   if (chartInstance) {
@@ -111,8 +117,12 @@ async function renderChart(): Promise<void> {
   })
 
   // Trend chart (12 months), cumulative counts by type.
-  if (!trendCanvasRef.value) return
-  const trendCtx = trendCanvasRef.value.getContext('2d')
+  const trendCanvas = trendCanvasRef.value
+  if (!trendCanvas) return
+  if (isUnmounted) return
+  if (trendCanvasRef.value !== trendCanvas) return
+
+  const trendCtx = trendCanvas.getContext('2d')
   if (!trendCtx) return
 
   if (trendChartInstance) {
@@ -182,6 +192,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  isUnmounted = true
   if (chartInstance) {
     chartInstance.destroy()
     chartInstance = null
