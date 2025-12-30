@@ -15,7 +15,9 @@ import type {
   CreateWorkflowRequest,
   UpdateWorkflowRequest,
   GetWorkflowsParams,
-  PaginatedResponse
+  PaginatedResponse,
+  WorkflowState,
+  WorkflowTransition
 } from '@/types/admin'
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -780,6 +782,45 @@ class AdminService {
    */
   async deleteWorkflow(id: number): Promise<void> {
     return apiService.delete<void>(`/api/v4/workflow_templates/${id}/`)
+  }
+
+  /**
+   * Get workflow states
+   * 
+   * Endpoint: GET /api/v4/workflow_templates/{id}/states/
+   */
+  async getWorkflowStates(workflowId: number): Promise<WorkflowState[]> {
+    return apiService.get<WorkflowState[]>(
+      `/api/v4/workflow_templates/${workflowId}/states/`,
+      undefined,
+      true
+    )
+  }
+
+  /**
+   * Get workflow transitions
+   * 
+   * Endpoint: GET /api/v4/workflow_templates/{id}/transitions/
+   */
+  async getWorkflowTransitions(workflowId: number): Promise<WorkflowTransition[]> {
+    return apiService.get<WorkflowTransition[]>(
+      `/api/v4/workflow_templates/${workflowId}/transitions/`,
+      undefined,
+      true
+    )
+  }
+
+  /**
+   * Get workflow document types
+   * 
+   * Endpoint: GET /api/v4/workflow_templates/{id}/document_types/
+   */
+  async getWorkflowDocumentTypes(workflowId: number): Promise<any[]> {
+    return apiService.get<any[]>(
+      `/api/v4/workflow_templates/${workflowId}/document_types/`,
+      undefined,
+      true
+    )
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
