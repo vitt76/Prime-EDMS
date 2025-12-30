@@ -217,12 +217,12 @@ public-frontend/
 
 #### 3.2.1. Маршрут: `/` (Главная / Hero)
 
-**URL:** `https://dam-brand.com/`
+**URL:** `https://maddam.ru/`
 **Режим рендеринга:** SSR (динамический, кешируется на 1 час)
 **Meta-теги (OpenGraph, JSON-LD):**
 
 ```html
-<title>DAM-система для управления медиафайлами | dam-brand</title>
+<title>DAM-система для управления медиафайлами | MADDAM</title>
 <meta name="description" content="Облачное хранилище и распределение контента с AI-поиском и аналитикой для маркетинга и креативных команд">
 <meta name="keywords" content="DAM, медиафайлы, управление контентом, облако">
 
@@ -300,7 +300,7 @@ public-frontend/
    - Links: Product | Pricing | Blog | About | Contact | Terms | Privacy
    - Соцсети: LinkedIn | Twitter | GitHub
    - Newsletter signup форма
-   - Copyright © 2025 dam-brand
+   - Copyright © 2025 maddam
 
 **API-запросы:**
 
@@ -333,7 +333,7 @@ GET /api/v4/public/testimonials/?limit=3
 
 #### 3.2.2. Маршрут: `/pricing` (Тарифы)
 
-**URL:** `https://dam-brand.com/pricing`
+**URL:** `https://`maddam.ru `/pricing`
 **Режим рендеринга:** SSR (кешируется на 6 часов)
 
 **Компоненты:**
@@ -457,7 +457,7 @@ GET /api/v4/public/posts/{slug}/                   // Деталь
 
 #### 3.2.4. Маршрут: `/auth/register` (Регистрация)
 
-**URL:** `https://dam-brand.com/auth/register`
+**URL:** `https://`maddam.ru `/auth/register`
 **Режим:** SSR (без кеша, всегда свежая форма)
 
 **Форма:**
@@ -504,7 +504,7 @@ const registerSchema = z.object({
 
 #### 3.2.5. Маршрут: `/auth/verify-email/:token` (Верификация)
 
-**URL:** `https://dam-brand.com/auth/verify-email/[token]`
+**URL:** `https://`maddam.ru `/auth/verify-email/[token]`
 
 **Flow:**
 
