@@ -1,18 +1,20 @@
 # ТЕХНИЧЕСКОЕ ЗАДАНИЕ
+
 ## Часть 1: Публичный фронтенд на Nuxt 3 (Headless CMS)
 
-**Версия:** 1.0  
-**Дата:** 30 декабря 2025  
-**Статус:** Ready for Development  
-**Целевая аудитория:** Frontend-разработчики, DevOps, маркетологи  
+**Версия:** 1.0
+**Дата:** 30 декабря 2025
+**Статус:** Ready for Development
+**Целевая аудитория:** Frontend-разработчики, DevOps, маркетологи
 
 ---
 
 ## 1. EXECUTIVE SUMMARY
 
-Требуется разработать SEO-оптимизированный публичный сайт `dam-brand.com` на **Nuxt 3 (SSR)**, работающий как headless-frontend для Django-модуля `mayan.apps.marketing_cms`. 
+Требуется разработать SEO-оптимизированный публичный сайт `maddam.ru` на **Nuxt 3 (SSR)**, работающий как headless-frontend для Django-модуля `mayan.apps.marketing_cms`.
 
 **Ключевые метрики:**
+
 - Lighthouse Score: ≥ 95 (SEO, Performance)
 - Core Web Vitals: LCP ≤ 2.5s, FID ≤ 100ms, CLS ≤ 0.1
 - TTM (Time-to-Market): 6 недель
@@ -22,14 +24,14 @@
 
 ## 2. ЦЕЛИ И KPI
 
-| # | Цель | Метрика | Целевое значение |
-|---|------|---------|------------------|
-| 1 | SEO-доминирование | Lighthouse SEO Score | ≥ 95 |
-| 2 | High Performance | Core Web Vitals (все зелёные) | LCP ≤ 2.5s, CLS ≤ 0.1 |
-| 3 | Лидогенерация | Conversion Rate регистрация | ≥ 3% (от посетителей) |
-| 4 | Маркетинговая гибкость | Время добавления новости | ≤ 15 мин (без кода) |
-| 5 | Мобильная доступность | Mobile Friendly Score | 100% |
-| 6 | Масштабируемость | Поддержка N новостей | N > 1000 статей без деградации |
+| # | Цель                                    | Метрика                                 | Целевое значение                   |
+| - | ------------------------------------------- | ---------------------------------------------- | ------------------------------------------------- |
+| 1 | SEO-доминирование              | Lighthouse SEO Score                           | ≥ 95                                             |
+| 2 | High Performance                            | Core Web Vitals (все зелёные)        | LCP ≤ 2.5s, CLS ≤ 0.1                           |
+| 3 | Лидогенерация                  | Conversion Rate регистрация         | ≥ 3% (от посетителей)               |
+| 4 | Маркетинговая гибкость | Время добавления новости | ≤ 15 мин (без кода)                    |
+| 5 | Мобильная доступность   | Mobile Friendly Score                          | 100%                                              |
+| 6 | Масштабируемость            | Поддержка N новостей          | N > 1000 статей без деградации |
 
 ---
 
@@ -56,24 +58,24 @@
 
 #### 3.1.1. Требуемые зависимости
 
-| Пакет | Версия | Назначение | Обоснование |
-|-------|--------|-----------|------------|
-| **nuxt** | 3.8+ | Meta-фреймворк Vue | SSR/SSG, SEO-ready |
-| **vue** | 3.4+ | Реактивность | Совместимость с Vue 3 SPA |
-| **typescript** | 5.3+ | Типизация | Уже используется в проекте |
-| **tailwindcss** | 3.4+ | Стили | Переиспользует текущий конфиг |
-| **@tailwindcss/forms** | 0.5+ | Form styling | Улучшенные формы |
-| **@nuxtjs/tailwindcss** | 6.10+ | Интеграция Nuxt+Tailwind | Автоконфигурация |
-| **pinia** | 2.1+ | State Management | Кеширование данных |
-| **axios** или **$fetch** | latest | HTTP-клиент | API-запросы |
-| **vueuse/core** | 10.7+ | Composition API hooks | Утилиты |
-| **@nuxtjs/i18n** | 8.1+ | Многоязычность | RU/EN локали |
-| **@nuxtjs/sitemap** | 2.4+ | Sitemap generation | SEO |
-| **@vueuse/head** | 2.0+ | Meta-управление | альтернатива useHead |
-| **zod** или **valibot** | latest | Валидация форм | Type-safe validation |
-| **clsx** или **classnames** | latest | Утилита для класс | Условные классы |
-| **nuxt-image** | 1.3+ | Image optimization | WebP, AVIF, lazy-loading |
-| **@nuxtjs/color-mode** | 3.4+ | Dark Mode (опционально) | theme switching |
+| Пакет                                 | Версия | Назначение               | Обоснование                                   |
+| ------------------------------------------ | ------------ | ---------------------------------- | -------------------------------------------------------- |
+| **nuxt**                             | 3.8+         | Meta-фреймворк Vue        | SSR/SSG, SEO-ready                                       |
+| **vue**                              | 3.4+         | Реактивность           | Совместимость с Vue 3 SPA                  |
+| **typescript**                       | 5.3+         | Типизация                 | Уже используется в проекте        |
+| **tailwindcss**                      | 3.4+         | Стили                         | Переиспользует текущий конфиг |
+| **@tailwindcss/forms**               | 0.5+         | Form styling                       | Улучшенные формы                          |
+| **@nuxtjs/tailwindcss**              | 6.10+        | Интеграция Nuxt+Tailwind | Автоконфигурация                         |
+| **pinia**                            | 2.1+         | State Management                   | Кеширование данных                      |
+| **axios** или **$fetch**    | latest       | HTTP-клиент                  | API-запросы                                       |
+| **vueuse/core**                      | 10.7+        | Composition API hooks              | Утилиты                                           |
+| **@nuxtjs/i18n**                     | 8.1+         | Многоязычность       | RU/EN локали                                       |
+| **@nuxtjs/sitemap**                  | 2.4+         | Sitemap generation                 | SEO                                                      |
+| **@vueuse/head**                     | 2.0+         | Meta-управление          | альтернатива useHead                         |
+| **zod** или **valibot**     | latest       | Валидация форм        | Type-safe validation                                     |
+| **clsx** или **classnames** | latest       | Утилита для класс   | Условные классы                            |
+| **nuxt-image**                       | 1.3+         | Image optimization                 | WebP, AVIF, lazy-loading                                 |
+| **@nuxtjs/color-mode**               | 3.4+         | Dark Mode (опционально) | theme switching                                          |
 
 #### 3.1.2. Файловая структура проекта
 
@@ -215,8 +217,8 @@ public-frontend/
 
 #### 3.2.1. Маршрут: `/` (Главная / Hero)
 
-**URL:** `https://dam-brand.com/`  
-**Режим рендеринга:** SSR (динамический, кешируется на 1 час)  
+**URL:** `https://dam-brand.com/`
+**Режим рендеринга:** SSR (динамический, кешируется на 1 час)
 **Meta-теги (OpenGraph, JSON-LD):**
 
 ```html
@@ -266,40 +268,42 @@ public-frontend/
 **Компоненты страницы (Sections):**
 
 1. **Navigation** (фиксированная сверху)
+
    - Логотип (ссылка на `/`)
    - Меню: Pricing | Blog | About | Contact | Docs
    - Auth buttons: Login | Sign Up
    - Язык: RU | EN (переключатель)
-
 2. **Hero Section**
+
    - Заголовок h1: "Управляйте контентом быстрее, чем когда-либо"
    - Подзаголовок: "Облачное хранилище + AI-поиск + Аналитика для вашей команды"
    - CTA кнопка primary: "Начать бесплатно" → `/auth/register`
    - Секундарная кнопка: "Демо видео" → YouTube embed / Modal
    - Фоновое изображение (оптимизированное WebP/AVIF)
-
 3. **Features Section** (3-4 карточки)
+
    - Icon + Title + Description для каждого feature
    - Примеры features: "AI Search", "Unlimited Collaboration", "Advanced Analytics", "Global Distribution"
-
 4. **Pricing Preview** (мини-таблица)
+
    - 3 плана (Start, Pro, Enterprise)
    - Кнопка "Сравнить планы" → `/pricing`
-
 5. **Social Proof** (опционально)
+
    - Логотипы клиентов (5-7)
    - Отзывы (2-3 карточки с котировками)
-
 6. **CTA Section** (перед footer)
-   - "Готовы начать?" + Primary button "Free Trial"
 
+   - "Готовы начать?" + Primary button "Free Trial"
 7. **Footer**
+
    - Links: Product | Pricing | Blog | About | Contact | Terms | Privacy
    - Соцсети: LinkedIn | Twitter | GitHub
    - Newsletter signup форма
    - Copyright © 2025 dam-brand
 
 **API-запросы:**
+
 ```typescript
 // Получить контент главной страницы (для заполнения sections)
 GET /api/v4/public/pages/home/
@@ -312,12 +316,14 @@ GET /api/v4/public/testimonials/?limit=3
 ```
 
 **SEO-требования:**
+
 - H1 только один (в Hero)
 - Правильная иерархия: H1 → H2 (Features, Pricing) → H3 (Card titles)
 - Все изображения с alt-текстом
 - Heading в title в браузерной вкладке совпадает с h1 на странице
 
 **Performance-требования:**
+
 - Lighthouse LCP ≤ 2.5s
 - Изображения: lazy-loaded (кроме hero), WebP + AVIF
 - CSS: Tailwind (встроенный в bundle)
@@ -327,19 +333,20 @@ GET /api/v4/public/testimonials/?limit=3
 
 #### 3.2.2. Маршрут: `/pricing` (Тарифы)
 
-**URL:** `https://dam-brand.com/pricing`  
-**Режим рендеринга:** SSR (кешируется на 6 часов)  
+**URL:** `https://dam-brand.com/pricing`
+**Режим рендеринга:** SSR (кешируется на 6 часов)
 
 **Компоненты:**
 
 1. **Hero** (мини)
+
    - Title: "Выберите план, который подходит вам"
    - Subtitle: "SaaS или On-Premises — оба варианта доступны"
-
 2. **Toggle: SaaS / Standalone** (опционально)
-   - Переключатель между типами развертывания
 
+   - Переключатель между типами развертывания
 3. **Pricing Cards** (3 основных плана)
+
    ```
    ┌─────────────────────┐
    │ START               │
@@ -350,18 +357,18 @@ GET /api/v4/public/testimonials/?limit=3
    │ [Try for Free]      │ ← кнопка
    └─────────────────────┘
    ```
-
 4. **Comparison Table** (детальное сравнение всех features)
-   | Feature | Start | Pro | Enterprise |
-   |---------|-------|-----|------------|
-   | Storage | 50 GB | 500 GB | Unlimited |
-   | Users | 3 | 10 | Unlimited |
-   | AI Features | Limited | Full | Full |
-   | Support | Email | Priority | 24/7 |
 
+   | Feature     | Start   | Pro      | Enterprise |
+   | ----------- | ------- | -------- | ---------- |
+   | Storage     | 50 GB   | 500 GB   | Unlimited  |
+   | Users       | 3       | 10       | Unlimited  |
+   | AI Features | Limited | Full     | Full       |
+   | Support     | Email   | Priority | 24/7       |
 5. **FAQ Section** (3-5 частых вопросов о тарифах)
 
 **API-запросы:**
+
 ```typescript
 GET /api/v4/public/plans/            // Все планы
 GET /api/v4/public/faq/?section=pricing  // FAQ по тарифам
@@ -372,17 +379,19 @@ GET /api/v4/public/faq/?section=pricing  // FAQ по тарифам
 #### 3.2.3. Маршрут: `/blog` & `/blog/:slug` (Новости)
 
 **Маршруты:**
+
 - `/blog` — Список новостей (пагинация)
 - `/blog/:slug` — Детальная страница поста (SSR для SEO)
 
 **Компоненты `/blog` (список):**
 
 1. **Search/Filter**
+
    - Поле поиска (query string: `?q=`)
    - Категория (filter: `?category=`)
    - Дата (опционально)
-
 2. **Post Cards Grid** (3 столбца на десктопе, 1 на мобильном)
+
    ```
    ┌──────────────┐
    │   Image      │
@@ -392,27 +401,28 @@ GET /api/v4/public/faq/?section=pricing  // FAQ по тарифам
    │ [Read More]  │
    └──────────────┘
    ```
-
 3. **Pagination**
+
    - Previous | 1 2 3 ... N | Next
    - 10 постов на странице (настраивается)
 
 **Компоненты `/blog/:slug` (детальная):**
 
 1. **Post Header**
+
    - Featured image (large, optimized)
    - Title (h1)
    - Author + date + reading time
    - Tags
-
 2. **Post Content**
+
    - HTML-контент (с поддержкой markdown)
    - Встроенные images (lazy-loaded)
    - Встроенные code blocks (с highlight)
-
 3. **Related Posts** (3-5 похожих статей в конце)
 
 **Meta-теги для `/blog/:slug`:**
+
 ```html
 <!-- Динамические теги из API ответа -->
 <title>{{ post.seo_title }}</title>
@@ -437,6 +447,7 @@ GET /api/v4/public/faq/?section=pricing  // FAQ по тарифам
 ```
 
 **API-запросы:**
+
 ```typescript
 GET /api/v4/public/posts/?page=1&limit=10&lang=ru  // Список
 GET /api/v4/public/posts/{slug}/                   // Деталь
@@ -446,21 +457,22 @@ GET /api/v4/public/posts/{slug}/                   // Деталь
 
 #### 3.2.4. Маршрут: `/auth/register` (Регистрация)
 
-**URL:** `https://dam-brand.com/auth/register`  
-**Режим:** SSR (без кеша, всегда свежая форма)  
+**URL:** `https://dam-brand.com/auth/register`
+**Режим:** SSR (без кеша, всегда свежая форма)
 
 **Форма:**
 
-| Поле | Тип | Валидация | Обязательное |
-|------|-----|-----------|-------------|
-| Email | text | Email format, no duplicates | ✅ |
-| Password | password | Min 8 chars, 1 digit, 1 special | ✅ |
-| Org Name | text | Min 2 chars | ✅ |
-| First Name | text | Min 2 chars | ❌ |
-| Last Name | text | Min 2 chars | ❌ |
-| Terms | checkbox | Must be checked | ✅ |
+| Поле   | Тип   | Валидация              | Обязательное |
+| ---------- | -------- | ------------------------------- | ------------------------ |
+| Email      | text     | Email format, no duplicates     | ✅                       |
+| Password   | password | Min 8 chars, 1 digit, 1 special | ✅                       |
+| Org Name   | text     | Min 2 chars                     | ✅                       |
+| First Name | text     | Min 2 chars                     | ❌                       |
+| Last Name  | text     | Min 2 chars                     | ❌                       |
+| Terms      | checkbox | Must be checked                 | ✅                       |
 
 **Валидация (Zod Schema):**
+
 ```typescript
 const registerSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -476,6 +488,7 @@ const registerSchema = z.object({
 ```
 
 **Flow:**
+
 1. Пользователь заполняет форму
 2. Клиентская валидация (Zod)
 3. `POST /api/v4/public/auth/register/`
@@ -483,6 +496,7 @@ const registerSchema = z.object({
 5. Ошибка: Вывести ошибку (email exists, password weak, etc)
 
 **Страница `/auth/register/sent`:**
+
 - Сообщение: "Проверьте email для активации аккаунта"
 - Ссылка: "Не получили письмо? Отправить ещё раз"
 
@@ -490,9 +504,10 @@ const registerSchema = z.object({
 
 #### 3.2.5. Маршрут: `/auth/verify-email/:token` (Верификация)
 
-**URL:** `https://dam-brand.com/auth/verify-email/[token]`  
+**URL:** `https://dam-brand.com/auth/verify-email/[token]`
 
 **Flow:**
+
 1. Пользователь кликает ссылку из письма
 2. Frontend извлекает `:token` из URL
 3. `POST /api/v4/public/auth/verify-email/` с token
@@ -505,12 +520,14 @@ const registerSchema = z.object({
 #### 3.2.6. Маршруты: `/contact`, `/about`, `/terms`, `/privacy`
 
 Все эти страницы получают контент из API через slug:
+
 ```typescript
 GET /api/v4/public/pages/{slug}/
 // Примеры: /contact/, /about/, /terms/, /privacy/
 ```
 
 **Структура контента (для каждой страницы в Django CMS):**
+
 ```json
 {
   "slug": "contact",
@@ -538,6 +555,7 @@ GET /api/v4/public/pages/{slug}/
 **Описание:** Получить контент страницы по slug (используется SSR).
 
 **Request:**
+
 ```bash
 GET /api/v4/public/pages/home/?lang=ru
 Accept: application/json
@@ -545,6 +563,7 @@ Authorization: (не требуется)
 ```
 
 **Response 200 OK:**
+
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -589,6 +608,7 @@ Authorization: (не требуется)
 ```
 
 **Response 404 Not Found:**
+
 ```json
 {
   "error": "not_found",
@@ -603,6 +623,7 @@ Authorization: (не требуется)
 **Описание:** Список опубликованных новостей с пагинацией.
 
 **Query Parameters:**
+
 - `page` (int, default 1) — номер страницы
 - `limit` (int, default 10) — количество на странице (max 100)
 - `lang` (string, default 'ru') — язык контента
@@ -610,12 +631,14 @@ Authorization: (не требуется)
 - `category` (string, optional) — фильтр по категории
 
 **Request:**
+
 ```bash
 GET /api/v4/public/posts/?page=1&limit=10&lang=ru
 Authorization: (не требуется)
 ```
 
 **Response 200 OK:**
+
 ```json
 {
   "count": 47,
@@ -649,6 +672,7 @@ Authorization: (не требуется)
 **Описание:** Полная статья по slug (для SSR).
 
 **Response 200 OK:**
+
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440001",
@@ -686,6 +710,7 @@ Authorization: (не требуется)
 **Описание:** Все тарифные планы (для страницы `/pricing`).
 
 **Response 200 OK:**
+
 ```json
 {
   "results": [
@@ -760,6 +785,7 @@ Authorization: (не требуется)
 **Описание:** Регистрация нового пользователя и организации.
 
 **Request:**
+
 ```json
 {
   "email": "cto@romashka.ru",
@@ -775,6 +801,7 @@ Authorization: (не требуется)
 ```
 
 **Response 201 Created:**
+
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440002",
@@ -793,6 +820,7 @@ Authorization: (не требуется)
 ```
 
 **Response 400 Bad Request (Email exists):**
+
 ```json
 {
   "error": "validation_error",
@@ -803,6 +831,7 @@ Authorization: (не требуется)
 ```
 
 **Response 400 Bad Request (Password weak):**
+
 ```json
 {
   "error": "validation_error",
@@ -819,6 +848,7 @@ Authorization: (не требуется)
 **Описание:** Верификация email по токену.
 
 **Request:**
+
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjE3MDQwMDAwMDB9.ABC..."
@@ -826,6 +856,7 @@ Authorization: (не требуется)
 ```
 
 **Response 200 OK:**
+
 ```json
 {
   "success": true,
@@ -835,6 +866,7 @@ Authorization: (не требуется)
 ```
 
 **Response 400 Bad Request (Token expired):**
+
 ```json
 {
   "error": "token_expired",
@@ -850,6 +882,7 @@ Authorization: (не требуется)
 **Описание:** Форма контакта (Lead capture).
 
 **Request:**
+
 ```json
 {
   "name": "Иван Петров",
@@ -862,6 +895,7 @@ Authorization: (не требуется)
 ```
 
 **Response 201 Created:**
+
 ```json
 {
   "id": "lead-550e8400",
@@ -878,6 +912,7 @@ Authorization: (не требуется)
 #### 3.4.1. Стратегия локализации
 
 **Уровень URL (Nuxt i18n prefix strategy):**
+
 ```
 /ru/                  → Русский (по умолчанию)
 /en/                  → Английский
@@ -886,6 +921,7 @@ Authorization: (не требуется)
 ```
 
 **Конфигурация в nuxt.config.ts:**
+
 ```typescript
 export default defineNuxtConfig({
   modules: ['@nuxtjs/i18n'],
@@ -914,6 +950,7 @@ export default defineNuxtConfig({
 #### 3.4.2. Backend API Localization
 
 **Backend отдает локализованные данные:**
+
 ```json
 {
   "title": {
@@ -932,6 +969,7 @@ export default defineNuxtConfig({
 ```
 
 **Frontend выбирает правильный язык:**
+
 ```vue
 <template>
   <h1>{{ page.title[$i18n.locale] }}</h1>
@@ -946,6 +984,7 @@ const { locale } = useI18n();
 #### 3.4.3. UI-элементы (переключатель языка)
 
 **Компонент LanguageSwitcher в Navigation:**
+
 ```vue
 <template>
   <div class="language-switcher">
@@ -975,17 +1014,17 @@ const switchLocalePath = useSwitchLocalePath();
 
 #### 3.5.1. События, которые нужно отслеживать
 
-| Событие | Триггер | Параметры | Цель |
-|---------|---------|-----------|------|
-| `page_view` | При загрузке страницы | page, lang, source | Трафик |
-| `cta_click` | Клик по CTA кнопке | button_text, page, section | Engagement |
-| `form_submit` | Отправка формы | form_type, success | Conversions |
-| `form_error` | Ошибка формы | field, error_type | UX insights |
-| `pricing_view` | Просмотр `/pricing` | plans_viewed | Intent |
-| `blog_read` | Прочитана новость | post_slug, reading_time | Content engagement |
-| `signup_start` | Открыта форма `/register` | source | Funnel |
-| `signup_complete` | Завершена регистрация | org_name, source | Conversion |
-| `email_verify_click` | Клик на ссылку в письме | success | Activation |
+| Событие         | Триггер                             | Параметры         | Цель           |
+| ---------------------- | ------------------------------------------ | -------------------------- | ------------------ |
+| `page_view`          | При загрузке страницы   | page, lang, source         | Трафик       |
+| `cta_click`          | Клик по CTA кнопке             | button_text, page, section | Engagement         |
+| `form_submit`        | Отправка формы                | form_type, success         | Conversions        |
+| `form_error`         | Ошибка формы                    | field, error_type          | UX insights        |
+| `pricing_view`       | Просмотр `/pricing`              | plans_viewed               | Intent             |
+| `blog_read`          | Прочитана новость          | post_slug, reading_time    | Content engagement |
+| `signup_start`       | Открыта форма `/register`    | source                     | Funnel             |
+| `signup_complete`    | Завершена регистрация  | org_name, source           | Conversion         |
+| `email_verify_click` | Клик на ссылку в письме | success                    | Activation         |
 
 #### 3.5.2. Реализация (Google Analytics + internal tracking)
 
@@ -1028,18 +1067,19 @@ export function useAnalytics() {
 
 ### 4.1. Performance (Core Web Vitals)
 
-| Метрика | Целевое значение | Инструмент |
-|---------|-----------------|-----------|
-| **LCP (Largest Contentful Paint)** | ≤ 2.5s | WebPageTest, Lighthouse |
-| **FID (First Input Delay)** | ≤ 100ms | Chrome UX Report |
-| **CLS (Cumulative Layout Shift)** | ≤ 0.1 | Lighthouse |
-| **TTFB (Time to First Byte)** | ≤ 600ms | CDN monitoring |
-| **JS Bundle Size** | ≤ 150 KB (gzip) | Rollup stats plugin |
-| **CSS Bundle Size** | ≤ 30 KB (gzip) | PurgeCSS |
-| **First Paint (FP)** | ≤ 1.5s | Lighthouse |
-| **Largest Paint (LP)** | ≤ 3s | Lighthouse |
+| Метрика                           | Целевое значение | Инструмент    |
+| ---------------------------------------- | ------------------------------- | ----------------------- |
+| **LCP (Largest Contentful Paint)** | ≤ 2.5s                         | WebPageTest, Lighthouse |
+| **FID (First Input Delay)**        | ≤ 100ms                        | Chrome UX Report        |
+| **CLS (Cumulative Layout Shift)**  | ≤ 0.1                          | Lighthouse              |
+| **TTFB (Time to First Byte)**      | ≤ 600ms                        | CDN monitoring          |
+| **JS Bundle Size**                 | ≤ 150 KB (gzip)                | Rollup stats plugin     |
+| **CSS Bundle Size**                | ≤ 30 KB (gzip)                 | PurgeCSS                |
+| **First Paint (FP)**               | ≤ 1.5s                         | Lighthouse              |
+| **Largest Paint (LP)**             | ≤ 3s                           | Lighthouse              |
 
 **Оптимизационные техники:**
+
 - Image: WebP/AVIF + srcset, lazy-loading для below-the-fold
 - Code splitting: Автоматически по роутам (Nuxt)
 - CSS: Tailwind (встроен в build, PurgeCSS убирает неиспользованные стили)
@@ -1050,57 +1090,57 @@ export function useAnalytics() {
 
 ### 4.2. SEO
 
-| Требование | Описание |
-|-----------|---------|
-| **Meta-теги** | Все страницы: `<title>`, `meta[description]`, `og:*`, `twitter:*` |
-| **Structured Data** | JSON-LD для: SoftwareApplication (главная), NewsArticle (блог) |
-| **Sitemap** | Автогенерация, обновление каждую ночь |
-| **robots.txt** | Правильный (разрешить `/`, запретить `/admin`, `/api/`) |
-| **Heading hierarchy** | H1 (только один) → H2 → H3, без пропусков |
-| **Alt-text** | Все `<img>` имеют осмысленный alt |
-| **Canonical URLs** | `<link rel="canonical">` на всех страницах |
-| **Mobile-friendly** | 100% адаптивность, проходит мобильный test |
-| **Page Speed** | Lighthouse ≥ 90 (performance score) |
-| **Indexation** | Все публичные страницы индексируются (проверить в GSC) |
+| Требование        | Описание                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Meta-теги**     | Все страницы:`<title>`, `meta[description]`, `og:*`, `twitter:*`               |
+| **Structured Data**   | JSON-LD для: SoftwareApplication (главная), NewsArticle (блог)                      |
+| **Sitemap**           | Автогенерация, обновление каждую ночь                            |
+| **robots.txt**        | Правильный (разрешить `/`, запретить `/admin`, `/api/`)         |
+| **Heading hierarchy** | H1 (только один) → H2 → H3, без пропусков                                 |
+| **Alt-text**          | Все `<img>` имеют осмысленный alt                                            |
+| **Canonical URLs**    | `<link rel="canonical">` на всех страницах                                       |
+| **Mobile-friendly**   | 100% адаптивность, проходит мобильный test                           |
+| **Page Speed**        | Lighthouse ≥ 90 (performance score)                                                              |
+| **Indexation**        | Все публичные страницы индексируются (проверить в GSC) |
 
 ---
 
 ### 4.3. Security
 
-| Требование | Описание |
-|-----------|---------|
-| **HTTPS** | Все ссылки HTTPS, HSTS (max-age=31536000) |
-| **CSP (Content Security Policy)** | Минимальная политика (script-src: self, cdn; img-src: self, cdn) |
-| **CORS** | Только api.dam-brand.com может отдавать ответы |
-| **XSS Protection** | Все user input экранируется (Vue это делает автоматически) |
-| **CSRF Protection** | Использовать CSRF tokens для форм (Django DRF поддерживает) |
-| **Input Validation** | Клиентская (Zod) + серверная (Django) валидация |
+| Требование                    | Описание                                                                                |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **HTTPS**                         | Все ссылки HTTPS, HSTS (max-age=31536000)                                              |
+| **CSP (Content Security Policy)** | Минимальная политика (script-src: self, cdn; img-src: self, cdn)             |
+| **CORS**                          | Только api.dam-brand.com может отдавать ответы                         |
+| **XSS Protection**                | Все user input экранируется (Vue это делает автоматически) |
+| **CSRF Protection**               | Использовать CSRF tokens для форм (Django DRF поддерживает)      |
+| **Input Validation**              | Клиентская (Zod) + серверная (Django) валидация                     |
 
 ---
 
 ### 4.4. Accessibility (WCAG 2.1 Level AA)
 
-| Требование | Описание |
-|-----------|---------|
-| **Color Contrast** | 4.5:1 для обычного текста, 3:1 для большого (ಠ_ಠ) |
-| **Keyboard Navigation** | Все интерактивные элементы доступны по Tab |
-| **Focus Indicators** | Видимый focus ring для клавиатурной навигации |
-| **Aria Labels** | Все иконки/кнопки имеют aria-label или title |
-| **Form Labels** | Все `<input>` связаны с `<label>` |
-| **Skip Links** | Skip-to-content ссылка (опционально) |
-| **Responsive Text** | Текст читаемый без зума на 200% |
+| Требование          | Описание                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| **Color Contrast**      | 4.5:1 для обычного текста, 3:1 для большого (ಠ_ಠ) |
+| **Keyboard Navigation** | Все интерактивные элементы доступны по Tab    |
+| **Focus Indicators**    | Видимый focus ring для клавиатурной навигации    |
+| **Aria Labels**         | Все иконки/кнопки имеют aria-label или title             |
+| **Form Labels**         | Все `<input>` связаны с `<label>`                                |
+| **Skip Links**          | Skip-to-content ссылка (опционально)                           |
+| **Responsive Text**     | Текст читаемый без зума на 200%                           |
 
 ---
 
 ### 4.5. Browser Support
 
-| Браузер | Версия | Поддержка |
-|---------|--------|----------|
-| Chrome | 90+ | ✅ Полная |
-| Firefox | 88+ | ✅ Полная |
-| Safari | 14+ | ✅ Полная |
-| Edge | 90+ | ✅ Полная |
-| IE 11 | — | ❌ Не поддерживается |
+| Браузер | Версия | Поддержка                   |
+| -------------- | ------------ | ------------------------------------ |
+| Chrome         | 90+          | ✅ Полная                      |
+| Firefox        | 88+          | ✅ Полная                      |
+| Safari         | 14+          | ✅ Полная                      |
+| Edge           | 90+          | ✅ Полная                      |
+| IE 11          | —           | ❌ Не поддерживается |
 
 ---
 
@@ -1224,6 +1264,7 @@ lhci autorun
 ### 5.5. Чек-листы для QA
 
 **Перед релизом проверить:**
+
 - [ ] All pages load without console errors
 - [ ] Meta tags are correct (title, description, OG)
 - [ ] Images are optimized (WebP/AVIF)
@@ -1405,41 +1446,42 @@ jobs:
 
 ### 7.1. Критические риски
 
-| # | Риск | Вероятность | Вплив | Mitigation |
-|---|------|-------------|------|-----------|
-| 1 | API от Django медленный (timeout) | Medium | High | Rate limiting, кеширование (Redis) на уровне Nuxt |
-| 2 | Контент на русском плохо индексируется | Medium | High | Структурированные данные (JSON-LD), XML sitemap, яндекс вебмастер |
-| 3 | Мобильная версия неоптимизирована | Low | High | Mobile-first design, регулярный PageSpeed testing |
-| 4 | Высокий bounce rate на лендинге | Medium | Medium | A/B-тестирование, тепловые карты (Hotjar), пользовательские интервью |
-| 5 | DDoS атаки на публичный сайт | Low | High | Cloudflare DDoS protection, rate limiting на API |
+| # | Риск                                                                 | Вероятность | Вплив | Mitigation                                                                                                            |
+| - | ------------------------------------------------------------------------ | ---------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| 1 | API от Django медленный (timeout)                             | Medium                 | High       | Rate limiting, кеширование (Redis) на уровне Nuxt                                                  |
+| 2 | Контент на русском плохо индексируется | Medium                 | High       | Структурированные данные (JSON-LD), XML sitemap, яндекс вебмастер               |
+| 3 | Мобильная версия неоптимизирована         | Low                    | High       | Mobile-first design, регулярный PageSpeed testing                                                           |
+| 4 | Высокий bounce rate на лендинге                         | Medium                 | Medium     | A/B-тестирование, тепловые карты (Hotjar), пользовательские интервью |
+| 5 | DDoS атаки на публичный сайт                         | Low                    | High       | Cloudflare DDoS protection, rate limiting на API                                                                    |
 
 ### 7.2. Архитектурные решения (нужно согласовать до разработки)
 
 1. **Кеширование API-ответов:**
+
    - На уровне Nuxt (Pinia store с TTL)?
    - На уровне Nginx (proxy_cache)?
    - На уровне Django (Redis)?
    - **Решение:** Все три уровня: Nginx (5 мин) → Pinia (во время сессии)
-
 2. **Образ изображений (что использовать):**
+
    - Cloudinary (платный, но удобный)?
    - S3 + AVIF conversion на лету?
    - Django imagekit?
    - **Решение:** S3 + Cloudflare Image Optimization (бесплатен для Workers)
-
 3. **Хостинг Nuxt приложения:**
+
    - Vercel (оптимально для Nuxt, но зависимость от сервиса)?
    - Self-hosted на выделенном VPS?
    - Kubernetes кластер?
    - **Решение:** Self-hosted Docker на одном VPS (для контроля) + Cloudflare CDN
-
 4. **Обработка форм (где валидировать):**
+
    - Только клиент (Zod)?
    - Только сервер (Django)?
    - Оба (дублирование кода)?
    - **Решение:** Клиент (быстро), сервер (security).
-
 5. **SEO: SSR vs SSG:**
+
    - SSR для всех страниц (свежий контент, но медленнее)?
    - SSG для статического контента + ISR для обновлений?
    - **Решение:** SSR для `/`, `/pricing`, `/blog` с кешированием; SSG для `/about`, `/privacy` (статичные).
@@ -1515,15 +1557,15 @@ npm run test:lighthouse   # Performance
 
 ## 10. КОНТАКТЫ И ОТВЕТСТВЕННОСТЬ
 
-| Роль | ФИО | Контакт | Ответственность |
-|------|-----|---------|-----------------|
-| **Frontend Lead** | — | — | Архитектура, code review |
-| **Frontend Dev** | — | — | Компоненты, страницы |
-| **DevOps** | — | — | Docker, CI/CD, infra |
-| **QA** | — | — | Тестирование, checklist |
+| Роль                | ФИО | Контакт | Ответственность         |
+| ----------------------- | ------ | -------------- | -------------------------------------- |
+| **Frontend Lead** | —     | —             | Архитектура, code review    |
+| **Frontend Dev**  | —     | —             | Компоненты, страницы |
+| **DevOps**        | —     | —             | Docker, CI/CD, infra                   |
+| **QA**            | —     | —             | Тестирование, checklist    |
 
 ---
 
-**Документ согласован:** ___________  
-**Дата:** 30 декабря 2025  
-**Версия:** 1.0  
+**Документ согласован:** ___________
+**Дата:** 30 декабря 2025
+**Версия:** 1.0
