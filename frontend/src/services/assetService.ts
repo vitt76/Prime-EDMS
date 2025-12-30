@@ -188,18 +188,19 @@ class AssetService {
     }
     
     // Use the documents endpoint with search parameter
-    const response = await apiService.get<BackendPaginatedResponse<BackendOptimizedDocument>>(
+    const response = await apiService.get<any>(
       useOptimizedApi ? OPTIMIZED_DOCUMENTS_API : STANDARD_DOCUMENTS_API,
       config,
       false
     )
     
-    const adapted = adaptBackendPaginatedResponse(response)
+    const adapted = adaptBackendPaginatedResponse(response as BackendPaginatedResponse<BackendOptimizedDocument>)
     
     return {
       count: adapted.count,
       results: adapted.results,
-      facets: {} // Facets would need separate implementation
+      facets: {}, // Facets would need separate implementation
+      analytics: (response as any)?.analytics || undefined,
     }
   }
 

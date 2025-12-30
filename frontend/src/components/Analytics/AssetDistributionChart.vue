@@ -8,6 +8,10 @@
     <div class="h-72">
       <canvas ref="canvasRef" aria-label="Asset distribution chart" />
     </div>
+
+    <div class="h-40 mt-4">
+      <canvas ref="trendCanvasRef" aria-label="Asset distribution trend chart" />
+    </div>
   </Card>
 </template>
 
@@ -15,10 +19,11 @@
 import { onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 
 import Card from '@/components/Common/Card.vue'
-import type { AssetDistributionItem } from '@/stores/analyticsStore'
+import type { AssetDistributionItem, AssetDistributionTrendMonth } from '@/stores/analyticsStore'
 
 const props = defineProps<{
   distribution: AssetDistributionItem[]
+  trend: AssetDistributionTrendMonth[]
 }>()
 
 const emit = defineEmits<{
@@ -26,7 +31,9 @@ const emit = defineEmits<{
 }>()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const trendCanvasRef = ref<HTMLCanvasElement | null>(null)
 let chartInstance: import('chart.js').Chart | null = null
+let trendChartInstance: import('chart.js').Chart | null = null
 
 const TYPE_LABELS: Record<string, string> = {
   images: 'Images',
@@ -102,6 +109,62 @@ async function renderChart(): Promise<void> {
       },
     },
   })
+
+  // Trend chart (12 months), cumulative counts by type.
+  if (!trendCanvasRef.value) return
+  const trendCtx = trendCanvasRef.value.getContext('2d')
+  if (!trendCtx) return
+
+  if (trendChartInstance) {
+    trendChartInstance.destroy()
+    trendChartInstance = null
+  }
+
+  const trendMonths = (props.trend || []).map((t) => t.month)
+  const byMonth = (props.trend || []).map((t) => {
+    const map: Record<string, number> = {}
+    for (const item of t.distribution || []) map[item.type] = item.count
+    return map
+  })
+
+  const typeOrder: Array<AssetDistributionItem['type']> = ['images', 'videos', 'documents', 'other']
+  const datasets = typeOrder.map((type) => {
+    return {
+      label: TYPE_LABELS[type] || type,
+      data: byMonth.map((m) => m[type] || 0),
+      borderColor: TYPE_COLORS[type] || '#6b7280',
+      backgroundColor: 'transparent',
+      tension: 0.25,
+      pointRadius: 0,
+      borderWidth: 2,
+    }
+  })
+
+  trendChartInstance = new Chart(trendCtx, {
+    type: 'line',
+    data: {
+      labels: trendMonths,
+      datasets: datasets as any,
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false,
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 6,
+          },
+        },
+      },
+    },
+  })
 }
 
 watch(
@@ -122,6 +185,10 @@ onUnmounted(() => {
   if (chartInstance) {
     chartInstance.destroy()
     chartInstance = null
+  }
+  if (trendChartInstance) {
+    trendChartInstance.destroy()
+    trendChartInstance = null
   }
 })
 </script>

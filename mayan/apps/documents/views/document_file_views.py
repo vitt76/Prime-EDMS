@@ -115,7 +115,7 @@ class DocumentFileDownloadView(SingleObjectDownloadView):
             from mayan.apps.analytics.models import AssetEvent
             from mayan.apps.analytics.utils import track_asset_event
 
-            track_asset_event(
+            download_event = track_asset_event(
                 document=instance.document,
                 event_type=AssetEvent.EVENT_TYPE_DOWNLOAD,
                 user=self.request.user,
@@ -140,6 +140,16 @@ class DocumentFileDownloadView(SingleObjectDownloadView):
                             'document_file_id': instance.pk,
                         }
                     )
+            except Exception:
+                pass
+
+            # Link download to the latest open SearchSession (Search-to-Find time).
+            try:
+                from mayan.apps.analytics.services import link_download_to_latest_search_session
+
+                link_download_to_latest_search_session(
+                    user=self.request.user, download_event=download_event, max_window_minutes=30
+                )
             except Exception:
                 pass
         except Exception:

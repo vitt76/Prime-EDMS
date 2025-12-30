@@ -9,12 +9,18 @@ export interface AssetBankTopMetrics {
   mau: number
   search_success_rate: number
   avg_find_time_minutes: number | null
+  cdn_cost_per_month?: number | null
 }
 
 export interface AssetDistributionItem {
   type: 'images' | 'videos' | 'documents' | 'other'
   count: number
   size_bytes: number
+}
+
+export interface AssetDistributionTrendMonth {
+  month: string
+  distribution: Array<{ type: AssetDistributionItem['type']; count: number }>
 }
 
 export interface MostDownloadedAssetRow {
@@ -86,6 +92,7 @@ export interface CampaignDashboardResponse {
     status: string
     assets_count: number
     roi: number | null
+    avg_engagement_minutes?: number | null
     cost_amount: any
     revenue_amount: any
     currency: string
@@ -93,6 +100,10 @@ export interface CampaignDashboardResponse {
   } | null
   timeline: Array<{ timestamp__date: string; views: number; downloads: number }>
   channels: Array<{ channel: string; views: number; downloads: number }>
+  baseline?: {
+    campaign: { id: string; label: string }
+    timeline: Array<{ timestamp__date: string; views: number; downloads: number }>
+  } | null
 }
 
 export interface CampaignTopAssetRow {
@@ -147,6 +158,7 @@ export const useAnalyticsStore = defineStore('analytics', () => {
   // Asset Bank state
   const assetBankTopMetrics = ref<AssetBankTopMetrics | null>(null)
   const assetDistribution = ref<AssetDistributionItem[]>([])
+  const assetDistributionTrend = ref<AssetDistributionTrendMonth[]>([])
   const mostDownloadedAssets = ref<MostDownloadedAssetRow[]>([])
   const assetReuseMetrics = ref<AssetReuseMetrics | null>(null)
   const storageTrends = ref<StorageTrendsResponse | null>(null)
@@ -161,24 +173,44 @@ export const useAnalyticsStore = defineStore('analytics', () => {
   const campaignTopAssets = ref<CampaignTopAssetRow[]>([])
   const campaignTimeline = ref<CampaignTimelineResponse | null>(null)
 
+  // Release 3 foundation: Distribution + Content Intelligence
+  const distributionDashboard = ref<any | null>(null)
+  const contentGaps = ref<any | null>(null)
+  const metadataComplianceAlerts = ref<any | null>(null)
+
   // Common state
   const isLoading = ref(false)
   const lastUpdated = ref<Date | null>(null)
   const error = ref<string | null>(null)
 
+  // User activity state (Release 2)
+  const userLoginPatterns = ref<any | null>(null)
+  const userCohorts = ref<any | null>(null)
+  const featureAdoption = ref<any | null>(null)
+
+  // Approval analytics state (Release 2)
+  const approvalSummary = ref<any | null>(null)
+  const approvalTimeseries = ref<any | null>(null)
+  const approvalRecommendations = ref<any | null>(null)
+
   // Cross-chart filters (Asset Bank)
   const filters = ref<{
     dateRange: [string, string] | null
     assetType: 'images' | 'videos' | 'documents' | 'other' | null
+    department: string | null
+    owner: string | null
   }>({
     dateRange: null,
     assetType: null,
+    department: null,
+    owner: null,
   })
 
   const hasData = computed(() => {
     return (
       !!assetBankTopMetrics.value ||
       assetDistribution.value.length > 0 ||
+      assetDistributionTrend.value.length > 0 ||
       mostDownloadedAssets.value.length > 0 ||
       !!assetReuseMetrics.value ||
       !!storageTrends.value ||
@@ -213,10 +245,25 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     }
   }
 
+  async function fetchAssetDistributionTrend(): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      assetDistributionTrend.value = await analyticsService.getAssetDistributionTrend()
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить тренд распределения'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   async function fetchMostDownloadedAssets(params?: {
     date_from?: string
     date_to?: string
     asset_type?: 'images' | 'videos' | 'documents' | 'other'
+    department?: string
+    owner?: string
   }): Promise<void> {
     isLoading.value = true
     error.value = null
@@ -228,6 +275,12 @@ export const useAnalyticsStore = defineStore('analytics', () => {
       }
       if (!effectiveParams.asset_type && filters.value.assetType) {
         effectiveParams.asset_type = filters.value.assetType
+      }
+      if (!effectiveParams.department && filters.value.department) {
+        effectiveParams.department = filters.value.department
+      }
+      if (!effectiveParams.owner && filters.value.owner) {
+        effectiveParams.owner = filters.value.owner
       }
 
       mostDownloadedAssets.value = await analyticsService.getMostDownloadedAssets(effectiveParams)
@@ -273,6 +326,84 @@ export const useAnalyticsStore = defineStore('analytics', () => {
       lastUpdated.value = new Date()
     } catch (e: any) {
       error.value = e?.message || 'Не удалось загрузить adoption heatmap'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function fetchUserLoginPatterns(params?: { days?: number }): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      userLoginPatterns.value = await analyticsService.getUserLoginPatterns(params)
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить login patterns'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function fetchUserCohorts(params?: { cohort_weeks?: number; retention_weeks?: number }): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      userCohorts.value = await analyticsService.getUserCohorts(params)
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить cohorts'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function fetchFeatureAdoption(params?: { days?: number }): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      featureAdoption.value = await analyticsService.getFeatureAdoption(params)
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить feature adoption'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function fetchDistributionDashboard(params?: { days?: number }): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      distributionDashboard.value = await analyticsService.getDistributionDashboard(params)
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить Distribution dashboard'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function fetchContentGaps(params?: { days?: number }): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      contentGaps.value = await analyticsService.getContentGaps(params)
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить Content Gaps'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function fetchMetadataComplianceAlerts(params?: { limit?: number }): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      metadataComplianceAlerts.value = await analyticsService.getMetadataComplianceAlerts(params)
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить metadata compliance alerts'
     } finally {
       isLoading.value = false
     }
@@ -373,10 +504,50 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     }
   }
 
+  async function fetchApprovalSummary(params?: { days?: number }): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      approvalSummary.value = await analyticsService.getApprovalSummary(params)
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить approvals summary'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function fetchApprovalTimeseries(params?: { days?: number }): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      approvalTimeseries.value = await analyticsService.getApprovalTimeseries(params)
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить approvals timeseries'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function fetchApprovalRecommendations(params?: { days?: number }): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      approvalRecommendations.value = await analyticsService.getApprovalRecommendations(params)
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить approvals recommendations'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   async function fetchAssetBankAll(): Promise<void> {
     await Promise.all([
       fetchAssetBankTopMetrics(),
       fetchAssetDistribution(),
+      fetchAssetDistributionTrend(),
       fetchMostDownloadedAssets(),
       fetchAssetReuseMetrics(),
       fetchStorageTrends(),
@@ -393,20 +564,38 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     filters.value.assetType = type
   }
 
+  function setDepartment(department: string | null): void {
+    filters.value.department = department
+  }
+
+  function setOwner(owner: string | null): void {
+    filters.value.owner = owner
+  }
+
   async function applyFilters(): Promise<void> {
-    await fetchMostDownloadedAssets()
+    await fetchAssetBankAll()
   }
 
   return {
     // state
     assetBankTopMetrics,
     assetDistribution,
+    assetDistributionTrend,
     mostDownloadedAssets,
     assetReuseMetrics,
     storageTrends,
     userAdoptionHeatmap,
     assetBankAlerts,
     roiSummary,
+    userLoginPatterns,
+    userCohorts,
+    featureAdoption,
+    approvalSummary,
+    approvalTimeseries,
+    approvalRecommendations,
+    distributionDashboard,
+    contentGaps,
+    metadataComplianceAlerts,
     isLoading,
     lastUpdated,
     error,
@@ -416,15 +605,27 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     // actions
     fetchAssetBankTopMetrics,
     fetchAssetDistribution,
+    fetchAssetDistributionTrend,
     fetchMostDownloadedAssets,
     fetchAssetReuseMetrics,
     fetchStorageTrends,
     fetchUserAdoptionHeatmap,
     fetchAssetBankAlerts,
     fetchRoiSummary,
+    fetchUserLoginPatterns,
+    fetchUserCohorts,
+    fetchFeatureAdoption,
+    fetchApprovalSummary,
+    fetchApprovalTimeseries,
+    fetchApprovalRecommendations,
+    fetchDistributionDashboard,
+    fetchContentGaps,
+    fetchMetadataComplianceAlerts,
     fetchAssetBankAll,
     setDateRange,
     setAssetType,
+    setDepartment,
+    setOwner,
     applyFilters,
 
     // Campaign Performance state

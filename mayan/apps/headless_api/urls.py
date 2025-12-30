@@ -30,7 +30,8 @@ from .views.notification_views import (
 )
 from .views.analytics_views import (
     AssetBankViewSet, CampaignPerformanceViewSet, SearchAnalyticsViewSet,
-    ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet
+    ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet,
+    DistributionAnalyticsViewSet, ContentIntelligenceViewSet
 )
 
 app_name = 'headless_api'
@@ -160,9 +161,19 @@ api_urls = [
         name='api-analytics-asset-bank-distribution'
     ),
     url(
+        regex=r'^analytics/dashboard/assets/distribution-trend/$',
+        view=AssetBankViewSet.as_view({'get': 'distribution_trend'}),
+        name='api-analytics-asset-bank-distribution-trend'
+    ),
+    url(
         regex=r'^analytics/dashboard/assets/most-downloaded/$',
         view=AssetBankViewSet.as_view({'get': 'most_downloaded'}),
         name='api-analytics-asset-bank-most-downloaded'
+    ),
+    url(
+        regex=r'^analytics/dashboard/assets/detail/$',
+        view=AssetBankViewSet.as_view({'get': 'asset_detail'}),
+        name='api-analytics-asset-bank-asset-detail'
     ),
     url(
         regex=r'^analytics/dashboard/assets/reuse-metrics/$',
@@ -196,6 +207,11 @@ api_urls = [
         name='api-analytics-campaigns-add-assets'
     ),
     url(
+        regex=r'^analytics/campaigns/(?P<campaign_id>[\w-]+)/engagement/$',
+        view=CampaignPerformanceViewSet.as_view({'post': 'engagement'}),
+        name='api-analytics-campaigns-engagement'
+    ),
+    url(
         regex=r'^analytics/dashboard/campaigns/$',
         view=CampaignPerformanceViewSet.as_view({'get': 'dashboard'}),
         name='api-analytics-campaigns-dashboard'
@@ -209,6 +225,11 @@ api_urls = [
         regex=r'^analytics/dashboard/campaigns/timeline/$',
         view=CampaignPerformanceViewSet.as_view({'get': 'timeline'}),
         name='api-analytics-campaigns-timeline'
+    ),
+    url(
+        regex=r'^analytics/dashboard/campaigns/geography/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'geography'}),
+        name='api-analytics-campaigns-geography'
     ),
     # Analytics (Phase 2 - Search Analytics)
     url(
@@ -226,11 +247,31 @@ api_urls = [
         view=SearchAnalyticsViewSet.as_view({'get': 'daily'}),
         name='api-analytics-search-daily'
     ),
+    url(
+        regex=r'^analytics/track/search/click/$',
+        view=SearchAnalyticsViewSet.as_view({'post': 'click'}),
+        name='api-analytics-search-track-click'
+    ),
     # Analytics (Phase 2 - User activity)
     url(
         regex=r'^analytics/dashboard/users/adoption-heatmap/$',
         view=UserActivityViewSet.as_view({'get': 'adoption_by_department'}),
         name='api-analytics-user-adoption-heatmap'
+    ),
+    url(
+        regex=r'^analytics/dashboard/users/login-patterns/$',
+        view=UserActivityViewSet.as_view({'get': 'login_patterns'}),
+        name='api-analytics-user-login-patterns'
+    ),
+    url(
+        regex=r'^analytics/dashboard/users/cohorts/$',
+        view=UserActivityViewSet.as_view({'get': 'cohorts'}),
+        name='api-analytics-user-cohorts'
+    ),
+    url(
+        regex=r'^analytics/dashboard/users/feature-adoption/$',
+        view=UserActivityViewSet.as_view({'get': 'feature_adoption'}),
+        name='api-analytics-user-feature-adoption'
     ),
     # Analytics (Phase 2 - Approval workflow)
     url(
@@ -239,8 +280,40 @@ api_urls = [
         name='api-analytics-approvals-summary'
     ),
     url(
+        regex=r'^analytics/dashboard/approvals/timeseries/$',
+        view=ApprovalAnalyticsViewSet.as_view({'get': 'timeseries'}),
+        name='api-analytics-approvals-timeseries'
+    ),
+    url(
+        regex=r'^analytics/dashboard/approvals/recommendations/$',
+        view=ApprovalAnalyticsViewSet.as_view({'get': 'recommendations'}),
+        name='api-analytics-approvals-recommendations'
+    ),
+    url(
         regex=r'^analytics/dashboard/roi/summary/$',
         view=ROIDashboardViewSet.as_view({'get': 'summary'}),
         name='api-analytics-roi-summary'
+    ),
+    # Analytics (Release 3 - Distribution)
+    url(
+        regex=r'^analytics/dashboard/distribution/$',
+        view=DistributionAnalyticsViewSet.as_view({'get': 'dashboard'}),
+        name='api-analytics-distribution-dashboard'
+    ),
+    url(
+        regex=r'^analytics/ingest/distribution-events/$',
+        view=DistributionAnalyticsViewSet.as_view({'post': 'ingest'}),
+        name='api-analytics-distribution-ingest'
+    ),
+    # Analytics (Release 3 - Content Intelligence)
+    url(
+        regex=r'^analytics/dashboard/content-intel/content-gaps/$',
+        view=ContentIntelligenceViewSet.as_view({'get': 'content_gaps'}),
+        name='api-analytics-content-gaps'
+    ),
+    url(
+        regex=r'^analytics/dashboard/content-intel/compliance/metadata/$',
+        view=ContentIntelligenceViewSet.as_view({'get': 'metadata_compliance'}),
+        name='api-analytics-content-intel-metadata-compliance'
     ),
 ]

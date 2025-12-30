@@ -127,6 +127,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSearchStore } from '@/stores/searchStore'
+import { analyticsService } from '@/services/analyticsService'
 import SearchBar from '@/components/DAM/SearchBar.vue'
 import FiltersPanel from '@/components/DAM/FiltersPanel.vue'
 import AssetCard from '@/components/DAM/AssetCard.vue'
@@ -182,10 +183,37 @@ function handleSearch(query: string) {
 }
 
 function handleResultSelected(assetId: number) {
+  try {
+    const startedAt = searchStore.lastSearchStartedAt
+    const deltaSeconds = startedAt ? Math.floor((Date.now() - startedAt.getTime()) / 1000) : null
+    analyticsService.trackSearchClick({
+      document_id: assetId,
+      search_query_id: searchStore.lastSearchAnalytics?.search_query_id ?? null,
+      search_session_id: searchStore.lastSearchAnalytics?.search_session_id ?? null,
+      click_position: 1,
+      time_to_click_seconds: deltaSeconds,
+    })
+  } catch {
+    // best-effort
+  }
   router.push(`/dam/assets/${assetId}`)
 }
 
 function handleAssetOpen(asset: any) {
+  try {
+    const startedAt = searchStore.lastSearchStartedAt
+    const deltaSeconds = startedAt ? Math.floor((Date.now() - startedAt.getTime()) / 1000) : null
+    const index = (searchStore.results || []).findIndex((a: any) => a?.id === asset?.id)
+    analyticsService.trackSearchClick({
+      document_id: asset.id,
+      search_query_id: searchStore.lastSearchAnalytics?.search_query_id ?? null,
+      search_session_id: searchStore.lastSearchAnalytics?.search_session_id ?? null,
+      click_position: index >= 0 ? index + 1 : null,
+      time_to_click_seconds: deltaSeconds,
+    })
+  } catch {
+    // best-effort
+  }
   router.push(`/dam/assets/${asset.id}`)
 }
 

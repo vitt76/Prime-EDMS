@@ -263,6 +263,9 @@ class CampaignDailyMetrics(models.Model):
         verbose_name=_('Top document')
     )
     channel_breakdown = models.JSONField(blank=True, default=dict, verbose_name=_('Channel breakdown'))
+    avg_engagement_minutes = models.FloatField(
+        blank=True, null=True, verbose_name=_('Avg engagement (minutes)')
+    )
 
     class Meta:
         db_table = 'analytics_campaign_daily_metrics'
@@ -338,6 +341,56 @@ class UserDailyMetrics(models.Model):
 
     def __str__(self):
         return f'{self.user_id} - {self.date}'
+
+
+class SearchSession(models.Model):
+    """Group search queries with the subsequent 'find' action (download).
+
+    This enables measuring Search-to-Find / Search-to-Download time in a way that
+    is robust to multiple searches and downloads by the same user.
+    """
+
+    id = models.UUIDField(primary_key=True, editable=False, default=uuid.uuid4)
+    user = models.ForeignKey(
+        to=settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='analytics_search_sessions',
+        verbose_name=_('User')
+    )
+    started_at = models.DateTimeField(db_index=True, verbose_name=_('Started at'))
+    ended_at = models.DateTimeField(blank=True, null=True, db_index=True, verbose_name=_('Ended at'))
+
+    first_search_query = models.ForeignKey(
+        to='analytics.SearchQuery',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='first_search_sessions',
+        verbose_name=_('First search query')
+    )
+    last_download_event = models.ForeignKey(
+        to='analytics.AssetEvent',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='search_sessions_download',
+        verbose_name=_('Last download event')
+    )
+    time_to_find_seconds = models.IntegerField(
+        blank=True, null=True, verbose_name=_('Time to find (seconds)')
+    )
+
+    class Meta:
+        db_table = 'analytics_search_sessions'
+        verbose_name = _('Search session')
+        verbose_name_plural = _('Search sessions')
+        indexes = (
+            models.Index(fields=('user', '-started_at')),
+            models.Index(fields=('ended_at',)),
+        )
+
+    def __str__(self):
+        return f'{self.user_id} - {self.started_at}'
 
 
 class ApprovalWorkflowEvent(models.Model):
@@ -499,6 +552,9 @@ class SearchQuery(models.Model):
     results_count = models.IntegerField(blank=True, null=True, verbose_name=_('Results count'))
     response_time_ms = models.IntegerField(blank=True, null=True, verbose_name=_('Response time (ms)'))
     filters_applied = models.JSONField(blank=True, default=dict, verbose_name=_('Filters applied'))
+    search_session_id = models.UUIDField(
+        blank=True, null=True, db_index=True, verbose_name=_('Search session ID')
+    )
 
     was_clicked_result_document_id = models.IntegerField(blank=True, null=True, verbose_name=_('Clicked document ID'))
     click_position = models.IntegerField(blank=True, null=True, verbose_name=_('Click position'))
@@ -542,4 +598,200 @@ class SearchDailyMetrics(models.Model):
 
     def __str__(self):
         return str(self.date)
+
+
+class CDNRate(models.Model):
+    """CDN pricing rates by region and channel (Phase 2+)."""
+
+    region = models.CharField(max_length=50, default='default', db_index=True, verbose_name=_('Region'))
+    channel = models.CharField(max_length=50, default='default', db_index=True, verbose_name=_('Channel'))
+    cost_per_gb_usd = models.DecimalField(
+        max_digits=10, decimal_places=4, default=0.10, verbose_name=_('Cost per GB (USD)')
+    )
+    effective_from = models.DateField(db_index=True, verbose_name=_('Effective from'))
+    effective_to = models.DateField(blank=True, null=True, db_index=True, verbose_name=_('Effective to'))
+
+    class Meta:
+        db_table = 'analytics_cdn_rates'
+        verbose_name = _('CDN rate')
+        verbose_name_plural = _('CDN rates')
+        unique_together = (('region', 'channel', 'effective_from'),)
+        indexes = (
+            models.Index(fields=('channel', 'effective_from')),
+        )
+
+    def __str__(self):
+        return f'{self.region}:{self.channel} @ {self.cost_per_gb_usd}'
+
+
+class CDNDailyCost(models.Model):
+    """Daily CDN bandwidth and cost rollups."""
+
+    date = models.DateField(db_index=True, verbose_name=_('Date'))
+    region = models.CharField(max_length=50, default='default', verbose_name=_('Region'))
+    channel = models.CharField(max_length=50, default='default', verbose_name=_('Channel'))
+    bandwidth_gb = models.FloatField(default=0.0, verbose_name=_('Bandwidth (GB)'))
+    cost_usd = models.DecimalField(max_digits=14, decimal_places=2, default=0.0, verbose_name=_('Cost (USD)'))
+
+    class Meta:
+        db_table = 'analytics_cdn_daily_costs'
+        verbose_name = _('CDN daily cost')
+        verbose_name_plural = _('CDN daily costs')
+        unique_together = (('date', 'region', 'channel'),)
+        indexes = (
+            models.Index(fields=('date', 'channel')),
+            models.Index(fields=('date', 'region')),
+        )
+
+    def __str__(self):
+        return f'{self.date} {self.channel}: {self.cost_usd}'
+
+
+class FeatureUsage(models.Model):
+    """Feature usage tracking (Level 3)."""
+
+    user = models.ForeignKey(
+        to=settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='analytics_feature_usage',
+        verbose_name=_('User')
+    )
+    feature_name = models.CharField(max_length=100, db_index=True, verbose_name=_('Feature name'))
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name=_('Timestamp'))
+    was_successful = models.BooleanField(default=True, verbose_name=_('Was successful'))
+    metadata = models.JSONField(blank=True, default=dict, verbose_name=_('Metadata'))
+
+    class Meta:
+        db_table = 'analytics_feature_usage'
+        verbose_name = _('Feature usage')
+        verbose_name_plural = _('Feature usage')
+        indexes = (
+            models.Index(fields=('feature_name', '-timestamp')),
+            models.Index(fields=('user', '-timestamp')),
+        )
+
+    def __str__(self):
+        return f'{self.feature_name} - {self.timestamp}'
+
+
+class CampaignEngagementEvent(models.Model):
+    """Raw engagement events for campaigns/collections (Level 2)."""
+
+    campaign = models.ForeignKey(
+        to='analytics.Campaign',
+        on_delete=models.CASCADE,
+        related_name='engagement_events',
+        verbose_name=_('Campaign')
+    )
+    user = models.ForeignKey(
+        to=settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='analytics_campaign_engagement_events',
+        verbose_name=_('User')
+    )
+    started_at = models.DateTimeField(db_index=True, verbose_name=_('Started at'))
+    ended_at = models.DateTimeField(db_index=True, verbose_name=_('Ended at'))
+    duration_seconds = models.PositiveIntegerField(verbose_name=_('Duration (seconds)'))
+    metadata = models.JSONField(blank=True, default=dict, verbose_name=_('Metadata'))
+
+    class Meta:
+        db_table = 'analytics_campaign_engagement_events'
+        verbose_name = _('Campaign engagement event')
+        verbose_name_plural = _('Campaign engagement events')
+        indexes = (
+            models.Index(fields=('campaign', '-started_at')),
+            models.Index(fields=('campaign', '-ended_at')),
+        )
+
+    def __str__(self):
+        return f'{self.campaign_id} - {self.duration_seconds}s'
+
+
+class DistributionEvent(models.Model):
+    """Raw distribution events for multi-channel analytics (Release 3 foundation)."""
+
+    EVENT_TYPE_SYNCED = 'synced'
+    EVENT_TYPE_CONVERTED = 'converted'
+    EVENT_TYPE_PUBLISHED = 'published'
+    EVENT_TYPE_DELIVERED = 'delivered'
+    EVENT_TYPE_ERROR = 'error'
+
+    EVENT_TYPE_CHOICES = (
+        (EVENT_TYPE_SYNCED, _('Synced')),
+        (EVENT_TYPE_CONVERTED, _('Converted')),
+        (EVENT_TYPE_PUBLISHED, _('Published')),
+        (EVENT_TYPE_DELIVERED, _('Delivered')),
+        (EVENT_TYPE_ERROR, _('Error')),
+    )
+
+    STATUS_OK = 'ok'
+    STATUS_WARNING = 'warning'
+    STATUS_ERROR = 'error'
+    STATUS_SYNCING = 'syncing'
+
+    STATUS_CHOICES = (
+        (STATUS_OK, _('OK')),
+        (STATUS_WARNING, _('Warning')),
+        (STATUS_ERROR, _('Error')),
+        (STATUS_SYNCING, _('Syncing')),
+    )
+
+    id = models.BigAutoField(primary_key=True)
+    channel = models.CharField(max_length=50, db_index=True, verbose_name=_('Channel'))
+    event_type = models.CharField(
+        max_length=50, choices=EVENT_TYPE_CHOICES, db_index=True, verbose_name=_('Event type')
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, db_index=True, verbose_name=_('Status'))
+
+    document = models.ForeignKey(
+        to='documents.Document',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='analytics_distribution_events',
+        verbose_name=_('Document')
+    )
+    campaign = models.ForeignKey(
+        to='analytics.Campaign',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='analytics_distribution_events',
+        verbose_name=_('Campaign')
+    )
+
+    views = models.PositiveIntegerField(blank=True, null=True, verbose_name=_('Views'))
+    clicks = models.PositiveIntegerField(blank=True, null=True, verbose_name=_('Clicks'))
+    conversions = models.PositiveIntegerField(blank=True, null=True, verbose_name=_('Conversions'))
+    revenue_amount = models.DecimalField(
+        max_digits=18, decimal_places=2, blank=True, null=True, verbose_name=_('Revenue amount')
+    )
+    currency = models.CharField(max_length=10, blank=True, default='', verbose_name=_('Currency'))
+
+    bandwidth_bytes = models.BigIntegerField(blank=True, null=True, verbose_name=_('Bandwidth (bytes)'))
+    latency_ms = models.IntegerField(blank=True, null=True, verbose_name=_('Latency (ms)'))
+
+    external_id = models.CharField(max_length=255, blank=True, default='', db_index=True, verbose_name=_('External ID'))
+    occurred_at = models.DateTimeField(db_index=True, verbose_name=_('Occurred at'))
+
+    metadata = models.JSONField(blank=True, default=dict, verbose_name=_('Metadata'))
+
+    class Meta:
+        db_table = 'analytics_distribution_events'
+        verbose_name = _('Distribution event')
+        verbose_name_plural = _('Distribution events')
+        indexes = (
+            models.Index(fields=('channel', '-occurred_at')),
+            models.Index(fields=('event_type', '-occurred_at')),
+            models.Index(fields=('status', '-occurred_at')),
+            models.Index(fields=('document', '-occurred_at')),
+            models.Index(fields=('campaign', '-occurred_at')),
+        )
+
+    def __str__(self):
+        return f'{self.channel} - {self.event_type} - {self.status}'
 

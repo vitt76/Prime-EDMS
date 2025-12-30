@@ -2,8 +2,41 @@ from django.contrib.auth.signals import user_logged_in, user_logged_out
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
+from django.conf import settings
 
 from .models import ApprovalWorkflowEvent, UserSession
+from .utils import anonymize_ip_address
+
+
+def _get_geo_from_ip(ip_address):
+    """Best-effort GeoIP lookup.
+
+    Requires:
+        - python package: geoip2
+        - settings.GEOIP_DATABASE_PATH pointing to a MaxMind GeoLite2 City DB
+    """
+    db_path = getattr(settings, 'GEOIP_DATABASE_PATH', '') or ''
+    if not ip_address or not db_path:
+        return '', ''
+
+    try:
+        import geoip2.database
+        import geoip2.errors
+    except Exception:
+        return '', ''
+
+    try:
+        reader = geoip2.database.Reader(db_path)
+    except Exception:
+        return '', ''
+
+    try:
+        response = reader.city(ip_address)
+        country = getattr(getattr(response, 'country', None), 'iso_code', '') or ''
+        city = getattr(getattr(response, 'city', None), 'name', '') or ''
+        return (country or ''), (city or '')
+    except Exception:
+        return '', ''
 
 
 @receiver(signal=user_logged_in)
@@ -28,11 +61,16 @@ def handler_user_logged_in(sender, request, user, **kwargs):
     except Exception:
         user_agent = ''
 
+    ip_address_anonymized = anonymize_ip_address(ip_address)
+    geo_country, geo_city = _get_geo_from_ip(ip_address)
+
     UserSession.objects.create(
         user=user,
         session_key=session_key,
         login_timestamp=timezone.now(),
-        ip_address=ip_address,
+        geo_country=geo_country or '',
+        geo_city=geo_city or '',
+        ip_address=ip_address_anonymized,
         user_agent=user_agent,
     )
 

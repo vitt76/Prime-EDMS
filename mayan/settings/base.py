@@ -175,6 +175,7 @@ MIDDLEWARE = (
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'stronghold.middleware.LoginRequiredMiddleware',
+    'mayan.apps.analytics.middleware.FeatureUsageMiddleware',
     'mayan.apps.views.middleware.ajax_redirect.AjaxRedirect'
 )
 

@@ -86,3 +86,32 @@ def track_cdn_delivery(
     )
 
 
+def anonymize_ip_address(ip_address: Optional[str]) -> Optional[str]:
+    """Anonymize an IP address for privacy/GDPR.
+
+    IPv4: keep first two octets, zero the rest: 192.168.0.0
+    IPv6: keep first 4 hextets, zero the rest (best-effort): abcd:ef01:2345:6789:0000:0000:0000:0000
+    """
+    if not ip_address:
+        return None
+
+    value = str(ip_address).strip()
+    if not value:
+        return None
+
+    if '.' in value:
+        parts = value.split('.')
+        if len(parts) == 4:
+            return f'{parts[0]}.{parts[1]}.0.0'
+        return value
+
+    if ':' in value:
+        parts = value.split(':')
+        # best-effort, do not try to fully normalize compressed IPv6 here
+        if len(parts) >= 4:
+            return ':'.join(parts[:4] + ['0000'] * 4)
+        return value
+
+    return value
+
+

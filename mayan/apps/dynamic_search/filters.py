@@ -1,9 +1,12 @@
 import logging
 import operator
 import time
+from datetime import timedelta
+import uuid
 
 from django.conf import settings
 from django.apps import apps
+from django.utils import timezone
 
 from rest_framework.filters import BaseFilterBackend
 
@@ -41,22 +44,52 @@ class RESTAPISearchFilter(BaseFilterBackend):
             SearchQuery = apps.get_model('analytics', 'SearchQuery')
         except Exception:
             return
+        try:
+            SearchSession = apps.get_model('analytics', 'SearchSession')
+        except Exception:
+            SearchSession = None
 
         query_text = query_dict_cleaned.get(QUERY_PARAMETER_ANY_FIELD) or ''
         if not query_text:
             query_text = ' '.join([str(value) for value in query_dict_cleaned.values()]).strip()
 
         user = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+        user_department = ''
+        if user:
+            user_department = getattr(user, 'department', '') or ''
 
-        SearchQuery.objects.create(
+        # Best-effort search session linking (for Search-to-Find metrics).
+        search_session_id = None
+        if user and SearchSession is not None:
+            now = timezone.now()
+            window_start = now - timedelta(minutes=30)
+            session = (
+                SearchSession.objects.filter(user=user, ended_at__isnull=True, started_at__gte=window_start)
+                .order_by('-started_at')
+                .first()
+            )
+            if not session:
+                session = SearchSession.objects.create(id=uuid.uuid4(), user=user, started_at=now)
+            search_session_id = session.pk
+
+        query = SearchQuery.objects.create(
             user=user,
             query_text=(query_text or '')[:500],
             search_type=SearchQuery.SEARCH_TYPE_KEYWORD,
             results_count=results_count,
             response_time_ms=response_time_ms,
             filters_applied=query_dict_cleaned,
-            user_department=''
+            user_department=user_department,
+            search_session_id=search_session_id
         )
+
+        if user and SearchSession is not None and search_session_id:
+            try:
+                SearchSession.objects.filter(pk=search_session_id, first_search_query__isnull=True).update(
+                    first_search_query=query
+                )
+            except Exception:
+                pass
 
     def get_search_model(self, queryset):
         try:

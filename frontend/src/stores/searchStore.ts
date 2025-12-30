@@ -25,6 +25,8 @@ export const useSearchStore = defineStore(
     const recentSearches = ref<string[]>([])
     const savedSearches = ref<SavedSearch[]>([])
     const searchHistory = ref<Array<{ query: string; timestamp: Date }>>([])
+    const lastSearchAnalytics = ref<{ search_query_id?: number | null; search_session_id?: string | null } | null>(null)
+    const lastSearchStartedAt = ref<Date | null>(null)
 
     // Getters
     const hasResults = computed(() => results.value.length > 0)
@@ -60,11 +62,13 @@ export const useSearchStore = defineStore(
           offset: 0
         }
 
+        lastSearchStartedAt.value = new Date()
         const response: SearchResponse = await assetService.searchAssets(searchParams)
 
         results.value = response.results
         totalCount.value = response.count
         facets.value = response.facets
+        lastSearchAnalytics.value = response.analytics || null
 
         // Add to recent searches (max 5)
         addToRecent(query.value)
@@ -93,11 +97,13 @@ export const useSearchStore = defineStore(
       error.value = null
 
       try {
+        lastSearchStartedAt.value = new Date()
         const response: SearchResponse = await assetService.searchAssets(searchParams)
 
         results.value = response.results
         totalCount.value = response.count
         facets.value = response.facets
+        lastSearchAnalytics.value = response.analytics || null
 
         if (searchParams.q) {
           query.value = searchParams.q
@@ -212,6 +218,8 @@ export const useSearchStore = defineStore(
       recentSearches,
       savedSearches,
       searchHistory,
+      lastSearchAnalytics,
+      lastSearchStartedAt,
       // Getters
       hasResults,
       resultCount,

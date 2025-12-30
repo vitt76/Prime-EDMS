@@ -1,7 +1,7 @@
 <template>
   <Card padding="lg">
     <div class="flex items-center justify-between gap-4 mb-4">
-      <h3 class="text-base font-semibold text-neutral-900">Most Downloaded Assets</h3>
+      <h3 class="text-base font-semibold text-neutral-900">Топ скачиваемых файлов</h3>
       <div class="flex items-center gap-2">
         <button
           class="px-3 py-2 text-sm rounded-md border border-neutral-300 hover:bg-neutral-50"
@@ -27,33 +27,38 @@
       </div>
     </div>
 
-    <div class="overflow-auto border border-neutral-200 rounded-lg">
+    <div v-if="rows.length === 0" class="py-10 text-center text-neutral-500">
+      <svg class="w-10 h-10 mx-auto text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m4 6V7m4 10v-4M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      </svg>
+      <div class="mt-3 text-sm">Нет данных за выбранный период</div>
+    </div>
+
+    <div v-else class="overflow-auto border border-neutral-200 rounded-lg">
       <table class="min-w-full text-sm">
         <thead class="bg-neutral-50">
           <tr class="text-left">
-            <th class="px-3 py-2 font-semibold text-neutral-700">Asset</th>
+            <th class="px-3 py-2 font-semibold text-neutral-700">Файл</th>
             <th class="px-3 py-2 font-semibold text-neutral-700 cursor-pointer" @click="toggleSort('downloads')">
-              Downloads
+              Скачивания
               <span v-if="sortKey === 'downloads'">{{ sortDir === 'desc' ? '↓' : '↑' }}</span>
             </th>
             <th class="px-3 py-2 font-semibold text-neutral-700 cursor-pointer" @click="toggleSort('views')">
-              Views
+              Просмотры
               <span v-if="sortKey === 'views'">{{ sortDir === 'desc' ? '↓' : '↑' }}</span>
             </th>
             <th class="px-3 py-2 font-semibold text-neutral-700 cursor-pointer" @click="toggleSort('shares')">
-              Shares
+              Шеринг
               <span v-if="sortKey === 'shares'">{{ sortDir === 'desc' ? '↓' : '↑' }}</span>
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="rows.length === 0">
-            <td class="px-3 py-4 text-neutral-500" colspan="4">Нет данных</td>
-          </tr>
           <tr
             v-for="row in pagedRows"
             :key="row.document_id"
-            class="border-t border-neutral-200 hover:bg-neutral-50"
+            class="border-t border-neutral-200 hover:bg-neutral-50 cursor-pointer"
+            @click="emit('select', row)"
           >
             <td class="px-3 py-2">
               <div class="font-medium text-neutral-900">
@@ -103,6 +108,10 @@ import type { MostDownloadedAssetRow } from '@/stores/analyticsStore'
 const props = defineProps<{
   rows: MostDownloadedAssetRow[]
   pageSize?: number
+}>()
+
+const emit = defineEmits<{
+  select: [row: MostDownloadedAssetRow]
 }>()
 
 const page = ref(1)
@@ -162,7 +171,7 @@ function exportCsv(): void {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'most-downloaded-assets.csv'
+  link.download = 'top-downloaded-assets.csv'
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -182,7 +191,7 @@ function exportJson(): void {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'most-downloaded-assets.json'
+  link.download = 'top-downloaded-assets.json'
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -195,9 +204,9 @@ async function exportPdf(): Promise<void> {
 
   const doc = new jsPDF({ orientation: 'landscape' })
   doc.setFontSize(14)
-  doc.text('Most Downloaded Assets', 14, 14)
+  doc.text('Топ скачиваемых файлов', 14, 14)
 
-  const head = [['ID', 'Asset', 'Downloads', 'Views', 'Shares']]
+  const head = [['ID', 'Файл', 'Скачивания', 'Просмотры', 'Шеринг']]
   const body = rowsSorted.value.map((row) => [
     String(row.document_id),
     row.document__label || `Document #${row.document_id}`,
@@ -215,7 +224,7 @@ async function exportPdf(): Promise<void> {
     alternateRowStyles: { fillColor: [250, 250, 250] },
   })
 
-  doc.save('most-downloaded-assets.pdf')
+  doc.save('top-downloaded-assets.pdf')
 }
 </script>
 

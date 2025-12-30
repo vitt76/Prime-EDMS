@@ -156,6 +156,10 @@ export interface SearchResponse {
   count: number
   results: Asset[]
   facets: Facets
+  analytics?: {
+    search_query_id?: number | null
+    search_session_id?: string | null
+  }
 }
 
 export interface Facets {

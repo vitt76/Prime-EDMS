@@ -1,15 +1,22 @@
 import logging
 from datetime import timedelta
+from decimal import Decimal
 
 from celery import shared_task
+from django.apps import apps as django_apps
 from django.conf import settings
 from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
+from typing import Optional
+
+from mayan.apps.documents.models import Document
 
 from .models import (
     ApprovalWorkflowEvent, AnalyticsAlert, AssetDailyMetrics, AssetEvent,
-    SearchDailyMetrics, SearchQuery
+    CampaignDailyMetrics, CDNDailyCost, CDNRate, SearchDailyMetrics, SearchQuery,
+    SearchSession, UserDailyMetrics, CampaignEngagementEvent
 )
+from .realtime import notify_analytics_refresh
 
 logger = logging.getLogger(name=__name__)
 
@@ -73,6 +80,11 @@ def aggregate_daily_metrics(self, date_iso: str = '') -> int:
         metrics.save(update_fields=('performance_score', 'top_channel'))
         upserts += 1
 
+    try:
+        notify_analytics_refresh(reason='aggregate_daily_metrics')
+    except Exception:
+        pass
+
     return upserts
 
 
@@ -107,10 +119,22 @@ def aggregate_search_daily_metrics(self, date_iso: str = '') -> int:
                 'null_queries': [],
             }
         )
+        try:
+            notify_analytics_refresh(reason='aggregate_search_daily_metrics')
+        except Exception:
+            pass
         return 1
 
-    successful_searches = qs.filter(results_count__gt=0).count()
+    # Success definition (enterprise DAM): success if user clicked or downloaded after search.
+    successful_searches = qs.filter(
+        Q(was_downloaded=True) | Q(was_clicked_result_document_id__isnull=False)
+    ).count()
     null_searches = qs.filter(results_count=0).count()
+
+    click_count = qs.filter(was_clicked_result_document_id__isnull=False).count()
+    ctr = None
+    if total_searches:
+        ctr = round((click_count / total_searches) * 100, 2)
 
     avg_response_time_ms = qs.aggregate(
         avg=Avg('response_time_ms')
@@ -131,12 +155,17 @@ def aggregate_search_daily_metrics(self, date_iso: str = '') -> int:
             'total_searches': total_searches,
             'successful_searches': successful_searches,
             'null_searches': null_searches,
-            'ctr': None,
+            'ctr': ctr,
             'avg_response_time_ms': avg_response_time_ms,
             'top_queries': top_queries,
             'null_queries': null_queries,
         }
     )
+
+    try:
+        notify_analytics_refresh(reason='aggregate_search_daily_metrics')
+    except Exception:
+        pass
 
     return 1
 
@@ -155,6 +184,10 @@ def cleanup_old_events(self, retention_days: int = 90) -> dict:
 
     deleted_asset_events = 0
     deleted_search_queries = 0
+    deleted_search_sessions = 0
+    deleted_asset_daily_metrics = 0
+    deleted_search_daily_metrics = 0
+    deleted_user_daily_metrics = 0
 
     try:
         deleted_asset_events, _ = AssetEvent.objects.filter(timestamp__lt=cutoff).delete()
@@ -166,10 +199,46 @@ def cleanup_old_events(self, retention_days: int = 90) -> dict:
     except Exception as exc:
         logger.exception('Failed to cleanup SearchQuery rows: %s', exc)
 
+    try:
+        deleted_search_sessions, _ = SearchSession.objects.filter(started_at__lt=cutoff).delete()
+    except Exception as exc:
+        logger.exception('Failed to cleanup SearchSession rows: %s', exc)
+
+    # Optional retention for aggregated tables.
+    try:
+        agg_days = int(getattr(settings, 'ANALYTICS_AGGREGATED_RETENTION_DAYS', 365))
+        agg_cutoff = timezone.now().date() - timedelta(days=agg_days)
+    except Exception:
+        agg_cutoff = None
+
+    if agg_cutoff:
+        try:
+            deleted_asset_daily_metrics, _ = AssetDailyMetrics.objects.filter(date__lt=agg_cutoff).delete()
+        except Exception as exc:
+            logger.exception('Failed to cleanup AssetDailyMetrics rows: %s', exc)
+        try:
+            deleted_search_daily_metrics, _ = SearchDailyMetrics.objects.filter(date__lt=agg_cutoff).delete()
+        except Exception as exc:
+            logger.exception('Failed to cleanup SearchDailyMetrics rows: %s', exc)
+        try:
+            deleted_user_daily_metrics, _ = UserDailyMetrics.objects.filter(date__lt=agg_cutoff).delete()
+        except Exception as exc:
+            logger.exception('Failed to cleanup UserDailyMetrics rows: %s', exc)
+
+    try:
+        notify_analytics_refresh(reason='cleanup_old_events')
+    except Exception:
+        pass
+
     return {
         'cutoff': cutoff.isoformat(),
+        'aggregated_cutoff': agg_cutoff.isoformat() if agg_cutoff else None,
         'deleted_asset_events': deleted_asset_events,
         'deleted_search_queries': deleted_search_queries,
+        'deleted_search_sessions': deleted_search_sessions,
+        'deleted_asset_daily_metrics': deleted_asset_daily_metrics,
+        'deleted_search_daily_metrics': deleted_search_daily_metrics,
+        'deleted_user_daily_metrics': deleted_user_daily_metrics,
     }
 
 
@@ -272,4 +341,202 @@ def generate_analytics_alerts(self, days: int = 90) -> dict:
     except Exception as exc:
         logger.exception('Failed generating storage-limit alerts: %s', exc)
 
+    # 4) Metadata completeness (Content Intelligence MVP).
+    try:
+        required = getattr(settings, 'ANALYTICS_REQUIRED_METADATA_TYPES', []) or []
+        required = [str(x).strip() for x in required if str(x).strip()]
+        if required:
+            DocumentMetadata = django_apps.get_model('metadata', 'DocumentMetadata')
+            recent_docs = (
+                Document.valid.filter(in_trash=False)
+                .order_by('-datetime_created')
+                .values_list('pk', flat=True)[:500]
+            )
+            for doc_id in recent_docs:
+                meta = list(
+                    DocumentMetadata.objects.filter(document_id=doc_id)
+                    .select_related('metadata_type')
+                    .values_list('metadata_type__name', 'metadata_type__label', 'value')
+                )
+                present = set()
+                for name, label, value in meta:
+                    if (value or '').strip():
+                        present.add((name or '').strip())
+                        present.add((label or '').strip())
+
+                missing = [m for m in required if m not in present]
+                if not missing:
+                    continue
+
+                exists = AnalyticsAlert.objects.filter(
+                    alert_type='metadata_incomplete',
+                    document_id=doc_id,
+                    resolved_at__isnull=True
+                ).exists()
+                if exists:
+                    continue
+
+                AnalyticsAlert.objects.create(
+                    alert_type='metadata_incomplete',
+                    severity=AnalyticsAlert.SEVERITY_WARNING,
+                    title='Metadata completeness issue',
+                    message=f'Missing required metadata fields: {", ".join(missing[:10])}',
+                    document_id=doc_id,
+                    metadata={'missing': missing, 'required': required},
+                )
+                created += 1
+    except Exception as exc:
+        logger.exception('Failed generating metadata completeness alerts: %s', exc)
+
+    try:
+        notify_analytics_refresh(reason='generate_analytics_alerts')
+    except Exception:
+        pass
     return {'created': created}
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')
+def aggregate_user_daily_metrics(self, date_iso: str = '') -> int:
+    """Aggregate user-level metrics, including Avg Search-to-Find Time.
+
+    Args:
+        date_iso: Optional ISO date (YYYY-MM-DD). If omitted, aggregates for yesterday.
+
+    Returns:
+        Number of users aggregated (rows upserted).
+    """
+    if date_iso:
+        target_date = timezone.datetime.fromisoformat(date_iso).date()
+    else:
+        target_date = timezone.now().date() - timedelta(days=1)
+
+    sessions_qs = SearchSession.objects.filter(
+        started_at__date=target_date,
+        time_to_find_seconds__isnull=False
+    )
+
+    user_ids = list(sessions_qs.values_list('user_id', flat=True).distinct())
+    upserts = 0
+    for user_id in user_ids:
+        avg_seconds = sessions_qs.filter(user_id=user_id).aggregate(
+            avg=Avg('time_to_find_seconds')
+        )['avg']
+        avg_minutes = int((avg_seconds or 0) / 60) if avg_seconds is not None else None
+
+        UserDailyMetrics.objects.update_or_create(
+            user_id=user_id,
+            date=target_date,
+            defaults={
+                'avg_search_to_find_minutes': avg_minutes
+            }
+        )
+        upserts += 1
+
+    try:
+        notify_analytics_refresh(reason='aggregate_user_daily_metrics')
+    except Exception:
+        pass
+
+    return upserts
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')
+def calculate_cdn_daily_costs(self, date_iso: str = '') -> int:
+    """Calculate daily CDN cost rollups based on bandwidth and configured rates.
+
+    Notes:
+        This is a Phase 2 best-effort implementation. Channels are derived from
+        `AssetDailyMetrics.top_channel` (or 'default' if empty).
+
+    Args:
+        date_iso: Optional ISO date (YYYY-MM-DD). If omitted, calculates for yesterday.
+
+    Returns:
+        Number of rows upserted in CDNDailyCost.
+    """
+    if date_iso:
+        target_date = timezone.datetime.fromisoformat(date_iso).date()
+    else:
+        target_date = timezone.now().date() - timedelta(days=1)
+
+    rates = list(
+        CDNRate.objects.filter(effective_from__lte=target_date).filter(
+            Q(effective_to__isnull=True) | Q(effective_to__gte=target_date)
+        )
+    )
+
+    def pick_rate(channel: str) -> Optional[CDNRate]:
+        for rate in rates:
+            if rate.channel == channel:
+                return rate
+        for rate in rates:
+            if rate.channel == 'default':
+                return rate
+        return None
+
+    rows = (
+        AssetDailyMetrics.objects.filter(date=target_date)
+        .values('top_channel')
+        .annotate(total_gb=Sum('cdn_bandwidth_gb'))
+    )
+
+    upserts = 0
+    for row in rows:
+        channel = (row.get('top_channel') or '').strip() or 'default'
+        total_gb = float(row.get('total_gb') or 0.0)
+        if total_gb <= 0:
+            continue
+
+        rate = pick_rate(channel=channel)
+        if not rate:
+            continue
+
+        cost = (Decimal(str(total_gb)) * rate.cost_per_gb_usd).quantize(Decimal('0.01'))
+
+        CDNDailyCost.objects.update_or_create(
+            date=target_date,
+            region=rate.region,
+            channel=channel,
+            defaults={'bandwidth_gb': total_gb, 'cost_usd': cost}
+        )
+        upserts += 1
+
+    try:
+        notify_analytics_refresh(reason='calculate_cdn_daily_costs')
+    except Exception:
+        pass
+
+    return upserts
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')
+def aggregate_campaign_engagement_daily_metrics(self, date_iso: str = '') -> int:
+    """Aggregate campaign/collection engagement (avg minutes) per day."""
+    if date_iso:
+        target_date = timezone.datetime.fromisoformat(date_iso).date()
+    else:
+        target_date = timezone.now().date() - timedelta(days=1)
+
+    qs = CampaignEngagementEvent.objects.filter(started_at__date=target_date)
+    rows = qs.values('campaign_id').annotate(avg_seconds=Avg('duration_seconds'))
+
+    upserts = 0
+    for row in rows:
+        avg_seconds = row.get('avg_seconds')
+        avg_minutes = None
+        if avg_seconds is not None:
+            avg_minutes = round(float(avg_seconds) / 60.0, 3)
+
+        CampaignDailyMetrics.objects.update_or_create(
+            campaign_id=row['campaign_id'],
+            date=target_date,
+            defaults={'avg_engagement_minutes': avg_minutes}
+        )
+        upserts += 1
+
+    try:
+        notify_analytics_refresh(reason='aggregate_campaign_engagement_daily_metrics')
+    except Exception:
+        pass
+
+    return upserts

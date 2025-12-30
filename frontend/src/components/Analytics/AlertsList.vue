@@ -1,8 +1,8 @@
 <template>
   <Card padding="lg">
     <div class="flex items-center justify-between gap-4 mb-4">
-      <h3 class="text-base font-semibold text-neutral-900">Alerts</h3>
-      <div class="text-xs text-neutral-500">{{ rows.length }} active</div>
+      <h3 class="text-base font-semibold text-neutral-900">Предупреждения</h3>
+      <div class="text-xs text-neutral-500">{{ rows.length }} активных</div>
     </div>
 
     <div v-if="rows.length === 0" class="text-sm text-neutral-500">Нет активных предупреждений</div>
@@ -15,15 +15,15 @@
       >
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-center gap-2">
-            <span :class="badgeClass(a.severity)">{{ a.severity }}</span>
+            <span :class="badgeClass(a.severity)">{{ severityLabel(a.severity) }}</span>
             <div class="font-semibold text-neutral-900">{{ a.title }}</div>
           </div>
           <div class="text-xs text-neutral-500">{{ formatDate(a.created_at) }}</div>
         </div>
         <div class="text-sm text-neutral-700 mt-1">{{ a.message }}</div>
         <div class="text-xs text-neutral-500 mt-1">
-          <span v-if="a.document_id">Document: {{ a.document_id }}</span>
-          <span v-if="a.campaign_id" class="ml-2">Campaign: {{ a.campaign_id }}</span>
+          <span v-if="a.document_id">Файл: {{ a.document_id }}</span>
+          <span v-if="a.campaign_id" class="ml-2">Кампания: {{ a.campaign_id }}</span>
         </div>
       </div>
     </div>
@@ -50,6 +50,12 @@ function formatDate(value: string): string {
   } catch {
     return value
   }
+}
+
+function severityLabel(severity: AnalyticsAlertRow['severity']): string {
+  if (severity === 'critical') return 'критично'
+  if (severity === 'warning') return 'предупреждение'
+  return 'инфо'
 }
 </script>
 
