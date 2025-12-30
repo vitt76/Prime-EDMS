@@ -6,14 +6,59 @@
     </div>
 
     <template v-else>
+      <!-- No Workflow Instance - Show Launch Button -->
+      <div v-if="!workflowInstance" class="p-4 border-b border-neutral-100">
+        <div class="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">
+          Статус и согласование
+        </div>
+        
+        <!-- Show Draft Status -->
+        <div class="mb-4">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-100">
+              <PencilSquareIcon class="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <div class="font-semibold text-blue-600">
+                Черновик
+              </div>
+              <div class="text-xs text-neutral-500">
+                Начальное состояние
+              </div>
+            </div>
+          </div>
+          <div class="text-sm text-neutral-600">
+            Согласование не запущено для этого документа
+          </div>
+        </div>
+        <button
+          v-if="availableWorkflowTemplates.length > 0"
+          class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg
+                 bg-primary-600 text-white hover:bg-primary-700 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500
+                 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="isLaunching"
+          @click="launchWorkflow"
+        >
+          <PaperAirplaneIcon v-if="!isLaunching" class="w-4 h-4" />
+          <svg v-else class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          {{ isLaunching ? 'Запуск...' : `Запустить ${availableWorkflowTemplates[0]?.label || 'согласование'}` }}
+        </button>
+        <div v-else class="text-xs text-neutral-500">
+          Нет доступных workflow для этого типа документа
+        </div>
+      </div>
+
       <!-- Current Status -->
-      <div class="p-4 border-b border-neutral-100">
+      <div v-else class="p-4 border-b border-neutral-100">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-medium text-neutral-500 uppercase tracking-wide">
             Текущий статус
           </span>
-          <span class="text-xs text-neutral-400">
-            {{ formatRelativeTime(workflowState?.enteredAt) }}
+          <span v-if="workflowInstance?.last_log_entry" class="text-xs text-neutral-400">
+            {{ formatRelativeTime(workflowInstance.last_log_entry.datetime) }}
           </span>
         </div>
         
@@ -28,7 +73,7 @@
             ]"
           >
             <component 
-              :is="getStateIcon(currentState.icon)" 
+              :is="currentState.initial ? PencilSquareIcon : currentState.completion ? CheckCircleIcon : ClockIcon" 
               :class="['w-5 h-5', stateColorClasses.text]" 
             />
           </div>
@@ -37,7 +82,7 @@
               {{ currentState.label }}
             </div>
             <div class="text-xs text-neutral-500">
-              {{ currentState.description }}
+              {{ currentState.initial ? 'Начальное состояние' : currentState.completion ? 'Завершающее состояние' : 'Промежуточное состояние' }}
             </div>
           </div>
         </div>
@@ -49,25 +94,23 @@
           Доступные действия
         </div>
         <div class="flex flex-wrap gap-2">
-          <button
-            v-for="transition in availableTransitions"
-            :key="transition.id"
-            :class="[
-              'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg',
-              'transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-              getTransitionButtonClasses(transition.color)
-            ]"
-            :disabled="isTransitioning"
-            @click="initiateTransition(transition)"
-          >
-            <component :is="getTransitionIcon(transition.icon)" class="w-4 h-4" />
-            {{ transition.label }}
-          </button>
+            <button
+              v-for="transition in availableTransitions"
+              :key="transition.id"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg
+                     bg-primary-100 text-primary-700 hover:bg-primary-200 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500
+                     transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isTransitioning"
+              @click="initiateTransition(transition)"
+            >
+              <ArrowRightIcon class="w-4 h-4" />
+              {{ transition.label }}
+            </button>
         </div>
       </div>
 
       <!-- Workflow History -->
-      <div class="p-4">
+      <div v-if="historyItems.length > 0" class="p-4">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-medium text-neutral-500 uppercase tracking-wide">
             История изменений
@@ -113,28 +156,24 @@
                 <div class="flex items-start justify-between gap-2">
                   <div>
                     <div class="text-sm font-medium text-neutral-900">
-                      {{ getTransitionLabel(item.transitionId) || 'Создано' }}
+                      {{ item.transition?.label || 'Создано' }}
                     </div>
                     <div class="text-xs text-neutral-500">
-                      {{ item.fromState ? `${getStateLabel(item.fromState)} → ` : '' }}
-                      <span class="font-medium">{{ getStateLabel(item.toState) }}</span>
+                      {{ item.transition?.origin_state_id ? `Состояние ${item.transition.origin_state_id} → ` : '' }}
+                      <span class="font-medium">{{ item.transition?.destination_state_id ? `Состояние ${item.transition.destination_state_id}` : 'Новое состояние' }}</span>
                     </div>
                   </div>
                   <div class="text-xs text-neutral-400 whitespace-nowrap">
-                    {{ formatRelativeTime(item.performedAt) }}
+                    {{ formatRelativeTime(item.datetime) }}
                   </div>
                 </div>
 
                 <!-- User info -->
                 <div class="mt-1 flex items-center gap-1.5">
-                  <img 
-                    v-if="item.performedBy.avatar"
-                    :src="item.performedBy.avatar" 
-                    :alt="item.performedBy.name"
-                    class="w-4 h-4 rounded-full"
-                  />
                   <span class="text-xs text-neutral-500">
-                    {{ item.performedBy.name }}
+                    {{ item.user?.first_name && item.user?.last_name 
+                      ? `${item.user.first_name} ${item.user.last_name}` 
+                      : item.user?.username || 'Система' }}
                   </span>
                 </div>
 
@@ -182,25 +221,8 @@
                 <!-- Header -->
                 <div class="px-5 pt-5 pb-4">
                   <div class="flex items-center gap-3">
-                    <div 
-                      :class="[
-                        'flex h-10 w-10 items-center justify-center rounded-full',
-                        pendingTransition?.color === 'danger' ? 'bg-red-100' :
-                        pendingTransition?.color === 'warning' ? 'bg-amber-100' :
-                        pendingTransition?.color === 'success' ? 'bg-green-100' :
-                        'bg-primary-100'
-                      ]"
-                    >
-                      <component 
-                        :is="getTransitionIcon(pendingTransition?.icon || 'ArrowRightIcon')" 
-                        :class="[
-                          'h-5 w-5',
-                          pendingTransition?.color === 'danger' ? 'text-red-600' :
-                          pendingTransition?.color === 'warning' ? 'text-amber-600' :
-                          pendingTransition?.color === 'success' ? 'text-green-600' :
-                          'text-primary-600'
-                        ]"
-                      />
+                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100">
+                      <ArrowRightIcon class="h-5 w-5 text-primary-600" />
                     </div>
                     <DialogTitle class="text-lg font-semibold text-neutral-900">
                       {{ pendingTransition?.label }}
@@ -211,13 +233,13 @@
                 <!-- Content -->
                 <div class="px-5 pb-4">
                   <p class="text-sm text-neutral-600 mb-4">
-                    {{ pendingTransition?.confirmationMessage || pendingTransition?.description }}
+                    Выполнить переход "{{ pendingTransition?.label }}"?
                   </p>
 
                   <!-- Comment field -->
-                  <div v-if="pendingTransition?.requiresComment">
+                  <div>
                     <label class="block text-sm font-medium text-neutral-700 mb-1.5">
-                      Комментарий <span class="text-red-500">*</span>
+                      Комментарий (необязательно)
                     </label>
                     <textarea
                       v-model="transitionComment"
@@ -225,7 +247,7 @@
                       class="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm
                              focus:ring-2 focus:ring-primary-500 focus:border-primary-500
                              placeholder:text-neutral-400 resize-none"
-                      placeholder="Укажите причину..."
+                      placeholder="Добавьте комментарий к переходу..."
                     />
                   </div>
                 </div>
@@ -243,15 +265,9 @@
                   </button>
                   <button
                     type="button"
-                    :class="[
-                      'px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors',
-                      'disabled:opacity-50 disabled:cursor-not-allowed',
-                      pendingTransition?.color === 'danger' ? 'bg-red-600 hover:bg-red-700' :
-                      pendingTransition?.color === 'warning' ? 'bg-amber-600 hover:bg-amber-700' :
-                      pendingTransition?.color === 'success' ? 'bg-green-600 hover:bg-green-700' :
-                      'bg-primary-600 hover:bg-primary-700'
-                    ]"
-                    :disabled="isTransitioning || (pendingTransition?.requiresComment && !transitionComment.trim())"
+                    class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700
+                           rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="isTransitioning"
                     @click="confirmTransition"
                   >
                     <span v-if="isTransitioning" class="flex items-center gap-2">
@@ -301,29 +317,18 @@ import {
   DocumentPlusIcon
 } from '@heroicons/vue/24/outline'
 import { useNotificationStore } from '@/stores/notificationStore'
-import {
-  getDefaultWorkflow,
-  getAssetWorkflowState,
-  getCurrentState,
-  getAvailableTransitions,
-  executeTransition,
-  getWorkflowHistory,
-  getStateLabel as getStateLabelFn,
-  getTransitionLabel as getTransitionLabelFn,
-  type WorkflowState,
-  type WorkflowTransition,
-  type WorkflowHistoryEntry,
-  type AssetWorkflowState
-} from '@/mocks/workflows'
+import { workflowService, type WorkflowInstance, type WorkflowTransition, type WorkflowLogEntry } from '@/services/workflowService'
+import { apiService } from '@/services/apiService'
 
 interface Props {
   assetId: number
+  documentTypeId?: number
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  statusChange: [newState: WorkflowState]
+  statusChange: [newState: { id: number; label: string }]
 }>()
 
 const notificationStore = useNotificationStore()
@@ -331,14 +336,15 @@ const notificationStore = useNotificationStore()
 // State
 const isLoading = ref(true)
 const isTransitioning = ref(false)
+const isLaunching = ref(false)
 const showAllHistory = ref(false)
 const showTransitionModal = ref(false)
 const pendingTransition = ref<WorkflowTransition | null>(null)
 const transitionComment = ref('')
-const workflowState = ref<AssetWorkflowState | null>(null)
-const currentState = ref<WorkflowState | null>(null)
+const workflowInstance = ref<WorkflowInstance | null>(null)
 const availableTransitions = ref<WorkflowTransition[]>([])
-const historyItems = ref<WorkflowHistoryEntry[]>([])
+const historyItems = ref<WorkflowLogEntry[]>([])
+const availableWorkflowTemplates = ref<Array<{ id: number; label: string }>>([])
 
 // Icon mapping for states
 const stateIconComponents: Record<string, Component> = {
@@ -374,28 +380,29 @@ function getTransitionIcon(iconName: string): Component {
   return transitionIconComponents[iconName] || transitionIconComponents.ArrowRightIcon
 }
 
-function getHistoryIcon(transitionId: string | null): Component {
+function getHistoryIcon(transitionId: number | null): Component {
   if (!transitionId) return transitionIconComponents.DocumentPlusIcon
-  
-  const workflow = getDefaultWorkflow()
-  const transition = workflow.transitions.find(t => t.id === transitionId)
-  if (!transition) return transitionIconComponents.ArrowRightIcon
-  
-  return getTransitionIcon(transition.icon)
+  return transitionIconComponents.ArrowRightIcon
 }
 
 // Computed
+const currentState = computed(() => {
+  return workflowInstance.value?.current_state || null
+})
+
 const stateColorClasses = computed(() => {
-  const colorMap: Record<string, { bg: string; text: string }> = {
-    gray: { bg: 'bg-neutral-100', text: 'text-neutral-600' },
-    amber: { bg: 'bg-amber-100', text: 'text-amber-600' },
-    orange: { bg: 'bg-orange-100', text: 'text-orange-600' },
-    green: { bg: 'bg-green-100', text: 'text-green-600' },
-    blue: { bg: 'bg-blue-100', text: 'text-blue-600' },
-    slate: { bg: 'bg-slate-100', text: 'text-slate-600' },
-    red: { bg: 'bg-red-100', text: 'text-red-600' }
+  if (!currentState.value) {
+    return { bg: 'bg-neutral-100', text: 'text-neutral-600' }
   }
-  return colorMap[currentState.value?.color || 'gray'] || colorMap.gray
+  
+  if (currentState.value.initial) {
+    return { bg: 'bg-blue-100', text: 'text-blue-600' }
+  }
+  if (currentState.value.completion) {
+    return { bg: 'bg-green-100', text: 'text-green-600' }
+  }
+  
+  return { bg: 'bg-neutral-100', text: 'text-neutral-600' }
 })
 
 const displayedHistory = computed(() => {
@@ -404,38 +411,96 @@ const displayedHistory = computed(() => {
 })
 
 // Methods
-function loadData() {
+async function loadData() {
   isLoading.value = true
   
-  setTimeout(() => {
-    workflowState.value = getAssetWorkflowState(props.assetId) || null
-    currentState.value = getCurrentState(props.assetId) || null
-    availableTransitions.value = getAvailableTransitions(props.assetId)
-    historyItems.value = getWorkflowHistory(props.assetId)
+  try {
+    // Get workflow instances for this document
+    const instances = await workflowService.getWorkflowInstances(props.assetId)
     
+    if (instances.length === 0) {
+      // No workflow instance found - load available templates if document type is provided
+      workflowInstance.value = null
+      availableTransitions.value = []
+      historyItems.value = []
+      
+      if (props.documentTypeId) {
+        try {
+          availableWorkflowTemplates.value = await workflowService.getAvailableWorkflowTemplates(props.documentTypeId)
+        } catch (err) {
+          console.warn('[WorkflowWidget] Failed to load available workflow templates:', err)
+        }
+      }
+      
+      isLoading.value = false
+      return
+    }
+    
+    // Use the first workflow instance (or could allow selecting which one)
+    const instance = instances[0]
+    
+    // Clear cache for transitions to ensure we get fresh data
+    apiService.clearCache(`/api/v4/documents/${props.assetId}/workflow_instances/${instance.id}/log_entries/transitions/`)
+    
+    workflowInstance.value = await workflowService.getWorkflowInstance(props.assetId, instance.id)
+    
+    // Load available transitions
+    availableTransitions.value = await workflowService.getAvailableTransitions(props.assetId, instance.id)
+    
+    // Load history
+    historyItems.value = await workflowService.getWorkflowHistory(props.assetId, instance.id)
+  } catch (error: any) {
+    console.error('[WorkflowWidget] Failed to load workflow data:', error)
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка загрузки',
+      message: error.message || 'Не удалось загрузить данные workflow'
+    })
+  } finally {
     isLoading.value = false
-  }, 200)
-}
-
-function getStateLabel(stateId: string): string {
-  return getStateLabelFn(stateId)
-}
-
-function getTransitionLabel(transitionId: string | null): string {
-  if (!transitionId) return ''
-  return getTransitionLabelFn(transitionId)
-}
-
-function getTransitionButtonClasses(color: string): string {
-  const classes: Record<string, string> = {
-    primary: 'bg-primary-100 text-primary-700 hover:bg-primary-200 focus:ring-primary-500',
-    success: 'bg-green-100 text-green-700 hover:bg-green-200 focus:ring-green-500',
-    warning: 'bg-amber-100 text-amber-700 hover:bg-amber-200 focus:ring-amber-500',
-    danger: 'bg-red-100 text-red-700 hover:bg-red-200 focus:ring-red-500',
-    neutral: 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 focus:ring-neutral-500'
   }
-  return classes[color] || classes.neutral
 }
+
+async function launchWorkflow() {
+  if (availableWorkflowTemplates.value.length === 0) return
+  
+  isLaunching.value = true
+  
+  try {
+    const templateId = availableWorkflowTemplates.value[0].id
+    const templateLabel = availableWorkflowTemplates.value[0].label
+    
+    await workflowService.launchWorkflow(
+      props.assetId,
+      templateId
+    )
+    
+    // Clear cache for workflow instances to force fresh fetch
+    apiService.clearCache(`/api/v4/documents/${props.assetId}/workflow_instances/`)
+    
+    // Wait a bit for server to process the launch request
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    // Reload data (this will fetch fresh workflow instances)
+    await loadData()
+    
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Согласование запущено',
+      message: `Согласование "${templateLabel}" успешно запущено`
+    })
+  } catch (error: any) {
+    console.error('[WorkflowWidget] Failed to launch workflow:', error)
+    notificationStore.addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message: error.message || 'Не удалось запустить согласование'
+    })
+  } finally {
+    isLaunching.value = false
+  }
+}
+
 
 function formatRelativeTime(dateString: string | undefined): string {
   if (!dateString) return ''
@@ -473,51 +538,50 @@ function cancelTransition() {
 }
 
 async function confirmTransition() {
-  if (!pendingTransition.value) return
+  if (!pendingTransition.value || !workflowInstance.value) return
   
   isTransitioning.value = true
   
   try {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    const result = executeTransition(
+    await workflowService.executeTransition(
       props.assetId,
+      workflowInstance.value.id,
       pendingTransition.value.id,
-      transitionComment.value || null,
-      { id: 1, name: 'Текущий пользователь' }
+      transitionComment.value || undefined
     )
     
-    if (result.success) {
-      notificationStore.addNotification({
-        type: 'success',
-        title: 'Статус обновлён',
-        message: `Актив переведён в статус "${result.newState?.label}"`
-      })
-      
-      // Reload data
-      loadData()
-      
-      // Emit event
-      if (result.newState) {
-        emit('statusChange', result.newState)
-      }
-      
-      showTransitionModal.value = false
-      pendingTransition.value = null
-      transitionComment.value = ''
-    } else {
-      notificationStore.addNotification({
-        type: 'error',
-        title: 'Ошибка',
-        message: result.error || 'Не удалось выполнить переход'
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Статус обновлён',
+      message: `Переход "${pendingTransition.value.label}" выполнен успешно`
+    })
+    
+    // Clear cache before reloading
+    apiService.clearCache(`/api/v4/documents/${props.assetId}/workflow_instances/`)
+    apiService.clearCache(`/api/v4/documents/${props.assetId}/workflow_instances/${workflowInstance.value.id}/`)
+    
+    // Reload data
+    await loadData()
+    
+    // Emit event with new state
+    if (workflowInstance.value?.current_state) {
+      emit('statusChange', {
+        id: workflowInstance.value.current_state.id,
+        label: workflowInstance.value.current_state.label
       })
     }
-  } catch (error) {
+    
+    // Close modal after successful transition
+    showTransitionModal.value = false
+    pendingTransition.value = null
+    transitionComment.value = ''
+  } catch (error: any) {
+    console.error('[WorkflowWidget] Failed to execute transition:', error)
+    const errorMessage = error.response?.data?.detail || error.response?.data?.non_field_errors?.[0] || error.message || 'Не удалось выполнить переход'
     notificationStore.addNotification({
       type: 'error',
       title: 'Ошибка',
-      message: 'Произошла ошибка при выполнении действия'
+      message: errorMessage
     })
   } finally {
     isTransitioning.value = false

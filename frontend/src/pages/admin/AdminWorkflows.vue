@@ -20,7 +20,7 @@
     </div>
 
     <!-- Workflows Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 gap-6">
       <div
         v-for="workflow in workflows"
         :key="workflow.id"
@@ -68,10 +68,10 @@
 
         <!-- Flow Visualization -->
         <div class="px-5 py-4">
-          <div class="flex items-center justify-between overflow-x-auto pb-2">
-            <template v-for="(state, index) in workflow.states" :key="state.id">
+          <div class="flex items-center justify-between flex-wrap gap-2 pb-2">
+            <template v-for="(state, index) in getOrderedStates(workflow)" :key="state.id">
               <!-- State Node -->
-              <div class="flex flex-col items-center min-w-[100px]">
+              <div class="flex flex-col items-center flex-1 min-w-[80px] max-w-[120px]">
                 <div
                   :class="[
                     'w-12 h-12 rounded-xl flex items-center justify-center border-2',
@@ -109,9 +109,9 @@
                 </p>
               </div>
 
-              <!-- Arrow -->
+              <!-- Arrow - show if there's ANY transition from current state to next state in list -->
               <div
-                v-if="index < workflow.states.length - 1"
+                v-if="index < getOrderedStates(workflow).length - 1 && hasAnyTransitionToNext(workflow, state.id, index)"
                 class="flex-shrink-0 px-2"
               >
                 <svg class="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -233,10 +233,10 @@
               
               <!-- Workflow Canvas -->
               <div 
-                class="relative min-h-[200px] bg-white rounded-xl border-2 border-dashed border-gray-300 p-6 overflow-x-auto"
+                class="relative min-h-[200px] bg-white rounded-xl border-2 border-dashed border-gray-300 p-6"
                 :class="{ 'border-violet-400': isEditing }"
               >
-                <div class="flex items-center gap-4">
+                <div class="flex items-center gap-4 flex-wrap">
                   <template v-for="(state, index) in selectedWorkflow.states" :key="state.id">
                     <!-- State Node -->
                     <div
@@ -252,7 +252,7 @@
                     >
                       <div
                         :class="[
-                          'w-32 h-32 rounded-2xl flex flex-col items-center justify-center border-2 p-3 transition-all',
+                          'w-24 h-24 rounded-2xl flex flex-col items-center justify-center border-2 p-3 transition-all',
                           state.initial
                             ? 'bg-blue-50 border-blue-300 hover:border-blue-400'
                             : state.completion
@@ -608,17 +608,82 @@ async function loadWorkflows() {
   try {
     const response = await adminService.getWorkflows({ page_size: 100 })
     
-    // Map Mayan workflows to frontend Workflow interface
-    workflows.value = response.results.map(wf => ({
-      id: wf.id,
-      label: wf.label,
-      internal_name: wf.internal_name || wf.label.toLowerCase().replace(/\s+/g, '_'),
-      auto_launch: false, // Mayan doesn't have this concept directly
-      document_types: wf.document_types || [],
-      states: wf.states || [],
-      transitions: wf.transitions || [],
-      instances_count: 0
-    }))
+    // Map Mayan workflows to frontend Workflow interface and load states/transitions
+    workflows.value = await Promise.all(
+      response.results.map(async (wf) => {
+        // Load states, transitions, and document types for each workflow
+        let states: WorkflowState[] = []
+        let transitions: WorkflowTransition[] = []
+        let documentTypes: DocumentType[] = []
+        
+        try {
+          const statesResponse = await adminService.getWorkflowStates(wf.id)
+          // API returns array directly or paginated response
+          const statesData = Array.isArray(statesResponse) ? statesResponse : statesResponse.results || []
+          
+          // Map API states to frontend format
+          states = statesData.map((state: any, index: number) => ({
+            id: state.id,
+            workflow_id: state.workflow_template_id || wf.id,
+            label: state.label,
+            initial: state.initial || false,
+            completion: state.completion || false,
+            actions: [], // Actions loaded separately if needed
+            order: state.completion || state.order !== undefined ? (state.order || index) : index
+          }))
+        } catch (err) {
+          console.warn(`[AdminWorkflows] Failed to load states for workflow ${wf.id}:`, err)
+        }
+        
+        try {
+          const transitionsResponse = await adminService.getWorkflowTransitions(wf.id)
+          // API returns array directly or paginated response
+          const transitionsData = Array.isArray(transitionsResponse) ? transitionsResponse : transitionsResponse.results || []
+          
+          // Map API transitions to frontend format
+          transitions = transitionsData.map((transition: any) => {
+            const mapped = {
+              id: transition.id,
+              workflow_id: transition.workflow_template_id || wf.id,
+              label: transition.label || '',
+              origin_state_id: transition.origin_state_id || transition.origin_state?.id,
+              destination_state_id: transition.destination_state_id || transition.destination_state?.id,
+              condition: transition.condition || '',
+              triggers: [] // Triggers loaded separately if needed
+            }
+            if (import.meta.env.DEV) {
+              console.log(`[AdminWorkflows] Mapped transition for workflow ${wf.id}:`, {
+                original: transition,
+                mapped
+              })
+            }
+            return mapped
+          })
+        } catch (err) {
+          console.warn(`[AdminWorkflows] Failed to load transitions for workflow ${wf.id}:`, err)
+        }
+        
+        try {
+          const docTypesResponse = await adminService.getWorkflowDocumentTypes(wf.id)
+          // API returns array directly or paginated response
+          const docTypesData = Array.isArray(docTypesResponse) ? docTypesResponse : docTypesResponse.results || []
+          documentTypes = docTypesData
+        } catch (err) {
+          console.warn(`[AdminWorkflows] Failed to load document types for workflow ${wf.id}:`, err)
+        }
+        
+        return {
+          id: wf.id,
+          label: wf.label,
+          internal_name: wf.internal_name || wf.label.toLowerCase().replace(/\s+/g, '_'),
+          auto_launch: wf.auto_launch ?? false, // Use real value from API
+          document_types: documentTypes,
+          states: states,
+          transitions: transitions,
+          instances_count: 0 // TODO: Load from API when endpoint is available
+        }
+      })
+    )
     
     console.log('[AdminWorkflows] Loaded workflows:', workflows.value.length)
   } catch (err: unknown) {
@@ -684,6 +749,61 @@ function getTransitionLabel(fromId: number, toId: number): string {
     t => t.origin_state_id === fromId && t.destination_state_id === toId
   )
   return transition?.label ?? ''
+}
+
+function getOrderedStates(workflow: Workflow): WorkflowState[] {
+  // Custom ordering: initial first, completion last, others by custom logic
+  return [...workflow.states].sort((a, b) => {
+    // Initial state always first
+    if (a.initial && !b.initial) return -1
+    if (!a.initial && b.initial) return 1
+    
+    // Completion state always last
+    if (a.completion && !b.completion) return 1
+    if (!a.completion && b.completion) return -1
+    
+    // Both are intermediate states - use custom ordering
+    // "На доработку" should come after "Отклонен" and before "Согласован"
+    const stateOrderMap: Record<string, number> = {
+      'Черновик': 1,
+      'На согласовании': 2,
+      'Отклонен': 3,
+      'На доработку': 4,
+      'Согласован': 5
+    }
+    
+    const orderA = stateOrderMap[a.label] || (a.order || 0)
+    const orderB = stateOrderMap[b.label] || (b.order || 0)
+    
+    return orderA - orderB
+  })
+}
+
+function hasAnyTransitionToNext(workflow: Workflow, currentStateId: number, currentIndex: number): boolean {
+  // Check if there's ANY transition from current state to any of the next states in the ordered list
+  const orderedStates = getOrderedStates(workflow)
+  if (currentIndex >= orderedStates.length - 1) return false
+  
+  // Check transitions to next few states (up to 3 positions ahead)
+  const maxLookAhead = Math.min(3, orderedStates.length - currentIndex - 1)
+  for (let i = 1; i <= maxLookAhead; i++) {
+    const nextState = orderedStates[currentIndex + i]
+    if (!nextState) continue
+    
+    // If there's a transition to this next state, show arrow
+    if (workflow.transitions.some(
+      t => t.origin_state_id === currentStateId && t.destination_state_id === nextState.id
+    )) {
+      return true
+    }
+  }
+  
+  return false
+}
+
+function getAllTransitionsFromState(workflow: Workflow, stateId: number): WorkflowTransition[] {
+  // Get all transitions that start from this state
+  return workflow.transitions.filter(t => t.origin_state_id === stateId)
 }
 
 // Drag & Drop
