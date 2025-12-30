@@ -27,7 +27,8 @@ from mayan.apps.headless_api.views.users_views import HeadlessUsersDetailView, H
 from mayan.apps.headless_api.views.admin_logs_views import HeadlessAdminLogsView
 from mayan.apps.headless_api.views.analytics_views import (
     AssetBankViewSet, CampaignPerformanceViewSet, SearchAnalyticsViewSet,
-    UserActivityViewSet
+    ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet,
+    DistributionAnalyticsViewSet, ContentIntelligenceViewSet
 )
 from mayan.apps.headless_api.views.image_editor_views import (
     HeadlessImageEditorCommitView,
@@ -223,6 +224,115 @@ api_version_urls = [
         regex=r'^headless/analytics/dashboard/users/adoption-heatmap/$',
         view=UserActivityViewSet.as_view({'get': 'adoption_by_department'}),
         name='headless-analytics-user-adoption-heatmap'
+    ),
+    # --- Analytics Expansion (Phase 2 & 3) ---
+    # Asset Bank (additional)
+    url(
+        regex=r'^headless/analytics/dashboard/assets/distribution-trend/$',
+        view=AssetBankViewSet.as_view({'get': 'distribution_trend'}),
+        name='headless-analytics-asset-bank-distribution-trend'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/assets/detail/$',
+        view=AssetBankViewSet.as_view({'get': 'asset_detail'}),
+        name='headless-analytics-asset-bank-asset-detail'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/assets/reuse-metrics/$',
+        view=AssetBankViewSet.as_view({'get': 'reuse_metrics'}),
+        name='headless-analytics-asset-bank-reuse-metrics'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/assets/storage-trends/$',
+        view=AssetBankViewSet.as_view({'get': 'storage_trends'}),
+        name='headless-analytics-asset-bank-storage-trends'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/assets/alerts/$',
+        view=AssetBankViewSet.as_view({'get': 'alerts'}),
+        name='headless-analytics-asset-bank-alerts'
+    ),
+    # Campaigns (additional)
+    url(
+        regex=r'^headless/analytics/dashboard/campaigns/top-assets/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'top_assets'}),
+        name='headless-analytics-campaigns-top-assets'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/campaigns/timeline/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'timeline'}),
+        name='headless-analytics-campaigns-timeline'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/campaigns/geography/$',
+        view=CampaignPerformanceViewSet.as_view({'get': 'geography'}),
+        name='headless-analytics-campaigns-geography'
+    ),
+    # Search tracking
+    url(
+        regex=r'^headless/analytics/track/search/click/$',
+        view=SearchAnalyticsViewSet.as_view({'post': 'click'}),
+        name='headless-analytics-search-track-click'
+    ),
+    # User activity (additional)
+    url(
+        regex=r'^headless/analytics/dashboard/users/login-patterns/$',
+        view=UserActivityViewSet.as_view({'get': 'login_patterns'}),
+        name='headless-analytics-user-login-patterns'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/users/cohorts/$',
+        view=UserActivityViewSet.as_view({'get': 'cohorts'}),
+        name='headless-analytics-user-cohorts'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/users/feature-adoption/$',
+        view=UserActivityViewSet.as_view({'get': 'feature_adoption'}),
+        name='headless-analytics-user-feature-adoption'
+    ),
+    # Approvals
+    url(
+        regex=r'^headless/analytics/dashboard/approvals/summary/$',
+        view=ApprovalAnalyticsViewSet.as_view({'get': 'summary'}),
+        name='headless-analytics-approvals-summary'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/approvals/timeseries/$',
+        view=ApprovalAnalyticsViewSet.as_view({'get': 'timeseries'}),
+        name='headless-analytics-approvals-timeseries'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/approvals/recommendations/$',
+        view=ApprovalAnalyticsViewSet.as_view({'get': 'recommendations'}),
+        name='headless-analytics-approvals-recommendations'
+    ),
+    # ROI
+    url(
+        regex=r'^headless/analytics/dashboard/roi/summary/$',
+        view=ROIDashboardViewSet.as_view({'get': 'summary'}),
+        name='headless-analytics-roi-summary'
+    ),
+    # Distribution
+    url(
+        regex=r'^headless/analytics/dashboard/distribution/$',
+        view=DistributionAnalyticsViewSet.as_view({'get': 'dashboard'}),
+        name='headless-analytics-distribution-dashboard'
+    ),
+    url(
+        regex=r'^headless/analytics/ingest/distribution-events/$',
+        view=DistributionAnalyticsViewSet.as_view({'post': 'ingest'}),
+        name='headless-analytics-distribution-ingest'
+    ),
+    # Content Intelligence
+    url(
+        regex=r'^headless/analytics/dashboard/content-intel/content-gaps/$',
+        view=ContentIntelligenceViewSet.as_view({'get': 'content_gaps'}),
+        name='headless-analytics-content-gaps'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/content-intel/compliance/metadata/$',
+        view=ContentIntelligenceViewSet.as_view({'get': 'metadata_compliance'}),
+        name='headless-analytics-content-intel-metadata-compliance'
     ),
     url(
         regex=r'^headless/favorites/$',
