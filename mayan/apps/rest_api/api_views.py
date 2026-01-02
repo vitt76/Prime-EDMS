@@ -1,5 +1,3 @@
-from drf_yasg.views import get_schema_view
-
 from rest_framework import mixins, permissions, renderers
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
@@ -18,7 +16,6 @@ from .serializers import (
     BatchAPIRequestResponseSerializer, EndpointSerializer,
     ProjectInformationSerializer
 )
-from .schemas import openapi_info
 
 
 class APIRoot(ListAPIView):
@@ -33,26 +30,16 @@ class APIRoot(ListAPIView):
         endpoint_api_version = Endpoint(
             label='API version root', viewname='rest_api:api_version_root'
         )
-        endpoint_redoc = Endpoint(
-            label='ReDoc UI', viewname='rest_api:schema-redoc'
+        endpoint_openapi_ui = Endpoint(
+            label='OpenAPI UI', viewname='rest_api:schema-openapi-ui'
         )
-        endpoint_swagger = Endpoint(
-            label='Swagger UI', viewname='rest_api:schema-swagger-ui'
-        )
-        endpoint_swagger_schema_json = Endpoint(
-            label='API schema (JSON)', viewname='rest_api:schema-json',
-            kwargs={'format': '.json'}
-        )
-        endpoint_swagger_schema_yaml = Endpoint(
-            label='API schema (YAML)', viewname='rest_api:schema-json',
-            kwargs={'format': '.yaml'}
+        endpoint_openapi_schema = Endpoint(
+            label='OpenAPI schema', viewname='rest_api:schema-openapi'
         )
         return [
             endpoint_api_version,
-            endpoint_swagger,
-            endpoint_redoc,
-            endpoint_swagger_schema_json,
-            endpoint_swagger_schema_yaml
+            endpoint_openapi_ui,
+            endpoint_openapi_schema
         ]
 
 
@@ -138,11 +125,3 @@ class ProjectInformationAPIView(RetrieveAPIView):
 
     def get_object(self):
         return mayan
-
-
-schema_view = get_schema_view(
-    info=openapi_info,
-    public=True,
-    permission_classes=(permissions.AllowAny,),
-    validators=['flex', 'ssv']
-)

@@ -294,11 +294,26 @@ api_urls = [
         view=ROIDashboardViewSet.as_view({'get': 'summary'}),
         name='api-analytics-roi-summary'
     ),
+    url(
+        regex=r'^analytics/dashboard/roi/estimate/$',
+        view=ROIDashboardViewSet.as_view({'get': 'estimate'}),
+        name='api-analytics-roi-estimate'
+    ),
     # Analytics (Release 3 - Distribution)
     url(
         regex=r'^analytics/dashboard/distribution/$',
         view=DistributionAnalyticsViewSet.as_view({'get': 'dashboard'}),
         name='api-analytics-distribution-dashboard'
+    ),
+    url(
+        regex=r'^analytics/dashboard/distribution/conversion-rate/$',
+        view=DistributionAnalyticsViewSet.as_view({'get': 'conversion_rate'}),
+        name='api-analytics-distribution-conversion-rate'
+    ),
+    url(
+        regex=r'^analytics/dashboard/distribution/velocity/$',
+        view=DistributionAnalyticsViewSet.as_view({'get': 'velocity'}),
+        name='api-analytics-distribution-velocity'
     ),
     url(
         regex=r'^analytics/ingest/distribution-events/$',

@@ -67,6 +67,8 @@ INSTALLED_APPS = (
     'mptt',
     'rest_framework',
     'rest_framework.authtoken',
+    'drf_spectacular',
+    'django_prometheus',
     'solo',
     'stronghold',
     'widget_tweaks',
@@ -136,7 +138,6 @@ INSTALLED_APPS = (
     'mayan.apps.tags',
     'mayan.apps.web_links',
     # Placed after rest_api to allow template overriding.
-    'drf_yasg'
 )
 
 # ASGI (used by Django Channels / WebSocket)
@@ -328,6 +329,8 @@ REST_FRAMEWORK = {
     'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.AcceptHeaderVersioning',
     # Use default DRF exception handler
     'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    # OpenAPI schema generator (Task 4)
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 REST_FRAMEWORK_EXTENDED = {
@@ -362,6 +365,36 @@ CACHES = {
         }
     }
 }
+
+# ---------------------------------------------------------------------------
+# Analytics Event Stream (Redis Streams)
+# ---------------------------------------------------------------------------
+# Producers publish to a Redis Stream to avoid synchronous DB writes on hot paths.
+# A management command consumer persists batches to PostgreSQL.
+ANALYTICS_EVENT_STREAM_ENABLED = os.environ.get('ANALYTICS_EVENT_STREAM_ENABLED', '1') not in ('0', 'false', 'False')
+ANALYTICS_EVENT_STREAM_FALLBACK_TO_DB = os.environ.get('ANALYTICS_EVENT_STREAM_FALLBACK_TO_DB', '1') not in ('0', 'false', 'False')
+ANALYTICS_EVENT_STREAM_KEY = os.environ.get('ANALYTICS_EVENT_STREAM_KEY', 'dam:analytics:events')
+ANALYTICS_EVENT_STREAM_GROUP = os.environ.get('ANALYTICS_EVENT_STREAM_GROUP', 'analytics')
+ANALYTICS_EVENT_STREAM_CONSUMER = os.environ.get('ANALYTICS_EVENT_STREAM_CONSUMER', 'consumer-1')
+ANALYTICS_EVENT_STREAM_MAXLEN = int(os.environ.get('ANALYTICS_EVENT_STREAM_MAXLEN', '1000000'))
+
+# External analytics providers (Adapter/Strategy)
+# Comma-separated list of enabled provider ids, e.g.: "youtube,wildberries,email"
+ANALYTICS_EXTERNAL_PROVIDERS_ENABLED = [
+    p.strip() for p in os.environ.get('ANALYTICS_EXTERNAL_PROVIDERS_ENABLED', '').split(',') if p.strip()
+]
+
+# External analytics provider credentials (12-factor: env vars)
+ANALYTICS_YOUTUBE_API_KEY = os.environ.get('ANALYTICS_YOUTUBE_API_KEY', '').strip()
+ANALYTICS_YOUTUBE_CLIENT_ID = os.environ.get('ANALYTICS_YOUTUBE_CLIENT_ID', '').strip()
+
+ANALYTICS_WILDBERRIES_API_TOKEN = os.environ.get('ANALYTICS_WILDBERRIES_API_TOKEN', '').strip()
+
+ANALYTICS_EMAIL_PROVIDER = os.environ.get('ANALYTICS_EMAIL_PROVIDER', 'sendgrid').strip().lower()
+ANALYTICS_SENDGRID_API_KEY = os.environ.get('ANALYTICS_SENDGRID_API_KEY', '').strip()
+ANALYTICS_MAILCHIMP_API_KEY = os.environ.get('ANALYTICS_MAILCHIMP_API_KEY', '').strip()
+# Optional shared secret to validate incoming webhook calls
+ANALYTICS_EMAIL_WEBHOOK_SECRET = os.environ.get('ANALYTICS_EMAIL_WEBHOOK_SECRET', '').strip()
 
 LOGGING = {
     'version': 1,
@@ -522,12 +555,12 @@ STRONGHOLD_PUBLIC_URLS = (
     r'^/publish/.*$',
 )
 
-# ----- Swagger --------
-
-SWAGGER_SETTINGS = {
-    'DEFAULT_INFO': 'rest_api.schemas.openapi_info',
-    'DEFAULT_MODEL_DEPTH': 1,
-    'DOC_EXPANSION': 'None'
+# ----- OpenAPI (drf-spectacular) --------
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'MADDAM API',
+    'DESCRIPTION': 'OpenAPI schema for MADDAM (including analytics endpoints).',
+    'VERSION': '4.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }
 
 # ----- Distribution -------

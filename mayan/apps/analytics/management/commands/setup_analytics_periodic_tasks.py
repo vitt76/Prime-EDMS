@@ -57,6 +57,13 @@ class Command(BaseCommand):
                 'interval': daily_24,
                 'queue': 'documents',
             },
+            {
+                'name': 'analytics_sync_external_metrics',
+                'task': 'mayan.apps.analytics.tasks.sync_external_metrics',
+                'interval': hourly_6,
+                'kwargs': '{"days": 7, "limit_assets": 500}',
+                'queue': 'analytics',
+            },
         )
 
         created_or_updated = 0
@@ -72,5 +79,3 @@ class Command(BaseCommand):
             created_or_updated += 1
 
         self.stdout.write(f'Analytics periodic tasks configured: {created_or_updated}')
-
-

@@ -11,8 +11,7 @@ import logging
 
 from django.db.models import Prefetch
 
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import JSONRenderer
@@ -107,51 +106,20 @@ class APIDocumentRichDetailView(generics.RetrieveAPIView):
         context['request'] = self.request
         return context
     
-    @swagger_auto_schema(
-        operation_id='document_rich_detail',
-        operation_description='''
-Retrieve rich document details optimized for frontend.
-
-Returns flattened, frontend-friendly JSON structure with:
-- Core document info (id, uuid, label, description, datetime_created)
-- File info (download_url, size, mimetype, filename)
-- **thumbnail_url**: URL for 150x150 preview image
-- **preview_url**: URL for 800px preview image
-- **download_url**: Direct file download URL
-- Metadata as simple key-value dict (SerializerMethodField)
-- Tags as list of objects with label and color
-- AI analysis data (if available)
-- Permission flags for current user
-- Version history
-
-**Phase B1 Implementation:**
-- Uses JSONRenderer only (no HTML)
-- Optimized with prefetch_related
-- Includes URL fields for media access
-        ''',
-        manual_parameters=[
-            openapi.Parameter(
-                'document_id',
-                openapi.IN_PATH,
-                description='Document ID',
-                type=openapi.TYPE_INTEGER,
-                required=True
-            )
+    @extend_schema(
+        summary='Детальная карточка документа (rich)',
+        description='Возвращает frontend-friendly JSON с данными документа, файла, метаданных, тегов и permissions.',
+        parameters=[
+            OpenApiParameter(
+                name='document_id', location=OpenApiParameter.PATH,
+                type=OpenApiTypes.INT, required=True, description='ID документа'
+            ),
         ],
         responses={
-            200: openapi.Response(
-                description='Success',
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'data': openapi.Schema(type=openapi.TYPE_OBJECT),
-                    }
-                )
-            ),
-            404: openapi.Response(description='Document not found'),
+            200: OpenApiResponse(description='OK'),
+            404: OpenApiResponse(description='Документ не найден'),
         },
-        tags=['Documents - Rich Details']
+        tags=['documents'],
     )
     def retrieve(self, request, *args, **kwargs):
         """
@@ -260,57 +228,18 @@ class APIDocumentRichListView(generics.ListAPIView):
         
         return queryset
     
-    @swagger_auto_schema(
-        operation_id='document_rich_list',
-        operation_description='''
-List documents with rich metadata, optimized for gallery view.
-
-Returns paginated list with thumbnail URLs and metadata summaries.
-        ''',
-        manual_parameters=[
-            openapi.Parameter(
-                'page', openapi.IN_QUERY, 
-                description='Page number', 
-                type=openapi.TYPE_INTEGER, default=1
-            ),
-            openapi.Parameter(
-                'page_size', openapi.IN_QUERY,
-                description='Items per page (max 100)',
-                type=openapi.TYPE_INTEGER, default=50
-            ),
-            openapi.Parameter(
-                'search', openapi.IN_QUERY,
-                description='Search query',
-                type=openapi.TYPE_STRING
-            ),
-            openapi.Parameter(
-                'document_type', openapi.IN_QUERY,
-                description='Filter by document type ID',
-                type=openapi.TYPE_INTEGER
-            ),
-            openapi.Parameter(
-                'ordering', openapi.IN_QUERY,
-                description='Sort field (datetime_created, -datetime_created, label, -label)',
-                type=openapi.TYPE_STRING, default='-datetime_created'
-            ),
+    @extend_schema(
+        summary='Список документов (rich)',
+        description='Пагинированный список документов с metadata summaries и thumbnail URLs.',
+        parameters=[
+            OpenApiParameter(name='page', location=OpenApiParameter.QUERY, type=OpenApiTypes.INT, required=False),
+            OpenApiParameter(name='page_size', location=OpenApiParameter.QUERY, type=OpenApiTypes.INT, required=False),
+            OpenApiParameter(name='search', location=OpenApiParameter.QUERY, type=OpenApiTypes.STR, required=False),
+            OpenApiParameter(name='document_type', location=OpenApiParameter.QUERY, type=OpenApiTypes.INT, required=False),
+            OpenApiParameter(name='ordering', location=OpenApiParameter.QUERY, type=OpenApiTypes.STR, required=False),
         ],
-        responses={
-            200: openapi.Response(
-                description='Success',
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'count': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'page': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'page_size': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'total_pages': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'results': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
-                    }
-                )
-            ),
-        },
-        tags=['Documents - Rich Details']
+        responses={200: OpenApiResponse(description='OK')},
+        tags=['documents'],
     )
     def list(self, request, *args, **kwargs):
         """List documents with rich metadata."""

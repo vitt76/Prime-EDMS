@@ -1,8 +1,10 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.db.models import Avg, Count, Q, Sum
-from django.db.models.functions import TruncDate, TruncMonth
+from django.db.models.functions import TruncDate, TruncHour, TruncMonth
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
@@ -11,13 +13,17 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from drf_spectacular.utils import (
+    OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema, extend_schema_view
+)
+
 from mayan.apps.documents.models import Document, DocumentFile
 
 from mayan.apps.analytics.models import (
     AssetDailyMetrics, AssetEvent, Campaign, CampaignAsset, SearchDailyMetrics,
     ApprovalWorkflowEvent, AnalyticsAlert, CDNDailyCost, SearchQuery,
     CampaignDailyMetrics, CampaignEngagementEvent, FeatureUsage, SearchSession,
-    DistributionEvent, UserDailyMetrics, UserSession
+    DistributionEvent, DocumentCostProfile, UserCostProfile, UserDailyMetrics, UserSession
 )
 from mayan.apps.analytics.utils import track_asset_event
 from mayan.apps.analytics.permissions import (
@@ -29,6 +35,61 @@ from mayan.apps.permissions import Permission
 from mayan.apps.analytics.realtime import notify_analytics_refresh
 
 
+@extend_schema_view(
+    top_metrics=extend_schema(
+        summary='Аналитика: Медиатека — ключевые метрики',
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    asset_distribution=extend_schema(
+        summary='Аналитика: Медиатека — распределение ассетов',
+        parameters=[
+            OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    most_downloaded=extend_schema(
+        summary='Аналитика: Медиатека — топ скачиваний',
+        parameters=[
+            OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('asset_type', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('owner_id', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    distribution_trend=extend_schema(
+        summary='Аналитика: Медиатека — тренд распределения',
+        parameters=[OpenApiParameter('months', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    asset_detail=extend_schema(
+        summary='Аналитика: Медиатека — детализация ассета',
+        parameters=[OpenApiParameter('document_id', OpenApiTypes.INT, OpenApiParameter.QUERY, required=True)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    reuse_metrics=extend_schema(
+        summary='Аналитика: Медиатека — метрики переиспользования',
+        parameters=[OpenApiParameter('months', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    storage_trends=extend_schema(
+        summary='Аналитика: Медиатека — тренды хранилища',
+        parameters=[OpenApiParameter('months', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    alerts=extend_schema(
+        summary='Аналитика: Медиатека — алерты',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+)
 class AssetBankViewSet(viewsets.ViewSet):
     """Headless API: Asset Bank dashboard (Phase 1 / Level 1)."""
 
@@ -180,7 +241,7 @@ class AssetBankViewSet(viewsets.ViewSet):
                 )
             document_ids_by_type = qs.values_list('document_id', flat=True).distinct()
 
-        # Prefer aggregated table if present.
+        # Prefer aggregated table (daily metrics) when available.
         metrics_qs = AssetDailyMetrics.objects.all()
         if date_from:
             metrics_qs = metrics_qs.filter(date__gte=date_from)
@@ -189,20 +250,23 @@ class AssetBankViewSet(viewsets.ViewSet):
         if document_ids_by_type is not None:
             metrics_qs = metrics_qs.filter(document_id__in=document_ids_by_type)
 
-        if metrics_qs.exists() and not department:
-            rows = metrics_qs.values(
-                'document_id',
-                'document__label'
-            ).annotate(
-                downloads=Sum('downloads'),
-                views=Sum('views'),
-                shares=Sum('shares')
-            ).order_by('-downloads')[:50]
-
-            return Response(
-                data={'results': list(rows), 'source': 'daily_metrics'},
-                status=status.HTTP_200_OK
+        if not department:
+            rows = list(
+                metrics_qs.values(
+                    'document_id',
+                    'document__label'
+                ).annotate(
+                    downloads=Sum('downloads'),
+                    views=Sum('views'),
+                    shares=Sum('shares')
+                ).order_by('-downloads')[:50]
             )
+
+            if rows:
+                return Response(
+                    data={'results': rows, 'source': 'daily_metrics'},
+                    status=status.HTTP_200_OK
+                )
 
         # Fallback: raw events.
         events_qs = AssetEvent.objects.filter(event_type=AssetEvent.EVENT_TYPE_DOWNLOAD)
@@ -222,7 +286,7 @@ class AssetBankViewSet(viewsets.ViewSet):
         # Attach labels in bulk.
         document_ids = [row['document_id'] for row in rows]
         label_map = dict(
-            Document.objects.filter(pk__in=document_ids).values_list('pk', 'label')
+            Document.valid.filter(pk__in=document_ids).values_list('pk', 'label')
         )
         results = []
         for row in rows:
@@ -241,7 +305,6 @@ class AssetBankViewSet(viewsets.ViewSet):
             status=status.HTTP_200_OK
         )
 
-    @method_decorator(cache_page(600))
     @action(detail=False, methods=('get',))
     def asset_detail(self, request):
         """GET /api/v4/headless/analytics/dashboard/assets/detail/?document_id=123"""
@@ -254,6 +317,17 @@ class AssetBankViewSet(viewsets.ViewSet):
             return Response({'detail': 'document_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         date_from = timezone.now() - timedelta(days=days)
+
+        # Manual caching to allow targeted invalidation per asset.
+        cache_key = f'analytics:asset_detail:{document_id}:days:{days}'
+        try:
+            from django.core.cache import cache
+
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(data=cached, status=status.HTTP_200_OK)
+        except Exception:
+            cached = None
 
         document = Document.valid.filter(pk=document_id).first()
         if not document:
@@ -296,12 +370,120 @@ class AssetBankViewSet(viewsets.ViewSet):
             ).order_by('-count')[:20]
         ) if session_ids else []
 
+        payload = {
+            'document': {'id': document.pk, 'label': document.label},
+            'daily_series': daily_series,
+            'channels': channel_rows,
+            'search_referrers': search_referrers,
+        }
+
+        try:
+            from django.core.cache import cache
+
+            cache.set(cache_key, payload, timeout=600)
+        except Exception:
+            pass
+
+        return Response(data=payload, status=status.HTTP_200_OK)
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def estimate(self, request):
+        """GET /api/v4/headless/analytics/dashboard/roi/estimate/
+
+        Supports:
+            - ?document_id=<int>
+            - ?campaign_id=<uuid>
+
+        ROI formula (as requested):
+            ROI = (Downloads * Reuse_Value) + (Time_Saved * Hourly_Rate) - Production_Cost
+        """
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_asset_bank,), user=request.user
+        )
+
+        document_id = int(request.query_params.get('document_id') or 0)
+        campaign_id = (request.query_params.get('campaign_id') or '').strip()
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now() - timedelta(days=days)
+
+        reuse_value = Decimal(str(getattr(settings, 'ANALYTICS_ROI_REUSE_VALUE_USD', 500)))
+        baseline_search_minutes = float(getattr(settings, 'ANALYTICS_ROI_BASELINE_SEARCH_MINUTES', 30.0))
+        default_hourly_rate = Decimal(str(getattr(settings, 'ANALYTICS_ROI_HOURLY_RATE_USD', 65.0)))
+
+        if not document_id and not campaign_id:
+            return Response(
+                {'detail': 'document_id or campaign_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Resolve documents in scope.
+        if document_id:
+            document_ids = [document_id]
+            scope = {'document_id': document_id}
+        else:
+            doc_ids = list(
+                CampaignAsset.objects.filter(campaign_id=campaign_id).values_list('document_id', flat=True)
+            )
+            document_ids = [int(d) for d in doc_ids]
+            if not document_ids:
+                return Response({'detail': 'Campaign has no assets'}, status=status.HTTP_404_NOT_FOUND)
+            scope = {'campaign_id': campaign_id}
+
+        downloads = AssetEvent.objects.filter(
+            document_id__in=document_ids,
+            event_type=AssetEvent.EVENT_TYPE_DOWNLOAD,
+            timestamp__gte=date_from
+        ).count()
+
+        # Production cost: sum of per-document cost profiles (unique docs).
+        production_cost = DocumentCostProfile.objects.filter(
+            document_id__in=document_ids
+        ).aggregate(total=Sum('production_cost'))['total'] or Decimal('0.0')
+
+        # Time saved: compare actual search-to-find per session to baseline minutes.
+        # Savings are calculated per SearchSession that ended with a download of a doc in scope.
+        sessions = SearchSession.objects.filter(
+            ended_at__gte=date_from,
+            last_download_event__document_id__in=document_ids,
+            time_to_find_seconds__isnull=False,
+        ).select_related('user')[:50000]
+
+        # Fetch hourly rates for involved users.
+        user_ids = sorted({s.user_id for s in sessions if s.user_id})
+        rates = {
+            p.user_id: p.hourly_rate
+            for p in UserCostProfile.objects.filter(user_id__in=user_ids)
+        }
+
+        time_saved_value = Decimal('0.0')
+        time_saved_minutes_total = 0.0
+        session_count = 0
+        for s in sessions:
+            session_count += 1
+            actual_minutes = float((s.time_to_find_seconds or 0) / 60.0)
+            saved_minutes = max(0.0, baseline_search_minutes - actual_minutes)
+            time_saved_minutes_total += saved_minutes
+
+            hourly_rate = rates.get(s.user_id) or default_hourly_rate
+            time_saved_value += (Decimal(str(saved_minutes)) / Decimal('60.0')) * Decimal(str(hourly_rate))
+
+        reuse_value_total = Decimal(downloads) * reuse_value
+        roi_value = reuse_value_total + time_saved_value - production_cost
+
         return Response(
             data={
-                'document': {'id': document.pk, 'label': document.label},
-                'daily_series': daily_series,
-                'channels': channel_rows,
-                'search_referrers': search_referrers,
+                'window_days': days,
+                'scope': scope,
+                'downloads': downloads,
+                'reuse_value_per_download': float(reuse_value),
+                'reuse_value_total': float(reuse_value_total),
+                'baseline_search_minutes': baseline_search_minutes,
+                'time_saved_minutes_total': round(time_saved_minutes_total, 2),
+                'time_saved_value': float(time_saved_value),
+                'production_cost': float(production_cost),
+                'roi_value': float(roi_value),
+                'sessions_used': session_count,
             },
             status=status.HTTP_200_OK
         )
@@ -592,6 +774,60 @@ class AssetBankViewSet(viewsets.ViewSet):
         return Response(data={'results': results}, status=status.HTTP_200_OK)
 
 
+@extend_schema_view(
+    campaigns=extend_schema(
+        summary='Аналитика: Кампании — список',
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    create_campaign=extend_schema(
+        summary='Аналитика: Кампании — создать кампанию',
+        responses={201: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    add_assets=extend_schema(
+        summary='Аналитика: Кампании — добавить ассеты',
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    update_financials=extend_schema(
+        summary='Аналитика: Кампании — обновить финансовые параметры',
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    dashboard=extend_schema(
+        summary='Аналитика: Кампании — дашборд',
+        parameters=[
+            OpenApiParameter('campaign_id', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    top_assets=extend_schema(
+        summary='Аналитика: Кампании — топ ассетов',
+        parameters=[OpenApiParameter('campaign_id', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    timeline=extend_schema(
+        summary='Аналитика: Кампании — таймлайн',
+        parameters=[OpenApiParameter('campaign_id', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    geography=extend_schema(
+        summary='Аналитика: Кампании — география',
+        parameters=[OpenApiParameter('campaign_id', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    engagement=extend_schema(
+        summary='Аналитика: Кампании — трекинг вовлеченности',
+        responses={201: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+)
 class CampaignPerformanceViewSet(viewsets.ViewSet):
     """Headless API: Campaign Performance dashboard (Phase 2 / Level 2)."""
 
@@ -867,6 +1103,40 @@ class CampaignPerformanceViewSet(viewsets.ViewSet):
             status=status.HTTP_200_OK
         )
 
+    @action(detail=False, methods=('post',))
+    def export_pdf(self, request, campaign_id: str = ''):
+        """POST /api/v4/analytics/campaigns/<id>/export/pdf/
+
+        Returns: application/pdf (binary).
+        Optional JSON body:
+          - email_to: send report to email via Celery
+          - days: window in days
+        """
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_campaign_performance,), user=request.user
+        )
+        campaign_id = campaign_id or (request.data or {}).get('campaign_id') or request.query_params.get('campaign_id') or ''
+        campaign_id = str(campaign_id).strip()
+        if not campaign_id:
+            return Response({'detail': 'campaign_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        days = int((request.data or {}).get('days') or 30)
+        email_to = ((request.data or {}).get('email_to') or '').strip()
+
+        from mayan.apps.analytics.reports import CampaignPDFReport
+        pdf_bytes = CampaignPDFReport(campaign_id=campaign_id, days=days).render()
+
+        if email_to:
+            try:
+                from mayan.apps.analytics.tasks import send_campaign_pdf_report_email
+                send_campaign_pdf_report_email.delay(campaign_id=campaign_id, email_to=email_to, days=days)
+            except Exception:
+                pass
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename=\"campaign-{campaign_id}.pdf\"'
+        return response
+
     @method_decorator(cache_page(600))
     @action(detail=False, methods=('get',))
     def geography(self, request):
@@ -1103,6 +1373,31 @@ class CampaignPerformanceViewSet(viewsets.ViewSet):
         )
 
 
+@extend_schema_view(
+    top_queries=extend_schema(
+        summary='Аналитика: Поиск — топ запросов',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    null_searches=extend_schema(
+        summary='Аналитика: Поиск — нулевые поиски',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    daily=extend_schema(
+        summary='Аналитика: Поиск — daily метрики',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    click=extend_schema(
+        summary='Аналитика: Поиск — трекинг клика',
+        responses={201: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+)
 class SearchAnalyticsViewSet(viewsets.ViewSet):
     """Headless API: Search Analytics (Phase 2 / Level 4)."""
 
@@ -1220,6 +1515,32 @@ class SearchAnalyticsViewSet(viewsets.ViewSet):
         return Response({'status': 'ok'}, status=status.HTTP_200_OK)
 
 
+@extend_schema_view(
+    adoption_by_department=extend_schema(
+        summary='Аналитика: Пользователи — adoption heatmap',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    login_patterns=extend_schema(
+        summary='Аналитика: Пользователи — паттерны логина',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    cohorts=extend_schema(
+        summary='Аналитика: Пользователи — когортный анализ',
+        parameters=[OpenApiParameter('weeks', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    feature_adoption=extend_schema(
+        summary='Аналитика: Пользователи — adoption по фичам',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+)
 class UserActivityViewSet(viewsets.ViewSet):
     """Headless API: User activity / adoption (Phase 2 / Level 3)."""
 
@@ -1452,6 +1773,26 @@ class UserActivityViewSet(viewsets.ViewSet):
         return Response(data={'results': list(rows)}, status=status.HTTP_200_OK)
 
 
+@extend_schema_view(
+    summary=extend_schema(
+        summary='Аналитика: Согласования — summary',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    timeseries=extend_schema(
+        summary='Аналитика: Согласования — временные ряды',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    recommendations=extend_schema(
+        summary='Аналитика: Согласования — рекомендации',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+)
 class ApprovalAnalyticsViewSet(viewsets.ViewSet):
     """Headless API: Approval workflow analytics (Phase 2 / Level 3)."""
 
@@ -1499,6 +1840,34 @@ class ApprovalAnalyticsViewSet(viewsets.ViewSet):
         )
 
 
+@extend_schema_view(
+    dashboard=extend_schema(
+        summary='Аналитика: Дистрибуция — dashboard/матрица',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    ingest=extend_schema(
+        summary='Аналитика: Дистрибуция — ingest событий',
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    conversion_rate=extend_schema(
+        summary='Аналитика: Дистрибуция — conversion rate',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    velocity=extend_schema(
+        summary='Аналитика: Дистрибуция — velocity (day/hour)',
+        parameters=[
+            OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('bucket', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+)
 class DistributionAnalyticsViewSet(viewsets.ViewSet):
     """Headless API: Distribution analytics (Release 3 foundation)."""
 
@@ -1527,10 +1896,12 @@ class DistributionAnalyticsViewSet(viewsets.ViewSet):
             matrix.append(
                 {
                     'channel': channel,
-                    'status': last.status,
+                    'status': (last.sync_status or last.status),
                     'last_sync': last.occurred_at,
                     'events': qs.filter(channel=channel).count(),
                     'issues': issues,
+                    'retry_count': int(getattr(last, 'retry_count', 0) or 0),
+                    'last_sync_error': (getattr(last, 'last_sync_error', '') or '')[:500],
                 }
             )
 
@@ -1587,6 +1958,106 @@ class DistributionAnalyticsViewSet(viewsets.ViewSet):
             status=status.HTTP_200_OK
         )
 
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def conversion_rate(self, request):
+        """GET /api/v4/headless/analytics/dashboard/distribution/conversion-rate/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_distribution,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now() - timedelta(days=days)
+
+        qs = DistributionEvent.objects.filter(occurred_at__gte=date_from)
+
+        rows = list(
+            qs.values('channel').annotate(
+                views=Sum('views'),
+                clicks=Sum('clicks'),
+                conversions=Sum('conversions'),
+            ).order_by('channel')
+        )
+
+        results = []
+        for row in rows:
+            views = int(row.get('views') or 0)
+            clicks = int(row.get('clicks') or 0)
+            conversions = int(row.get('conversions') or 0)
+
+            denom = clicks if clicks > 0 else views
+            rate = None
+            if denom > 0:
+                rate = round((conversions / denom) * 100, 2)
+
+            results.append(
+                {
+                    'channel': row.get('channel') or '',
+                    'conversion_rate': rate,
+                    'denominator': 'clicks' if clicks > 0 else 'views',
+                    'views': views,
+                    'clicks': clicks,
+                    'conversions': conversions,
+                }
+            )
+
+        return Response({'window_days': days, 'results': results}, status=status.HTTP_200_OK)
+
+    @method_decorator(cache_page(600))
+    @action(detail=False, methods=('get',))
+    def velocity(self, request):
+        """GET /api/v4/headless/analytics/dashboard/distribution/velocity/"""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_distribution,), user=request.user
+        )
+        days = int(request.query_params.get('days') or 30)
+        bucket = (request.query_params.get('bucket') or 'day').strip().lower()  # day|hour
+        date_from = timezone.now() - timedelta(days=days)
+
+        qs = DistributionEvent.objects.filter(occurred_at__gte=date_from).exclude(views__isnull=True)
+
+        if bucket == 'hour':
+            rows = list(
+                qs.annotate(ts=TruncHour('occurred_at')).values('channel', 'ts').annotate(
+                    views=Sum('views')
+                ).order_by('channel', 'ts')
+            )
+            key_name = 'hour'
+        else:
+            rows = list(
+                qs.annotate(ts=TruncDate('occurred_at')).values('channel', 'ts').annotate(
+                    views=Sum('views')
+                ).order_by('channel', 'ts')
+            )
+            key_name = 'date'
+
+        out_by_channel = {}
+        last_views_by_channel = {}
+        for row in rows:
+            channel = row.get('channel') or ''
+            ts = row.get('ts')
+            views = int(row.get('views') or 0)
+            prev = last_views_by_channel.get(channel)
+            delta = None
+            if prev is not None:
+                delta = views - prev
+            last_views_by_channel[channel] = views
+
+            if channel not in out_by_channel:
+                out_by_channel[channel] = []
+            out_by_channel[channel].append(
+                {
+                    key_name: ts.isoformat() if ts else None,
+                    'views': views,
+                    'delta_views': delta,
+                }
+            )
+
+        results = []
+        for channel, series in out_by_channel.items():
+            results.append({'channel': channel, 'series': series})
+
+        return Response({'window_days': days, 'bucket': bucket, 'results': results}, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=('post',))
     def ingest(self, request):
         """POST /api/v4/headless/analytics/ingest/distribution-events/
@@ -1616,6 +2087,9 @@ class DistributionAnalyticsViewSet(viewsets.ViewSet):
                     channel=channel,
                     event_type=ev.get('event_type') or DistributionEvent.EVENT_TYPE_SYNCED,
                     status=ev.get('status') or DistributionEvent.STATUS_OK,
+                    sync_status=ev.get('sync_status') or '',
+                    last_sync_error=ev.get('last_sync_error') or '',
+                    retry_count=int(ev.get('retry_count') or 0),
                     document_id=ev.get('document_id') or None,
                     campaign_id=ev.get('campaign_id') or None,
                     views=ev.get('views'),
@@ -1641,6 +2115,24 @@ class DistributionAnalyticsViewSet(viewsets.ViewSet):
         return Response({'created': created}, status=status.HTTP_200_OK)
 
 
+@extend_schema_view(
+    content_gaps=extend_schema(
+        summary='Аналитика: Content Intel — пробелы контента (null searches)',
+        parameters=[OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False)],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    metadata_compliance=extend_schema(
+        summary='Аналитика: Content Intel — compliance (полнота метаданных)',
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    recommendations=extend_schema(
+        summary='Аналитика: Content Intel — рекомендации',
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+)
 class ContentIntelligenceViewSet(viewsets.ViewSet):
     """Headless API: Content Intelligence MVP (Release 3 foundation)."""
 
@@ -1690,6 +2182,7 @@ class ContentIntelligenceViewSet(viewsets.ViewSet):
             .values('id', 'severity', 'title', 'message', 'document_id', 'created_at', 'metadata')
         )
         return Response({'results': rows}, status=status.HTTP_200_OK)
+
     @method_decorator(cache_page(600))
     @action(detail=False, methods=('get',))
     def timeseries(self, request):
@@ -1817,6 +2310,23 @@ class ContentIntelligenceViewSet(viewsets.ViewSet):
         )
 
 
+@extend_schema_view(
+    summary=extend_schema(
+        summary='Аналитика: ROI — summary',
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+    estimate=extend_schema(
+        summary='Аналитика: ROI — оценка (document_id/campaign_id)',
+        parameters=[
+            OpenApiParameter('document_id', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('campaign_id', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('days', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
+        tags=['analytics'],
+    ),
+)
 class ROIDashboardViewSet(viewsets.ViewSet):
     """Headless API: ROI dashboard (Phase 2 MVP)."""
 

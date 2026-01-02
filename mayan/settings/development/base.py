@@ -43,3 +43,6 @@ TEMPLATES[0]['OPTIONS']['loaders'] = (  # NOQA: F405
 )
 
 WSGI_AUTO_RELOAD = True
+
+# Debug-only: log SQL query counts for analytics endpoints.
+MIDDLEWARE += ('mayan.apps.analytics.middleware.QueryCountDebugMiddleware',)  # NOQA: F405

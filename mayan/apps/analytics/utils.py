@@ -1,8 +1,10 @@
 from typing import Any, Dict, Optional
 
 from django.contrib.auth import get_user_model
+from django.conf import settings
 
 from .models import AssetEvent
+from .event_stream import publish_asset_event
 
 
 User = get_user_model()
@@ -18,7 +20,7 @@ def track_asset_event(
     bandwidth_bytes: Optional[int] = None,
     latency_seconds: Optional[int] = None,
     metadata: Optional[Dict[str, Any]] = None
-) -> AssetEvent:
+) -> Optional[AssetEvent]:
     """Create a raw asset analytics event (Level 1).
 
     Args:
@@ -32,12 +34,31 @@ def track_asset_event(
         metadata: Arbitrary JSON-serializable metadata.
 
     Returns:
-        Created AssetEvent instance.
+        Created AssetEvent instance if written synchronously; otherwise None.
     """
     user_department = ''
     if user:
         # Department might not exist on all deployments; keep best-effort.
         user_department = getattr(user, 'department', '') or ''
+
+    # Prefer Redis Streams (Event Stream pattern) for high throughput.
+    entry_id = publish_asset_event(
+        document_id=int(getattr(document, 'pk', 0) or 0),
+        event_type=event_type,
+        user_id=int(getattr(user, 'pk', 0) or 0) if user else None,
+        user_department=user_department,
+        channel=channel or '',
+        intended_use=intended_use or '',
+        bandwidth_bytes=bandwidth_bytes,
+        latency_seconds=latency_seconds,
+        metadata=metadata or {},
+    )
+    if entry_id:
+        return None
+
+    # Fallback: keep best-effort compatibility if stream publishing is disabled/down.
+    if bool(getattr(settings, 'ANALYTICS_EVENT_STREAM_FALLBACK_TO_DB', True)) is False:
+        return None
 
     return AssetEvent.objects.create(
         document=document,
