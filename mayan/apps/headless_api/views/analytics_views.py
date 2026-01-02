@@ -241,67 +241,49 @@ class AssetBankViewSet(viewsets.ViewSet):
                 )
             document_ids_by_type = qs.values_list('document_id', flat=True).distinct()
 
-        # Prefer aggregated table (daily metrics) when available.
-        metrics_qs = AssetDailyMetrics.objects.all()
-        if date_from:
-            metrics_qs = metrics_qs.filter(date__gte=date_from)
-        if date_to:
-            metrics_qs = metrics_qs.filter(date__lte=date_to)
+        # Performance-first approach: query Document with minimal fields and annotate counts.
+        # This avoids loading full Document objects and avoids extra label join passes.
+        docs_qs = Document.valid.all().only('id', 'label', 'description')
+
         if document_ids_by_type is not None:
-            metrics_qs = metrics_qs.filter(document_id__in=document_ids_by_type)
+            docs_qs = docs_qs.filter(pk__in=document_ids_by_type)
 
-        if not department:
-            rows = list(
-                metrics_qs.values(
-                    'document_id',
-                    'document__label'
-                ).annotate(
-                    downloads=Sum('downloads'),
-                    views=Sum('views'),
-                    shares=Sum('shares')
-                ).order_by('-downloads')[:50]
-            )
+        # Normalize date filters (we use __date for compatibility with incoming iso strings).
+        date_from_norm = date_from
+        date_to_norm = date_to
 
-            if rows:
-                return Response(
-                    data={'results': rows, 'source': 'daily_metrics'},
-                    status=status.HTTP_200_OK
-                )
+        download_filter = Q(analytics_events__event_type=AssetEvent.EVENT_TYPE_DOWNLOAD)
+        view_filter = Q(analytics_events__event_type=AssetEvent.EVENT_TYPE_VIEW)
+        share_filter = Q(analytics_events__event_type=AssetEvent.EVENT_TYPE_SHARE)
 
-        # Fallback: raw events.
-        events_qs = AssetEvent.objects.filter(event_type=AssetEvent.EVENT_TYPE_DOWNLOAD)
-        if date_from:
-            events_qs = events_qs.filter(timestamp__date__gte=date_from)
-        if date_to:
-            events_qs = events_qs.filter(timestamp__date__lte=date_to)
-        if document_ids_by_type is not None:
-            events_qs = events_qs.filter(document_id__in=document_ids_by_type)
+        if date_from_norm:
+            download_filter &= Q(analytics_events__timestamp__date__gte=date_from_norm)
+            view_filter &= Q(analytics_events__timestamp__date__gte=date_from_norm)
+            share_filter &= Q(analytics_events__timestamp__date__gte=date_from_norm)
+        if date_to_norm:
+            download_filter &= Q(analytics_events__timestamp__date__lte=date_to_norm)
+            view_filter &= Q(analytics_events__timestamp__date__lte=date_to_norm)
+            share_filter &= Q(analytics_events__timestamp__date__lte=date_to_norm)
         if department:
-            events_qs = events_qs.filter(user_department=department)
+            download_filter &= Q(analytics_events__user_department=department)
+            view_filter &= Q(analytics_events__user_department=department)
+            share_filter &= Q(analytics_events__user_department=department)
 
-        rows = events_qs.values('document_id').annotate(
-            downloads=Count('id')
+        docs_qs = docs_qs.annotate(
+            downloads=Count('analytics_events', filter=download_filter),
+            views=Count('analytics_events', filter=view_filter),
+            shares=Count('analytics_events', filter=share_filter),
         ).order_by('-downloads')[:50]
 
-        # Attach labels in bulk.
-        document_ids = [row['document_id'] for row in rows]
-        label_map = dict(
-            Document.valid.filter(pk__in=document_ids).values_list('pk', 'label')
+        results = list(
+            docs_qs.values('id', 'label', 'downloads', 'views', 'shares')
         )
-        results = []
-        for row in rows:
-            results.append(
-                {
-                    'document_id': row['document_id'],
-                    'document__label': label_map.get(row['document_id'], ''),
-                    'downloads': row['downloads'],
-                    'views': 0,
-                    'shares': 0
-                }
-            )
+        for row in results:
+            row['document_id'] = row.pop('id')
+            row['document__label'] = row.pop('label')
 
         return Response(
-            data={'results': results, 'source': 'raw_events'},
+            data={'results': results, 'source': 'document_annotate'},
             status=status.HTTP_200_OK
         )
 
