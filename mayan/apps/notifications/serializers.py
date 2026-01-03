@@ -20,7 +20,12 @@ class NotificationSerializer(serializers.ModelSerializer):
     """Full notification serializer with fallback for legacy notifications."""
 
     actions = NotificationActionSerializer(many=True, required=False)
-    created_at = serializers.DateTimeField(source='action.timestamp', read_only=True)
+    created_at = serializers.SerializerMethodField()
+
+    def get_created_at(self, obj):
+        """Return action timestamp or None if action is missing (corrupted row)."""
+        action = getattr(obj, 'action', None)
+        return getattr(action, 'timestamp', None)
 
     class Meta:
         model = EventNotification
@@ -70,7 +75,12 @@ class NotificationSerializer(serializers.ModelSerializer):
 class NotificationListSerializer(serializers.ModelSerializer):
     """List serializer optimized for popover with fallback for legacy notifications."""
 
-    created_at = serializers.DateTimeField(source='action.timestamp', read_only=True)
+    created_at = serializers.SerializerMethodField()
+
+    def get_created_at(self, obj):
+        """Return action timestamp or None if action is missing (corrupted row)."""
+        action = getattr(obj, 'action', None)
+        return getattr(action, 'timestamp', None)
 
     class Meta:
         model = EventNotification

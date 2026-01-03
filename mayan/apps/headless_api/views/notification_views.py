@@ -143,15 +143,28 @@ class HeadlessNotificationListView(APIView):
             doc_event_types = StoredEventType.objects.filter(name__startswith='documents.')
             subscribed_doc_events = user_subscriptions.filter(stored_event_type__in=doc_event_types)
             
-            # Auto-subscribe user to document events if not subscribed
-            if subscribed_doc_events.count() == 0:
-                document_event_types = [
-                    'documents.document_file_created',
-                    'documents.document_created',
-                    'documents.document_edited',
-                    'documents.document_version_created',
-                ]
-                for event_type_name in document_event_types:
+            # Auto-subscribe user to required document events (idempotent).
+            # IMPORTANT: do not only run when there are 0 subscriptions; existing users
+            # may miss lifecycle events and would never see "удалён/восстановлен".
+            document_event_types = [
+                'documents.document_file_created',
+                'documents.document_created',
+                'documents.document_edited',
+                'documents.document_version_created',
+                # Lifecycle (trash/restore/delete) - must appear in Notification Center
+                'documents.document_trashed',
+                'documents.trashed_document_restored',
+                'documents.trashed_document_deleted',
+            ]
+
+            try:
+                already = set(subscribed_doc_events.values_list('stored_event_type__name', flat=True))
+            except Exception:
+                already = set()
+
+            missing = [name for name in document_event_types if name not in already]
+            if missing:
+                for event_type_name in missing:
                     try:
                         stored_event_type = StoredEventType.objects.get(name=event_type_name)
                         EventSubscription.objects.get_or_create(
@@ -163,7 +176,7 @@ class HeadlessNotificationListView(APIView):
                         logger.debug('Event type %s not found, skipping auto-subscription', event_type_name)
                     except Exception as e:
                         logger.warning('Failed to auto-subscribe user %s to event %s: %s', request.user.username, event_type_name, e)
-                
+
                 # Re-fetch subscriptions after auto-subscription
                 user_subscriptions = EventSubscription.objects.filter(user=request.user)
                 subscribed_doc_events = user_subscriptions.filter(stored_event_type__in=doc_event_types)
@@ -233,8 +246,14 @@ class HeadlessNotificationListView(APIView):
                 pass
         # #endregion
 
-        # Return all notifications - fallback for legacy notifications is in serializer
-        queryset = EventNotification.objects.filter(user=request.user).select_related('action').order_by('-action__timestamp')
+        # Return all notifications - fallback for legacy notifications is in serializer.
+        # HOTFIX: filter out corrupted rows where action is NULL; serializers may otherwise crash.
+        queryset = (
+            EventNotification.objects
+            .filter(user=request.user, action__isnull=False)
+            .select_related('action')
+            .order_by('-action__timestamp')
+        )
 
         # Extended schema: exclude DELETED by default.
         if hasattr(EventNotification, 'state'):

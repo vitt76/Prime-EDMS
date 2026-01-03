@@ -12,44 +12,26 @@
 
     <template #default>
       <div class="space-y-4">
-        <!-- Collection Selector -->
+        <!-- Folder (Cabinet) Selector -->
         <div>
           <label class="block text-sm font-medium text-neutral-900 dark:text-neutral-900 mb-2">
-            Коллекция назначения
+            Папка назначения
           </label>
           <select
-            v-model="selectedCollection"
+            v-model="selectedFolderId"
             class="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-300 rounded-md text-sm bg-neutral-0 dark:bg-neutral-0 text-neutral-900 dark:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            <option value="">Выберите коллекцию...</option>
-            <option v-for="collection in collections" :key="collection.id" :value="collection.id">
-              {{ collection.name }}
+            <option value="">Выберите папку...</option>
+            <option v-for="folder in folderOptions" :key="folder.id" :value="folder.id">
+              {{ folder.label }}
             </option>
           </select>
-        </div>
-
-        <!-- Create New Collection Option -->
-        <div>
-          <button
-            class="text-sm text-primary-500 hover:text-primary-600 transition-colors"
-            @click="showNewCollectionInput = !showNewCollectionInput"
-          >
-            + Создать новую коллекцию
-          </button>
-          <input
-            v-if="showNewCollectionInput"
-            v-model="newCollectionName"
-            type="text"
-            placeholder="Название коллекции"
-            class="mt-2 w-full px-3 py-2 border border-neutral-300 dark:border-neutral-300 rounded-md text-sm bg-neutral-0 dark:bg-neutral-0 text-neutral-900 dark:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            @keydown.enter="createAndSelectCollection"
-          />
         </div>
 
         <!-- Info -->
         <div class="p-3 bg-neutral-50 dark:bg-neutral-50 rounded-md">
           <p class="text-sm text-neutral-600 dark:text-neutral-600">
-            <strong>{{ selectedCount }}</strong> активов будет перемещено в выбранную коллекцию.
+            <strong>{{ selectedCount }}</strong> активов будет перемещено в выбранную папку.
           </p>
         </div>
 
@@ -95,7 +77,7 @@
           variant="primary"
           size="md"
           @click="handleMove"
-          :disabled="!selectedCollection || isProcessing"
+          :disabled="!selectedFolderId || isProcessing"
         >
           <span v-if="!isProcessing">Переместить</span>
           <span v-else>Обработка...</span>
@@ -109,84 +91,81 @@
 import { ref, computed, watch } from 'vue'
 import Modal from '@/components/Common/Modal.vue'
 import Button from '@/components/Common/Button.vue'
-import { assetService } from '@/services/assetService'
+import { useFolderStore } from '@/stores/folderStore'
 import { formatApiError } from '@/utils/errors'
-
-interface Collection {
-  id: number
-  name: string
-}
+import type { FolderNode } from '@/mocks/folders'
 
 interface Props {
   isOpen: boolean
   selectedIds: number[]
-  collections?: Collection[]
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  collections: () => []
-})
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   close: []
   success: [result: { updated: number; failed: number }]
 }>()
 
-const selectedCollection = ref<number | ''>('')
-const showNewCollectionInput = ref(false)
-const newCollectionName = ref('')
+const folderStore = useFolderStore()
+const selectedFolderId = ref<string>('')
 const isProcessing = ref(false)
 const processedCount = ref(0)
 const errors = ref<string[]>([])
 
 const selectedCount = computed(() => props.selectedIds.length)
 
+function flattenFolders(
+  folders: FolderNode[],
+  depth = 0,
+  acc: Array<{ id: string; label: string }> = []
+): Array<{ id: string; label: string }> {
+  for (const folder of folders) {
+    const prefix = depth > 0 ? `${'— '.repeat(depth)}` : ''
+    acc.push({ id: folder.id, label: `${prefix}${folder.name}` })
+    if (folder.children?.length) {
+      flattenFolders(folder.children, depth + 1, acc)
+    }
+  }
+  return acc
+}
+
+const folderOptions = computed(() => {
+  return flattenFolders(folderStore.systemFolders)
+})
+
 // Reset on open
 watch(
   () => props.isOpen,
-  (isOpen) => {
+  async (isOpen) => {
     if (isOpen) {
-      selectedCollection.value = ''
-      showNewCollectionInput.value = false
-      newCollectionName.value = ''
+      selectedFolderId.value = ''
       isProcessing.value = false
       processedCount.value = 0
       errors.value = []
+
+      // Ensure system folders are loaded from backend
+      await folderStore.refreshFolders(true)
     }
   }
 )
 
-function createAndSelectCollection() {
-  if (newCollectionName.value.trim()) {
-    // TODO: Create collection via API
-    // For now, just use the name as a placeholder
-    selectedCollection.value = -1 // Temporary ID
-    showNewCollectionInput.value = false
-  }
-}
-
 async function handleMove() {
-  if (!selectedCollection.value) return
+  if (!selectedFolderId.value) return
 
   isProcessing.value = true
   processedCount.value = 0
   errors.value = []
 
   try {
-    const collectionId = selectedCollection.value === -1 ? newCollectionName.value : selectedCollection.value
+    const result = await folderStore.handleBulkAssetDrop(
+      props.selectedIds,
+      selectedFolderId.value
+    )
 
-    const result = await assetService.bulkOperation({
-      ids: props.selectedIds,
-      action: 'move',
-      data: { collection_id: collectionId }
-    })
-
-    if (result.success) {
-      processedCount.value = result.updated
-      if (result.errors && result.errors.length > 0) {
-        errors.value = result.errors.map((e) => `Asset ${e.id}: ${e.error}`)
-      }
-      emit('success', { updated: result.updated, failed: result.failed })
+    if (result.success > 0) {
+      processedCount.value = result.success
+      emit('success', { updated: result.success, failed: result.failed })
       setTimeout(() => {
         emit('close')
       }, 1000)
