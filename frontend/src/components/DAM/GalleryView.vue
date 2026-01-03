@@ -512,8 +512,9 @@ function handleScroll(event: Event) {
 let resizeHandler: (() => void) | null = null
 
 onMounted(() => {
-  // Load shared links for shared badges
-  distributionStore.fetchSharedLinks()
+  // NOTE: Do not fetch share links on gallery mount.
+  // This endpoint is unstable in some deployments and creates console noise.
+  // We load share links lazily when the Share modal is opened.
 
   // Setup virtual scrolling
   if (virtualScrollContainer.value) {
@@ -545,6 +546,8 @@ onMounted(() => {
     window.addEventListener('resize', resizeHandler, { passive: true })
   }
 })
+
+// NOTE: Share links are loaded lazily inside handleBulkShare()
 
 onUnmounted(() => {
   if (virtualScrollContainer.value) {
@@ -743,6 +746,10 @@ function handleBulkDownload() {
 }
 
 function handleBulkShare() {
+  // Lazy-load share links only when the Share modal is actually opened.
+  if (!distributionStore.sharedLinksLoading && (distributionStore.sharedLinks?.length || 0) === 0) {
+    distributionStore.fetchSharedLinks()
+  }
   showBulkShareModal.value = true
 }
 

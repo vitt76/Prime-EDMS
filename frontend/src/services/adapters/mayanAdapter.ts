@@ -524,7 +524,9 @@ export function adaptBackendAsset(backendDoc: BackendOptimizedDocument): Asset {
     thumbnail_url: getThumbnailUrl(backendDoc),
     preview_url: getPreviewUrl(backendDoc),
     download_url: toAbsoluteUrl(backendDoc.file_latest?.download_url || backendDoc.download_url),
-    file_latest_id: backendDoc.file_latest?.id,
+    // IMPORTANT: list endpoint provides `file_latest_id` as a separate field.
+    // Do not drop it, otherwise the UI triggers N+1 file detail fetches.
+    file_latest_id: file_latest_id,
     tags: allTags,
     metadata: {
       ...metadata,

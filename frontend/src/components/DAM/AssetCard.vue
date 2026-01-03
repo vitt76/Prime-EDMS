@@ -699,12 +699,8 @@ onMounted(() => {
   window.addEventListener('resize', handleGlobalResizeScroll)
   window.addEventListener('scroll', handleGlobalResizeScroll, true)
 
-  const size = (props.asset as any)?.file_details?.size ?? props.asset.size
-  if (!size || size === 0) {
-    assetStore.getAssetDetail(props.asset.id, true).catch(() => {
-      // Silently ignore errors
-    })
-  }
+  // IMPORTANT: Do not fetch asset details on every card mount.
+  // List endpoint already provides file_latest_* fields; eager fetching causes N+1.
 })
 
 onBeforeUnmount(() => {

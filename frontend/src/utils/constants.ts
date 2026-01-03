@@ -3,7 +3,27 @@
  */
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
-export const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws'
+const computeWsUrl = (): string => {
+  const explicit = import.meta.env.VITE_WS_URL
+  if (explicit) return explicit
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+
+  // Prefer API host if provided, otherwise fallback to current host.
+  let host = window.location.host
+  const apiUrl = import.meta.env.VITE_API_URL
+  if (apiUrl) {
+    try {
+      host = new URL(apiUrl).host || host
+    } catch {
+      // ignore invalid URL; keep window host
+    }
+  }
+
+  return `${protocol}//${host}/ws`
+}
+
+export const WS_URL = computeWsUrl()
 
 export const APP_TITLE = import.meta.env.VITE_APP_TITLE || 'DAM System'
 export const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0'

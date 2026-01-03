@@ -12,6 +12,15 @@ const MAX_RETRIES = 3
 const MAX_RETRIES_RATE_LIMIT = 5 // More retries for rate limit errors
 const RETRY_DELAY = 1000 // 1 second
 
+const debugIngest = (payload: Record<string, unknown>): void => {
+  if (import.meta.env.VITE_DEBUG_INGEST !== 'true') return
+  fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(() => {})
+}
+
 const shouldDebugLog = (): boolean => {
   try {
     // Auto-enable debug logging in dev mode if not explicitly disabled
@@ -283,27 +292,21 @@ class ApiService {
       const cacheKey = this.getCacheKey(url, config?.params)
       const cached = cacheService.get<T>(cacheKey)
       if (cached !== null) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'H-cache',
-            location: 'services/apiService.ts:285',
-            message: 'Frontend: API cache hit (GET)',
-            data: {
-              url,
-              cacheKey,
-              config_has_params: !!(config as any)?.params,
-              config_params: (config as any)?.params || null,
-              config_keys: config ? Object.keys(config as any) : []
-            },
-            timestamp: Date.now()
-          })
-        }).catch(() => {})
-        // #endregion
+        debugIngest({
+          sessionId: 'debug-session',
+          runId: 'run1',
+          hypothesisId: 'H-cache',
+          location: 'services/apiService.ts:get(cache-hit)',
+          message: 'Frontend: API cache hit (GET)',
+          data: {
+            url,
+            cacheKey,
+            config_has_params: !!(config as any)?.params,
+            config_params: (config as any)?.params || null,
+            config_keys: config ? Object.keys(config as any) : []
+          },
+          timestamp: Date.now()
+        })
         if (import.meta.env.DEV) {
           console.log(`[API Cache Hit] ${url}`)
         }
@@ -316,27 +319,21 @@ class ApiService {
     }
 
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'run1',
-          hypothesisId: 'H-params',
-          location: 'services/apiService.ts:309',
-          message: 'Frontend: API GET about to request via axios',
-          data: {
-            url,
-            useCache,
-            config_has_params: !!(config as any)?.params,
-            config_params: (config as any)?.params || null,
-            config_keys: config ? Object.keys(config as any) : []
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
+      debugIngest({
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'H-params',
+        location: 'services/apiService.ts:get(before-axios)',
+        message: 'Frontend: API GET about to request via axios',
+        data: {
+          url,
+          useCache,
+          config_has_params: !!(config as any)?.params,
+          config_params: (config as any)?.params || null,
+          config_keys: config ? Object.keys(config as any) : []
+        },
+        timestamp: Date.now()
+      })
       const response = await this.client.get<ApiResponse<T>>(url, config)
       
       if (import.meta.env.DEV) {
