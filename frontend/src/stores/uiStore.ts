@@ -17,6 +17,11 @@ export const useUIStore = defineStore(
     const breadcrumbs = ref<Breadcrumb[]>([])
     const notifications = ref<any[]>([])
 
+    // DAM Gallery (UI preferences) — persisted to avoid UX reset after reload
+    const damGalleryDensity = ref<'compact' | 'comfortable'>('comfortable')
+    const damGalleryLayout = ref<'grid' | 'masonry'>('grid')
+    const damGallerySort = ref<'date' | 'name' | 'size'>('date')
+
     // Getters
     const isDarkMode = computed(() => {
       if (theme.value === 'auto') {
@@ -86,6 +91,18 @@ export const useUIStore = defineStore(
       }
     }
 
+    function setDamGalleryDensity(value: 'compact' | 'comfortable') {
+      damGalleryDensity.value = value
+    }
+
+    function setDamGalleryLayout(value: 'grid' | 'masonry') {
+      damGalleryLayout.value = value
+    }
+
+    function setDamGallerySort(value: 'date' | 'name' | 'size') {
+      damGallerySort.value = value
+    }
+
     // Initialize theme on store creation
     applyTheme()
 
@@ -97,6 +114,9 @@ export const useUIStore = defineStore(
       mobileMenuOpen,
       breadcrumbs,
       notifications,
+      damGalleryDensity,
+      damGalleryLayout,
+      damGallerySort,
       // Getters
       isDarkMode,
       // Actions
@@ -110,12 +130,21 @@ export const useUIStore = defineStore(
       toggleMobileMenu,
       setBreadcrumbs,
       addNotification,
-      removeNotification
+      removeNotification,
+      setDamGalleryDensity,
+      setDamGalleryLayout,
+      setDamGallerySort
     }
   },
   {
     persist: {
-      paths: ['sidebarExpanded', 'theme']
+      paths: [
+        'sidebarExpanded',
+        'theme',
+        'damGalleryDensity',
+        'damGalleryLayout',
+        'damGallerySort'
+      ]
     }
   }
 )

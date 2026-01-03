@@ -96,6 +96,9 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
             @blur="isSearchFocused = false"
           />
 
+          <!-- Page-specific actions aligned with search (Teleport target) -->
+          <div id="header-search-actions" class="flex items-center gap-1" />
+
           <!-- Keyboard Shortcut Badge -->
           <kbd
             v-if="!isSearchFocused && !searchQuery"
@@ -124,97 +127,8 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
          ZONE 2: RIGHT — View Controls, Sort, Actions
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="flex items-center gap-3">
-      <!-- View Mode Toggle (Grid/List) -->
-      <div class="hidden md:flex items-center bg-gray-100 p-1 rounded-lg">
-        <button
-          type="button"
-          :class="[
-            'flex items-center justify-center w-8 h-7 rounded-md transition-all duration-200',
-            viewMode === 'grid'
-              ? 'bg-white shadow-sm text-gray-900'
-              : 'text-gray-500 hover:text-gray-700'
-          ]"
-          @click="setViewMode('grid')"
-          title="Вид сеткой"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-            />
-          </svg>
-        </button>
-        <button
-          type="button"
-          :class="[
-            'flex items-center justify-center w-8 h-7 rounded-md transition-all duration-200',
-            viewMode === 'list'
-              ? 'bg-white shadow-sm text-gray-900'
-              : 'text-gray-500 hover:text-gray-700'
-          ]"
-          @click="setViewMode('list')"
-          title="Вид списком"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Sort Dropdown -->
-      <div class="relative hidden sm:block" ref="sortDropdownRef">
-        <button
-          type="button"
-          class="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 
-                 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-gray-100"
-          @click="toggleSortDropdown"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-          </svg>
-          <span class="hidden lg:inline">{{ currentSortLabel }}</span>
-          <svg
-            class="w-3.5 h-3.5 transition-transform duration-200"
-            :class="{ 'rotate-180': isSortDropdownOpen }"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-
-        <!-- Sort Dropdown Menu -->
-        <Transition
-          enter-active-class="transition ease-out duration-100"
-          enter-from-class="transform opacity-0 scale-95"
-          enter-to-class="transform opacity-100 scale-100"
-          leave-active-class="transition ease-in duration-75"
-          leave-from-class="transform opacity-100 scale-100"
-          leave-to-class="transform opacity-0 scale-95"
-        >
-          <div
-            v-if="isSortDropdownOpen"
-            class="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-50"
-          >
-            <button
-              v-for="option in sortOptions"
-              :key="option.value"
-              type="button"
-              class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
-              :class="sortBy === option.value ? 'text-indigo-600 bg-indigo-50 font-medium' : 'text-gray-700'"
-              @click="selectSort(option.value)"
-            >
-              <svg v-if="sortBy === option.value" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-              </svg>
-              <span :class="sortBy === option.value ? '' : 'ml-6'">{{ option.label }}</span>
-            </button>
-          </div>
-        </Transition>
-      </div>
+      <!-- Page-specific actions (Teleport target) -->
+      <div id="header-actions" class="flex items-center gap-1" />
 
       <!-- Divider -->
       <div class="h-6 w-px bg-gray-200 hidden sm:block" />
@@ -345,7 +259,6 @@ const assetStore = useAssetStore()
 // Refs
 // ═══════════════════════════════════════════════════════════════════════════════
 const searchInputRef = ref<HTMLInputElement | null>(null)
-const sortDropdownRef = ref<HTMLElement | null>(null)
 const userMenuRef = ref<HTMLElement | null>(null)
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -353,19 +266,7 @@ const userMenuRef = ref<HTMLElement | null>(null)
 // ═══════════════════════════════════════════════════════════════════════════════
 const searchQuery = ref('')
 const isSearchFocused = ref(false)
-const viewMode = ref<'grid' | 'list'>('grid')
-const sortBy = ref('newest')
-const isSortDropdownOpen = ref(false)
 const isUserMenuOpen = ref(false)
-
-const sortOptions = [
-  { value: 'newest', label: 'Сначала новые' },
-  { value: 'oldest', label: 'Сначала старые' },
-  { value: 'name_asc', label: 'Имя А → Я' },
-  { value: 'name_desc', label: 'Имя Я → А' },
-  { value: 'size_desc', label: 'Сначала большие' },
-  { value: 'size_asc', label: 'Сначала маленькие' }
-]
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Computed
@@ -407,10 +308,6 @@ const isAdmin = computed(() => {
   )
 })
 
-const currentSortLabel = computed(() => {
-  const option = sortOptions.find(o => o.value === sortBy.value)
-  return option?.label ?? 'Сначала новые'
-})
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Handlers
@@ -425,21 +322,6 @@ function handleSearch() {
 function clearSearch() {
   searchQuery.value = ''
   assetStore.setSearchQuery('')
-}
-
-function setViewMode(mode: 'grid' | 'list') {
-  viewMode.value = mode
-  emit('view-mode-change', mode)
-}
-
-function toggleSortDropdown() {
-  isSortDropdownOpen.value = !isSortDropdownOpen.value
-}
-
-function selectSort(value: string) {
-  sortBy.value = value
-  isSortDropdownOpen.value = false
-  emit('sort-change', value)
 }
 
 function handleUpload() {
@@ -476,10 +358,6 @@ function handleKeydown(event: KeyboardEvent) {
 function handleClickOutside(event: MouseEvent) {
   const target = event.target as Node
   
-  if (sortDropdownRef.value && !sortDropdownRef.value.contains(target)) {
-    isSortDropdownOpen.value = false
-  }
-  
   if (userMenuRef.value && !userMenuRef.value.contains(target)) {
     isUserMenuOpen.value = false
   }
@@ -503,8 +381,6 @@ onUnmounted(() => {
 // ═══════════════════════════════════════════════════════════════════════════════
 const emit = defineEmits<{
   search: [query: string]
-  'view-mode-change': [mode: 'grid' | 'list']
-  'sort-change': [value: string]
   upload: []
 }>()
 </script>

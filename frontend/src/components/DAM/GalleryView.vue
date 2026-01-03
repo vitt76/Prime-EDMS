@@ -100,45 +100,30 @@
 
     <!-- Gallery Grid -->
     <div v-else class="gallery-content">
-      <!-- Grid Toolbar (density/layout/sort/count) -->
-      <GridToolbar
-        :density="gridDensity"
-        :layout="gridLayout"
-        :sort="gridSort"
-        :shown-count="assetStore.assets.length"
-        :total-count="assetStore.totalCount"
-        @update:density="handleDensityChange"
-        @update:layout="handleLayoutChange"
-        @update:sort="handleSortChange"
-      />
-
-      <!-- Gallery Toolbar with Select All -->
-      <div
-        v-if="assetStore.assets.length > 0"
-        class="flex items-center justify-between px-4 py-2 border-b border-neutral-300 dark:border-neutral-300 bg-neutral-0 dark:bg-neutral-0 sticky top-0 z-30"
-      >
-        <div class="flex items-center gap-4">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              :checked="isAllSelected"
-              :indeterminate="isIndeterminate"
-              class="w-5 h-5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 min-w-[44px] min-h-[44px]"
-              @change="handleSelectAllToggle"
-              aria-label="Выбрать все активы"
-            />
-            <span class="text-sm font-medium text-neutral-900 dark:text-neutral-900">
-              {{ isAllSelected ? 'Снять выделение' : 'Выбрать все' }}
-            </span>
-          </label>
-          <span
-            v-if="assetStore.selectedCount > 0"
-            class="text-sm text-neutral-600 dark:text-neutral-600"
-          >
-            Выбрано: <strong>{{ assetStore.selectedCount }}</strong> из {{ assetStore.assets.length }}
-          </span>
-        </div>
-      </div>
+      <!-- Context-Aware Header Actions -->
+      <Teleport to="#header-actions">
+        <GalleryHeaderActions
+          variant="controls"
+          :density="gridDensity"
+          :layout="gridLayout"
+          :sort="gridSort"
+          :active-filters-count="activeFiltersCount"
+          @update:density="handleDensityChange"
+          @update:layout="handleLayoutChange"
+          @update:sort="handleSortChange"
+          @toggle-filters="openFilters"
+        />
+      </Teleport>
+      <Teleport to="#header-search-actions">
+        <GalleryHeaderActions
+          variant="filter"
+          :density="gridDensity"
+          :layout="gridLayout"
+          :sort="gridSort"
+          :active-filters-count="activeFiltersCount"
+          @toggle-filters="openFilters"
+        />
+      </Teleport>
 
       <!-- Assets Grid (regular for small lists) -->
       <div
@@ -147,29 +132,104 @@
         role="grid"
         aria-label="Галерея активов"
       >
-        <AssetGrid
-          :assets="assetStore.assets"
-          :density="gridDensity"
-          :layout="gridLayout"
-          @asset-open="handleAssetOpen"
-          @asset-preview="handleAssetPreview"
-          @asset-download="handleAssetDownload"
-          @asset-share="handleAssetShare"
-          @asset-delete="handleAssetDelete"
-        />
+        <div class="group">
+          <!-- Select All (ABOVE grid, no overlay) -->
+          <div
+            v-if="assetStore.assets.length > 0"
+            class="flex items-center justify-between mb-3"
+          >
+            <button
+              type="button"
+              class="flex items-center gap-2
+                     bg-white/95 backdrop-blur-md border border-gray-200 shadow-sm
+                     rounded-xl px-3 py-2 text-sm font-medium
+                     text-gray-700 hover:text-gray-900 hover:bg-gray-50
+                     transition-all duration-150"
+              :class="assetStore.selectedCount > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+              @click="handleSelectAllToggle"
+              aria-label="Выбрать все активы"
+            >
+              <span
+                class="w-4 h-4 rounded border border-gray-300 bg-white flex items-center justify-center"
+                aria-hidden="true"
+              >
+                <svg v-if="isAllSelected" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                <svg v-else-if="isIndeterminate" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14" />
+                </svg>
+              </span>
+              <span>{{ isAllSelected ? 'Снять выделение' : 'Выбрать все' }}</span>
+            </button>
+
+            <div v-if="assetStore.selectedCount > 0" class="text-sm text-gray-600">
+              Выбрано: <span class="font-semibold text-gray-900">{{ assetStore.selectedCount }}</span> из {{ assetStore.assets.length }}
+            </div>
+          </div>
+
+          <AssetGrid
+            :assets="assetStore.assets"
+            :density="gridDensity"
+            :layout="gridLayout"
+            @asset-open="handleAssetOpen"
+            @asset-preview="handleAssetPreview"
+            @asset-download="handleAssetDownload"
+            @asset-share="handleAssetShare"
+            @asset-delete="handleAssetDelete"
+          />
+        </div>
       </div>
 
       <!-- Virtual Scrolling for large lists (100+ items) -->
       <div
         v-else
         ref="virtualScrollContainer"
-        class="virtual-scroll-container p-4"
+        class="virtual-scroll-container p-4 relative group"
         style="height: calc(100vh - 200px); overflow-y: auto;"
         role="grid"
         aria-label="Галерея активов (виртуальная прокрутка)"
         tabindex="0"
         @scroll="handleScroll"
       >
+        <!-- Select All (virtual list, sticky header inside scroll container; no overlay on cards) -->
+        <div
+          v-if="assetStore.assets.length > 0"
+          class="sticky top-0 z-20 -mx-4 px-4 py-2
+                 bg-white/80 backdrop-blur-md border-b border-gray-200/70"
+        >
+          <div class="flex items-center justify-between">
+            <button
+              type="button"
+              class="flex items-center gap-2
+                     bg-white/95 backdrop-blur-md border border-gray-200 shadow-sm
+                     rounded-xl px-3 py-2 text-sm font-medium
+                     text-gray-700 hover:text-gray-900 hover:bg-gray-50
+                     transition-all duration-150"
+              :class="assetStore.selectedCount > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+              @click="handleSelectAllToggle"
+              aria-label="Выбрать все активы"
+            >
+              <span
+                class="w-4 h-4 rounded border border-gray-300 bg-white flex items-center justify-center"
+                aria-hidden="true"
+              >
+                <svg v-if="isAllSelected" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                <svg v-else-if="isIndeterminate" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14" />
+                </svg>
+              </span>
+              <span>{{ isAllSelected ? 'Снять выделение' : 'Выбрать все' }}</span>
+            </button>
+
+            <div v-if="assetStore.selectedCount > 0" class="text-sm text-gray-600">
+              Выбрано: <span class="font-semibold text-gray-900">{{ assetStore.selectedCount }}</span> из {{ assetStore.assets.length }}
+            </div>
+          </div>
+        </div>
+
         <div
           :style="{ height: `${totalHeight}px`, position: 'relative' }"
         >
@@ -249,6 +309,62 @@
       @delete="handleBulkDelete"
       @clear="handleClearSelection"
     />
+
+    <!-- Filters Drawer -->
+    <Transition
+      enter-active-class="transition ease-out duration-200"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition ease-in duration-150"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="isFiltersOpen"
+        class="fixed inset-0 z-[900] bg-black/30"
+        @click="closeFilters"
+        aria-hidden="true"
+      />
+    </Transition>
+    <Transition
+      enter-active-class="transition ease-out duration-250"
+      enter-from-class="translate-x-full"
+      enter-to-class="translate-x-0"
+      leave-active-class="transition ease-in duration-200"
+      leave-from-class="translate-x-0"
+      leave-to-class="translate-x-full"
+    >
+      <aside
+        v-if="isFiltersOpen"
+        class="fixed top-16 right-0 bottom-0 w-[360px] max-w-[90vw]
+               bg-white border-l border-gray-200 shadow-2xl z-[950]
+               overflow-y-auto"
+        role="dialog"
+        aria-label="Фильтры"
+      >
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <h3 class="text-sm font-semibold text-gray-900">Фильтры</h3>
+          <button
+            type="button"
+            class="text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg p-2 transition-colors"
+            @click="closeFilters"
+            aria-label="Закрыть фильтры"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="p-4">
+          <FiltersPanel
+            :facets="filtersFacets"
+            :initial-filters="filtersInitial"
+            @apply="handleFiltersApply"
+            @reset="handleFiltersReset"
+          />
+        </div>
+      </aside>
+    </Transition>
   </div>
 </template>
 
@@ -258,6 +374,7 @@ import { useRouter } from 'vue-router'
 import { apiService } from '@/services/apiService'
 import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
+import { useUIStore } from '@/stores/uiStore'
 import AssetCard from './AssetCard.vue'
 import AssetGrid from './AssetGrid.vue'
 import BulkActionsBar from './BulkActionsBar.vue'
@@ -267,8 +384,10 @@ import BulkDeleteModal from './BulkDeleteModal.vue'
 import BulkDownloadModal from './BulkDownloadModal.vue'
 import ShareModal from './ShareModal.vue'
 import Pagination from '@/components/Common/Pagination.vue'
-import GridToolbar from './GridToolbar.vue'
+import GalleryHeaderActions from './GalleryHeaderActions.vue'
+import FiltersPanel from './FiltersPanel.vue'
 import type { Asset } from '@/types/api'
+import type { Facets, SearchFilters } from '@/types/api'
 
 // Emits
 const emit = defineEmits<{
@@ -279,12 +398,61 @@ const emit = defineEmits<{
 const router = useRouter()
 const assetStore = useAssetStore()
 const distributionStore = useDistributionStore()
+const uiStore = useUIStore()
 const virtualScrollContainer = ref<HTMLElement | null>(null)
 
-// Grid UI state (density/layout/sort)
-const gridDensity = ref<'compact' | 'comfortable'>('comfortable')
-const gridLayout = ref<'grid' | 'masonry'>('grid')
-const gridSort = ref<'date' | 'name' | 'size'>('date')
+// Grid UI state (density/layout/sort) — persisted via uiStore
+const gridDensity = computed<'compact' | 'comfortable'>({
+  get: () => uiStore.damGalleryDensity,
+  set: (value) => uiStore.setDamGalleryDensity(value)
+})
+
+const gridLayout = computed<'grid' | 'masonry'>({
+  get: () => uiStore.damGalleryLayout,
+  set: (value) => uiStore.setDamGalleryLayout(value)
+})
+
+const gridSort = computed<'date' | 'name' | 'size'>({
+  get: () => uiStore.damGallerySort,
+  set: (value) => uiStore.setDamGallerySort(value)
+})
+
+// Filters drawer
+const isFiltersOpen = ref(false)
+
+const activeFiltersCount = computed(() => {
+  const f = assetStore.filters
+  let count = 0
+  if (f.type && f.type.length > 0) count++
+  if (f.tags && f.tags.length > 0) count++
+  if (f.status && f.status.length > 0) count++
+  if (f.dateFrom || f.dateTo) count++
+  if (typeof f.sizeMin === 'number' || typeof f.sizeMax === 'number') count++
+  return count
+})
+
+const filtersFacets = computed<Facets>(() => {
+  const tagsRecord: Record<string, number> = {}
+  for (const tag of assetStore.availableTags) {
+    tagsRecord[tag] = 1
+  }
+  return {
+    type: assetStore.typeCounts,
+    tags: tagsRecord
+  }
+})
+
+const filtersInitial = computed<SearchFilters>(() => {
+  const f = assetStore.filters
+  const initial: SearchFilters = {}
+  if (f.type && f.type.length) initial.type = f.type
+  if (f.tags && f.tags.length) initial.tags = f.tags
+  if (f.dateFrom && f.dateTo) initial.date_range = [f.dateFrom, f.dateTo]
+  if (typeof f.sizeMin === 'number' || typeof f.sizeMax === 'number') {
+    initial.size = { min: f.sizeMin, max: f.sizeMax }
+  }
+  return initial
+})
 
 // Virtual scrolling state
 const scrollTop = ref(0)
@@ -457,6 +625,31 @@ function handleSortChange(value: 'date' | 'name' | 'size') {
   } else if (value === 'size') {
     assetStore.setSortBy('size', 'desc')
   }
+}
+
+function openFilters() {
+  isFiltersOpen.value = true
+}
+
+function closeFilters() {
+  isFiltersOpen.value = false
+}
+
+function handleFiltersApply(filters: SearchFilters) {
+  assetStore.applyFilters({
+    type: filters.type || [],
+    tags: filters.tags || [],
+    dateFrom: filters.date_range?.[0],
+    dateTo: filters.date_range?.[1],
+    sizeMin: filters.size?.min,
+    sizeMax: filters.size?.max
+  })
+  isFiltersOpen.value = false
+}
+
+function handleFiltersReset() {
+  assetStore.clearFilters()
+  isFiltersOpen.value = false
 }
 
 function handleAssetOpen(asset: Asset) {
