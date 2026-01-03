@@ -18,8 +18,11 @@ RUN apt-get update && \
         channels-redis==4.1.0 \
         cryptography \
         daphne==3.0.2 \
+        django-prometheus==2.3.1 \
+        django-ratelimit==4.1.0 \
         django-redis==5.4.0 \
         django-storages \
+        drf-spectacular==0.27.2 \
         gigachat \
         PyJWT \
         python-json-logger \

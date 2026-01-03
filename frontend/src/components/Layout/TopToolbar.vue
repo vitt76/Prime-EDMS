@@ -33,9 +33,9 @@
             type="text"
             :value="searchQuery"
             @input="handleSearchInput"
-            placeholder="Search assets, tags, metadata..."
+            placeholder="Поиск по названию, тегам, метаданным…"
             class="flex-1 h-full bg-transparent border-none outline-none px-3 
-                   text-sm text-gray-900 placeholder-gray-500"
+                   text-sm text-gray-900 placeholder-gray-400"
           />
 
           <!-- Filter Adjustment Icon (Right, inside input) -->

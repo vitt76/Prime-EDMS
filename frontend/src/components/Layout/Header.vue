@@ -88,9 +88,9 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
             ref="searchInputRef"
             v-model="searchQuery"
             type="text"
-            placeholder="Поиск активов, тегов, метаданных..."
+            placeholder="Поиск по названию, тегам, метаданным…"
             class="flex-1 h-full bg-transparent border-none outline-none px-3 
-                   text-sm text-gray-900 placeholder-gray-500"
+                   text-sm text-gray-900 placeholder-gray-400"
             @keydown.enter="handleSearch"
             @focus="isSearchFocused = true"
             @blur="isSearchFocused = false"
@@ -248,12 +248,12 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import NotificationBell from '@/components/Notifications/NotificationBell.vue'
-import { useAssetStore } from '@/stores/assetStore'
+import { useDamSearchFilters } from '@/composables/useDamSearchFilters'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const notificationStore = useNotificationStore()
-const assetStore = useAssetStore()
+const damSearch = useDamSearchFilters()
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Refs
@@ -264,7 +264,9 @@ const userMenuRef = ref<HTMLElement | null>(null)
 // ═══════════════════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════════════════
-const searchQuery = ref('')
+// IMPORTANT: damSearch.q is already a ComputedRef<string>.
+// Do not wrap it into another computed, иначе в input попадёт объект и отобразится "[object Object]".
+const searchQuery = damSearch.q
 const isSearchFocused = ref(false)
 const isUserMenuOpen = ref(false)
 
@@ -313,15 +315,13 @@ const isAdmin = computed(() => {
 // Handlers
 // ═══════════════════════════════════════════════════════════════════════════════
 function handleSearch() {
-  if (searchQuery.value.trim()) {
-    assetStore.setSearchQuery(searchQuery.value)
-    emit('search', searchQuery.value)
+  if (String(searchQuery.value).trim()) {
+    damSearch.submitSearchNow()
   }
 }
 
 function clearSearch() {
-  searchQuery.value = ''
-  assetStore.setSearchQuery('')
+  damSearch.setSearch('')
 }
 
 function handleUpload() {
@@ -380,7 +380,6 @@ onUnmounted(() => {
 // Emits
 // ═══════════════════════════════════════════════════════════════════════════════
 const emit = defineEmits<{
-  search: [query: string]
   upload: []
 }>()
 </script>

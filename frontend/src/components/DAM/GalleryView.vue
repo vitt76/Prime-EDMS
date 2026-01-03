@@ -358,8 +358,7 @@
         <div class="p-4">
           <FiltersPanel
             :facets="filtersFacets"
-            :initial-filters="filtersInitial"
-            @apply="handleFiltersApply"
+            v-model="filtersModel"
             @reset="handleFiltersReset"
           />
         </div>
@@ -374,7 +373,7 @@ import { useRouter } from 'vue-router'
 import { apiService } from '@/services/apiService'
 import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
-import { useUIStore } from '@/stores/uiStore'
+import { useDamSearchFilters } from '@/composables/useDamSearchFilters'
 import AssetCard from './AssetCard.vue'
 import AssetGrid from './AssetGrid.vue'
 import BulkActionsBar from './BulkActionsBar.vue'
@@ -398,37 +397,18 @@ const emit = defineEmits<{
 const router = useRouter()
 const assetStore = useAssetStore()
 const distributionStore = useDistributionStore()
-const uiStore = useUIStore()
+const damSearch = useDamSearchFilters()
 const virtualScrollContainer = ref<HTMLElement | null>(null)
 
-// Grid UI state (density/layout/sort) — persisted via uiStore
-const gridDensity = computed<'compact' | 'comfortable'>({
-  get: () => uiStore.damGalleryDensity,
-  set: (value) => uiStore.setDamGalleryDensity(value)
-})
-
-const gridLayout = computed<'grid' | 'masonry'>({
-  get: () => uiStore.damGalleryLayout,
-  set: (value) => uiStore.setDamGalleryLayout(value)
-})
-
-const gridSort = computed<'date' | 'name' | 'size'>({
-  get: () => uiStore.damGallerySort,
-  set: (value) => uiStore.setDamGallerySort(value)
-})
+const gridDensity = computed(() => damSearch.state.density)
+const gridLayout = computed(() => damSearch.state.layout)
+const gridSort = computed(() => damSearch.state.sort)
 
 // Filters drawer
 const isFiltersOpen = ref(false)
 
 const activeFiltersCount = computed(() => {
-  const f = assetStore.filters
-  let count = 0
-  if (f.type && f.type.length > 0) count++
-  if (f.tags && f.tags.length > 0) count++
-  if (f.status && f.status.length > 0) count++
-  if (f.dateFrom || f.dateTo) count++
-  if (typeof f.sizeMin === 'number' || typeof f.sizeMax === 'number') count++
-  return count
+  return damSearch.activeFiltersCount.value
 })
 
 const filtersFacets = computed<Facets>(() => {
@@ -442,16 +422,30 @@ const filtersFacets = computed<Facets>(() => {
   }
 })
 
-const filtersInitial = computed<SearchFilters>(() => {
-  const f = assetStore.filters
-  const initial: SearchFilters = {}
-  if (f.type && f.type.length) initial.type = f.type
-  if (f.tags && f.tags.length) initial.tags = f.tags
-  if (f.dateFrom && f.dateTo) initial.date_range = [f.dateFrom, f.dateTo]
-  if (typeof f.sizeMin === 'number' || typeof f.sizeMax === 'number') {
-    initial.size = { min: f.sizeMin, max: f.sizeMax }
+const filtersModel = computed<SearchFilters>({
+  get: () => ({
+    type: damSearch.state.filters.type,
+    tags: damSearch.state.filters.tags,
+    date_range:
+      damSearch.state.filters.dateFrom && damSearch.state.filters.dateTo
+        ? [damSearch.state.filters.dateFrom, damSearch.state.filters.dateTo]
+        : null,
+    size:
+      typeof damSearch.state.filters.sizeMin === 'number' || typeof damSearch.state.filters.sizeMax === 'number'
+        ? { min: damSearch.state.filters.sizeMin, max: damSearch.state.filters.sizeMax }
+        : undefined
+  }),
+  set: (value) => {
+    // Convert SearchFilters -> composable state
+    damSearch.state.filters.type = value.type || []
+    damSearch.state.filters.tags = value.tags || []
+    damSearch.state.filters.dateFrom = value.date_range?.[0]
+    damSearch.state.filters.dateTo = value.date_range?.[1]
+    damSearch.state.filters.sizeMin = value.size?.min
+    damSearch.state.filters.sizeMax = value.size?.max
+    // Trigger debounced sync+fetch (without changing q)
+    damSearch.scheduleFetch()
   }
-  return initial
 })
 
 // Virtual scrolling state
@@ -514,11 +508,6 @@ function handleScroll(event: Event) {
 let resizeHandler: (() => void) | null = null
 
 onMounted(() => {
-  // Load assets
-  if (assetStore.assets.length === 0) {
-    assetStore.fetchAssets()
-  }
-
   // Load shared links for shared badges
   distributionStore.fetchSharedLinks()
 
@@ -565,13 +554,9 @@ onUnmounted(() => {
   }
 })
 
-// Watch for page changes
-watch(
-  () => assetStore.currentPage,
-  () => {
-    assetStore.fetchAssets()
-  }
-)
+// NOTE: Do not watch currentPage here — assetStore pagination actions already fetch,
+// and SSoT composable resets currentPage on filter/search changes. A watcher here
+// causes duplicate requests.
 
 function isAssetSelected(asset: Asset): boolean {
   return assetStore.selectedAssets.has(asset.id)
@@ -608,23 +593,16 @@ function handleAssetSelect(asset: Asset) {
 }
 
 function handleDensityChange(value: 'compact' | 'comfortable') {
-  gridDensity.value = value
+  damSearch.setView({ density: value })
 }
 
 function handleLayoutChange(value: 'grid' | 'masonry') {
   // masonry + virtual list плохо дружат; пока ограничим только обычный режим
-  gridLayout.value = value
+  damSearch.setView({ layout: value })
 }
 
 function handleSortChange(value: 'date' | 'name' | 'size') {
-  gridSort.value = value
-  if (value === 'date') {
-    assetStore.setSortBy('date_added', 'desc')
-  } else if (value === 'name') {
-    assetStore.setSortBy('name', 'asc')
-  } else if (value === 'size') {
-    assetStore.setSortBy('size', 'desc')
-  }
+  damSearch.setSort(value)
 }
 
 function openFilters() {
@@ -635,20 +613,8 @@ function closeFilters() {
   isFiltersOpen.value = false
 }
 
-function handleFiltersApply(filters: SearchFilters) {
-  assetStore.applyFilters({
-    type: filters.type || [],
-    tags: filters.tags || [],
-    dateFrom: filters.date_range?.[0],
-    dateTo: filters.date_range?.[1],
-    sizeMin: filters.size?.min,
-    sizeMax: filters.size?.max
-  })
-  isFiltersOpen.value = false
-}
-
 function handleFiltersReset() {
-  assetStore.clearFilters()
+  damSearch.resetFilters()
   isFiltersOpen.value = false
 }
 

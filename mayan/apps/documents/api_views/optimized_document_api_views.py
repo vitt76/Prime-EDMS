@@ -12,7 +12,7 @@ import time
 import uuid
 from datetime import timedelta
 
-from django.db.models import Prefetch, OuterRef, Subquery
+from django.db.models import Prefetch, OuterRef, Q, Subquery
 from django.apps import apps as django_apps
 from django.utils import timezone
 
@@ -82,6 +82,14 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
         latest_file_subquery = DocumentFile.objects.filter(
             document=OuterRef('pk')
         ).order_by('-timestamp').values('pk')[:1]
+
+        # Subqueries to get the latest file mimetype and size for each document
+        latest_file_mimetype_subquery = DocumentFile.objects.filter(
+            document=OuterRef('pk')
+        ).order_by('-timestamp').values('mimetype')[:1]
+        latest_file_size_subquery = DocumentFile.objects.filter(
+            document=OuterRef('pk')
+        ).order_by('-timestamp').values('size')[:1]
         
         # Subquery to get active version ID for each document
         active_version_subquery = DocumentVersion.objects.filter(
@@ -92,6 +100,8 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
         # Build main queryset with optimizations
         queryset = Document.valid.annotate(
             latest_file_id=Subquery(latest_file_subquery),
+            latest_file_mimetype=Subquery(latest_file_mimetype_subquery),
+            latest_file_size=Subquery(latest_file_size_subquery),
             active_version_id=Subquery(active_version_subquery)
         ).select_related(
             'document_type'  # ForeignKey - single JOIN
@@ -137,6 +147,13 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
             user=self.request.user
         )
         
+        # Keyword search (basic: label + description)
+        query_text = (self.request.query_params.get('q') or '').strip()
+        if query_text:
+            queryset = queryset.filter(
+                Q(label__icontains=query_text) | Q(description__icontains=query_text)
+            )
+
         # Filter by cabinet if provided
         cabinet_id = self.request.query_params.get('cabinets__id')
         if cabinet_id:
@@ -163,6 +180,57 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
                 pass
             # #endregion agent log
             queryset = filtered_queryset
+
+        # Date range filter (ISO strings supported by Django)
+        dt_gte = self.request.query_params.get('datetime_created__gte')
+        if dt_gte:
+            queryset = queryset.filter(datetime_created__gte=dt_gte)
+        dt_lte = self.request.query_params.get('datetime_created__lte')
+        if dt_lte:
+            queryset = queryset.filter(datetime_created__lte=dt_lte)
+
+        # Document type filter
+        # Supports repeated `document_type__label` OR a CSV `document_type__label__in`
+        labels = []
+        try:
+            labels = self.request.query_params.getlist('document_type__label')
+        except Exception:
+            labels = []
+        if not labels:
+            in_value = self.request.query_params.get('document_type__label__in')
+            if in_value:
+                labels = [v.strip() for v in in_value.split(',') if v.strip()]
+        if labels:
+            queryset = queryset.filter(document_type__label__in=labels)
+
+        # Tags filter (CSV)
+        tags_in = self.request.query_params.get('tags__label__in')
+        if tags_in:
+            tags = [v.strip() for v in tags_in.split(',') if v.strip()]
+            if tags:
+                queryset = queryset.filter(tags__label__in=tags).distinct()
+
+        # Latest file size filter (bytes)
+        size_gte = self.request.query_params.get('file_latest__size__gte')
+        if size_gte:
+            queryset = queryset.filter(latest_file_size__gte=int(size_gte))
+        size_lte = self.request.query_params.get('file_latest__size__lte')
+        if size_lte:
+            queryset = queryset.filter(latest_file_size__lte=int(size_lte))
+
+        # Latest file mimetype filter:
+        # Supports repeated `file_latest__mimetype__startswith` values with OR semantics.
+        prefixes = []
+        try:
+            prefixes = self.request.query_params.getlist('file_latest__mimetype__startswith')
+        except Exception:
+            prefixes = []
+        prefixes = [p for p in prefixes if p]
+        if prefixes:
+            q_or = Q()
+            for p in prefixes:
+                q_or |= Q(latest_file_mimetype__startswith=p)
+            queryset = queryset.filter(q_or)
         
         # Apply ordering
         ordering = self.request.query_params.get('ordering', '-datetime_created')

@@ -167,7 +167,7 @@ export const useAssetStore = defineStore(
       const sortDirection = sort.value.direction === 'desc' ? '-' : ''
       queryParams.set('ordering', `${sortDirection}${sortField}`)
       
-      // Search
+      // Search (keyword)
       if (searchQuery.value.trim()) {
         queryParams.set('q', searchQuery.value.trim())
       }
@@ -177,15 +177,49 @@ export const useAssetStore = defineStore(
         queryParams.set('cabinets__id', folderFilterId.value)
       }
       
-      // Type filter
+      // Type filter:
+      // - If values look like generic categories (image/video/audio/document) -> mimetype startswith
+      // - Else fallback to Mayan document_type label filtering
       if (filters.value.type?.length) {
-        // Mayan uses document_type__label for filtering
-        filters.value.type.forEach(type => {
-          queryParams.append('document_type__label', type)
-        })
+        const categories = new Set(['image', 'video', 'audio', 'document'])
+        const picked = filters.value.type
+
+        const hasCategory = picked.some((t) => categories.has(String(t)))
+        if (hasCategory) {
+          picked.forEach((t) => {
+            const v = String(t)
+            if (v === 'image') queryParams.append('file_latest__mimetype__startswith', 'image/')
+            else if (v === 'video') queryParams.append('file_latest__mimetype__startswith', 'video/')
+            else if (v === 'audio') queryParams.append('file_latest__mimetype__startswith', 'audio/')
+            else if (v === 'document') queryParams.append('file_latest__mimetype__startswith', 'application/')
+          })
+        } else {
+          // Mayan uses document_type__label for filtering
+          picked.forEach((type) => {
+            queryParams.append('document_type__label', type)
+          })
+        }
+      }
+
+      // Tags filter (Django-style __in)
+      if (filters.value.tags?.length) {
+        queryParams.set('tags__label__in', filters.value.tags.join(','))
+      }
+
+      // Status filter (optional, if backend supports)
+      if (filters.value.status?.length) {
+        queryParams.set('status__in', filters.value.status.join(','))
+      }
+
+      // Size filter (bytes)
+      if (typeof filters.value.sizeMin === 'number') {
+        queryParams.set('file_latest__size__gte', String(filters.value.sizeMin))
+      }
+      if (typeof filters.value.sizeMax === 'number') {
+        queryParams.set('file_latest__size__lte', String(filters.value.sizeMax))
       }
       
-      // Date range
+      // Date range (ISO strings expected)
       if (filters.value.dateFrom) {
         queryParams.set('datetime_created__gte', filters.value.dateFrom)
       }
@@ -851,7 +885,6 @@ export const useAssetStore = defineStore(
     function setSort(newSort: AssetSort): void {
       sort.value = newSort
       currentPage.value = 1
-      fetchAssets()
     }
     
     function setSortBy(field: AssetSort['field'], direction: AssetSort['direction'] = 'desc'): void {
@@ -861,26 +894,22 @@ export const useAssetStore = defineStore(
     function applyFilters(newFilters: Partial<AssetFilters>): void {
       filters.value = { ...filters.value, ...newFilters }
       currentPage.value = 1
-      fetchAssets()
     }
     
     function setFilters(newFilters: AssetFilters): void {
       filters.value = newFilters
       currentPage.value = 1
-      fetchAssets()
     }
 
     function clearFilters(): void {
       filters.value = {}
       searchQuery.value = ''
       currentPage.value = 1
-      fetchAssets()
     }
     
     function setSearchQuery(query: string): void {
       searchQuery.value = query
       currentPage.value = 1
-      fetchAssets()
     }
 
     function refresh(): void {
