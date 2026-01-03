@@ -100,6 +100,18 @@
 
     <!-- Gallery Grid -->
     <div v-else class="gallery-content">
+      <!-- Grid Toolbar (density/layout/sort/count) -->
+      <GridToolbar
+        :density="gridDensity"
+        :layout="gridLayout"
+        :sort="gridSort"
+        :shown-count="assetStore.assets.length"
+        :total-count="assetStore.totalCount"
+        @update:density="handleDensityChange"
+        @update:layout="handleLayoutChange"
+        @update:sort="handleSortChange"
+      />
+
       <!-- Gallery Toolbar with Select All -->
       <div
         v-if="assetStore.assets.length > 0"
@@ -131,24 +143,19 @@
       <!-- Assets Grid (regular for small lists) -->
       <div
         v-if="assetStore.assets.length < 100"
-        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-6"
+        class="p-6"
         role="grid"
         aria-label="Галерея активов"
       >
-        <AssetCard
-          v-for="asset in assetStore.assets"
-          :key="asset.id"
-          :asset="asset"
-          :is-selected="isAssetSelected(asset)"
-          :is-shared="isAssetShared(asset.id)"
-          :show-checkbox="true"
-          @select="handleAssetSelect"
-          @open="handleAssetOpen"
-          @preview="handleAssetPreview"
-          @download="handleAssetDownload"
-          @share="handleAssetShare"
-          @delete="handleAssetDelete"
-          @more="handleAssetMore"
+        <AssetGrid
+          :assets="assetStore.assets"
+          :density="gridDensity"
+          :layout="gridLayout"
+          @asset-open="handleAssetOpen"
+          @asset-preview="handleAssetPreview"
+          @asset-download="handleAssetDownload"
+          @asset-share="handleAssetShare"
+          @asset-delete="handleAssetDelete"
         />
       </div>
 
@@ -177,6 +184,7 @@
                 :is-selected="isAssetSelected(asset)"
                 :is-shared="isAssetShared(asset.id)"
                 :show-checkbox="true"
+                :density="gridDensity"
                 @select="handleAssetSelect"
                 @open="handleAssetOpen"
                 @preview="handleAssetPreview"
@@ -238,8 +246,8 @@
     <BulkActionsBar
       @share="handleBulkShare"
       @download="handleBulkDownload"
-      @move="handleBulkMove"
-      @campaign="handleBulkCampaign"
+      @delete="handleBulkDelete"
+      @clear="handleClearSelection"
     />
   </div>
 </template>
@@ -251,6 +259,7 @@ import { apiService } from '@/services/apiService'
 import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
 import AssetCard from './AssetCard.vue'
+import AssetGrid from './AssetGrid.vue'
 import BulkActionsBar from './BulkActionsBar.vue'
 import BulkTagModal from './BulkTagModal.vue'
 import BulkMoveModal from './BulkMoveModal.vue'
@@ -258,6 +267,7 @@ import BulkDeleteModal from './BulkDeleteModal.vue'
 import BulkDownloadModal from './BulkDownloadModal.vue'
 import ShareModal from './ShareModal.vue'
 import Pagination from '@/components/Common/Pagination.vue'
+import GridToolbar from './GridToolbar.vue'
 import type { Asset } from '@/types/api'
 
 // Emits
@@ -270,6 +280,11 @@ const router = useRouter()
 const assetStore = useAssetStore()
 const distributionStore = useDistributionStore()
 const virtualScrollContainer = ref<HTMLElement | null>(null)
+
+// Grid UI state (density/layout/sort)
+const gridDensity = ref<'compact' | 'comfortable'>('comfortable')
+const gridLayout = ref<'grid' | 'masonry'>('grid')
+const gridSort = ref<'date' | 'name' | 'size'>('date')
 
 // Virtual scrolling state
 const scrollTop = ref(0)
@@ -422,6 +437,26 @@ function handleSelectAllToggle() {
 
 function handleAssetSelect(asset: Asset) {
   assetStore.selectAsset(asset, true) // Multi-select enabled
+}
+
+function handleDensityChange(value: 'compact' | 'comfortable') {
+  gridDensity.value = value
+}
+
+function handleLayoutChange(value: 'grid' | 'masonry') {
+  // masonry + virtual list плохо дружат; пока ограничим только обычный режим
+  gridLayout.value = value
+}
+
+function handleSortChange(value: 'date' | 'name' | 'size') {
+  gridSort.value = value
+  if (value === 'date') {
+    assetStore.setSortBy('date_added', 'desc')
+  } else if (value === 'name') {
+    assetStore.setSortBy('name', 'asc')
+  } else if (value === 'size') {
+    assetStore.setSortBy('size', 'desc')
+  }
 }
 
 function handleAssetOpen(asset: Asset) {
