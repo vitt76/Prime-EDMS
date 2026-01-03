@@ -128,6 +128,13 @@
                     </button>
                   </div>
                 </div>
+
+                <!-- Error -->
+                <div v-if="errorMessage" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                  <p class="text-sm text-red-700">
+                    {{ errorMessage }}
+                  </p>
+                </div>
               </div>
 
               <!-- Footer -->
@@ -171,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import {
   Dialog,
   DialogPanel,
@@ -179,6 +186,8 @@ import {
   TransitionRoot,
   TransitionChild,
 } from '@headlessui/vue'
+import { useAssetStore } from '@/stores/assetStore'
+import { apiService } from '@/services/apiService'
 
 interface Props {
   isOpen: boolean
@@ -197,23 +206,43 @@ const inputRef = ref<HTMLInputElement | null>(null)
 const tagInput = ref('')
 const selectedTags = ref<string[]>([])
 const isSubmitting = ref(false)
+const errorMessage = ref('')
 
-const suggestedTags = [
-  'Campaign 2025',
-  'Marketing',
-  'Product',
-  'Social Media',
-  'Press Release',
-  'Internal',
-  'Approved',
-  'Archive',
-]
+const assetStore = useAssetStore()
+const fetchedFallbackTags = ref<string[]>([])
+
+// NOTE: real suggestions (not mocks). We prefer tags discovered from assets.
+// If empty, we try to fetch global tags list from backend.
+const suggestedTags = computed(() => {
+  const fromAssets = assetStore.availableTags || []
+  const source = fromAssets.length > 0 ? fromAssets : fetchedFallbackTags.value
+  return source.slice(0, 16)
+})
+
+async function ensureSuggestedTags(): Promise<void> {
+  if ((assetStore.availableTags || []).length > 0 || fetchedFallbackTags.value.length > 0) return
+  try {
+    // Mayan/DRF tags endpoint (best effort; ignore if not available)
+    const resp: any = await apiService.get('/api/v4/tags/?page_size=200', { useCache: true } as any)
+    const results: any[] = resp?.data?.results || resp?.results || []
+    const tags = results
+      .map((t: any) => t?.label || t?.name)
+      .filter(Boolean)
+      .map((v: any) => String(v))
+    if (tags.length > 0) {
+      fetchedFallbackTags.value = Array.from(new Set(tags)).sort()
+    }
+  } catch {
+    // ignore
+  }
+}
 
 // Focus input when modal opens
 watch(() => props.isOpen, async (isOpen) => {
   if (isOpen) {
     selectedTags.value = []
     tagInput.value = ''
+    await ensureSuggestedTags()
     await nextTick()
     inputRef.value?.focus()
   }
@@ -246,15 +275,68 @@ function handleClose() {
   }
 }
 
+async function getOrCreateTagId(label: string): Promise<number | null> {
+  const normalized = label.trim()
+  if (!normalized) return null
+
+  // 1) Try create (fast path)
+  try {
+    const created: any = await apiService.post('/api/v4/tags/', { label: normalized, color: '#3B82F6' })
+    return created?.data?.id ?? created?.id ?? null
+  } catch {
+    // ignore; fallback to list lookup
+  }
+
+  // 2) Fallback: fetch list and find by label
+  try {
+    const resp: any = await apiService.get('/api/v4/tags/?page_size=200', { useCache: false } as any)
+    const results: any[] = resp?.data?.results || resp?.results || []
+    const found = results.find((t: any) => String(t?.label ?? t?.name ?? '') === normalized)
+    return found?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 async function handleSubmit() {
   if (selectedTags.value.length === 0) return
   
   isSubmitting.value = true
-  
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 800))
-  
-  isSubmitting.value = false
-  emit('success', [...selectedTags.value])
+  errorMessage.value = ''
+
+  try {
+    if (!props.selectedIds || props.selectedIds.length === 0) {
+      throw new Error('Не выбраны активы для применения тегов.')
+    }
+
+    const uniqueLabels = Array.from(new Set(selectedTags.value.map(t => t.trim()).filter(Boolean)))
+    const tagIds: number[] = []
+    for (const label of uniqueLabels) {
+      const tagId = await getOrCreateTagId(label)
+      if (tagId) tagIds.push(tagId)
+    }
+
+    if (tagIds.length === 0) {
+      throw new Error('Не удалось создать или найти теги для применения.')
+    }
+
+    // Attach each tag to each selected document
+    for (const documentId of props.selectedIds) {
+      for (const tagId of tagIds) {
+        await apiService.post(`/api/v4/documents/${documentId}/tags/attach/`, { tag: tagId })
+      }
+    }
+
+    emit('success', [...uniqueLabels])
+    emit('close')
+  } catch (err: any) {
+    const message =
+      err?.response?.data?.detail ||
+      err?.message ||
+      'Не удалось применить теги. Проверьте права доступа и доступность API.'
+    errorMessage.value = String(message)
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>

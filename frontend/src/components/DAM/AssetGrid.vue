@@ -19,7 +19,7 @@
       @download="handleAssetDownload"
       @share="handleAssetShare"
       @delete="handleAssetDelete"
-      @addTags="handleAssetAddTags"
+      @add-tags="handleAssetAddTags"
       @move="handleAssetMove"
     />
   </div>

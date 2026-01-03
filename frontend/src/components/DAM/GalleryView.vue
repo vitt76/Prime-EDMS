@@ -177,6 +177,8 @@
             @asset-download="handleAssetDownload"
             @asset-share="handleAssetShare"
             @asset-delete="handleAssetDelete"
+            @asset-add-tags="handleAssetAddTags"
+            @asset-move="handleAssetMove"
           />
         </div>
       </div>
@@ -251,6 +253,8 @@
                 @download="handleAssetDownload"
                 @share="handleAssetShare"
                 @delete="handleAssetDelete"
+                @add-tags="handleAssetAddTags"
+                @move="handleAssetMove"
                 @more="handleAssetMore"
               />
             </div>
@@ -688,6 +692,20 @@ function handleAssetDelete(asset: Asset) {
   emit('delete', asset)
 }
 
+function handleAssetAddTags(asset: Asset) {
+  // Single-asset action -> reuse bulk modal UX
+  assetStore.clearSelection()
+  assetStore.toggleSelection(asset.id)
+  showBulkTagModal.value = true
+}
+
+function handleAssetMove(asset: Asset) {
+  // Single-asset action -> reuse bulk modal UX
+  assetStore.clearSelection()
+  assetStore.toggleSelection(asset.id)
+  showBulkMoveModal.value = true
+}
+
 function handlePageChange(page: number) {
   assetStore.setPage(page)
 }
@@ -748,6 +766,12 @@ function handleBulkOperationSuccess() {
   // Refresh assets after bulk operation
   assetStore.fetchAssets()
   assetStore.clearSelection()
+
+  // UX: ensure modals are not left open showing "0 выбрано"
+  showBulkTagModal.value = false
+  showBulkMoveModal.value = false
+  showBulkDeleteModal.value = false
+  showBulkDownloadModal.value = false
 }
 </script>
 
