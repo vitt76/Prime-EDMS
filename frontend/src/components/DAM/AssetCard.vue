@@ -138,7 +138,9 @@
         </div>
       </div>
 
-      <!-- Quick Actions (bottom-right, appears on hover) -->
+      <!-- Quick Actions (bottom-right, appears on hover)
+           IMPORTANT: metadata overlay reserves space (padding-right/padding-bottom),
+           so action buttons never cover filename/size/date/tags. -->
       <Transition
         enter-active-class="transition-all duration-200 ease-out"
         enter-from-class="opacity-0 translate-y-2"
@@ -149,7 +151,7 @@
       >
         <div
           v-if="isHovered && !isLoading && !isSelected"
-          class="absolute bottom-3 right-3 z-30 flex items-center gap-2"
+          class="absolute bottom-3 right-3 z-30 flex items-center gap-2 pointer-events-auto"
           data-quick-actions
           @click.stop
         >
@@ -224,8 +226,8 @@
           v-if="isHovered && !isLoading"
           class="absolute inset-x-0 bottom-0 z-20 
                  bg-gradient-to-t from-black/80 via-black/60 to-transparent 
-                 px-3 py-3 pb-4"
-          @click.stop
+                 px-3 pt-3 pointer-events-none"
+          :class="!isSelected ? 'pb-16 pr-36' : 'pb-4 pr-3'"
         >
           <h3 
             class="text-sm font-semibold text-white truncate mb-1 drop-shadow-lg"
@@ -690,7 +692,9 @@ function handleDragEnd() {
 }
 
 onMounted(() => {
-  window.addEventListener('click', handleGlobalClick, true)
+  // IMPORTANT: do not use capture here.
+  // Capture-phase listener can close the teleported menu before Vue click handlers run.
+  window.addEventListener('click', handleGlobalClick)
   window.addEventListener('keydown', handleGlobalEscape)
   window.addEventListener('resize', handleGlobalResizeScroll)
   window.addEventListener('scroll', handleGlobalResizeScroll, true)
@@ -704,7 +708,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('click', handleGlobalClick, true)
+  window.removeEventListener('click', handleGlobalClick)
   window.removeEventListener('keydown', handleGlobalEscape)
   window.removeEventListener('resize', handleGlobalResizeScroll)
   window.removeEventListener('scroll', handleGlobalResizeScroll, true)

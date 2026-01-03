@@ -43,7 +43,8 @@
       >
         <div
           v-if="isViewOpen"
-          class="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 z-50 overflow-hidden"
+          class="absolute right-0 mt-2 w-[min(16rem,calc(100vw-1rem))] bg-white rounded-xl shadow-lg border border-gray-200 z-50
+                 max-h-[calc(100vh-6rem)] overflow-auto"
         >
           <div class="px-4 py-3 border-b border-gray-100">
             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Плотность</p>
@@ -219,11 +220,12 @@ function onGlobalClick(e: MouseEvent) {
 }
 
 onMounted(() => {
-  window.addEventListener('click', onGlobalClick, true)
+  // IMPORTANT: bubble phase is enough and avoids closing dropdowns before inner clicks run.
+  window.addEventListener('click', onGlobalClick)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('click', onGlobalClick, true)
+  window.removeEventListener('click', onGlobalClick)
 })
 </script>
 
