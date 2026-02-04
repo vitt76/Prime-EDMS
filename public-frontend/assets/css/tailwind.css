@@ -1,0 +1,196 @@
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter-var.woff2') format('woff2');
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Light mode defaults */
+  :root {
+    --color-background: 255 255 255;
+    --color-foreground: 23 23 23;
+    --color-muted: 245 245 245;
+    --color-muted-foreground: 115 115 115;
+    --color-border: 229 229 229;
+    --color-ring: 79 70 229;
+  }
+
+  /* Dark mode overrides */
+  .dark {
+    --color-background: 10 10 10;
+    --color-foreground: 250 250 250;
+    --color-muted: 38 38 38;
+    --color-muted-foreground: 163 163 163;
+    --color-border: 64 64 64;
+    --color-ring: 99 102 241;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white text-neutral-900 antialiased;
+    @apply dark:bg-neutral-950 dark:text-neutral-50;
+  }
+
+  /* Custom selection */
+  ::selection {
+    @apply bg-primary-100 text-primary-900;
+    @apply dark:bg-primary-900 dark:text-primary-100;
+  }
+
+  /* Focus visible outline */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary-500;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-neutral-100 dark:bg-neutral-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-neutral-300 dark:bg-neutral-700;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-neutral-400 dark:bg-neutral-600;
+  }
+}
+
+@layer components {
+  /* Card component */
+  .card {
+    @apply rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-200;
+    @apply dark:bg-neutral-900 dark:ring-neutral-800;
+  }
+
+  /* Input base styles */
+  .input {
+    @apply w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm;
+    @apply transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20;
+    @apply dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100;
+    @apply dark:focus:border-primary-400 dark:focus:ring-primary-400/20;
+  }
+
+  /* Button variants */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium;
+    @apply transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 text-white shadow-sm;
+    @apply hover:bg-primary-700 hover:shadow-md;
+    @apply focus:ring-primary-500;
+    @apply dark:bg-primary-500 dark:hover:bg-primary-400;
+  }
+
+  .btn-secondary {
+    @apply btn bg-neutral-100 text-neutral-700;
+    @apply hover:bg-neutral-200;
+    @apply focus:ring-neutral-500;
+    @apply dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700;
+  }
+
+  .btn-outline {
+    @apply btn border-2 border-neutral-200 bg-transparent text-neutral-700;
+    @apply hover:bg-neutral-50;
+    @apply focus:ring-neutral-500;
+    @apply dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800;
+  }
+
+  /* Link styles */
+  .link {
+    @apply text-primary-600 hover:text-primary-700 hover:underline;
+    @apply dark:text-primary-400 dark:hover:text-primary-300;
+  }
+
+  /* Section styles */
+  .section {
+    @apply py-16 lg:py-24;
+  }
+
+  /* Container */
+  .container-narrow {
+    @apply mx-auto max-w-3xl px-4;
+  }
+}
+
+@layer utilities {
+  /* Text balance for headings */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Hide scrollbar */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent;
+    @apply dark:from-primary-400 dark:to-primary-200;
+  }
+
+  /* Prose dark mode */
+  .prose-dark {
+    @apply dark:prose-invert;
+  }
+}
+
+/* Animation utilities */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Line clamp utility */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
