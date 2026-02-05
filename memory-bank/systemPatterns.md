@@ -184,6 +184,94 @@ def transform_ai_tags(value):
 - Transformation функции для поиска по массивам
 - Интеграция с динамическим поиском Mayan
 
+### 9. Tenant Isolation Pattern (Multi-tenancy)
+
+**Архитектурный подход:** Shared Database + Shared Schema + ForeignKey изоляция
+
+**Назначение:** Поддержка SaaS-модели (один backend, много клиентов) и Standalone-модели (один клиент на выделенном сервере).
+
+**Компоненты:**
+
+#### 9.1. Organization Model
+```python
+# mayan/apps/organizations/models.py
+class Organization(models.Model):
+    """Тенант / Компания для изоляции данных"""
+    id = models.UUIDField(primary_key=True)
+    name = models.CharField(unique=True)
+    slug = models.SlugField(unique=True)
+    deployment_mode = models.CharField(choices=['saas', 'standalone'])
+    # Квоты: storage_limit_gb, max_users, max_ai_analyses_monthly
+    # Статус: is_active, status (trial/active/suspended/archived)
+```
+
+#### 9.2. TenantAwareManager
+```python
+# Автоматическая фильтрация QuerySet по Organization
+class TenantAwareManager(models.Manager):
+    def get_queryset(self):
+        organization = self._get_current_organization()
+        if organization:
+            return super().get_queryset().filter(organization=organization)
+        return super().get_queryset()
+```
+
+#### 9.3. TenantAwareMixin
+```python
+# Миксин для tenant-aware моделей
+class TenantAwareMixin(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE)
+    objects = TenantAwareManager()
+    objects_unfiltered = models.Manager()  # Для админки
+    
+    class Meta:
+        abstract = True
+```
+
+#### 9.4. TenantResolverMiddleware
+```python
+# Определение Organization по домену/токену
+class TenantResolverMiddleware:
+    def process_request(self, request):
+        # 1. По кастомному домену
+        # 2. По поддомену (app.dam-brand.com → dam-brand)
+        # 3. По токену в Authorization header
+        # 4. Standalone mode (default Organization)
+        request.organization = self._resolve_organization(request)
+```
+
+**Tenant-aware модели:**
+- Document, DocumentFile, DocumentVersion
+- Cabinet, Tag, Metadata
+- DocumentAIAnalysis (DAM)
+- CampaignAsset, AssetEvent (Analytics)
+- Publication, ShareLink (Distribution)
+
+**Глобальные модели (НЕ tenant-aware):**
+- Plan (тарифные планы)
+- MetadataType (типизация метаданных)
+- Source (источники загрузки)
+
+**Режимы развертывания:**
+- **SaaS**: Множественные организации на одном сервере
+- **Standalone**: Одна организация по умолчанию (on-premises)
+
+**Изоляция данных:**
+- Все tenant-aware модели имеют FK на Organization
+- Автоматическая фильтрация через TenantAwareManager
+- Middleware устанавливает request.organization
+- ContextVar для потокобезопасности в async контексте
+
+**Безопасность:**
+- 100% защита от cross-tenant access
+- Индексы на organization_id для производительности
+- Audit logging всех операций с Organization
+
+**Масштабируемость:**
+- Готовность к шардированию (future)
+- Поддержка ≥100 тенантов на одном сервере
+- Оптимизация запросов через select_related('organization')
+
 ## Компоненты системы
 
 ### Backend Components

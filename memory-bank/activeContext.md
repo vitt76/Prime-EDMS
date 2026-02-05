@@ -157,19 +157,44 @@
 - Retry механизмы для transient errors
 - Fallback на альтернативные источники данных
 
-### 4. Multi-tenancy Approach
+### 4. Multi-tenancy Architecture (Tenant Isolation)
 
-**Решение:** Organization-aware WebSocket groups для изоляции данных
+**Решение:** Shared Database + Shared Schema + ForeignKey изоляция через Organization
+
+**Статус:** ТЗ готово, реализация планируется (Sprint 1-4, 6 недель)
 
 **Обоснование:**
+- Поддержка SaaS-модели (один backend, много клиентов)
+- Поддержка Standalone-модели (один клиент на выделенном сервере)
 - Безопасность данных между организациями
 - Масштабируемость для SaaS модели
-- Изоляция real-time обновлений
+- Enforcement квот (storage, users, AI analyses)
 
-**Реализация:**
-- Organization ID в WebSocket group names
-- Фильтрация данных по organization в API
-- Organization-specific analytics dashboards
+**Архитектурные компоненты (из ТЗ):**
+- **Organizations Module**: Модели Organization, Subscription, Plan, DomainSettings
+- **TenantAwareManager**: Автоматическая фильтрация QuerySet по Organization
+- **TenantAwareMixin**: Миксин для tenant-aware моделей
+- **TenantResolverMiddleware**: Определение Organization по домену/токену
+- **Migration Strategy**: Поэтапная миграция существующих данных
+
+**Текущая реализация:**
+- Organization-aware WebSocket groups в Analytics (частично реализовано)
+- Фильтрация данных по organization в API (частично)
+- Organization-specific analytics dashboards (частично)
+
+**Планируемая реализация (из ТЗ):**
+- Sprint 1-2: Инфраструктура (Models, Managers, Middleware)
+- Sprint 3: Миграция существующих данных
+- Sprint 4: API и Admin панель
+- Sprint 5: Polish и Deploy
+
+**Ключевые решения:**
+- Shared Database + Shared Schema (не отдельные БД)
+- ForeignKey изоляция (не шардирование на уровне схемы)
+- ContextVar для потокобезопасности в async контексте
+- User-Organization связь: ManyToMany (нужна модель UserOrganizationRole)
+
+**Документация:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`
 
 ### 5. Module Separation
 
@@ -256,15 +281,20 @@
 
 ### Long-term (Следующие 3-6 месяцев)
 
-1. **Analytics Phase 3:**
+1. **Multi-tenancy Implementation (Приоритет):**
+   - Реализация Organizations модуля (Sprint 1-4)
+   - TenantAwareManager и TenantAwareMixin
+   - TenantResolverMiddleware
+   - Миграция существующих данных к Organization
+   - API endpoints для управления Organizations
+   - Полная изоляция данных между тенантами
+   - Organization-level settings
+   - Billing integration (Subscription, Plan)
+
+2. **Analytics Phase 3:**
    - AI/ML для рекомендаций
    - Real-time analytics
    - Predictive analytics
-
-2. **Multi-tenancy:**
-   - Полная изоляция данных
-   - Organization-level settings
-   - Billing integration
 
 3. **Mobile Support:**
    - Responsive design improvements
@@ -329,5 +359,46 @@
 - `docs/transformation-2025/IMMERSIVE_GRID_IMPLEMENTATION.md` - Детали реализации Immersive Grid
 - `docs/transformation-2025/UI_UX_AUDIT_2025.md` - UI/UX аудит и рекомендации
 - `docs/transformation-2025/ARCHITECTURE_GAP_REPORT_V2.md` - Анализ gaps между frontend и backend
+- `docs/transformation-2025/TZ_Django_Tenant_Isolation.md` - **ТЗ по Multi-tenancy архитектуре** (Ready for Development)
 - `ANALYTICS_TRANSFORMATION_ROADMAP.md` - Roadmap для аналитики
 - `frontend/docs/FEATURE-PARITY-CHECKLIST.md` - Сравнение Old UI vs New UI
+
+## 🏗️ Планируемые Архитектурные Изменения
+
+### Multi-tenancy Implementation (ТЗ готово)
+
+**Источник:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`
+
+**Цель:** Реализовать мульти-тенантную архитектуру для поддержки SaaS и Standalone моделей.
+
+**Подход:** Shared Database + Shared Schema + ForeignKey изоляция через Organization.
+
+**Ключевые компоненты:**
+1. **Organizations Module** (`mayan.apps.organizations`)
+   - Модели: Organization, Subscription, Plan, DomainSettings
+   - TenantAwareManager для автоматической фильтрации
+   - TenantAwareMixin для tenant-aware моделей
+   - TenantResolverMiddleware для определения тенанта
+
+2. **Миграция существующих данных:**
+   - Добавить FK на Organization ко всем tenant-aware моделям
+   - Создать default Organization для Standalone mode
+   - Привязать все существующие данные к default Organization
+
+3. **API и Admin:**
+   - ViewSet'ы для управления Organizations
+   - Django Admin панель для SuperAdmin
+   - Permissions для Super Admin vs Org Admin
+
+**Timeline:** 6 недель (Sprint 1-4)
+
+**KPI:**
+- ≥100 тенантов на одном сервере
+- 100% защита от cross-tenant access
+- ≤200ms время запроса с фильтрацией
+- ≤5 мин время создания нового тенанта
+
+**Риски:**
+- Ошибка в Middleware → Data Leak (mitigation: unit-тесты, security audit)
+- Performance degradation с FK-фильтром (mitigation: индексы, кеширование)
+- Сложность миграции данных (mitigation: staging окружение, dry-run)

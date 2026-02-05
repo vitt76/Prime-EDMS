@@ -151,7 +151,38 @@
 
 ## 🚧 In Progress (В процессе разработки)
 
-### 1. UI/UX Improvements
+### 1. Multi-tenancy Architecture (Tenant Isolation)
+**Статус:** ТЗ готово, реализация планируется  
+**Документ:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`
+
+**Что планируется:**
+- 🚧 Organizations Module (`mayan.apps.organizations`)
+  - Модели: Organization, Subscription, Plan, DomainSettings
+  - TenantAwareManager для автоматической фильтрации QuerySet
+  - TenantAwareMixin для tenant-aware моделей
+  - TenantResolverMiddleware для определения тенанта
+- 🚧 Миграция существующих моделей:
+  - Добавить FK на Organization ко всем tenant-aware моделям
+  - Привязать существующие данные к default Organization
+  - Сделать FK обязательным
+- 🚧 API endpoints для управления Organizations
+- 🚧 Django Admin панель для SuperAdmin
+- 🚧 Permissions для Super Admin vs Org Admin
+
+**Архитектурный подход:**
+- Shared Database + Shared Schema
+- ForeignKey изоляция через Organization
+- Поддержка SaaS и Standalone режимов
+- ContextVar для потокобезопасности
+
+**Timeline:** 6 недель (Sprint 1-4)
+
+**Текущая частичная реализация:**
+- ✅ Organization-aware WebSocket groups в Analytics
+- ✅ Фильтрация данных по organization в некоторых API endpoints
+- ⚠️ Полная изоляция данных еще не реализована
+
+### 2. UI/UX Improvements
 - 🚧 **Immersive Grid Implementation** (активно разрабатывается)
   - ✅ Убраны границы и тени в покое
   - ✅ Metadata overlay на hover
@@ -200,7 +231,14 @@
 
 ## ❌ Incomplete / TODO (Неполные функции)
 
-### 1. AI Providers
+### 1. Multi-tenancy Implementation
+- ❌ **Organizations Module** - Требуется полная реализация
+  - ТЗ готово (`docs/transformation-2025/TZ_Django_Tenant_Isolation.md`)
+  - Статус: Ready for Development
+  - Компоненты: Models, Managers, Middleware, Migrations, API
+  - Timeline: 6 недель (Sprint 1-4)
+
+### 2. AI Providers
 - ❌ **Claude Provider** - только placeholder, требует реализации
   - Файл: `mayan/apps/dam/ai_providers/claude.py`
   - Статус: Все методы возвращают пустые значения
@@ -266,10 +304,14 @@
 ## 🎯 Приоритеты разработки
 
 ### Высокий приоритет
-1. Завершение Immersive Grid оптимизаций
-2. Реализация Change Password API endpoint
-3. Завершение YouTube Analytics интеграции
-4. Оптимизация производительности для больших коллекций
+1. **Multi-tenancy Implementation** (ТЗ готово, критично для SaaS)
+   - Реализация Organizations модуля
+   - TenantAwareManager и Middleware
+   - Миграция существующих данных
+2. Завершение Immersive Grid оптимизаций
+3. Реализация Change Password API endpoint
+4. Завершение YouTube Analytics интеграции
+5. Оптимизация производительности для больших коллекций
 
 ### Средний приоритет
 1. Реализация Claude и Gemini AI провайдеров
