@@ -1,0 +1,32 @@
+# Системные папки и библиотеки (это чужой код)
+node_modules/
+bower_components/
+venv/
+.venv/
+env/
+__pycache__/
+
+# Сборки и временные файлы
+dist/
+build/
+.idea/
+.vscode/
+
+# Логи и базы данных (это не код, а данные)
+*.log
+*.sqlite
+*.sqlite3
+*.db
+
+# Медиа и картинки (ИИ не умеет читать бинарники текстом)
+*.jpg
+*.png
+*.gif
+*.pdf
+*.ico
+
+# Большие файлы данных, которые собьют ИИ с толку
+**/*.csv
+**/*.json
+!package.json
+!tsconfig.json
