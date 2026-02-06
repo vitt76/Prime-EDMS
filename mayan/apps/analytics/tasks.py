@@ -6,6 +6,7 @@ from celery import shared_task
 from django.apps import apps as django_apps
 from django.conf import settings
 from django.db.models import Avg, Count, Q, Sum
+from django.core.mail import EmailMessage
 from django.utils import timezone
 from typing import Optional
 
@@ -14,9 +15,11 @@ from mayan.apps.documents.models import Document
 from .models import (
     ApprovalWorkflowEvent, AnalyticsAlert, AssetDailyMetrics, AssetEvent,
     CampaignDailyMetrics, CDNDailyCost, CDNRate, SearchDailyMetrics, SearchQuery,
-    SearchSession, UserDailyMetrics, CampaignEngagementEvent
+    SearchSession, UserDailyMetrics, CampaignEngagementEvent, DistributionEvent
 )
 from .realtime import notify_analytics_refresh
+from .providers.registry import AnalyticsProviderRegistry, register_default_providers
+from .reports import CampaignPDFReport
 
 logger = logging.getLogger(name=__name__)
 
@@ -393,6 +396,134 @@ def generate_analytics_alerts(self, days: int = 90) -> dict:
     except Exception:
         pass
     return {'created': created}
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=5,
+    queue='analytics',
+)
+def sync_external_metrics(
+    self,
+    days: int = 7,
+    limit_assets: int = 500,
+) -> dict:
+    """Sync external channel metrics (Adapter/Strategy; stubs for now).
+
+    Strategy:
+    - Determine active channels from recent `DistributionEvent` rows.
+    - For each active channel that has an enabled provider, fetch mock metrics.
+    - Persist as new `DistributionEvent` rows using `bulk_create`.
+    """
+    register_default_providers()
+
+    enabled = set(getattr(settings, 'ANALYTICS_EXTERNAL_PROVIDERS_ENABLED', []) or [])
+    if not enabled:
+        return {'created': 0, 'reason': 'no_enabled_providers'}
+
+    date_from = timezone.now() - timedelta(days=int(days))
+    active_channels = list(
+        DistributionEvent.objects.filter(occurred_at__gte=date_from)
+        .values_list('channel', flat=True).distinct()
+    )
+    if not active_channels:
+        active_channels = list(enabled)
+
+    created_events = []
+    provider_errors = 0
+    for channel in active_channels:
+        provider = AnalyticsProviderRegistry.get_by_channel(channel)
+        if not provider:
+            provider = AnalyticsProviderRegistry.get_by_provider_id(channel)
+        if not provider or provider.provider_id not in enabled:
+            continue
+
+        doc_ids = list(
+            DistributionEvent.objects.filter(channel=channel, occurred_at__gte=date_from)
+            .exclude(document_id__isnull=True)
+            .values_list('document_id', flat=True)
+            .distinct()[: int(limit_assets)]
+        )
+        if not doc_ids:
+            continue
+
+        for document_id in doc_ids:
+            try:
+                metrics = provider.fetch_metrics(asset_id=int(document_id))
+            except Exception:
+                provider_errors += 1
+                continue
+
+            created_events.append(
+                DistributionEvent(
+                    channel=channel,
+                    event_type=DistributionEvent.EVENT_TYPE_DELIVERED,
+                    status=DistributionEvent.STATUS_OK,
+                    sync_status=str(metrics.get('sync_status') or 'ok'),
+                    last_sync_error=str(metrics.get('last_sync_error') or ''),
+                    retry_count=int(metrics.get('retry_count') or 0),
+                    document_id=int(document_id),
+                    views=metrics.get('views'),
+                    clicks=metrics.get('clicks'),
+                    conversions=metrics.get('conversions'),
+                    bandwidth_bytes=metrics.get('bandwidth_bytes'),
+                    latency_ms=metrics.get('latency_ms'),
+                    external_id=str(metrics.get('external_id') or ''),
+                    occurred_at=timezone.now(),
+                    metadata=metrics.get('metadata') or {'provider': provider.provider_id, 'mock': True},
+                )
+            )
+
+    if created_events:
+        try:
+            DistributionEvent.objects.bulk_create(created_events, batch_size=1000)
+        except Exception as exc:
+            logger.exception('sync_external_metrics bulk_create failed: %s', exc)
+            raise
+
+    try:
+        notify_analytics_refresh(reason='sync_external_metrics')
+    except Exception:
+        pass
+
+    logger.info(
+        'sync_external_metrics finished: created=%d provider_errors=%d enabled=%s window_days=%d',
+        len(created_events), provider_errors, sorted(enabled), int(days)
+    )
+
+    if provider_errors and not created_events:
+        # Trigger autoretry when all providers fail to fetch.
+        raise RuntimeError('sync_external_metrics: all providers failed')
+
+    return {
+        'created': len(created_events),
+        'window_days': int(days),
+        'providers_enabled': sorted(enabled),
+    }
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='analytics')
+def send_campaign_pdf_report_email(
+    self,
+    *,
+    campaign_id: str,
+    email_to: str,
+    days: int = 30,
+) -> dict:
+    """Generate and send a campaign PDF report to email (best-effort)."""
+    pdf_bytes = CampaignPDFReport(campaign_id=campaign_id, days=int(days)).render()
+    msg = EmailMessage(
+        subject=f'Отчет по кампании {campaign_id}',
+        body=f'PDF отчет по кампании (период: {days} дней).',
+        to=[email_to],
+    )
+    msg.attach(filename=f'campaign-{campaign_id}.pdf', content=pdf_bytes, mimetype='application/pdf')
+    sent = msg.send(fail_silently=True)
+    return {'sent': bool(sent), 'email_to': email_to, 'campaign_id': campaign_id}
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')

@@ -32,6 +32,7 @@ else:
                     [
                         path('ws/notifications/', NotificationConsumer.as_asgi()),
                         path('ws/analytics/', AnalyticsDashboardConsumer.as_asgi()),
+                        path('ws/analytics/dashboard/', AnalyticsDashboardConsumer.as_asgi()),
                     ]
                 )
             ),

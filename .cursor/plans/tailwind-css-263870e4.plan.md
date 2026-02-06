@@ -1,4 +1,13 @@
-<!-- 263870e4-28a8-4905-b9b6-a46e0577a930 47728c77-f3bb-4974-bada-e9bc43e8da4a -->
+---
+name: "План стандартизации стилей: Tailwind + CSS-переменные"
+overview: ""
+todos:
+  - id: c5d48f76-84a0-4e9f-9ecf-afba5b213553
+    content: "Очистка: удалить дублирование, проверить bundle size, убедиться что Tailwind tree-shaking работает"
+    status: pending
+isProject: false
+---
+
 # План стандартизации стилей: Tailwind + CSS-переменные
 
 ## Цель
@@ -52,7 +61,6 @@
     }
   }
   ```
-
 - Заменить fontSize на переменные:
   ```js
   fontSize: {
@@ -60,7 +68,6 @@
     // ...
   }
   ```
-
 - Заменить borderRadius на переменные
 - Заменить boxShadow на переменные
 - Сохранить spacing, transitionDuration, transitionTimingFunction как есть (они не используются в CSS-переменных)
@@ -155,16 +162,3 @@
 5. Этап 5 (Очистка) - 1-2 часа
 
 **Общее время**: 2-3 рабочих дня
-
-### To-dos
-
-- [ ] Провести аудит всех используемых CSS-переменных в проекте (30 файлов), выявить недостающие переменные
-- [ ] Обновить frontend/src/styles/index.css: добавить все недостающие переменные (--color-surface, --color-border, --font-size-*, --radius-*, --shadow-*) для light и dark mode
-- [ ] Обновить frontend/tailwind.config.js: заменить хардкодные значения на ссылки на CSS-переменные через var() для colors, fontSize, borderRadius, boxShadow
-- [ ] Проверить корректность работы Tailwind с CSS-переменными в dev окружении, убедиться что dark mode работает
-- [ ] Проверить и обновить Common компоненты (Button, Card, Badge, Input, Modal, Select) - убедиться что используют Tailwind классы корректно
-- [ ] Мигрировать DataTable.vue: простые стили на Tailwind, оставить CSS-переменные только для scrollbar и сложных случаев
-- [ ] Мигрировать страницы (PublicationDetailPage, CollectionsPage и др.): layout/spacing на Tailwind, CSS-переменные для анимаций и динамики
-- [ ] Создать frontend/docs/DESIGN-TOKENS.md с описанием всех CSS-переменных, примерами использования, guidelines
-- [ ] Провести визуальную валидацию: проверить консистентность в light/dark mode, убедиться что все компоненты выглядят корректно
-- [ ] Очистка: удалить дублирование, проверить bundle size, убедиться что Tailwind tree-shaking работает

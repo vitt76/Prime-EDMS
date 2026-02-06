@@ -180,17 +180,8 @@
       </div>
     </div>
 
-    <!-- Actions -->
+    <!-- Actions (auto-apply; only reset) -->
     <div class="flex gap-2 pt-4 border-t border-neutral-300 dark:border-neutral-300">
-      <Button
-        variant="primary"
-        size="sm"
-        class="flex-1"
-        :disabled="!hasActiveFilters"
-        @click="handleApply"
-      >
-        Применить
-      </Button>
       <Button
         variant="outline"
         size="sm"
@@ -205,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import Button from '@/components/Common/Button.vue'
 import Badge from '@/components/Common/Badge.vue'
 import TagInput from '@/components/Common/TagInput.vue'
@@ -214,13 +205,13 @@ import type { Facets, SearchFilters } from '@/types/api'
 
 interface Props {
   facets?: Facets
-  initialFilters?: SearchFilters
+  modelValue: SearchFilters
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  apply: [filters: SearchFilters]
+  'update:modelValue': [filters: SearchFilters]
   reset: []
 }>()
 
@@ -238,28 +229,40 @@ const sizeMax = ref<number | null>(null)
 const selectedTags = ref<string[]>([])
 const showCustomMetadata = ref(false)
 const customMetadataFilters = ref<Array<{ key: string; value: string }>>([])
+const isHydrating = ref(false)
 
-// Initialize from props
+function hydrateFromModel(filters: SearchFilters) {
+  selectedTypes.value = filters.type || []
+  dateRange.value = filters.date_range || null
+  if (filters.size) {
+    sizeMin.value = filters.size.min ? filters.size.min / (1024 * 1024) : null // bytes -> MB
+    sizeMax.value = filters.size.max ? filters.size.max / (1024 * 1024) : null
+  } else {
+    sizeMin.value = null
+    sizeMax.value = null
+  }
+  selectedTags.value = filters.tags || []
+  if (filters.custom_metadata) {
+    customMetadataFilters.value = Object.entries(filters.custom_metadata).map(([key, value]) => ({
+      key,
+      value: String(value)
+    }))
+  } else {
+    customMetadataFilters.value = []
+  }
+}
+
+// Initialize & keep in sync with external modelValue (e.g. URL back/forward)
 watch(
-  () => props.initialFilters,
+  () => props.modelValue,
   (filters) => {
-    if (filters) {
-      selectedTypes.value = filters.type || []
-      dateRange.value = filters.date_range || null
-      if (filters.size) {
-        sizeMin.value = filters.size.min ? filters.size.min / (1024 * 1024) : null // Convert to MB
-        sizeMax.value = filters.size.max ? filters.size.max / (1024 * 1024) : null
-      }
-      selectedTags.value = filters.tags || []
-      if (filters.custom_metadata) {
-        customMetadataFilters.value = Object.entries(filters.custom_metadata).map(([key, value]) => ({
-          key,
-          value: String(value)
-        }))
-      }
-    }
+    isHydrating.value = true
+    hydrateFromModel(filters || {})
+    void nextTick(() => {
+      isHydrating.value = false
+    })
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 )
 
 const tagSuggestions = computed(() => {
@@ -336,7 +339,7 @@ function clearFilter(key: string) {
   }
 }
 
-function handleApply() {
+function emitModelUpdate() {
   const filters: SearchFilters = {}
 
   if (selectedTypes.value.length > 0) {
@@ -370,7 +373,7 @@ function handleApply() {
     }
   }
 
-  emit('apply', filters)
+  emit('update:modelValue', filters)
 }
 
 function handleReset() {
@@ -380,8 +383,19 @@ function handleReset() {
   sizeMax.value = null
   selectedTags.value = []
   customMetadataFilters.value = []
+  emitModelUpdate()
   emit('reset')
 }
+
+// Auto-apply (reactive). Debounce happens outside (in composable).
+watch(
+  () => [selectedTypes.value, dateRange.value, sizeMin.value, sizeMax.value, selectedTags.value, customMetadataFilters.value],
+  () => {
+    if (isHydrating.value) return
+    emitModelUpdate()
+  },
+  { deep: true }
+)
 </script>
 
 <style scoped>

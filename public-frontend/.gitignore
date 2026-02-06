@@ -1,0 +1,31 @@
+# Nuxt build output
+.nuxt
+.output
+.nitro
+
+# Dependencies
+node_modules
+
+# Package lock (optional - depends on team preference)
+# package-lock.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage
+.nyc_output

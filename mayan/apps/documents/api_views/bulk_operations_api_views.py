@@ -15,8 +15,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils.translation import ugettext_lazy as _
 
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import JSONRenderer
@@ -172,50 +171,27 @@ class BulkDocumentActionView(APIView):
     permission_classes = (IsAuthenticated,)
     renderer_classes = (JSONRenderer,)
     
-    @swagger_auto_schema(
-        operation_id='documents_bulk_action',
-        operation_description='''
-Perform bulk operations on multiple documents.
-
-**Actions:**
-- `delete`: Move documents to trash
-- `tag`: Attach a tag to documents (requires `params.tag_id`)
-- `untag`: Remove a tag from documents (requires `params.tag_id`)
-- `move`: Add documents to a cabinet (requires `params.cabinet_id`)
-- `restore`: Restore documents from trash
-
-**Example Request:**
-```json
-{
-    "action": "tag",
-    "ids": [1, 2, 3],
-    "params": {"tag_id": 5}
-}
-```
-
-**Response Codes:**
-- 200: All operations succeeded
-- 207: Partial success (some operations failed)
-- 400: Validation error
-        ''',
-        request_body=BulkOperationRequestSerializer,
+    @extend_schema(
+        summary='Массовые операции над документами',
+        description='Выполняет bulk-операции над документами: delete/tag/untag/move/restore.',
+        request=BulkOperationRequestSerializer,
         responses={
             200: BulkOperationResponseSerializer,
             207: BulkOperationResponseSerializer,
-            400: openapi.Response(
-                description='Validation error',
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'error': openapi.Schema(type=openapi.TYPE_STRING),
-                        'error_code': openapi.Schema(type=openapi.TYPE_STRING),
-                        'details': openapi.Schema(type=openapi.TYPE_OBJECT),
+            400: OpenApiResponse(
+                response=inline_serializer(
+                    name='BulkOperationValidationError',
+                    fields={
+                        'success': serializers.BooleanField(),
+                        'error': serializers.CharField(),
+                        'error_code': serializers.CharField(),
+                        'details': serializers.DictField(),
                     }
-                )
+                ),
+                description='Ошибка валидации'
             ),
         },
-        tags=['Documents - Bulk Operations']
+        tags=['documents'],
     )
     def post(self, request, *args, **kwargs):
         """Handle bulk operation request."""

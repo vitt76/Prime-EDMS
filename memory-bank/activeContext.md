@@ -1,0 +1,404 @@
+# Active Context: Prime-EDMS
+
+**Последнее обновление:** 2026-02-05  
+**Текущий фокус:** UI/UX улучшения и оптимизация производительности DAM компонентов
+
+---
+
+## 🎯 Current Focus (Текущий фокус)
+
+### Активная разработка (Последние 10 коммитов)
+
+#### 1. Immersive Grid Implementation
+**Статус:** Активно разрабатывается  
+**Коммиты:** `55168e0166`, `9a35372d90`, `c2a4a28596`
+
+**Что делается:**
+- Реализация "премиального" дизайна в стиле Pinterest/Google Photos/Figma
+- Улучшение AssetCard компонента:
+  - Убраны границы и тени в покое
+  - Metadata overlay появляется только на hover
+  - Google Photos style checkbox selection
+  - Quick actions в правом нижнем углу при hover
+- Создание AssetGrid компонента для оптимизированного рендеринга
+- Density control (compact/comfortable layouts)
+- Context-aware GalleryHeaderActions вместо GridToolbar
+
+**Архитектурные решения:**
+- Использование Teleport для header actions (лучшая композиция компонентов)
+- Persistence UI preferences через uiStore (density, layout, sort)
+- Lazy loading для share links (загрузка только при открытии модала)
+- Предотвращение N+1 queries (использование данных из list endpoint)
+
+**Документация:** `docs/transformation-2025/IMMERSIVE_GRID_IMPLEMENTATION.md`
+
+#### 2. Search & Filtering Enhancements
+**Статус:** Активно улучшается  
+**Коммиты:** `c2a4a28596`, `9a35372d90`
+
+**Что делается:**
+- Рефакторинг FiltersPanel для v-model two-way binding
+- Auto-apply фильтров при изменении
+- Новый composable `useDamSearchFilters` для централизованного управления
+- Интеграция с damSearch composable в Header
+- Улучшение API views для поддержки keyword search и document type filtering
+
+**Архитектурные решения:**
+- Централизация логики фильтров в composable (лучшая переиспользуемость)
+- Реактивное состояние вместо deprecated методов asset store
+- Улучшенная синхронизация между компонентами
+
+#### 3. Performance Optimizations
+**Статус:** Постоянные улучшения  
+**Коммиты:** `331b22fe6a`, `29a9f274f6`
+
+**Что делается:**
+- Оптимизация asset fetching (предотвращение лишних запросов)
+- Lazy loading share links
+- Улучшение error handling и retry механизмов
+- Централизация debug telemetry в API service
+- Non-fatal error handling в distribution store
+
+**Архитектурные решения:**
+- Предотвращение N+1 queries через использование данных из list endpoint
+- Graceful degradation при ошибках backend
+- Оптимизация notification fetching (предотвращение дубликатов)
+
+#### 4. Marketing CMS Module
+**Статус:** Недавно добавлен  
+**Коммит:** `8304fb2fa6`
+
+**Что сделано:**
+- Полностью новый модуль для управления маркетинговым контентом
+- Модели: Page, Post, Plan, FAQ, Lead, EmailVerificationToken
+- REST API endpoints для всех моделей
+- Интеграция в docker-compose через MAYAN_COMMON_EXTRA_APPS
+
+**Архитектурные решения:**
+- JSON поля для мультиязычного контента (title, description)
+- Отдельный модуль для маркетингового контента (не смешивается с DAM)
+- Готовность к интеграции с Public Frontend
+
+#### 5. Public Frontend (Nuxt 3)
+**Статус:** Полностью реализован  
+**Коммит:** `8304fb2fa6`
+
+**Что сделано:**
+- Полнофункциональный публичный сайт на Nuxt 3
+- Все страницы: Home, Blog, Pricing, Contact, About, Privacy, Terms
+- Компоненты: Hero, Features, CTA, FAQ, Pricing Calculator
+- SEO оптимизация, i18n, analytics интеграция
+- E2E и unit тесты
+
+**Архитектурные решения:**
+- Отдельное приложение от основного DAM frontend
+- SSR/SSG для лучшего SEO
+- Интеграция с Marketing CMS через API
+
+#### 6. Analytics Improvements
+**Статус:** Улучшения в процессе  
+**Коммиты:** `31d0e00535`, `74690a55a1`
+
+**Что делается:**
+- Multi-tenancy поддержка через organization-specific WebSocket groups
+- YouTube Analytics интеграция с OAuth2
+- Fallback на YouTube Data API v3
+- Улучшенная error handling в YouTube provider
+- Улучшенное broadcasting сообщений для analytics refresh
+
+**Архитектурные решения:**
+- Organization-aware WebSocket groups для изоляции данных
+- Best-effort подход к внешним API (fallback механизмы)
+- Улучшенная обработка ошибок OAuth2
+
+---
+
+## 🏗️ Recent Architectural Decisions
+
+### 1. Component Architecture (Frontend)
+
+**Решение:** Переход от монолитных компонентов к композиции через composables и Teleport
+
+**Обоснование:**
+- Лучшая переиспользуемость логики (useDamSearchFilters, useAssetSelection)
+- Более гибкая композиция UI (Teleport для header actions)
+- Централизация состояния (stores вместо prop drilling)
+
+**Примеры:**
+- `useDamSearchFilters` - централизованная логика фильтров
+- `useAssetSelection` - логика выбора активов
+- `GalleryHeaderActions` с Teleport вместо GridToolbar
+
+### 2. Performance Optimization Strategy
+
+**Решение:** Предотвращение лишних запросов и оптимизация данных
+
+**Обоснование:**
+- Уменьшение нагрузки на backend
+- Улучшение UX (меньше задержек)
+- Масштабируемость для больших коллекций
+
+**Реализация:**
+- Использование данных из list endpoint вместо отдельных запросов
+- Lazy loading для необязательных данных (share links)
+- Кеширование UI preferences
+
+### 3. Error Handling Philosophy
+
+**Решение:** Graceful degradation вместо жестких ошибок
+
+**Обоснование:**
+- Лучший UX (система продолжает работать при частичных сбоях)
+- Устойчивость к нестабильности backend
+- Неблокирующие операции
+
+**Реализация:**
+- Non-fatal error handling в stores
+- Retry механизмы для transient errors
+- Fallback на альтернативные источники данных
+
+### 4. Multi-tenancy Architecture (Tenant Isolation)
+
+**Решение:** Shared Database + Shared Schema + ForeignKey изоляция через Organization
+
+**Статус:** ТЗ готово, реализация планируется (Sprint 1-4, 6 недель)
+
+**Обоснование:**
+- Поддержка SaaS-модели (один backend, много клиентов)
+- Поддержка Standalone-модели (один клиент на выделенном сервере)
+- Безопасность данных между организациями
+- Масштабируемость для SaaS модели
+- Enforcement квот (storage, users, AI analyses)
+
+**Архитектурные компоненты (из ТЗ):**
+- **Organizations Module**: Модели Organization, Subscription, Plan, DomainSettings
+- **TenantAwareManager**: Автоматическая фильтрация QuerySet по Organization
+- **TenantAwareMixin**: Миксин для tenant-aware моделей
+- **TenantResolverMiddleware**: Определение Organization по домену/токену
+- **Migration Strategy**: Поэтапная миграция существующих данных
+
+**Текущая реализация:**
+- Organization-aware WebSocket groups в Analytics (частично реализовано)
+- Фильтрация данных по organization в API (частично)
+- Organization-specific analytics dashboards (частично)
+
+**Планируемая реализация (из ТЗ):**
+- Sprint 1-2: Инфраструктура (Models, Managers, Middleware)
+- Sprint 3: Миграция существующих данных
+- Sprint 4: API и Admin панель
+- Sprint 5: Polish и Deploy
+
+**Ключевые решения:**
+- Shared Database + Shared Schema (не отдельные БД)
+- ForeignKey изоляция (не шардирование на уровне схемы)
+- ContextVar для потокобезопасности в async контексте
+- User-Organization связь: ManyToMany (нужна модель UserOrganizationRole)
+
+**Документация:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`
+
+### 5. Module Separation
+
+**Решение:** Отдельные модули для разных доменов (DAM, Marketing CMS, Public Frontend)
+
+**Обоснование:**
+- Четкое разделение ответственности
+- Независимое развертывание и масштабирование
+- Упрощение поддержки
+
+**Реализация:**
+- Marketing CMS как отдельный Django app
+- Public Frontend как отдельное Nuxt приложение
+- API-first подход для интеграции
+
+---
+
+## 🔄 Active Workflows
+
+### Development Workflow
+
+1. **Feature Development:**
+   - Создание feature branch
+   - Разработка с тестами
+   - Code review
+   - Merge в main
+
+2. **UI Improvements:**
+   - Дизайн в стиле современных DAM систем
+   - Итеративная разработка компонентов
+   - Тестирование на реальных данных
+   - Оптимизация производительности
+
+3. **Performance Optimization:**
+   - Профилирование производительности
+   - Выявление узких мест
+   - Оптимизация запросов и рендеринга
+   - Тестирование на больших коллекциях
+
+### Testing Strategy
+
+- **Unit Tests:** Компоненты и утилиты
+- **Integration Tests:** API endpoints и workflows
+- **E2E Tests:** Критичные user flows (Playwright)
+- **Performance Tests:** Нагрузочное тестирование (Locust)
+
+---
+
+## 📋 Next Steps (Ближайшие шаги)
+
+### Immediate (Следующие 1-2 недели)
+
+1. **Завершение Immersive Grid:**
+   - Оптимизация для больших списков (>100 активов)
+   - Виртуальный скроллинг для очень больших коллекций
+   - Финальная полировка UI/UX
+
+2. **Search Improvements:**
+   - Расширенные фильтры (дата, размер, владелец)
+   - Search history persistence
+   - Улучшение faceted search
+
+3. **Performance:**
+   - Оптимизация изображений (lazy loading, responsive)
+   - CDN интеграция для статики
+   - Database query optimization
+
+### Short-term (Следующие 1-2 месяца)
+
+1. **API Gaps:**
+   - Реализация Change Password API endpoint
+   - User Activity Feed API
+   - Улучшение error responses
+
+2. **AI Providers:**
+   - Реализация Claude provider
+   - Реализация Gemini provider
+   - Улучшение fallback механизмов
+
+3. **Analytics:**
+   - Завершение Analytics Transformation Phase 1-2
+   - Search-to-Find Time метрика
+   - CDN Cost tracking
+
+### Long-term (Следующие 3-6 месяцев)
+
+1. **Multi-tenancy Implementation (Приоритет):**
+   - Реализация Organizations модуля (Sprint 1-4)
+   - TenantAwareManager и TenantAwareMixin
+   - TenantResolverMiddleware
+   - Миграция существующих данных к Organization
+   - API endpoints для управления Organizations
+   - Полная изоляция данных между тенантами
+   - Organization-level settings
+   - Billing integration (Subscription, Plan)
+
+2. **Analytics Phase 3:**
+   - AI/ML для рекомендаций
+   - Real-time analytics
+   - Predictive analytics
+
+3. **Mobile Support:**
+   - Responsive design improvements
+   - Mobile app (опционально)
+   - Touch gestures
+
+---
+
+## 🎨 Design Philosophy
+
+### Current Approach
+
+1. **Content-First Design:**
+   - Минимальные UI элементы в покое
+   - Фокус на контенте, а не на интерфейсе
+   - Metadata появляется только при необходимости
+
+2. **Progressive Disclosure:**
+   - Базовые функции всегда доступны
+   - Продвинутые функции скрыты до необходимости
+   - Context-aware actions
+
+3. **Performance as Feature:**
+   - Оптимизация для больших коллекций
+   - Lazy loading везде где возможно
+   - Кеширование агрессивное но умное
+
+4. **Accessibility:**
+   - Keyboard navigation
+   - Screen reader support
+   - WCAG compliance (в процессе)
+
+---
+
+## 🔍 Key Insights
+
+### Что работает хорошо
+
+1. **DAM Core:** Стабильная работа всех основных функций
+2. **AI Integration:** YandexGPT и GigaChat работают надежно
+3. **Analytics:** Дашборды предоставляют ценную информацию
+4. **Distribution:** Публикации и share links работают как ожидается
+
+### Что требует внимания
+
+1. **Performance:** Большие коллекции (>1000 активов) требуют оптимизации
+2. **API Gaps:** Некоторые endpoints отсутствуют для полного self-service
+3. **Error Handling:** Можно улучшить user-friendly сообщения
+4. **Mobile:** Responsive design требует доработки
+
+### Архитектурные сильные стороны
+
+1. **Modularity:** Четкое разделение модулей
+2. **API-First:** Хорошая база для интеграций
+3. **Scalability:** Горизонтальное масштабирование через Celery
+4. **Extensibility:** Легко добавлять новые модули и функции
+
+---
+
+## 📚 Relevant Documentation
+
+- `docs/transformation-2025/IMMERSIVE_GRID_IMPLEMENTATION.md` - Детали реализации Immersive Grid
+- `docs/transformation-2025/UI_UX_AUDIT_2025.md` - UI/UX аудит и рекомендации
+- `docs/transformation-2025/ARCHITECTURE_GAP_REPORT_V2.md` - Анализ gaps между frontend и backend
+- `docs/transformation-2025/TZ_Django_Tenant_Isolation.md` - **ТЗ по Multi-tenancy архитектуре** (Ready for Development)
+- `ANALYTICS_TRANSFORMATION_ROADMAP.md` - Roadmap для аналитики
+- `frontend/docs/FEATURE-PARITY-CHECKLIST.md` - Сравнение Old UI vs New UI
+
+## 🏗️ Планируемые Архитектурные Изменения
+
+### Multi-tenancy Implementation (ТЗ готово)
+
+**Источник:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`
+
+**Цель:** Реализовать мульти-тенантную архитектуру для поддержки SaaS и Standalone моделей.
+
+**Подход:** Shared Database + Shared Schema + ForeignKey изоляция через Organization.
+
+**Ключевые компоненты:**
+1. **Organizations Module** (`mayan.apps.organizations`)
+   - Модели: Organization, Subscription, Plan, DomainSettings
+   - TenantAwareManager для автоматической фильтрации
+   - TenantAwareMixin для tenant-aware моделей
+   - TenantResolverMiddleware для определения тенанта
+
+2. **Миграция существующих данных:**
+   - Добавить FK на Organization ко всем tenant-aware моделям
+   - Создать default Organization для Standalone mode
+   - Привязать все существующие данные к default Organization
+
+3. **API и Admin:**
+   - ViewSet'ы для управления Organizations
+   - Django Admin панель для SuperAdmin
+   - Permissions для Super Admin vs Org Admin
+
+**Timeline:** 6 недель (Sprint 1-4)
+
+**KPI:**
+- ≥100 тенантов на одном сервере
+- 100% защита от cross-tenant access
+- ≤200ms время запроса с фильтрацией
+- ≤5 мин время создания нового тенанта
+
+**Риски:**
+- Ошибка в Middleware → Data Leak (mitigation: unit-тесты, security audit)
+- Performance degradation с FK-фильтром (mitigation: индексы, кеширование)
+- Сложность миграции данных (mitigation: staging окружение, dry-run)

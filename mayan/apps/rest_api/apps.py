@@ -8,7 +8,7 @@ from mayan.apps.common.menus import menu_tools
 from mayan.apps.organizations.settings import setting_organization_url_base_path
 
 from .links import (
-    link_api, link_api_documentation, link_api_documentation_redoc
+    link_api, link_api_documentation
 )
 
 
@@ -41,7 +41,7 @@ class RESTAPIApp(MayanAppConfig):
         )
         menu_tools.bind_links(
             links=(
-                link_api, link_api_documentation, link_api_documentation_redoc
+                link_api, link_api_documentation
             )
         )
 
@@ -53,12 +53,12 @@ class RESTAPIApp(MayanAppConfig):
                     app_api_urls = import_string(dotted_path='{}.urls.api_urls'.format(app.name))
                     api_version_urls.extend(app_api_urls)
                     loaded_apps.append(f"{app.name} ({len(app_api_urls)} URLs)")
-                except ImportError as e:
+                except ImportError:
                     # Silently skip apps without api_urls
                     pass
                 except Exception as e:
                     print(f"ERROR: Failed to import API URLs for {app.name}: {e}")
-        
+
         if loaded_apps:
             print(f"✅ REST API: Loaded URLs from {len(loaded_apps)} apps")
             for app_info in loaded_apps[:5]:

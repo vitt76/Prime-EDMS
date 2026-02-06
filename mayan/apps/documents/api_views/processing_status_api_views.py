@@ -22,8 +22,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
+from drf_spectacular.utils import (
+    OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema, inline_serializer
+)
+from rest_framework import serializers
 
 from mayan.apps.acls.models import AccessControlList
 
@@ -71,94 +73,50 @@ class APIDocumentProcessingStatusView(generics.RetrieveAPIView):
     renderer_classes = (JSONRenderer,)
     lookup_url_kwarg = 'document_id'
     
-    @swagger_auto_schema(
-        operation_id='document_processing_status',
-        operation_description='''
-        Get the current processing status for a document.
-        
-        This endpoint is designed for frontend polling to show real-time
-        progress during document uploads and AI analysis.
-        
-        **Polling Strategy:**
-        - Poll every 2-5 seconds while status is "processing"
-        - Use ETag header for conditional requests (If-None-Match)
-        - Stop polling when status is "complete" or "failed"
-        
-        **Status Values:**
-        - `pending`: Waiting to start processing
-        - `processing`: Currently being processed
-        - `complete`: Processing finished successfully
-        - `failed`: Processing failed (check error_message)
-        - `no_files`: Document has no files uploaded yet
-        ''',
-        manual_parameters=[
-            openapi.Parameter(
-                'document_id',
-                openapi.IN_PATH,
-                description='Document ID',
-                type=openapi.TYPE_INTEGER,
-                required=True
+    @extend_schema(
+        summary='Статус обработки документа',
+        description=(
+            'Возвращает текущий статус обработки документа для фронтенд-поллинга. '
+            'Рекомендуется опрашивать каждые 2–5 сек во время processing и использовать ETag (If-None-Match).'
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='document_id', location=OpenApiParameter.PATH,
+                type=OpenApiTypes.INT, required=True, description='ID документа'
             ),
-            openapi.Parameter(
-                'If-None-Match',
-                openapi.IN_HEADER,
-                description='ETag from previous response for cache validation',
-                type=openapi.TYPE_STRING,
-                required=False
-            )
+            OpenApiParameter(
+                name='If-None-Match', location=OpenApiParameter.HEADER,
+                type=OpenApiTypes.STR, required=False, description='ETag из предыдущего ответа'
+            ),
         ],
         responses={
-            200: openapi.Response(
-                description='Processing status retrieved successfully',
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'document_id': openapi.Schema(type=openapi.TYPE_STRING),
-                        'status': openapi.Schema(
-                            type=openapi.TYPE_STRING,
-                            enum=['pending', 'processing', 'complete', 'failed', 'no_files']
-                        ),
-                        'progress': openapi.Schema(
-                            type=openapi.TYPE_INTEGER,
-                            description='Progress percentage 0-100'
-                        ),
-                        'current_step': openapi.Schema(
-                            type=openapi.TYPE_STRING,
-                            description='Human-readable current step'
-                        ),
-                        'ai_tags_ready': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'ai_description_ready': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'ai_colors_ready': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'ocr_ready': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'thumbnail_ready': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'analysis_provider': openapi.Schema(
-                            type=openapi.TYPE_STRING,
-                            description='AI provider name (e.g., qwenlocal, gigachat)'
-                        ),
-                        'error_message': openapi.Schema(
-                            type=openapi.TYPE_STRING,
-                            description='Error message if status is failed'
-                        ),
-                        'task_id': openapi.Schema(
-                            type=openapi.TYPE_STRING,
-                            description='Celery task ID for tracking'
-                        ),
-                        'started_at': openapi.Schema(
-                            type=openapi.TYPE_STRING,
-                            format='date-time'
-                        ),
-                        'completed_at': openapi.Schema(
-                            type=openapi.TYPE_STRING,
-                            format='date-time'
-                        )
+            200: OpenApiResponse(
+                response=inline_serializer(
+                    name='DocumentProcessingStatusResponse',
+                    fields={
+                        'document_id': serializers.CharField(),
+                        'status': serializers.CharField(),
+                        'progress': serializers.IntegerField(),
+                        'current_step': serializers.CharField(),
+                        'ai_tags_ready': serializers.BooleanField(),
+                        'ai_description_ready': serializers.BooleanField(),
+                        'ai_colors_ready': serializers.BooleanField(),
+                        'ocr_ready': serializers.BooleanField(),
+                        'thumbnail_ready': serializers.BooleanField(),
+                        'analysis_provider': serializers.CharField(required=False, allow_null=True),
+                        'error_message': serializers.CharField(required=False, allow_null=True),
+                        'task_id': serializers.CharField(required=False, allow_null=True),
+                        'started_at': serializers.CharField(required=False, allow_null=True),
+                        'completed_at': serializers.CharField(required=False, allow_null=True),
                     }
-                )
+                ),
+                description='Текущий статус обработки'
             ),
-            304: openapi.Response(description='Not Modified (ETag match)'),
-            403: openapi.Response(description='Access denied'),
-            404: openapi.Response(description='Document not found')
+            304: OpenApiResponse(description='Not Modified (ETag совпал)'),
+            403: OpenApiResponse(description='Доступ запрещён'),
+            404: OpenApiResponse(description='Документ не найден'),
         },
-        tags=['documents', 'processing']
+        tags=['documents'],
     )
     def get(self, request, document_id):
         # Get document

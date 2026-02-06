@@ -44,3 +44,29 @@ class FeatureUsageMiddleware(MiddlewareMixin):
         return response
 
 
+class QueryCountDebugMiddleware(MiddlewareMixin):
+    """Log SQL query count for analytics endpoints (DEBUG-only).
+
+    This middleware is intended for development troubleshooting to catch N+1
+    queries and heavy endpoints. It is opt-in via development settings.
+    """
+
+    def __init__(self, get_response=None):
+        super().__init__(get_response=get_response)
+        import logging
+        self._logger = logging.getLogger('mayan.apps.analytics.sql')
+
+    def __call__(self, request):
+        from django.conf import settings
+        if not getattr(settings, 'DEBUG', False) or 'analytics' not in (request.path or ''):
+            return self.get_response(request)
+
+        try:
+            from django.db import connection, reset_queries
+            reset_queries()
+            response = self.get_response(request)
+            self._logger.debug('SQL queries=%d path=%s', len(connection.queries), request.path)
+            return response
+        except Exception:
+            return self.get_response(request)
+

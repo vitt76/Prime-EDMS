@@ -1,9 +1,11 @@
 from django.conf.urls import include, url
 from django.http import JsonResponse
 
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
 from .api_views import (
     APIRoot, APIVersionRoot, BatchRequestAPIView, BrowseableObtainAuthToken,
-    ProjectInformationAPIView, schema_view
+    ProjectInformationAPIView
 )
 from mayan.apps.permissions.urls import api_urls as permissions_api_urls
 from mayan.apps.headless_api.views.config_views import HeadlessDocumentTypeConfigView
@@ -30,6 +32,9 @@ from mayan.apps.headless_api.views.analytics_views import (
     ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet,
     DistributionAnalyticsViewSet, ContentIntelligenceViewSet
 )
+from mayan.apps.analytics.api_views import EmailClickWebhookView
+from mayan.apps.analytics.api_views import AnalyticsEventsExportView
+from mayan.apps.analytics.api_views import AnalyticsHealthCheckView
 from mayan.apps.headless_api.views.image_editor_views import (
     HeadlessImageEditorCommitView,
     HeadlessImageEditorPreviewView,
@@ -46,50 +51,6 @@ from mayan.apps.headless_api.views.notification_views import (
     HeadlessNotificationUnreadCountView,
 )
 from .literals import API_VERSION
-
-# #region agent log
-try:
-    import json as _json, time as _time
-    with open(r"c:\DAM\Prime-EDMS\.cursor\debug.log", "a", encoding="utf-8") as _f:
-        _f.write(_json.dumps({
-            "id": "log_rest_api_urls_enter",
-            "timestamp": _time.time() * 1000,
-            "sessionId": "debug-session",
-            "runId": "pre-fix",
-            "hypothesisId": "H3",
-            "location": "rest_api/urls.py:api_version_urls",
-            "message": "Building rest_api api_version_urls",
-            "data": {}
-        }) + "\n")
-except Exception:
-    pass
-# #endregion agent log
-
-# #region agent log http
-try:
-    import json as _json, time as _time
-    import urllib.request as _r
-    _r.urlopen(
-        _r.Request(
-            "http://host.docker.internal:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac",
-            data=_json.dumps({
-                "id": "log_rest_api_urls_enter_http",
-                "timestamp": _time.time() * 1000,
-                "sessionId": "debug-session",
-                "runId": "pre-fix",
-                "hypothesisId": "H3",
-                "location": "rest_api/urls.py:api_version_urls",
-                "message": "Building rest_api api_version_urls",
-                "data": {}
-            }).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        ),
-        timeout=2
-    )
-except Exception:
-    pass
-# #endregion agent log
 
 api_version_urls = [
     url(regex=r'^$', name='api_version_root', view=APIVersionRoot.as_view()),
@@ -203,6 +164,11 @@ api_version_urls = [
         view=CampaignPerformanceViewSet.as_view({'get': 'dashboard'}),
         name='headless-analytics-campaigns-dashboard'
     ),
+    url(
+        regex=r'^analytics/campaigns/(?P<campaign_id>[^/]+)/export/pdf/$',
+        view=CampaignPerformanceViewSet.as_view({'post': 'export_pdf'}),
+        name='analytics-campaign-export-pdf'
+    ),
     # Analytics (Phase 2 - Search Analytics)
     url(
         regex=r'^headless/analytics/dashboard/search/top-queries/$',
@@ -312,11 +278,26 @@ api_version_urls = [
         view=ROIDashboardViewSet.as_view({'get': 'summary'}),
         name='headless-analytics-roi-summary'
     ),
+    url(
+        regex=r'^headless/analytics/dashboard/roi/estimate/$',
+        view=ROIDashboardViewSet.as_view({'get': 'estimate'}),
+        name='headless-analytics-roi-estimate'
+    ),
     # Distribution
     url(
         regex=r'^headless/analytics/dashboard/distribution/$',
         view=DistributionAnalyticsViewSet.as_view({'get': 'dashboard'}),
         name='headless-analytics-distribution-dashboard'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/distribution/conversion-rate/$',
+        view=DistributionAnalyticsViewSet.as_view({'get': 'conversion_rate'}),
+        name='headless-analytics-distribution-conversion-rate'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/distribution/velocity/$',
+        view=DistributionAnalyticsViewSet.as_view({'get': 'velocity'}),
+        name='headless-analytics-distribution-velocity'
     ),
     url(
         regex=r'^headless/analytics/ingest/distribution-events/$',
@@ -333,6 +314,22 @@ api_version_urls = [
         regex=r'^headless/analytics/dashboard/content-intel/compliance/metadata/$',
         view=ContentIntelligenceViewSet.as_view({'get': 'metadata_compliance'}),
         name='headless-analytics-content-intel-metadata-compliance'
+    ),
+    # Analytics Webhooks (external providers)
+    url(
+        regex=r'^analytics/webhooks/email/click/$',
+        view=EmailClickWebhookView.as_view(),
+        name='analytics-webhook-email-click'
+    ),
+    url(
+        regex=r'^analytics/export/events/$',
+        view=AnalyticsEventsExportView.as_view(),
+        name='analytics-export-events'
+    ),
+    url(
+        regex=r'^analytics/health/$',
+        view=AnalyticsHealthCheckView.as_view(),
+        name='analytics-health'
     ),
     url(
         regex=r'^headless/favorites/$',
@@ -442,22 +439,18 @@ api_version_urls = [
 api_version_urls.extend(permissions_api_urls)
 
 api_urls = [
-    url(
-        regex=r'^swagger(?P<format>.json|.yaml)$', name='schema-json',
-        view=schema_view.without_ui(cache_timeout=None),
-    ),
     url(regex=r'^v{}/'.format(API_VERSION), view=include(api_version_urls)),
     url(regex=r'^$', name='api_root', view=APIRoot.as_view())
 ]
 
 urlpatterns = [
     url(
-        regex=r'^swagger/ui/$', name='schema-swagger-ui',
-        view=schema_view.with_ui('swagger', cache_timeout=None)
+        regex=r'^schema/$', name='schema-openapi',
+        view=SpectacularAPIView.as_view()
     ),
     url(
-        regex=r'^redoc/ui/$', name='schema-redoc',
-        view=schema_view.with_ui('redoc', cache_timeout=None)
+        regex=r'^schema/ui/$', name='schema-openapi-ui',
+        view=SpectacularSwaggerView.as_view(url_name='rest_api:schema-openapi')
     ),
     url(regex=r'^', view=include(api_urls))
 ]

@@ -11,7 +11,6 @@
       <!-- Layout for authenticated routes -->
       <template v-if="showLayout">
         <Header
-          @search="handleSearch"
           @filter-toggle="handleFilterToggle"
           @upload="handleUpload"
           @notifications="handleNotifications"
@@ -49,7 +48,6 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useNotificationStore } from '@/stores/notificationStore'
-import { useAssetStore } from '@/stores/assetStore'
 import { setupGlobalErrorHandlers, logError } from '@/composables/useErrorBoundary'
 import Header from '@/components/Layout/Header.vue'
 import Sidebar from '@/components/Layout/Sidebar.vue'
@@ -102,17 +100,7 @@ onMounted(async () => {
 })
 
 function handleSearch(query: string) {
-  // Update asset store search query
-  const assetStore = useAssetStore()
-  assetStore.setSearchQuery(query)
-  
-  // Navigate to DAM page if not already there
-  if (!router.currentRoute.value.path.startsWith('/dam')) {
-    router.push('/dam')
-  }
-  
-  // Refetch assets with the new search query
-  assetStore.fetchAssets()
+  // Search is handled via useDamSearchFilters() inside Header (single source of truth).
 }
 
 function handleFilterToggle() {

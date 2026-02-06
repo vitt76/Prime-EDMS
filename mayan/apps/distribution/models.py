@@ -472,28 +472,43 @@ class ShareLink(models.Model):
             timestamp=timezone.now()
         )
 
-        # Analytics (Level 1): track view via share link as a "view" event.
+        # Analytics (Portal): publish portal_event to Redis stream.
+        # The stream consumer will persist:
+        #  - PortalSession (session-level)
+        #  - AssetEvent(channel='portal', event_type='view')
         try:
-            from mayan.apps.analytics.models import AssetEvent
-            from mayan.apps.analytics.utils import track_asset_event
+            from mayan.apps.analytics.event_stream import publish_portal_event
+            from mayan.apps.analytics.utils import anonymize_ip_address
 
-            document = self.rendition.publication_item.document_file.document
             user = getattr(request, 'user', None)
             if user and not user.is_authenticated:
                 user = None
 
-            track_asset_event(
-                document=document,
-                event_type=AssetEvent.EVENT_TYPE_VIEW,
-                user=user,
-                channel='public_link',
+            document = self.rendition.publication_item.document_file.document
+            publication = self.rendition.publication_item.publication
+            ip_address = anonymize_ip_address(self._get_client_ip(request))
+            user_agent = request.META.get('HTTP_USER_AGENT', '') or ''
+            session_key = ''
+            try:
+                session_key = (getattr(getattr(request, 'session', None), 'session_key', '') or '')
+            except Exception:
+                session_key = ''
+
+            publish_portal_event(
+                event_type='view',
+                occurred_at_iso=timezone.now().isoformat(),
+                document_id=int(document.pk),
+                share_link_id=int(self.pk),
+                publication_id=int(publication.pk),
+                user_id=int(user.pk) if user else None,
+                session_key=session_key,
+                ip_address=ip_address or '',
+                user_agent=user_agent,
                 metadata={
-                    'share_link_id': self.pk,
                     'rendition_id': self.rendition_id,
                 }
             )
         except Exception:
-            # Best-effort only; never break public access due to analytics.
             pass
 
     def get_unique_visitors_count(self):
@@ -528,52 +543,51 @@ class ShareLink(models.Model):
             timestamp=timezone.now()
         )
 
-        # Analytics (Level 1): track download via share link as a "download" event.
+        # Analytics (Portal): publish portal_event to Redis stream.
+        # The consumer will persist:
+        #  - PortalSession updates
+        #  - AssetEvent(channel='portal', event_type='download')
+        #  - plus an additional 'deliver' AssetEvent if bandwidth_bytes is present
         try:
-            from mayan.apps.analytics.models import AssetEvent
-            from mayan.apps.analytics.utils import track_asset_event
+            from mayan.apps.analytics.event_stream import publish_portal_event
+            from mayan.apps.analytics.utils import anonymize_ip_address
 
-            document = self.rendition.publication_item.document_file.document
             user = getattr(request, 'user', None)
             if user and not user.is_authenticated:
                 user = None
 
-            track_asset_event(
-                document=document,
-                event_type=AssetEvent.EVENT_TYPE_DOWNLOAD,
-                user=user,
-                channel='public_link',
-                metadata={
-                    'share_link_id': self.pk,
-                    'rendition_id': self.rendition_id,
-                }
-            )
+            document = self.rendition.publication_item.document_file.document
+            publication = self.rendition.publication_item.publication
+            ip_address = anonymize_ip_address(self._get_client_ip(request))
+            user_agent = request.META.get('HTTP_USER_AGENT', '') or ''
+            session_key = ''
+            try:
+                session_key = (getattr(getattr(request, 'session', None), 'session_key', '') or '')
+            except Exception:
+                session_key = ''
 
-            # Also track delivery bandwidth (best-effort). Prefer rendition file size.
-            bandwidth_bytes = None
+            bandwidth_bytes = 0
             try:
                 bandwidth_bytes = int(getattr(rendition or self.rendition, 'file_size', 0) or 0)
             except Exception:
                 bandwidth_bytes = 0
 
-            try:
-                from mayan.apps.analytics.utils import track_cdn_delivery
-
-                if bandwidth_bytes:
-                    track_cdn_delivery(
-                        document=document,
-                        bandwidth_bytes=bandwidth_bytes,
-                        user=user,
-                        channel='public_link',
-                        metadata={
-                            'share_link_id': self.pk,
-                            'rendition_id': self.rendition_id,
-                        }
-                    )
-            except Exception:
-                pass
+            publish_portal_event(
+                event_type='download',
+                occurred_at_iso=timezone.now().isoformat(),
+                document_id=int(document.pk),
+                share_link_id=int(self.pk),
+                publication_id=int(publication.pk),
+                user_id=int(user.pk) if user else None,
+                session_key=session_key,
+                ip_address=ip_address or '',
+                user_agent=user_agent,
+                bandwidth_bytes=bandwidth_bytes or None,
+                metadata={
+                    'rendition_id': self.rendition_id,
+                }
+            )
         except Exception:
-            # Best-effort only; never break downloads due to analytics.
             pass
 
     def _get_client_ip(self, request):

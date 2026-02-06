@@ -100,69 +100,138 @@
 
     <!-- Gallery Grid -->
     <div v-else class="gallery-content">
-      <!-- Gallery Toolbar with Select All -->
-      <div
-        v-if="assetStore.assets.length > 0"
-        class="flex items-center justify-between px-4 py-2 border-b border-neutral-300 dark:border-neutral-300 bg-neutral-0 dark:bg-neutral-0 sticky top-0 z-30"
-      >
-        <div class="flex items-center gap-4">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              :checked="isAllSelected"
-              :indeterminate="isIndeterminate"
-              class="w-5 h-5 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 min-w-[44px] min-h-[44px]"
-              @change="handleSelectAllToggle"
-              aria-label="Выбрать все активы"
-            />
-            <span class="text-sm font-medium text-neutral-900 dark:text-neutral-900">
-              {{ isAllSelected ? 'Снять выделение' : 'Выбрать все' }}
-            </span>
-          </label>
-          <span
-            v-if="assetStore.selectedCount > 0"
-            class="text-sm text-neutral-600 dark:text-neutral-600"
-          >
-            Выбрано: <strong>{{ assetStore.selectedCount }}</strong> из {{ assetStore.assets.length }}
-          </span>
-        </div>
-      </div>
+      <!-- Context-Aware Header Actions -->
+      <Teleport to="#header-actions">
+        <GalleryHeaderActions
+          variant="controls"
+          :density="gridDensity"
+          :layout="gridLayout"
+          :sort="gridSort"
+          :active-filters-count="activeFiltersCount"
+          @update:density="handleDensityChange"
+          @update:layout="handleLayoutChange"
+          @update:sort="handleSortChange"
+          @toggle-filters="openFilters"
+        />
+      </Teleport>
+      <Teleport to="#header-search-actions">
+        <GalleryHeaderActions
+          variant="filter"
+          :density="gridDensity"
+          :layout="gridLayout"
+          :sort="gridSort"
+          :active-filters-count="activeFiltersCount"
+          @toggle-filters="openFilters"
+        />
+      </Teleport>
 
       <!-- Assets Grid (regular for small lists) -->
       <div
         v-if="assetStore.assets.length < 100"
-        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 p-6"
+        class="p-6"
         role="grid"
         aria-label="Галерея активов"
       >
-        <AssetCard
-          v-for="asset in assetStore.assets"
-          :key="asset.id"
-          :asset="asset"
-          :is-selected="isAssetSelected(asset)"
-          :is-shared="isAssetShared(asset.id)"
-          :show-checkbox="true"
-          @select="handleAssetSelect"
-          @open="handleAssetOpen"
-          @preview="handleAssetPreview"
-          @download="handleAssetDownload"
-          @share="handleAssetShare"
-          @delete="handleAssetDelete"
-          @more="handleAssetMore"
-        />
+        <div class="group">
+          <!-- Select All (ABOVE grid, no overlay) -->
+          <div
+            v-if="assetStore.assets.length > 0"
+            class="flex items-center justify-between mb-3"
+          >
+            <button
+              type="button"
+              class="flex items-center gap-2
+                     bg-white/95 backdrop-blur-md border border-gray-200 shadow-sm
+                     rounded-xl px-3 py-2 text-sm font-medium
+                     text-gray-700 hover:text-gray-900 hover:bg-gray-50
+                     transition-all duration-150"
+              :class="assetStore.selectedCount > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+              @click="handleSelectAllToggle"
+              aria-label="Выбрать все активы"
+            >
+              <span
+                class="w-4 h-4 rounded border border-gray-300 bg-white flex items-center justify-center"
+                aria-hidden="true"
+              >
+                <svg v-if="isAllSelected" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                <svg v-else-if="isIndeterminate" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14" />
+                </svg>
+              </span>
+              <span>{{ isAllSelected ? 'Снять выделение' : 'Выбрать все' }}</span>
+            </button>
+
+            <div v-if="assetStore.selectedCount > 0" class="text-sm text-gray-600">
+              Выбрано: <span class="font-semibold text-gray-900">{{ assetStore.selectedCount }}</span> из {{ assetStore.assets.length }}
+            </div>
+          </div>
+
+          <AssetGrid
+            :assets="assetStore.assets"
+            :density="gridDensity"
+            :layout="gridLayout"
+            @asset-open="handleAssetOpen"
+            @asset-preview="handleAssetPreview"
+            @asset-download="handleAssetDownload"
+            @asset-share="handleAssetShare"
+            @asset-delete="handleAssetDelete"
+            @asset-add-tags="handleAssetAddTags"
+            @asset-move="handleAssetMove"
+          />
+        </div>
       </div>
 
       <!-- Virtual Scrolling for large lists (100+ items) -->
       <div
         v-else
         ref="virtualScrollContainer"
-        class="virtual-scroll-container p-4"
+        class="virtual-scroll-container p-4 relative group"
         style="height: calc(100vh - 200px); overflow-y: auto;"
         role="grid"
         aria-label="Галерея активов (виртуальная прокрутка)"
         tabindex="0"
         @scroll="handleScroll"
       >
+        <!-- Select All (virtual list, sticky header inside scroll container; no overlay on cards) -->
+        <div
+          v-if="assetStore.assets.length > 0"
+          class="sticky top-0 z-20 -mx-4 px-4 py-2
+                 bg-white/80 backdrop-blur-md border-b border-gray-200/70"
+        >
+          <div class="flex items-center justify-between">
+            <button
+              type="button"
+              class="flex items-center gap-2
+                     bg-white/95 backdrop-blur-md border border-gray-200 shadow-sm
+                     rounded-xl px-3 py-2 text-sm font-medium
+                     text-gray-700 hover:text-gray-900 hover:bg-gray-50
+                     transition-all duration-150"
+              :class="assetStore.selectedCount > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+              @click="handleSelectAllToggle"
+              aria-label="Выбрать все активы"
+            >
+              <span
+                class="w-4 h-4 rounded border border-gray-300 bg-white flex items-center justify-center"
+                aria-hidden="true"
+              >
+                <svg v-if="isAllSelected" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                <svg v-else-if="isIndeterminate" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14" />
+                </svg>
+              </span>
+              <span>{{ isAllSelected ? 'Снять выделение' : 'Выбрать все' }}</span>
+            </button>
+
+            <div v-if="assetStore.selectedCount > 0" class="text-sm text-gray-600">
+              Выбрано: <span class="font-semibold text-gray-900">{{ assetStore.selectedCount }}</span> из {{ assetStore.assets.length }}
+            </div>
+          </div>
+        </div>
+
         <div
           :style="{ height: `${totalHeight}px`, position: 'relative' }"
         >
@@ -177,12 +246,15 @@
                 :is-selected="isAssetSelected(asset)"
                 :is-shared="isAssetShared(asset.id)"
                 :show-checkbox="true"
+                :density="gridDensity"
                 @select="handleAssetSelect"
                 @open="handleAssetOpen"
                 @preview="handleAssetPreview"
                 @download="handleAssetDownload"
                 @share="handleAssetShare"
                 @delete="handleAssetDelete"
+                @add-tags="handleAssetAddTags"
+                @move="handleAssetMove"
                 @more="handleAssetMore"
               />
             </div>
@@ -238,9 +310,64 @@
     <BulkActionsBar
       @share="handleBulkShare"
       @download="handleBulkDownload"
-      @move="handleBulkMove"
-      @campaign="handleBulkCampaign"
+      @delete="handleBulkDelete"
+      @clear="handleClearSelection"
     />
+
+    <!-- Filters Drawer -->
+    <Transition
+      enter-active-class="transition ease-out duration-200"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition ease-in duration-150"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="isFiltersOpen"
+        class="fixed inset-0 z-[900] bg-black/30"
+        @click="closeFilters"
+        aria-hidden="true"
+      />
+    </Transition>
+    <Transition
+      enter-active-class="transition ease-out duration-250"
+      enter-from-class="translate-x-full"
+      enter-to-class="translate-x-0"
+      leave-active-class="transition ease-in duration-200"
+      leave-from-class="translate-x-0"
+      leave-to-class="translate-x-full"
+    >
+      <aside
+        v-if="isFiltersOpen"
+        class="fixed top-16 right-0 bottom-0 w-[360px] max-w-[90vw]
+               bg-white border-l border-gray-200 shadow-2xl z-[950]
+               overflow-y-auto"
+        role="dialog"
+        aria-label="Фильтры"
+      >
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <h3 class="text-sm font-semibold text-gray-900">Фильтры</h3>
+          <button
+            type="button"
+            class="text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg p-2 transition-colors"
+            @click="closeFilters"
+            aria-label="Закрыть фильтры"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="p-4">
+          <FiltersPanel
+            :facets="filtersFacets"
+            v-model="filtersModel"
+            @reset="handleFiltersReset"
+          />
+        </div>
+      </aside>
+    </Transition>
   </div>
 </template>
 
@@ -250,7 +377,9 @@ import { useRouter } from 'vue-router'
 import { apiService } from '@/services/apiService'
 import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
+import { useDamSearchFilters } from '@/composables/useDamSearchFilters'
 import AssetCard from './AssetCard.vue'
+import AssetGrid from './AssetGrid.vue'
 import BulkActionsBar from './BulkActionsBar.vue'
 import BulkTagModal from './BulkTagModal.vue'
 import BulkMoveModal from './BulkMoveModal.vue'
@@ -258,7 +387,10 @@ import BulkDeleteModal from './BulkDeleteModal.vue'
 import BulkDownloadModal from './BulkDownloadModal.vue'
 import ShareModal from './ShareModal.vue'
 import Pagination from '@/components/Common/Pagination.vue'
+import GalleryHeaderActions from './GalleryHeaderActions.vue'
+import FiltersPanel from './FiltersPanel.vue'
 import type { Asset } from '@/types/api'
+import type { Facets, SearchFilters } from '@/types/api'
 
 // Emits
 const emit = defineEmits<{
@@ -269,7 +401,56 @@ const emit = defineEmits<{
 const router = useRouter()
 const assetStore = useAssetStore()
 const distributionStore = useDistributionStore()
+const damSearch = useDamSearchFilters()
 const virtualScrollContainer = ref<HTMLElement | null>(null)
+
+const gridDensity = computed(() => damSearch.state.density)
+const gridLayout = computed(() => damSearch.state.layout)
+const gridSort = computed(() => damSearch.state.sort)
+
+// Filters drawer
+const isFiltersOpen = ref(false)
+
+const activeFiltersCount = computed(() => {
+  return damSearch.activeFiltersCount.value
+})
+
+const filtersFacets = computed<Facets>(() => {
+  const tagsRecord: Record<string, number> = {}
+  for (const tag of assetStore.availableTags) {
+    tagsRecord[tag] = 1
+  }
+  return {
+    type: assetStore.typeCounts,
+    tags: tagsRecord
+  }
+})
+
+const filtersModel = computed<SearchFilters>({
+  get: () => ({
+    type: damSearch.state.filters.type,
+    tags: damSearch.state.filters.tags,
+    date_range:
+      damSearch.state.filters.dateFrom && damSearch.state.filters.dateTo
+        ? [damSearch.state.filters.dateFrom, damSearch.state.filters.dateTo]
+        : null,
+    size:
+      typeof damSearch.state.filters.sizeMin === 'number' || typeof damSearch.state.filters.sizeMax === 'number'
+        ? { min: damSearch.state.filters.sizeMin, max: damSearch.state.filters.sizeMax }
+        : undefined
+  }),
+  set: (value) => {
+    // Convert SearchFilters -> composable state
+    damSearch.state.filters.type = value.type || []
+    damSearch.state.filters.tags = value.tags || []
+    damSearch.state.filters.dateFrom = value.date_range?.[0]
+    damSearch.state.filters.dateTo = value.date_range?.[1]
+    damSearch.state.filters.sizeMin = value.size?.min
+    damSearch.state.filters.sizeMax = value.size?.max
+    // Trigger debounced sync+fetch (without changing q)
+    damSearch.scheduleFetch()
+  }
+})
 
 // Virtual scrolling state
 const scrollTop = ref(0)
@@ -331,13 +512,9 @@ function handleScroll(event: Event) {
 let resizeHandler: (() => void) | null = null
 
 onMounted(() => {
-  // Load assets
-  if (assetStore.assets.length === 0) {
-    assetStore.fetchAssets()
-  }
-
-  // Load shared links for shared badges
-  distributionStore.fetchSharedLinks()
+  // NOTE: Do not fetch share links on gallery mount.
+  // This endpoint is unstable in some deployments and creates console noise.
+  // We load share links lazily when the Share modal is opened.
 
   // Setup virtual scrolling
   if (virtualScrollContainer.value) {
@@ -370,6 +547,8 @@ onMounted(() => {
   }
 })
 
+// NOTE: Share links are loaded lazily inside handleBulkShare()
+
 onUnmounted(() => {
   if (virtualScrollContainer.value) {
     virtualScrollContainer.value.removeEventListener('scroll', handleScroll)
@@ -382,13 +561,9 @@ onUnmounted(() => {
   }
 })
 
-// Watch for page changes
-watch(
-  () => assetStore.currentPage,
-  () => {
-    assetStore.fetchAssets()
-  }
-)
+// NOTE: Do not watch currentPage here — assetStore pagination actions already fetch,
+// and SSoT composable resets currentPage on filter/search changes. A watcher here
+// causes duplicate requests.
 
 function isAssetSelected(asset: Asset): boolean {
   return assetStore.selectedAssets.has(asset.id)
@@ -422,6 +597,32 @@ function handleSelectAllToggle() {
 
 function handleAssetSelect(asset: Asset) {
   assetStore.selectAsset(asset, true) // Multi-select enabled
+}
+
+function handleDensityChange(value: 'compact' | 'comfortable') {
+  damSearch.setView({ density: value })
+}
+
+function handleLayoutChange(value: 'grid' | 'masonry') {
+  // masonry + virtual list плохо дружат; пока ограничим только обычный режим
+  damSearch.setView({ layout: value })
+}
+
+function handleSortChange(value: 'date' | 'name' | 'size') {
+  damSearch.setSort(value)
+}
+
+function openFilters() {
+  isFiltersOpen.value = true
+}
+
+function closeFilters() {
+  isFiltersOpen.value = false
+}
+
+function handleFiltersReset() {
+  damSearch.resetFilters()
+  isFiltersOpen.value = false
 }
 
 function handleAssetOpen(asset: Asset) {
@@ -494,6 +695,20 @@ function handleAssetDelete(asset: Asset) {
   emit('delete', asset)
 }
 
+function handleAssetAddTags(asset: Asset) {
+  // Single-asset action -> reuse bulk modal UX
+  assetStore.clearSelection()
+  assetStore.toggleSelection(asset.id)
+  showBulkTagModal.value = true
+}
+
+function handleAssetMove(asset: Asset) {
+  // Single-asset action -> reuse bulk modal UX
+  assetStore.clearSelection()
+  assetStore.toggleSelection(asset.id)
+  showBulkMoveModal.value = true
+}
+
 function handlePageChange(page: number) {
   assetStore.setPage(page)
 }
@@ -531,6 +746,10 @@ function handleBulkDownload() {
 }
 
 function handleBulkShare() {
+  // Lazy-load share links only when the Share modal is actually opened.
+  if (!distributionStore.sharedLinksLoading && (distributionStore.sharedLinks?.length || 0) === 0) {
+    distributionStore.fetchSharedLinks()
+  }
   showBulkShareModal.value = true
 }
 
@@ -554,6 +773,12 @@ function handleBulkOperationSuccess() {
   // Refresh assets after bulk operation
   assetStore.fetchAssets()
   assetStore.clearSelection()
+
+  // UX: ensure modals are not left open showing "0 выбрано"
+  showBulkTagModal.value = false
+  showBulkMoveModal.value = false
+  showBulkDeleteModal.value = false
+  showBulkDownloadModal.value = false
 }
 </script>
 

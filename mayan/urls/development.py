@@ -33,6 +33,17 @@ if 'silk' in settings.INSTALLED_APPS:
             url(regex=r'^silk/', view=include('silk.urls', namespace='silk'))
         ]
 
+# Prometheus metrics endpoint (best-effort, optional dependency).
+if 'django_prometheus' in settings.INSTALLED_APPS:
+    try:
+        import django_prometheus  # NOQA: F401
+    except ImportError:
+        pass
+    else:
+        urlpatterns += [  # NOQA
+            url(regex=r'^metrics/', view=include('django_prometheus.urls'))
+        ]
+
 # Note: converter_pipeline_extension is registered automatically
 # via MayanAppConfig for extra_apps in config.yml
 

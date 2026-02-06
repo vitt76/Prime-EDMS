@@ -6,6 +6,7 @@ from django.conf import settings
 
 from .models import ApprovalWorkflowEvent, UserSession
 from .utils import anonymize_ip_address
+from .event_stream import publish_user_session_event
 
 
 def _get_geo_from_ip(ip_address):
@@ -64,15 +65,29 @@ def handler_user_logged_in(sender, request, user, **kwargs):
     ip_address_anonymized = anonymize_ip_address(ip_address)
     geo_country, geo_city = _get_geo_from_ip(ip_address)
 
-    UserSession.objects.create(
-        user=user,
+    # Prefer stream ingestion for scalability.
+    entry_id = publish_user_session_event(
+        action='login',
+        user_id=int(getattr(user, 'pk', 0) or 0),
         session_key=session_key,
-        login_timestamp=timezone.now(),
+        ip_address=ip_address_anonymized or '',
+        user_agent=user_agent or '',
         geo_country=geo_country or '',
         geo_city=geo_city or '',
-        ip_address=ip_address_anonymized,
-        user_agent=user_agent,
+        timestamp_iso=timezone.now().isoformat(),
     )
+
+    # Best-effort fallback to direct DB write if stream is unavailable.
+    if not entry_id:
+        UserSession.objects.create(
+            user=user,
+            session_key=session_key,
+            login_timestamp=timezone.now(),
+            geo_country=geo_country or '',
+            geo_city=geo_city or '',
+            ip_address=ip_address_anonymized,
+            user_agent=user_agent,
+        )
 
 
 @receiver(signal=user_logged_out)
@@ -84,6 +99,18 @@ def handler_user_logged_out(sender, request, user, **kwargs):
         session_key = request.session.session_key or ''
     except Exception:
         session_key = ''
+
+    # Prefer stream ingestion for scalability. The consumer updates the DB row.
+    entry_id = publish_user_session_event(
+        action='logout',
+        user_id=int(getattr(user, 'pk', 0) or 0),
+        session_key=session_key,
+        timestamp_iso=timezone.now().isoformat(),
+    )
+
+    # Best-effort fallback to synchronous DB update if stream is unavailable.
+    if entry_id:
+        return
 
     qs = UserSession.objects.filter(
         user=user, logout_timestamp__isnull=True

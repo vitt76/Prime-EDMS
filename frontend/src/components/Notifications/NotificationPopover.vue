@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -130,12 +130,9 @@ const toggleScope = () => {
   store.setCenterScope(scope.value === 'all' ? 'dam' : 'all', 'SENT')
 }
 
-onMounted(() => {
-  // When opening the popover we want the "recent" view (SENT) regardless of
-  // what the archive last fetched (ALL). This also keeps the popover in sync
-  // when switching the same scope toggle in the archive page.
-  store.fetchCenterNotifications('SENT', 1)
-})
+// NOTE: Do not fetch here.
+// The popover is rendered only when the bell is opened, and the bell already
+// triggers a fetch. Keeping a second fetch here causes duplicate requests.
 </script>
 
 

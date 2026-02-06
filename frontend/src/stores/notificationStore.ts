@@ -200,28 +200,28 @@ export const useNotificationStore = defineStore(
           scope: centerScope.value,
           category: centerCategory.value === 'all' ? undefined : centerCategory.value
         })
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'D',
-            location: 'stores/notificationStore.ts:144',
-            message: 'Frontend: API response received',
-            data: {
-              results_count: response.results?.length || 0,
-              unread_count: response.unread_count || 0,
-              has_urgent: response.has_urgent || false,
-              first_result_id: response.results?.[0]?.id,
-              first_result_state: response.results?.[0]?.state,
-              first_result_title: response.results?.[0]?.title
-            },
-            timestamp: Date.now()
-          })
-        }).catch(() => {})
-        // #endregion
+        if (import.meta.env.VITE_DEBUG_INGEST === 'true') {
+          fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'run1',
+              hypothesisId: 'D',
+              location: 'stores/notificationStore.ts:fetchCenterNotifications(response)',
+              message: 'Frontend: API response received',
+              data: {
+                results_count: response.results?.length || 0,
+                unread_count: response.unread_count || 0,
+                has_urgent: response.has_urgent || false,
+                first_result_id: response.results?.[0]?.id,
+                first_result_state: response.results?.[0]?.state,
+                first_result_title: response.results?.[0]?.title
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {})
+        }
         centerNotifications.value = response.results || []
         centerUnreadCount.value = response.unread_count || 0
         centerHasUrgent.value = !!response.has_urgent
@@ -229,21 +229,21 @@ export const useNotificationStore = defineStore(
         // Keep UX stable; toast errors are handled elsewhere
         // eslint-disable-next-line no-console
         console.error('Failed to fetch Notification Center notifications', error)
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'D',
-            location: 'stores/notificationStore.ts:150',
-            message: 'Frontend: API error',
-            data: { error: String(error) },
-            timestamp: Date.now()
-          })
-        }).catch(() => {})
-        // #endregion
+        if (import.meta.env.VITE_DEBUG_INGEST === 'true') {
+          fetch('http://127.0.0.1:7242/ingest/e2a91df7-36f3-4ec3-8d36-7745f17b1cac', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'debug-session',
+              runId: 'run1',
+              hypothesisId: 'D',
+              location: 'stores/notificationStore.ts:fetchCenterNotifications(error)',
+              message: 'Frontend: API error',
+              data: { error: String(error) },
+              timestamp: Date.now()
+            })
+          }).catch(() => {})
+        }
       } finally {
         centerIsLoading.value = false
       }

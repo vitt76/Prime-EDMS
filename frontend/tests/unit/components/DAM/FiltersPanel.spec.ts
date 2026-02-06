@@ -23,7 +23,8 @@ describe('FiltersPanel', () => {
   beforeEach(() => {
     wrapper = mount(FiltersPanel, {
       props: {
-        facets: mockFacets
+        facets: mockFacets,
+        modelValue: {}
       }
     })
   })
@@ -43,19 +44,13 @@ describe('FiltersPanel', () => {
     expect(typeLabels).toContain('11') // video count
   })
 
-  it('emits apply event with filters when Apply button clicked', async () => {
+  it('emits update:modelValue when filters change (auto-apply)', async () => {
     const typeCheckbox = wrapper.find('input[value="image"]')
     await typeCheckbox.setValue(true)
 
-    const buttons = wrapper.findAll('button')
-    const applyButton = buttons.find((btn) => btn.text().includes('Применить'))
-    if (applyButton) {
-      await applyButton.trigger('click')
-
-      const applyEvents = wrapper.emitted('apply')
-      expect(applyEvents).toBeTruthy()
-      expect(applyEvents?.[0]?.[0]).toHaveProperty('type')
-    }
+    const updateEvents = wrapper.emitted('update:modelValue')
+    expect(updateEvents).toBeTruthy()
+    expect(updateEvents?.[0]?.[0]).toHaveProperty('type')
   })
 
   it('emits reset event when Reset button clicked', async () => {
@@ -106,20 +101,17 @@ describe('FiltersPanel', () => {
     const typeCheckbox = wrapper.find('input[value="image"]')
     await typeCheckbox.setValue(true)
 
-    const applyButton = wrapper.find('button:contains("Применить")')
-    await applyButton.trigger('click')
-
     await wrapper.vm.$nextTick()
 
     const summary = wrapper.find('.bg-primary-50')
     expect(summary.exists()).toBe(true)
   })
 
-  it('disables Apply button when no filters are active', () => {
+  it('disables Reset button when no filters are active', () => {
     const buttons = wrapper.findAll('button')
-    const applyButton = buttons.find((btn) => btn.text().includes('Применить'))
-    if (applyButton) {
-      expect(applyButton.attributes('disabled')).toBeDefined()
+    const resetButton = buttons.find((btn) => btn.text().includes('Сбросить'))
+    if (resetButton) {
+      expect(resetButton.attributes('disabled')).toBeDefined()
     }
   })
 })

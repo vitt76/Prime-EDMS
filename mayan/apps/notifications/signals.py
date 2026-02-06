@@ -26,6 +26,10 @@ def create_notification_preference(sender, instance, created, **kwargs):
                 'documents.document_created',
                 'documents.document_edited',
                 'documents.document_version_created',
+                # Lifecycle (trash/restore/delete) - must appear in Notification Center
+                'documents.document_trashed',
+                'documents.trashed_document_restored',
+                'documents.trashed_document_deleted',
             ]
             
             for event_type_name in document_event_types:

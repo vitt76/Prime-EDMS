@@ -14,6 +14,7 @@ class AssetEvent(models.Model):
     EVENT_TYPE_SHARE = 'share'
     EVENT_TYPE_UPLOAD = 'upload'
     EVENT_TYPE_DELIVER = 'deliver'
+    EVENT_TYPE_EMAIL_CLICK = 'email_click'
 
     EVENT_TYPE_CHOICES = (
         (EVENT_TYPE_DOWNLOAD, _('Download')),
@@ -21,6 +22,7 @@ class AssetEvent(models.Model):
         (EVENT_TYPE_SHARE, _('Share')),
         (EVENT_TYPE_UPLOAD, _('Upload')),
         (EVENT_TYPE_DELIVER, _('Deliver')),
+        (EVENT_TYPE_EMAIL_CLICK, _('Email click')),
     )
 
     id = models.BigAutoField(primary_key=True)
@@ -131,10 +133,7 @@ class AssetDailyMetrics(models.Model):
         bandwidth_score = min(10.0, float(self.cdn_bandwidth_gb) * 0.5) if self.cdn_bandwidth_gb else 0.0
 
         score = (
-            downloads_score * 0.4 +
-            views_score * 0.3 +
-            shares_score * 0.2 +
-            bandwidth_score * 0.1
+            downloads_score * 0.4 + views_score * 0.3 + shares_score * 0.2 + bandwidth_score * 0.1
         )
         return round(float(score), 2)
 
@@ -310,6 +309,129 @@ class UserSession(models.Model):
 
     def __str__(self):
         return f'{self.user_id} - {self.login_timestamp}'
+
+
+class PortalSession(models.Model):
+    """Portal/public-link session tracking (Release 2.5 / Portal Analytics).
+
+    This model aggregates anonymous (or authenticated) interactions on branded
+    portals and public share links. Events are ingested from Redis Streams.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+
+    share_link = models.ForeignKey(
+        to='distribution.ShareLink',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='analytics_portal_sessions',
+        verbose_name=_('Share link')
+    )
+    publication = models.ForeignKey(
+        to='distribution.Publication',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name='analytics_portal_sessions',
+        verbose_name=_('Publication')
+    )
+    campaign = models.ForeignKey(
+        to='analytics.Campaign',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='portal_sessions',
+        verbose_name=_('Campaign')
+    )
+    document = models.ForeignKey(
+        to='documents.Document',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='portal_sessions',
+        verbose_name=_('Document')
+    )
+    user = models.ForeignKey(
+        to=settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='portal_sessions',
+        verbose_name=_('User')
+    )
+
+    session_key = models.CharField(max_length=128, blank=True, default='', db_index=True, verbose_name=_('Session key'))
+    ip_address = models.CharField(max_length=64, blank=True, default='', db_index=True, verbose_name=_('IP address'))
+    user_agent = models.TextField(blank=True, default='', verbose_name=_('User agent'))
+
+    started_at = models.DateTimeField(db_index=True, verbose_name=_('Started at'))
+    last_seen_at = models.DateTimeField(db_index=True, verbose_name=_('Last seen at'))
+
+    views = models.PositiveIntegerField(default=0, verbose_name=_('Views'))
+    downloads = models.PositiveIntegerField(default=0, verbose_name=_('Downloads'))
+
+    metadata = models.JSONField(blank=True, default=dict, verbose_name=_('Metadata'))
+
+    class Meta:
+        db_table = 'analytics_portal_sessions'
+        verbose_name = _('Portal session')
+        verbose_name_plural = _('Portal sessions')
+        indexes = (
+            models.Index(fields=('share_link', '-last_seen_at')),
+            models.Index(fields=('publication', '-last_seen_at')),
+            models.Index(fields=('document', '-last_seen_at')),
+            models.Index(fields=('campaign', '-last_seen_at')),
+        )
+
+    def __str__(self):
+        return f'portal:{self.share_link_id or "-"} {self.started_at}'
+
+
+class UserCostProfile(models.Model):
+    """Cost profile for ROI calculations (separate from core User model)."""
+
+    user = models.OneToOneField(
+        to=settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='cost_profile',
+        verbose_name=_('User')
+    )
+    hourly_rate = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0.0, verbose_name=_('Hourly rate')
+    )
+    currency = models.CharField(max_length=10, blank=True, default='USD', verbose_name=_('Currency'))
+
+    class Meta:
+        db_table = 'analytics_user_cost_profiles'
+        verbose_name = _('User cost profile')
+        verbose_name_plural = _('User cost profiles')
+
+    def __str__(self):
+        return f'{self.user_id} @ {self.hourly_rate} {self.currency}'
+
+
+class DocumentCostProfile(models.Model):
+    """Production cost profile for ROI calculations (separate from core Document)."""
+
+    document = models.OneToOneField(
+        to='documents.Document',
+        on_delete=models.CASCADE,
+        related_name='cost_profile',
+        verbose_name=_('Document')
+    )
+    production_cost = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0.0, verbose_name=_('Production cost')
+    )
+    currency = models.CharField(max_length=10, blank=True, default='USD', verbose_name=_('Currency'))
+
+    class Meta:
+        db_table = 'analytics_document_cost_profiles'
+        verbose_name = _('Document cost profile')
+        verbose_name_plural = _('Document cost profiles')
+
+    def __str__(self):
+        return f'{self.document_id} cost={self.production_cost} {self.currency}'
 
 
 class UserDailyMetrics(models.Model):
@@ -747,6 +869,11 @@ class DistributionEvent(models.Model):
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, db_index=True, verbose_name=_('Status'))
 
+    # Operational sync state (for dashboards).
+    sync_status = models.CharField(max_length=50, blank=True, default='', db_index=True, verbose_name=_('Sync status'))
+    last_sync_error = models.TextField(blank=True, default='', verbose_name=_('Last sync error'))
+    retry_count = models.PositiveIntegerField(default=0, verbose_name=_('Retry count'))
+
     document = models.ForeignKey(
         to='documents.Document',
         on_delete=models.CASCADE,
@@ -794,4 +921,3 @@ class DistributionEvent(models.Model):
 
     def __str__(self):
         return f'{self.channel} - {self.event_type} - {self.status}'
-

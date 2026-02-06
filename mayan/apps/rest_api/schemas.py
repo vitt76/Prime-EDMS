@@ -1,15 +1,10 @@
-from django.utils.translation import ugettext_lazy as _
+"""OpenAPI configuration module.
 
-from drf_yasg import openapi
+Historically this project used `drf-yasg` and kept OpenAPI metadata here.
+The production-ready analytics rollout migrates the project to `drf-spectacular`.
 
-import mayan
-from mayan.apps.common.settings import setting_project_title
+This module is kept to avoid import errors in older references, but it no longer
+exports `drf-yasg` objects.
+"""
 
-from .literals import API_VERSION
-
-openapi_info = openapi.Info(
-    title=_('%s API') % setting_project_title.value,
-    default_version='v{}'.format(API_VERSION),
-    description=mayan.__description__,
-    license=openapi.License(name=mayan.__license__)
-)
+openapi_info = None

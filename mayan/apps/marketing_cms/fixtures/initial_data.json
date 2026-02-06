@@ -1,0 +1,119 @@
+[
+  {
+    "model": "marketing_cms.page",
+    "pk": 1,
+    "fields": {
+      "slug": "home",
+      "title": { "ru": "Главная", "en": "Home" },
+      "meta_title": { "ru": "DAM-система для управления медиафайлами | MADDAM", "en": "DAM system for media assets | MADDAM" },
+      "meta_description": { "ru": "Облачное хранилище и распределение контента с AI-поиском и аналитикой для маркетинга и креативных команд", "en": "Cloud storage and distribution with AI search and analytics for marketing and creative teams" },
+      "og_image": "https://cdn.dam-brand.com/og-home-ru.jpg",
+      "canonical_url": "https://dam-brand.com/",
+      "sections": [
+        {
+          "id": "section-hero",
+          "type": "hero",
+          "order": 1,
+          "content": {
+            "heading": "Управляйте контентом быстрее",
+            "subheading": "Облачное хранилище + AI-поиск + Аналитика",
+            "cta_text": "Начать бесплатно",
+            "cta_url": "/auth/register",
+            "background_image": "https://cdn.dam-brand.com/hero-bg.jpg"
+          }
+        }
+      ],
+      "status": "published",
+      "published_at": "2025-12-20T10:00:00Z",
+      "updated_at": "2025-12-30T15:00:00Z",
+      "created_at": "2025-12-20T10:00:00Z"
+    }
+  },
+  {
+    "model": "marketing_cms.plan",
+    "pk": 1,
+    "fields": {
+      "name": "Start",
+      "description": { "ru": "Для небольших команд", "en": "For small teams" },
+      "price_monthly": "29.00",
+      "price_yearly": "290.00",
+      "currency": "USD",
+      "billing_period": "month",
+      "storage_gb": 50,
+      "max_users": 3,
+      "max_api_calls_monthly": 100000,
+      "features": ["Basic AI Search", "Email Support", "Basic Analytics"],
+      "recommended": false,
+      "type": "saas",
+      "cta_text": "Try Free",
+      "cta_url": "/auth/register?plan=start",
+      "order": 1
+    }
+  },
+  {
+    "model": "marketing_cms.plan",
+    "pk": 2,
+    "fields": {
+      "name": "Pro",
+      "description": { "ru": "Для растущих команд", "en": "For growing teams" },
+      "price_monthly": "99.00",
+      "price_yearly": "990.00",
+      "currency": "USD",
+      "billing_period": "month",
+      "storage_gb": 500,
+      "max_users": 10,
+      "max_api_calls_monthly": 1000000,
+      "features": ["Advanced AI Search", "Priority Support", "Full Analytics", "Custom Integrations"],
+      "recommended": true,
+      "type": "saas",
+      "cta_text": "Try Free",
+      "cta_url": "/auth/register?plan=pro",
+      "order": 2
+    }
+  },
+  {
+    "model": "marketing_cms.plan",
+    "pk": 3,
+    "fields": {
+      "name": "Enterprise",
+      "description": { "ru": "Для больших организаций", "en": "For large organizations" },
+      "price_monthly": null,
+      "price_yearly": null,
+      "currency": "USD",
+      "billing_period": "month",
+      "storage_gb": null,
+      "max_users": null,
+      "max_api_calls_monthly": null,
+      "features": ["Unlimited Everything", "Dedicated Support", "Custom Deployment", "SLA Guarantee"],
+      "recommended": false,
+      "type": "both",
+      "cta_text": "Contact Sales",
+      "cta_url": "/contact",
+      "order": 3
+    }
+  },
+  {
+    "model": "marketing_cms.post",
+    "pk": 1,
+    "fields": {
+      "slug": "ai-search-release",
+      "title": { "ru": "Выпустили AI Search 2.0", "en": "AI Search 2.0 released" },
+      "excerpt": { "ru": "Новый поиск видит изображения и видео лучше чем когда-либо...", "en": "Our new search understands images and video better than ever..." },
+      "content": "Новая эра поиска\n\nМы гордимся представить...",
+      "content_html": "<h1>Новая эра поиска</h1><p>Мы гордимся представить...</p>",
+      "featured_image": "https://cdn.dam-brand.com/news-ai-search.jpg",
+      "author_name": "Ivan Petrov",
+      "author_avatar": "https://cdn.dam-brand.com/avatar-ivan.jpg",
+      "category": "Product Updates",
+      "tags": ["AI", "Search", "Feature Release"],
+      "reading_time_minutes": 5,
+      "seo_title": { "ru": "AI Search 2.0 выпущена | dam-brand", "en": "AI Search 2.0 released | dam-brand" },
+      "seo_description": { "ru": "Революционный AI-поиск для видео и изображений...", "en": "Revolutionary AI search for video and images..." },
+      "og_image": "https://cdn.dam-brand.com/news-ai-search-og.jpg",
+      "status": "published",
+      "published_at": "2025-12-28T12:00:00Z",
+      "updated_at": "2025-12-30T10:00:00Z",
+      "created_at": "2025-12-28T12:00:00Z"
+    }
+  }
+]

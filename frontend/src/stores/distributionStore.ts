@@ -350,7 +350,8 @@ export const useDistributionStore = defineStore(
       } catch (err) {
         sharedLinksError.value = formatApiError(err)
         sharedLinks.value = []
-        console.error('Failed to fetch shared links:', err)
+        // Do not crash / spam; this endpoint can be unstable depending on backend state.
+        console.warn('[DistributionStore] Failed to fetch shared links (non-fatal):', err)
       } finally {
         sharedLinksLoading.value = false
       }
