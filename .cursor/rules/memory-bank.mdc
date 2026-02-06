@@ -156,3 +156,15 @@ flowchart TD
 The format is flexible - focus on capturing valuable insights that help me work more effectively with you and the project. Think of .cursor/rules as a living document that grows smarter as we work together.
 
 REMEMBER: After every memory reset, I begin completely fresh. The Memory Bank is my only link to previous work. It must be maintained with precision and clarity, as my effectiveness depends entirely on its accuracy.
+
+# MEMORY BANK COMMANDS
+
+When I say "update bank", you must:
+1.  Analyze my latest changes in the codebase.
+2.  Update `memory-bank/activeContext.md` (what we are doing now).
+3.  Update `memory-bank/progress.md` (tick checkboxes, add logs).
+4.  Check if I violated any patterns in `systemPatterns.md`.
+
+When I say "status", you must:
+1.  Read `memory-bank/activeContext.md`.
+2.  Tell me briefly what represents the current focus.

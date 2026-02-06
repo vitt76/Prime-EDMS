@@ -162,6 +162,7 @@ services:
       - ./mayan/apps/rest_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api
       - ./mayan/apps/notifications:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/notifications
       - ./mayan/apps/events:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/events
+      - ./mayan/apps/marketing_cms:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/marketing_cms
       - ./mayan/settings/base.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
       - ./mayan/asgi.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/asgi.py
     ports:
@@ -222,6 +223,7 @@ services:
       - ./mayan/settings/base.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
       - ./mayan/asgi.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/asgi.py
       - ./mayan/apps/notifications:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/notifications
+      - ./mayan/apps/marketing_cms:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/marketing_cms
     ports:
       - "8001:8001"
     depends_on:

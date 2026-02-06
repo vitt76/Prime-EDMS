@@ -78,7 +78,7 @@
   },
   "forms": {
     "email": "Email",
-    "emailPlaceholder": "you@company.com",
+    "emailPlaceholder": "you{'@'}company.com",
     "password": "Пароль",
     "passwordPlaceholder": "Минимум 8 символов",
     "passwordHint": "Минимум 8 символов, включая цифру и спецсимвол",

@@ -37,14 +37,7 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#4f46e5' }
       ],
       link: [
-        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
-        {
-          rel: 'preload',
-          as: 'font',
-          type: 'font/woff2',
-          href: '/fonts/inter-var.woff2',
-          crossorigin: 'anonymous'
-        }
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }
       ]
     }
   },
@@ -144,9 +137,13 @@ export default defineNuxtConfig({
     classSuffix: ''
   },
 
+  // Site URL (used by sitemap and other modules)
+  site: {
+    url: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  },
+
   // Sitemap configuration
   sitemap: {
-    siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
     autoLastmod: true,
     exclude: ['/auth/**', '/api/**']
   },
