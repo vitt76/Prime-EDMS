@@ -16,6 +16,7 @@ export interface DamFiltersState {
   dateTo?: string
   sizeMin?: number
   sizeMax?: number
+  owner?: number
 }
 
 export interface DamSearchState {
@@ -73,7 +74,8 @@ export function useDamSearchFilters() {
         dateFrom: undefined,
         dateTo: undefined,
         sizeMin: undefined,
-        sizeMax: undefined
+        sizeMax: undefined,
+        owner: undefined
       }
     })
   }
@@ -87,6 +89,7 @@ export function useDamSearchFilters() {
     if (state.filters.status.length) count++
     if (state.filters.dateFrom || state.filters.dateTo) count++
     if (typeof state.filters.sizeMin === 'number' || typeof state.filters.sizeMax === 'number') count++
+    if (typeof state.filters.owner === 'number') count++
     return count
   })
 
@@ -105,6 +108,7 @@ export function useDamSearchFilters() {
 
     state.filters.sizeMin = route.query.sizeMin ? Number(route.query.sizeMin) : undefined
     state.filters.sizeMax = route.query.sizeMax ? Number(route.query.sizeMax) : undefined
+    state.filters.owner = route.query.owner ? Number(route.query.owner) : undefined
   }
 
   function writeToUrl(): void {
@@ -123,7 +127,8 @@ export function useDamSearchFilters() {
           dateFrom: state.filters.dateFrom || undefined,
           dateTo: state.filters.dateTo || undefined,
           sizeMin: typeof state.filters.sizeMin === 'number' ? String(state.filters.sizeMin) : undefined,
-          sizeMax: typeof state.filters.sizeMax === 'number' ? String(state.filters.sizeMax) : undefined
+          sizeMax: typeof state.filters.sizeMax === 'number' ? String(state.filters.sizeMax) : undefined,
+          owner: typeof state.filters.owner === 'number' ? String(state.filters.owner) : undefined
         }
       })
       .finally(() => {
@@ -145,7 +150,8 @@ export function useDamSearchFilters() {
       dateFrom: state.filters.dateFrom,
       dateTo: state.filters.dateTo,
       sizeMin: state.filters.sizeMin,
-      sizeMax: state.filters.sizeMax
+      sizeMax: state.filters.sizeMax,
+      owner: state.filters.owner
     })
 
     uiStore.setDamGalleryDensity(state.density)
@@ -221,6 +227,7 @@ export function useDamSearchFilters() {
     state.filters.dateTo = undefined
     state.filters.sizeMin = undefined
     state.filters.sizeMax = undefined
+    state.filters.owner = undefined
     scheduleFetch()
   }
 

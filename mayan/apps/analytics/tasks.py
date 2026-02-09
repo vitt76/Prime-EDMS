@@ -11,6 +11,7 @@ from django.utils import timezone
 from typing import Optional
 
 from mayan.apps.documents.models import Document
+from mayan.apps.organizations.tasks import TenantAwareTask
 
 from .models import (
     ApprovalWorkflowEvent, AnalyticsAlert, AssetDailyMetrics, AssetEvent,
@@ -24,12 +25,18 @@ from .reports import CampaignPDFReport
 logger = logging.getLogger(name=__name__)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')
-def aggregate_daily_metrics(self, date_iso: str = '') -> int:
+@shared_task(
+    bind=True, max_retries=3, default_retry_delay=60, queue='documents',
+    base=TenantAwareTask
+)
+def aggregate_daily_metrics(self, date_iso: str = '', **kwargs) -> int:
     """Aggregate raw AssetEvent rows into AssetDailyMetrics.
+
+    Sprint 3: Organization-aware via TenantAwareTask base class.
 
     Args:
         date_iso: Optional ISO date (YYYY-MM-DD). If omitted, aggregates for yesterday.
+        **kwargs: May contain organization_id (consumed by TenantAwareTask).
 
     Returns:
         Number of documents aggregated (rows upserted).
@@ -245,9 +252,14 @@ def cleanup_old_events(self, retention_days: int = 90) -> dict:
     }
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')
-def generate_analytics_alerts(self, days: int = 90) -> dict:
+@shared_task(
+    bind=True, max_retries=3, default_retry_delay=60, queue='documents',
+    base=TenantAwareTask
+)
+def generate_analytics_alerts(self, days: int = 90, **kwargs) -> dict:
     """Generate basic analytics alerts (Phase 2 MVP).
+
+    Sprint 3: Organization-aware via TenantAwareTask base class.
 
     Alerts:
     - Assets without downloads (archiving candidates)

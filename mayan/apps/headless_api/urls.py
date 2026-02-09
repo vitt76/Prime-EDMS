@@ -33,6 +33,7 @@ from .views.analytics_views import (
     ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet,
     DistributionAnalyticsViewSet, ContentIntelligenceViewSet
 )
+from mayan.apps.organizations.urls import api_urls as organizations_api_urls
 
 app_name = 'headless_api'
 
@@ -331,4 +332,4 @@ api_urls = [
         view=ContentIntelligenceViewSet.as_view({'get': 'metadata_compliance'}),
         name='api-analytics-content-intel-metadata-compliance'
     ),
-]
+] + organizations_api_urls

@@ -171,6 +171,7 @@ MIDDLEWARE = (
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'mayan.apps.organizations.middleware.TenantResolverMiddleware',
     'mayan.apps.locales.middleware.locales.UserLocaleProfileMiddleware',
     'mayan.apps.authentication.middleware.impersonate.ImpersonateMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',

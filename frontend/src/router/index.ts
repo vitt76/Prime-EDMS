@@ -196,6 +196,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/settings/organization',
+    name: 'settings-organization',
+    component: () => import('@/pages/OrganizationSettingsPage.vue'),
+    meta: { requiresAuth: true, requiresOrgAdmin: true, title: 'Настройки организации' }
+  },
+  {
     path: '/notifications/archive',
     name: 'notifications-archive',
     component: () => import('@/pages/NotificationsArchivePage.vue'),
@@ -377,6 +383,19 @@ router.beforeEach(async (to, _from, next) => {
       next({
         name: 'login',
         query: { returnTo: to.fullPath }
+      })
+      return
+    }
+  }
+
+  // Sprint 3: Check organization admin access
+  if (to.meta.requiresOrgAdmin && authStore.isAuthenticated) {
+    const { useOrganizationStore } = await import('@/stores/organizationStore')
+    const orgStore = useOrganizationStore()
+    if (!orgStore.isAdmin) {
+      next({
+        name: 'forbidden',
+        query: { returnTo: to.fullPath, requiredRole: 'org_admin' }
       })
       return
     }

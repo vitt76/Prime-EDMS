@@ -9,6 +9,8 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
+from mayan.apps.organizations.tasks import TenantAwareTask
+
 from mayan.apps.documents.models import Document, DocumentFile, DocumentType
 from mayan.apps.dam import settings as dam_settings
 from mayan.apps.dynamic_search.tasks import task_index_instance
@@ -185,15 +187,20 @@ def _update_analysis_progress(ai_analysis, progress: int, current_step: str):
     logger.debug(f"📊 Progress: {progress}% - {current_step}")
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='tools')
-def analyze_document_with_ai(self, document_id: int):
+@shared_task(
+    bind=True, max_retries=3, default_retry_delay=60, queue='tools',
+    base=TenantAwareTask
+)
+def analyze_document_with_ai(self, document_id: int, **kwargs):
     """
     Analyze document with AI and update metadata.
     
     Phase B4: Enhanced with progress tracking for frontend polling.
+    Sprint 3: Organization-aware via TenantAwareTask base class.
 
     Args:
         document_id: ID of the document to analyze
+        **kwargs: May contain organization_id (consumed by TenantAwareTask)
     """
     ai_analysis = None
     
@@ -208,7 +215,36 @@ def analyze_document_with_ai(self, document_id: int):
         logger.info(f"🚀 Starting AI analysis for document {document_id}")
 
         # Get document and its latest file
+        # Use unfiltered manager to ensure we can always find the document
+        # (ContextVar might not match if org was set differently)
         document = Document.objects.get(id=document_id)
+
+        # Sprint 3: Check AI quota before proceeding
+        try:
+            from mayan.apps.organizations.quota import check_ai_quota
+            org = getattr(document, 'organization', None)
+            if org is not None:
+                check_ai_quota(org)
+        except Exception as quota_exc:
+            from mayan.apps.organizations.quota import QuotaExceededException
+            if isinstance(quota_exc, QuotaExceededException):
+                logger.warning(
+                    'AI quota exceeded for document %d: %s',
+                    document_id, quota_exc
+                )
+                ai_analysis, _ = DocumentAIAnalysis.objects.get_or_create(
+                    document=document,
+                    defaults={
+                        'analysis_status': 'failed',
+                        'task_id': self.request.id,
+                        'progress': 0,
+                        'current_step': 'AI quota exceeded',
+                        'error_message': str(quota_exc)[:1000]
+                    }
+                )
+                return
+            # Non-quota exceptions — log and continue
+            logger.warning('Quota check warning: %s', quota_exc)
         document_file = document.files.order_by('-timestamp').first()
 
         logger.info(f"📄 Document: {document.label} (ID: {document_id})")
@@ -385,10 +421,13 @@ def analyze_document_with_ai(self, document_id: int):
             logger.error(f"Max retries exceeded for document {document_id}")
 
 
-@shared_task(bind=True, queue='tools')
-def import_yandex_disk(self):
+@shared_task(bind=True, queue='tools', base=TenantAwareTask)
+def import_yandex_disk(self, **kwargs):
     """
     Trigger one-off import from Yandex Disk into Cabinets/Documents.
+
+    Sprint 3: Organization-aware via TenantAwareTask base class.
+    Pass organization_id kwarg when scheduling to set tenant context.
     """
     token = dam_settings.setting_yandex_disk_token.value
     if not token:
@@ -1180,16 +1219,19 @@ def reindex_document_assets(document: Document):
         logger.warning('Failed to schedule search reindex for document %s: %s', document.pk, exc)
 
 
-@shared_task(queue='tools')
+@shared_task(queue='tools', base=TenantAwareTask)
 def bulk_analyze_documents(
     document_ids: List[int],
     ai_service: Optional[str] = None,
     analysis_type: Optional[str] = None,
     user_id: Optional[int] = None,
-    bulk_id: Optional[str] = None
+    bulk_id: Optional[str] = None,
+    **kwargs
 ):
     """
     Bulk analyze multiple documents with AI.
+
+    Sprint 3: Organization-aware via TenantAwareTask base class.
 
     Args:
         document_ids: List of document IDs to analyze
@@ -1197,6 +1239,7 @@ def bulk_analyze_documents(
         analysis_type: Optional type of analysis
         user_id: Requesting user for auditing
         bulk_id: Traceable bulk request ID
+        **kwargs: May contain organization_id (consumed by TenantAwareTask)
     """
     logger.info(
         'Scheduling bulk AI analysis task',
@@ -1209,5 +1252,14 @@ def bulk_analyze_documents(
         }
     )
 
+    # Propagate organization_id to child tasks
+    from mayan.apps.organizations.managers import get_current_organization
+    current_org = get_current_organization()
+    org_kwargs = {}
+    if current_org:
+        org_kwargs['organization_id'] = str(current_org.pk)
+
     for document_id in document_ids:
-        analyze_document_with_ai.delay(document_id=document_id)
+        analyze_document_with_ai.delay(
+            document_id=document_id, **org_kwargs
+        )

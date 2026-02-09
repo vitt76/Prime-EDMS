@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
-**Последнее обновление:** 2026-02-05  
-**Текущий фокус:** Multi-tenancy инфраструктура, SSR improvements в Public Frontend, UI/UX оптимизации
+**Последнее обновление:** 2026-02-09  
+**Текущий фокус:** Multi-tenancy Sprint 4 — Hotfix Applied, Ready for Validation
 
 ---
 
@@ -9,23 +9,99 @@
 
 ### Активная разработка (Последние коммиты)
 
-#### 1. Multi-tenancy Infrastructure (Новый)
-**Статус:** Базовая инфраструктура реализована  
+#### 1. Multi-tenancy Infrastructure
+**Статус:** Sprint 1-4 + Hotfix реализованы, Sprint 4.1 Tech Debt завершён  
 **Коммит:** `7f41e418fe`
 
-**Что сделано:**
+**Что сделано (Sprint 1 Infrastructure — ЗАВЕРШЁН 2026-02-09):**
 - ✅ Создан базовый модуль `mayan.apps.organizations`
 - ✅ Настройки для Organizations (installation URL, base path)
 - ✅ Патчи для HttpRequest (поддержка organization URLs)
 - ✅ Тесты для settings и requests
 - ✅ Интеграция в apps.py с патчингом при старте
+- ✅ Модели: Organization (UUID PK, quotas, branding), Plan, Subscription, DomainSettings, UserOrganizationRole
+- ✅ Миграция 0001_initial с полной схемой БД
+- ✅ TenantAwareManager (ContextVar-based filtering) + TenantAwareMixin (abstract model)
+- ✅ TenantResolverMiddleware (custom domain, subdomain, user, standalone fallback, access control)
+- ✅ Middleware интегрирован в settings/base.py (после AuthenticationMiddleware)
+- ✅ Unit-тесты: модели (CRUD, уникальность, квоты), managers (ContextVar, filtering), middleware (exempt paths, SaaS/standalone, access control, cleanup)
 
-**Что еще требуется:**
-- 🚧 Модели: Organization, Subscription, Plan, DomainSettings
-- 🚧 TenantAwareManager и TenantAwareMixin
-- 🚧 TenantResolverMiddleware
-- 🚧 Миграции для привязки существующих данных
-- 🚧 API endpoints для управления Organizations
+**Что сделано (Sprint 2 Data Binding & API — ЗАВЕРШЁН 2026-02-09):**
+- ✅ Гибридные менеджеры: TenantAwareDocumentManager, TenantAwareTrashCanManager, TenantAwareValidDocumentManager
+- ✅ Миграция 0002: nullable organization FK к Document, Tag, Cabinet + обновление unique_together
+- ✅ Миграция 0003: data migration — привязка всех данных к default Organization + UserOrganizationRole
+- ✅ Миграция 0004: organization FK обязательным (NOT NULL) + composite DB indexes
+- ✅ Monkey-patching Document.objects/trash/valid на гибридные менеджеры (patches.py + apps.py)
+- ✅ Django Admin: OrganizationAdmin, PlanAdmin, SubscriptionAdmin, UserOrganizationRoleAdmin, DomainSettingsAdmin
+- ✅ DRF Serializers: Organization, Plan, Subscription, UserOrganizationRole, CurrentOrganization, AddMember
+- ✅ API Views + URLs: Organizations CRUD, Members, Plans, Current org — зарегистрированы в headless API
+- ✅ Integration тесты: cross-tenant isolation для Document/Tag/Cabinet, hybrid managers, security tests
+
+**Что сделано (Sprint 3 Frontend Integration, Permissions, Task Context — ЗАВЕРШЁН 2026-02-09):**
+- ✅ auth/me enrichment: organization + organizations list в ответе GET /api/v4/headless/auth/me/
+- ✅ Reusable DRF permission classes: IsOrganizationMember, IsOrganizationAdmin, IsOrganizationOwner, IsSuperAdminOrOrgAdmin
+- ✅ api_views.py рефакторинг: ad-hoc проверки заменены на permission classes (IsTargetOrgAdminOrSuperAdmin для org-scoped views)
+- ✅ X-Organization-Id header: _resolve_by_header() в TenantResolverMiddleware (между subdomain и user default)
+- ✅ TenantAwareTask: base Celery Task class с organization_id kwarg → ContextVar
+- ✅ DAM tasks обновлены: analyze_document_with_ai, import_yandex_disk, bulk_analyze_documents — base=TenantAwareTask
+- ✅ Analytics tasks обновлены: aggregate_daily_metrics, generate_analytics_alerts — base=TenantAwareTask
+- ✅ Quota enforcement: check_storage_quota (pre_save signal), check_ai_quota (в AI task), check_user_quota, QuotaExceededException
+- ✅ Frontend TypeScript types: Organization, OrganizationWithRole, OrganizationDetail, Plan, OrganizationMember
+- ✅ Frontend organizationService: API wrapper для /organizations/ endpoints
+
+**Что сделано (Sprint 4 Polish, Performance, Security — ЗАВЕРШЁН 2026-02-09):**
+- ✅ Database Indexes: composite indexes на UserOrganizationRole (user+is_default, org+role), DomainSettings (is_verified) + миграция 0005
+- ✅ N+1 Устранение: OrganizationListSerializer и OrganizationSerializer используют annotated fields вместо SerializerMethodField
+- ✅ Пагинация: OrganizationListCreateView теперь поддерживает page/page_size параметры (default 20, max 100)
+- ✅ select_related/prefetch_related: OrgScopedAPIMixin.get_target_organization() с оптимальной загрузкой связей
+- ✅ Admin annotate: OrganizationAdmin.get_queryset() с Count annotation для member_count
+- ✅ Redis-кеширование квот: get_storage_used_gb(), get_active_users_count(), get_ai_analyses_this_month() — TTL 5 мин
+- ✅ Cache invalidation signals: post_save/post_delete на DocumentFile → storage, UserOrganizationRole → users, DocumentAIAnalysis → AI
+- ✅ UUID-валидация: middleware._resolve_by_header() валидирует формат UUID перед запросом к БД
+- ✅ Input validation: RemoveMemberSerializer для DELETE members endpoint вместо raw request.data
+- ✅ Audit logging: audit.py с log_org_event() для SIEM-совместимого логирования (create, update, archive, member_add, member_remove)
+- ✅ Deprecated patterns: urls.py — url() заменён на path()/re_path(); permission_classes — imports на уровне модуля
+- ✅ Per-request permission caching: _get_user_role() с request._org_role_cache для исключения дублирующих DB-запросов
+- ✅ check_user_quota() в api_views.py вместо прямого вызова is_user_limit_exceeded()
+- ✅ Улучшенный error handling: quota.py с специфичными exceptions (AttributeError, ValueError, TypeError)
+- ✅ Test coverage: test_api_views.py (~20 тестов), test_quota.py (~12 тестов), test_serializers.py (~8 тестов)
+- ✅ Frontend type safety: authService.ts — OrganizationWithRole вместо any; organizationService.ts — OrganizationUpdateInput
+- ✅ Frontend race condition fix: organizationStore.ts — _initializing guard, isLoading корректно используется
+- ✅ Frontend dynamic import: organizationStore.ts — async import() вместо require()
+- ✅ Frontend UUID validation: apiService.ts — regex проверка orgId перед отправкой X-Organization-Id header
+- ✅ Frontend ARIA/keyboard: OrganizationSelector.vue — role=listbox, aria-selected, Escape/Arrow keyboard navigation, loading state
+- ✅ Frontend organizationStore (Pinia): state, getters (isOwner/isAdmin/isMember), actions (initialize, switchOrganization)
+- ✅ Frontend apiService: X-Organization-Id header в request interceptor
+- ✅ Frontend authStore + authService: org initialization из auth/me, org reset при logout
+- ✅ Frontend router: /settings/organization route с requiresOrgAdmin guard
+- ✅ Frontend OrganizationSelector component: dropdown в Header с переключением org
+- ✅ Frontend OrganizationSettingsPage: General, Members, Quota, Plan вкладки
+- ✅ Backend tests: test_permissions.py (12 tests), test_celery_context.py (5 tests)
+
+**Sprint 4 Hotfix Applied (2026-02-09):**
+- ✅ C1 SECURITY FIX: OrgScopedAPIMixin + IsTargetOrgAdminOrSuperAdmin — cross-org access vulnerability closed
+- ✅ C2 URL FIX: Added `headless/` prefix to all organization URL patterns — frontend/backend routing mismatch resolved
+- ✅ C2 Middleware: TENANT_EXEMPT_PATHS updated to `/api/v4/headless/organizations/`
+- ✅ C2 Frontend: `listPlans()` URL fixed — plans endpoint uses separate `PLANS_BASE` constant
+- ✅ I2: `check_ai_quota()` now uses cached `get_ai_analyses_this_month()` for consistency
+- ✅ I3: Silent `except: pass` replaced with `logger.debug()` in cache invalidation signal handlers
+- ✅ UUID regex tightened to strict format `[0-9a-f]{8}-...-[0-9a-f]{12}` in URL patterns
+- ✅ 12+ cross-organization security tests added (admin cross-org denied, staff bypass, own-org allowed)
+
+**Definition of Done — Sprint 4 Closure:**
+- [ ] All tests pass: `python manage.py test mayan.apps.organizations`
+- [ ] No cross-org access possible for non-staff users (verified by CrossOrganizationAccessTestCase)
+- [ ] Frontend organization + plans API calls return 200 (not 404)
+- [ ] Production migration applied without rollback
+- [ ] 403/404 error rates stable post-deploy (monitor Nginx/Django logs)
+- [ ] Code review approved by peer
+
+**Sprint 4.1 Tech Debt (ЗАВЕРШЁН 2026-02-09):**
+- ✅ I1: DRY annotation helper `querysets.py` — `annotate_org_counts()`, `active_users_count` aliased via `source='member_count'`
+- ✅ I4: (Done in C2) Strict UUID regex in URL patterns
+- ✅ I5: Specific `DoesNotExist` exceptions in middleware resolvers + fallback `logger.warning()`
+- ✅ I6: `apiService.deleteWithBody()` — clean DELETE-with-body pattern, simplified `removeMember()`
+- ✅ I7: activeContext.md cleanup — stale markers, contradictions, Long-term section updated
 
 **Архитектурные решения:**
 - Использование патчей для расширения HttpRequest без модификации core
@@ -211,7 +287,7 @@
 
 **Решение:** Shared Database + Shared Schema + ForeignKey изоляция через Organization
 
-**Статус:** Базовая инфраструктура реализована, модели и middleware в разработке
+**Статус:** Полностью реализовано (Sprint 1-4), hotfix applied
 
 **Обоснование:**
 - Поддержка SaaS-модели (один backend, много клиентов)
@@ -230,18 +306,19 @@
 **Текущая реализация:**
 - ✅ Базовый модуль `mayan.apps.organizations` создан
 - ✅ Настройки и патчи для HttpRequest реализованы
-- ✅ Organization-aware WebSocket groups в Analytics (частично реализовано)
-- ✅ Фильтрация данных по organization в API (частично)
-- ✅ Organization-specific analytics dashboards (частично)
-- 🚧 Модели Organization, Subscription, Plan (в разработке)
-- 🚧 TenantAwareManager и TenantAwareMixin (в разработке)
-- 🚧 TenantResolverMiddleware (в разработке)
+- ✅ Organization-aware WebSocket groups в Analytics
+- ✅ Фильтрация данных по organization в API
+- ✅ Organization-specific analytics dashboards
+- ✅ Модели Organization, Subscription, Plan (Sprint 1)
+- ✅ TenantAwareManager и TenantAwareMixin (Sprint 1)
+- ✅ TenantResolverMiddleware (Sprint 1)
+- ✅ OrgScopedAPIMixin + IsTargetOrgAdminOrSuperAdmin (Sprint 4 Hotfix)
 
 **Следующие шаги:**
-- Sprint 1-2: Модели и Managers (в процессе)
-- Sprint 3: Миграция существующих данных
-- Sprint 4: API и Admin панель
-- Sprint 5: Polish и Deploy
+- ✅ Sprint 1: Модели и Managers (ЗАВЕРШЁН)
+- ✅ Sprint 2: Data Binding, API, Admin (ЗАВЕРШЁН)
+- ✅ Sprint 3: Frontend интеграция, Permissions (ЗАВЕРШЁН)
+- ✅ Sprint 4: Polish, Performance, Security + Hotfix (ЗАВЕРШЁН — Ready for Validation)
 
 **Ключевые решения:**
 - Shared Database + Shared Schema (не отдельные БД)
@@ -336,15 +413,15 @@
 
 ### Long-term (Следующие 3-6 месяцев)
 
-1. **Multi-tenancy Implementation (Приоритет):**
-   - Реализация Organizations модуля (Sprint 1-4)
-   - TenantAwareManager и TenantAwareMixin
-   - TenantResolverMiddleware
-   - Миграция существующих данных к Organization
-   - API endpoints для управления Organizations
-   - Полная изоляция данных между тенантами
-   - Organization-level settings
-   - Billing integration (Subscription, Plan)
+1. **Multi-tenancy — ЗАВЕРШЕНО (Sprint 1-4 + Hotfix + Tech Debt):**
+   - ✅ Organizations модуль (Sprint 1-4)
+   - ✅ TenantAwareManager и TenantAwareMixin
+   - ✅ TenantResolverMiddleware
+   - ✅ Миграция существующих данных к Organization
+   - ✅ API endpoints для управления Organizations
+   - ✅ Полная изоляция данных между тенантами (OrgScopedAPIMixin)
+   - ✅ Organization-level settings
+   - ✅ Billing integration (Subscription, Plan)
 
 2. **Analytics Phase 3:**
    - AI/ML для рекомендаций

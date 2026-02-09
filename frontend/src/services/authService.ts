@@ -15,6 +15,7 @@
 import { apiService } from './apiService'
 import { cacheService } from './cacheService'
 import type { User, TwoFactorStatus, TwoFactorSetup } from '@/types'
+import type { OrganizationWithRole } from '@/types/organization'
 
 // ============================================================================
 // CONFIGURATION
@@ -42,6 +43,8 @@ type MayanUserResponse = any
 export interface GetCurrentUserResponse {
   user: User
   permissions: string[]
+  organization?: OrganizationWithRole | null
+  organizations?: OrganizationWithRole[]
 }
 
 
@@ -183,12 +186,17 @@ class AuthService {
       throw new Error('Not authenticated')
     }
 
-    // Prefer headless "me" endpoint which includes is_staff/is_superuser and groups.
+    // Prefer headless "me" endpoint which includes is_staff/is_superuser, groups, and organization.
     try {
       const me = await apiService.get<any>('/api/v4/headless/auth/me/', undefined, false)
       const user = (me && me.user) ? me.user : this.mapMayanUser(me)
       localStorage.setItem(USER_KEY, JSON.stringify(user))
-      return { user, permissions: user.permissions || [] }
+      return {
+        user,
+        permissions: user.permissions || [],
+        organization: me?.organization ?? null,
+        organizations: me?.organizations ?? [],
+      }
     } catch (_e) {
       // Fallback to core endpoint
       const response = await apiService.get<MayanUserResponse>(

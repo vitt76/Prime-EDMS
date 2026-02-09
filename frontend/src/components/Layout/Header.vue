@@ -130,6 +130,9 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
       <!-- Page-specific actions (Teleport target) -->
       <div id="header-actions" class="flex items-center gap-1" />
 
+      <!-- Organization Selector (Sprint 3) -->
+      <OrganizationSelector />
+
       <!-- Divider -->
       <div class="h-6 w-px bg-gray-200 hidden sm:block" />
 
@@ -248,6 +251,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import NotificationBell from '@/components/Notifications/NotificationBell.vue'
+import OrganizationSelector from '@/components/Layout/OrganizationSelector.vue'
 import { useDamSearchFilters } from '@/composables/useDamSearchFilters'
 
 const router = useRouter()

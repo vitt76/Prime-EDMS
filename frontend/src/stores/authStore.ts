@@ -4,6 +4,7 @@ import { authService, hasToken, clearToken } from '@/services/authService'
 import { formatApiError } from '@/utils/errors'
 import type { User } from '@/types'
 import router from '@/router'
+import { useOrganizationStore } from './organizationStore'
 
 export const useAuthStore = defineStore(
   'auth',
@@ -65,6 +66,13 @@ export const useAuthStore = defineStore(
         if (localVersion === authStateVersion) {
           user.value = userResponse.user
           permissions.value = userResponse.permissions || []
+
+          // Sprint 3: Initialize organization context
+          const orgStore = useOrganizationStore()
+          orgStore.initialize(
+            userResponse.organization ?? null,
+            userResponse.organizations ?? []
+          )
         }
 
         return { success: true }
@@ -88,6 +96,15 @@ export const useAuthStore = defineStore(
         localStorage.removeItem('auth_token')
         localStorage.removeItem('auth_user')
         localStorage.removeItem('dev_authenticated')
+
+        // Sprint 3: Clear organization state
+        try {
+          const orgStore = useOrganizationStore()
+          orgStore.$reset()
+        } catch {
+          // Ignore if store not ready
+        }
+
         router.replace('/login').catch(() => {})
       }
     }
@@ -149,6 +166,17 @@ export const useAuthStore = defineStore(
           user.value = response.user
           permissions.value = response.permissions || []
           lastActivity.value = new Date()
+
+          // Sprint 3: Initialize organization context from auth/me
+          try {
+            const orgStore = useOrganizationStore()
+            orgStore.initialize(
+              response.organization ?? null,
+              response.organizations ?? []
+            )
+          } catch (orgErr) {
+            if (shouldDebugLog) console.warn('[AuthStore] Failed to init org store:', orgErr)
+          }
         }
         
         if (shouldDebugLog) console.log('[AuthStore] ✅ Session restored for:', response.user.username)

@@ -113,6 +113,13 @@ class ApiService {
           config.headers['Authorization'] = `Token ${token}`
         }
 
+        // Sprint 3: Add X-Organization-Id header for multi-tenancy
+        // Sprint 4: Validate UUID format before sending
+        const orgId = localStorage.getItem('current_organization_id')
+        if (orgId && config.headers && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId)) {
+          config.headers['X-Organization-Id'] = orgId
+        }
+
         // Add CSRF token from cookie or meta tag
         const csrfToken = this.getCSRFToken()
         if (csrfToken && config.headers) {
@@ -424,6 +431,18 @@ class ApiService {
    */
   async delete<T>(url: string, config?: InternalAxiosRequestConfig): Promise<T> {
     const response = await this.client.delete<ApiResponse<T>>(url, config)
+    return response.data.data || (response.data as unknown as T)
+  }
+
+  /**
+   * DELETE request with a JSON body.
+   *
+   * Axios DELETE does not accept a body parameter directly;
+   * the payload must be passed via ``config.data``.  This helper
+   * wraps that pattern so callers don't need double type casts.
+   */
+  async deleteWithBody<T>(url: string, data: unknown): Promise<T> {
+    const response = await this.client.delete<ApiResponse<T>>(url, { data })
     return response.data.data || (response.data as unknown as T)
   }
 
