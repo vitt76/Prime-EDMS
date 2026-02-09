@@ -17,7 +17,7 @@
           :target="link.external ? '_blank' : undefined"
           :rel="link.external ? 'noopener noreferrer' : undefined"
           class="text-sm font-medium transition-colors"
-          :class="isActive(link.path) ? 'text-primary-600' : 'text-neutral-600 hover:text-neutral-900'"
+          :class="isActive(link.path) ? 'text-primary-600 dark:text-primary-400' : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white'"
         >
           {{ $t(link.label) }}
         </NuxtLink>
@@ -27,7 +27,7 @@
       <div class="flex items-center gap-3">
         <NuxtLink 
           to="/auth/login" 
-          class="hidden text-sm font-medium text-neutral-600 transition hover:text-neutral-900 md:inline"
+          class="hidden text-sm font-medium text-neutral-600 transition hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white md:inline"
         >
           {{ $t('nav.login') }}
         </NuxtLink>
@@ -41,7 +41,7 @@
         <!-- Language Switcher -->
         <Menu as="div" class="relative">
           <MenuButton 
-            class="flex items-center gap-1 rounded-lg p-2 text-sm text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+            class="flex items-center gap-1 rounded-lg p-2 text-sm text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white"
             aria-label="Change language"
           >
             <GlobeAltIcon class="h-5 w-5" />
@@ -56,12 +56,12 @@
             leave-from-class="transform scale-100 opacity-100"
             leave-to-class="transform scale-95 opacity-0"
           >
-            <MenuItems class="absolute right-0 mt-2 w-36 origin-top-right rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none">
+            <MenuItems class="absolute right-0 mt-2 w-36 origin-top-right rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-neutral-800 dark:ring-neutral-700">
               <MenuItem v-for="loc in availableLocales" :key="loc.code" v-slot="{ active }">
                 <NuxtLink 
                   :to="switchLocalePath(loc.code)"
                   class="flex items-center gap-2 px-4 py-2 text-sm"
-                  :class="active ? 'bg-neutral-50 text-neutral-900' : 'text-neutral-700'"
+                  :class="active ? 'bg-neutral-50 text-neutral-900 dark:bg-neutral-700 dark:text-white' : 'text-neutral-700 dark:text-neutral-300'"
                 >
                   <span>{{ loc.name }}</span>
                   <CheckIcon v-if="locale === loc.code" class="ml-auto h-4 w-4 text-primary-600" />
@@ -98,7 +98,7 @@
     >
       <div 
         v-if="mobileMenuOpen" 
-        class="border-t border-neutral-200 bg-white lg:hidden"
+        class="border-t border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900 lg:hidden"
       >
         <nav class="flex flex-col px-4 py-4">
           <NuxtLink 
@@ -108,7 +108,7 @@
             :href="link.external ? link.path : undefined"
             :target="link.external ? '_blank' : undefined"
             class="flex items-center justify-between rounded-lg px-3 py-3 text-base font-medium transition"
-            :class="isActive(link.path) ? 'bg-primary-50 text-primary-600' : 'text-neutral-700 hover:bg-neutral-50'"
+            :class="isActive(link.path) ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400' : 'text-neutral-700 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-800'"
             @click="!link.external && (mobileMenuOpen = false)"
           >
             <span>{{ $t(link.label) }}</span>

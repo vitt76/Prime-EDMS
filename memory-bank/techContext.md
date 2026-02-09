@@ -296,7 +296,7 @@ public-frontend/
 - **Headless API**: REST API для фронтенда
 - **Image Editor**: Редактор изображений
 - **Distribution**: Распределение контента
-- **Organizations app**: Multi-tenancy изоляция (планируется)
+- **Organizations app**: Multi-tenancy изоляция (базовая инфраструктура реализована, модели в разработке)
 
 ## Multi-tenancy Architecture
 
@@ -307,7 +307,17 @@ public-frontend/
 **Компоненты:**
 
 #### Organizations Module (mayan.apps.organizations)
-**Статус:** Планируется (ТЗ готово, реализация в процессе)
+**Статус:** Базовая инфраструктура реализована, модели и middleware в разработке  
+**Коммит:** `7f41e418fe`
+
+**Реализовано:**
+- ✅ Базовый модуль создан (`mayan.apps.organizations`)
+- ✅ Настройки: `ORGANIZATIONS_INSTALLATION_URL`, `ORGANIZATIONS_URL_BASE_PATH`
+- ✅ Патчи для HttpRequest (поддержка organization URLs)
+- ✅ Тесты для settings и requests
+- ✅ Интеграция в apps.py с патчингом при старте
+
+**В разработке:**
 
 **Модели:**
 - **Organization**: Тенант/компания (UUID primary key)

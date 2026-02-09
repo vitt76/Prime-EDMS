@@ -9,7 +9,7 @@
             <span class="text-lg font-bold text-neutral-900">MADDAM</span>
           </NuxtLink>
           <p class="mt-4 max-w-sm text-sm leading-relaxed text-neutral-600">
-            Облачная DAM-система для управления медиафайлами с AI-поиском, аналитикой и командной работой.
+            {{ $t('footer.description') }}
           </p>
 
           <!-- Social Links -->
@@ -49,7 +49,7 @@
         <!-- Newsletter -->
         <div>
           <h4 class="text-sm font-semibold text-neutral-900">Newsletter</h4>
-          <p class="mt-2 text-sm text-neutral-600">Получайте новости и обновления</p>
+          <p class="mt-2 text-sm text-neutral-600">{{ $t('footer.newsletterDesc') }}</p>
           <form @submit.prevent="subscribeNewsletter" class="mt-4">
             <div class="flex gap-2">
               <input
@@ -77,7 +77,7 @@
               enter-to-class="opacity-100 translate-y-0"
             >
               <p v-if="subscribed" class="mt-2 text-xs text-success">
-                Подписка оформлена! Проверьте почту.
+                {{ $t('footer.subscribed') }}
               </p>
               <p v-else-if="error" class="mt-2 text-xs text-error">
                 {{ error }}
@@ -93,10 +93,10 @@
 
       <!-- Bottom Bar -->
       <div class="mt-12 flex flex-col items-center justify-between gap-4 border-t border-neutral-200 pt-8 text-sm text-neutral-500 md:flex-row">
-        <p>© {{ currentYear }} MADDAM. Все права защищены.</p>
+        <p>© {{ currentYear }} MADDAM. {{ $t('footer.copyright') }}</p>
         <div class="flex gap-6">
-          <NuxtLink to="/terms" class="transition hover:text-neutral-900">Условия использования</NuxtLink>
-          <NuxtLink to="/privacy" class="transition hover:text-neutral-900">Политика конфиденциальности</NuxtLink>
+          <NuxtLink to="/terms" class="transition hover:text-neutral-900">{{ $t('footer.terms') }}</NuxtLink>
+          <NuxtLink to="/privacy" class="transition hover:text-neutral-900">{{ $t('footer.privacy') }}</NuxtLink>
         </div>
       </div>
     </div>
@@ -147,26 +147,28 @@ const socialLinks: SocialLink[] = [
   { name: 'GitHub', url: 'https://github.com/maddam', icon: IconGithub }
 ]
 
-const linkSections: LinkSection[] = [
+const { t } = useI18n()
+
+const linkSections = computed<LinkSection[]>(() => [
   {
-    title: 'Продукт',
+    title: t('footer.product'),
     links: [
-      { label: 'Возможности', path: '/#features' },
-      { label: 'Тарифы', path: '/pricing' },
-      { label: 'Roadmap', path: '/roadmap' },
-      { label: 'Changelog', path: '/changelog' }
+      { label: t('footer.features'), path: '/#features' },
+      { label: t('nav.pricing'), path: '/pricing' },
+      { label: t('footer.roadmap'), path: '/roadmap' },
+      { label: t('footer.changelog'), path: '/changelog' }
     ]
   },
   {
-    title: 'Компания',
+    title: t('footer.company'),
     links: [
-      { label: 'О нас', path: '/about' },
-      { label: 'Блог', path: '/blog' },
-      { label: 'Контакты', path: '/contact' },
-      { label: 'Документация', path: 'https://docs.maddam.ru', external: true }
+      { label: t('nav.about'), path: '/about' },
+      { label: t('nav.blog'), path: '/blog' },
+      { label: t('nav.contact'), path: '/contact' },
+      { label: t('nav.docs'), path: 'https://docs.maddam.ru', external: true }
     ]
   }
-]
+])
 
 const subscribeNewsletter = async () => {
   if (loading.value || subscribed.value) return
@@ -185,7 +187,7 @@ const subscribeNewsletter = async () => {
     email.value = ''
   } catch (err: any) {
     console.error('Newsletter subscription failed:', err)
-    error.value = err?.data?.message || 'Произошла ошибка. Попробуйте позже.'
+    error.value = err?.data?.message || t('errors.serverError')
   } finally {
     loading.value = false
   }

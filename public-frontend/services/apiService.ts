@@ -1,6 +1,14 @@
 import { API_ENDPOINTS } from '~/utils/constants'
 import type { PublicPage, PublicPlan, PublicPost } from '~/types/content'
 
+/** Paginated response shape returned by DRF */
+interface PaginatedResponse<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
+
 export class ApiService {
   private baseURL: string
 
@@ -12,7 +20,12 @@ export class ApiService {
     try {
       return await $fetch<T>(url, { baseURL: this.baseURL, ...options })
     } catch (error: any) {
-      console.error('API Error:', error)
+      // Log concisely — avoid spamming the console when backend is unavailable
+      if (error?.message?.includes('Failed to fetch') || error?.message?.includes('fetch failed')) {
+        console.warn(`[API] Backend unavailable: ${url}`)
+      } else {
+        console.error('[API] Error:', error?.statusCode || error?.message || error)
+      }
       throw this.handleError(error)
     }
   }
@@ -44,9 +57,20 @@ export class ApiService {
   }
 
   async getPlans(lang: string = 'ru'): Promise<PublicPlan[]> {
-    return this.fetch<PublicPlan[]>(`${API_ENDPOINTS.PLANS}/`, {
-      params: { lang }
-    })
+    const response = await this.fetch<PublicPlan[] | PaginatedResponse<PublicPlan>>(
+      `${API_ENDPOINTS.PLANS}/`,
+      { params: { lang } }
+    )
+
+    // Normalize: backend may return a paginated object {count, next, previous, results}
+    // or a plain array — handle both cases gracefully
+    if (Array.isArray(response)) {
+      return response
+    }
+    if (response && typeof response === 'object' && 'results' in response) {
+      return (response as PaginatedResponse<PublicPlan>).results
+    }
+    return []
   }
 
   async getFaq(params?: Record<string, any>) {

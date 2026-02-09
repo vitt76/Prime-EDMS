@@ -71,51 +71,51 @@ interface StatItem {
   label: string
 }
 
+const { t } = useI18n()
+
 const props = withDefaults(
   defineProps<{
-    title?: string
-    subtitle?: string
-    sectionBadge?: string
     items?: FeatureItem[]
     showHighlights?: boolean
   }>(),
   {
-    title: 'Почему выбирают MADDAM',
-    subtitle: 'Все инструменты для эффективного управления контентом в одном месте',
-    sectionBadge: 'Возможности',
     showHighlights: true
   }
 )
 
-// Default features if not provided
-const defaultFeatures: FeatureItem[] = [
+const title = computed(() => t('features.title'))
+const subtitle = computed(() => t('features.subtitle'))
+const sectionBadge = computed(() => t('features.badge'))
+
+// Default features using i18n
+const defaultFeatures = computed<FeatureItem[]>(() => [
   {
     icon: MagnifyingGlassIcon,
-    title: 'AI Search',
-    description: 'Найдите нужный файл за секунды с помощью умного поиска по содержимому и метаданным'
+    title: t('features.aiSearch'),
+    description: t('features.aiSearchDesc')
   },
   {
     icon: UsersIcon,
-    title: 'Командная работа',
-    description: 'Приглашайте коллег, настраивайте права доступа и работайте над проектами вместе'
+    title: t('features.collaboration'),
+    description: t('features.collaborationDesc')
   },
   {
     icon: ChartBarIcon,
-    title: 'Аналитика',
-    description: 'Отслеживайте использование контента, популярность файлов и эффективность команды'
+    title: t('features.analytics'),
+    description: t('features.analyticsDesc')
   },
   {
     icon: GlobeAltIcon,
-    title: 'CDN дистрибуция',
-    description: 'Мгновенная доставка контента по всему миру через глобальную сеть серверов'
+    title: t('features.cdn'),
+    description: t('features.cdnDesc')
   }
-]
+])
 
-const featuresData = computed(() => props.items || defaultFeatures)
+const featuresData = computed(() => props.items || defaultFeatures.value)
 
-const statsData: StatItem[] = [
-  { value: '10M+', label: 'Файлов обработано' },
-  { value: '99.9%', label: 'Uptime SLA' },
-  { value: '<100ms', label: 'Время отклика API' }
-]
+const statsData = computed<StatItem[]>(() => [
+  { value: '10M+', label: t('features.filesProcessed') },
+  { value: '99.9%', label: t('features.uptimeSLA') },
+  { value: '<100ms', label: t('features.apiResponseTime') }
+])
 </script>

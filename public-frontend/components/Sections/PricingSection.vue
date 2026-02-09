@@ -4,13 +4,13 @@
     <div class="mx-auto max-w-2xl text-center">
       <div class="inline-flex items-center gap-2 rounded-full bg-primary-100 px-4 py-1.5 text-sm font-medium text-primary-700">
         <CurrencyDollarIcon class="h-4 w-4" />
-        <span>Тарифы</span>
+        <span>{{ $t('pricing.badge') }}</span>
       </div>
       <h2 class="mt-4 text-3xl font-bold tracking-tight text-neutral-900 md:text-4xl">
-        Выберите подходящий план
+        {{ $t('pricing.title') }}
       </h2>
       <p class="mt-4 text-lg leading-relaxed text-neutral-600">
-        Начните бесплатно. Масштабируйтесь по мере роста вашего бизнеса.
+        {{ $t('pricing.subtitle') }}
       </p>
     </div>
 
@@ -18,9 +18,9 @@
     <div class="mt-10 flex items-center justify-center gap-4">
       <span 
         class="text-sm font-medium"
-        :class="billingPeriod === 'monthly' ? 'text-neutral-900' : 'text-neutral-500'"
+        :class="billingPeriod === 'monthly' ? 'text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'"
       >
-        Помесячно
+        {{ $t('pricing.monthly') }}
       </span>
       <button
         @click="billingPeriod = billingPeriod === 'monthly' ? 'yearly' : 'monthly'"
@@ -37,26 +37,26 @@
       </button>
       <span 
         class="flex items-center gap-2 text-sm font-medium"
-        :class="billingPeriod === 'yearly' ? 'text-neutral-900' : 'text-neutral-500'"
+        :class="billingPeriod === 'yearly' ? 'text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'"
       >
-        Ежегодно
+        {{ $t('pricing.yearly') }}
         <span class="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-          -20%
+          {{ $t('pricing.discount') }}
         </span>
       </span>
     </div>
 
     <!-- Type Toggle (SaaS / Standalone) -->
     <div class="mt-6 flex items-center justify-center">
-      <div class="inline-flex rounded-lg bg-neutral-100 p-1">
+      <div class="inline-flex rounded-lg bg-neutral-100 p-1 dark:bg-neutral-800">
         <button
           v-for="type in deploymentTypes"
           :key="type.id"
           @click="deploymentType = type.id"
           class="rounded-md px-4 py-2 text-sm font-medium transition"
           :class="deploymentType === type.id 
-            ? 'bg-white text-neutral-900 shadow-sm' 
-            : 'text-neutral-600 hover:text-neutral-900'"
+            ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white' 
+            : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white'"
         >
           {{ type.label }}
         </button>
@@ -71,7 +71,7 @@
         class="relative flex flex-col rounded-2xl p-8 transition-all duration-300"
         :class="plan.recommended 
           ? 'bg-primary-600 text-white shadow-2xl shadow-primary-600/20 ring-4 ring-primary-600 scale-105 z-10' 
-          : 'bg-white shadow-sm ring-1 ring-neutral-200 hover:shadow-lg'"
+          : 'bg-white shadow-sm ring-1 ring-neutral-200 hover:shadow-lg dark:bg-neutral-800 dark:ring-neutral-700'"
       >
         <!-- Recommended Badge -->
         <div 
@@ -80,20 +80,20 @@
         >
           <span class="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold text-primary-600 shadow-lg">
             <SparklesIcon class="h-3.5 w-3.5" />
-            Популярный
+            {{ $t('pricing.popular') }}
           </span>
         </div>
 
         <!-- Plan Name -->
         <h3 
           class="text-xl font-bold"
-          :class="plan.recommended ? 'text-white' : 'text-neutral-900'"
+          :class="plan.recommended ? 'text-white' : 'text-neutral-900 dark:text-white'"
         >
           {{ plan.name }}
         </h3>
         <p 
           class="mt-2 text-sm"
-          :class="plan.recommended ? 'text-primary-100' : 'text-neutral-600'"
+          :class="plan.recommended ? 'text-primary-100' : 'text-neutral-600 dark:text-neutral-400'"
         >
           {{ plan.description }}
         </p>
@@ -104,23 +104,23 @@
             <span 
               v-if="getPrice(plan) !== null"
               class="text-4xl font-bold tracking-tight"
-              :class="plan.recommended ? 'text-white' : 'text-neutral-900'"
+              :class="plan.recommended ? 'text-white' : 'text-neutral-900 dark:text-white'"
             >
               ${{ getPrice(plan) }}
             </span>
             <span 
               v-else
               class="text-2xl font-bold"
-              :class="plan.recommended ? 'text-white' : 'text-neutral-900'"
+              :class="plan.recommended ? 'text-white' : 'text-neutral-900 dark:text-white'"
             >
-              Индивидуально
+              {{ $t('pricing.custom') }}
             </span>
             <span 
               v-if="getPrice(plan) !== null"
               class="text-sm"
               :class="plan.recommended ? 'text-primary-200' : 'text-neutral-500'"
             >
-              /{{ billingPeriod === 'monthly' ? 'мес' : 'год' }}
+              {{ billingPeriod === 'monthly' ? $t('pricing.perMonth') : $t('pricing.perYear') }}
             </span>
           </div>
           <p 
@@ -128,7 +128,7 @@
             class="mt-1 text-sm"
             :class="plan.recommended ? 'text-primary-200' : 'text-neutral-500'"
           >
-            ${{ plan.price_monthly }}/мес при помесячной оплате
+            ${{ $t('pricing.monthlyBilling', { price: plan.price_monthly }) }}
           </p>
         </div>
 
@@ -157,7 +157,7 @@
             ? 'bg-white text-primary-600 hover:bg-primary-50' 
             : 'bg-primary-600 text-white hover:bg-primary-700'"
         >
-          {{ plan.cta_text || 'Начать' }}
+          {{ plan.cta_text || $t('cta.getStarted') }}
           <ArrowRightIcon class="h-4 w-4" />
         </NuxtLink>
       </div>
@@ -169,7 +169,7 @@
         to="/pricing" 
         class="inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-700"
       >
-        Сравнить все возможности
+        {{ $t('pricing.compareFeatures') }}
         <ArrowRightIcon class="h-4 w-4" />
       </NuxtLink>
     </div>
@@ -185,6 +185,8 @@ import {
   CurrencyDollarIcon
 } from '@heroicons/vue/24/outline'
 
+const { t } = useI18n()
+
 const props = withDefaults(
   defineProps<{
     plans?: PublicPlan[]
@@ -197,76 +199,76 @@ const props = withDefaults(
 const billingPeriod = ref<'monthly' | 'yearly'>('monthly')
 const deploymentType = ref<'saas' | 'standalone'>('saas')
 
-const deploymentTypes = [
-  { id: 'saas' as const, label: 'SaaS (Облако)' },
-  { id: 'standalone' as const, label: 'On-Premise' }
-]
+const deploymentTypes = computed(() => [
+  { id: 'saas' as const, label: t('pricing.saas') },
+  { id: 'standalone' as const, label: t('pricing.onPremise') }
+])
 
-// Default plans if not provided
-const defaultPlans: PublicPlan[] = [
+// Default plans using i18n
+const defaultPlans = computed<PublicPlan[]>(() => [
   {
     id: 'starter',
     name: 'Starter',
-    description: 'Для небольших команд и стартапов',
+    description: t('pricing.starterDesc'),
     price_monthly: 29,
     price_yearly: 278,
     currency: 'USD',
     features: [
-      '5 пользователей',
-      '10 ГБ хранилища',
-      'Базовый AI-поиск',
-      'Email поддержка',
-      'API доступ'
+      t('pricing.users5'),
+      t('pricing.storage10'),
+      t('pricing.basicAiSearch'),
+      t('pricing.emailSupport'),
+      t('pricing.apiAccess')
     ],
     recommended: false,
     type: 'saas',
-    cta_text: 'Начать бесплатно'
+    cta_text: t('pricing.startFree')
   },
   {
     id: 'pro',
     name: 'Professional',
-    description: 'Для растущих компаний',
+    description: t('pricing.proDesc'),
     price_monthly: 99,
     price_yearly: 950,
     currency: 'USD',
     features: [
-      '25 пользователей',
-      '100 ГБ хранилища',
-      'Продвинутый AI-поиск',
-      'Приоритетная поддержка',
-      'API доступ + Webhooks',
-      'Брендирование',
-      'SSO интеграция'
+      t('pricing.users25'),
+      t('pricing.storage100'),
+      t('pricing.advancedAiSearch'),
+      t('pricing.prioritySupport'),
+      t('pricing.apiWebhooks'),
+      t('pricing.branding'),
+      t('pricing.ssoIntegration')
     ],
     recommended: true,
     type: 'saas',
-    cta_text: 'Начать Pro'
+    cta_text: t('pricing.startPro')
   },
   {
     id: 'enterprise',
     name: 'Enterprise',
-    description: 'Для крупных организаций',
+    description: t('pricing.enterpriseDesc'),
     price_monthly: null,
     price_yearly: null,
     currency: 'USD',
     features: [
-      'Неограниченно пользователей',
-      'Неограниченно хранилища',
-      'Кастомный AI-поиск',
-      'Выделенная поддержка 24/7',
-      'Полный API доступ',
-      'White-label решение',
-      'On-premise развертывание',
-      'SLA 99.99%'
+      t('pricing.unlimitedUsers'),
+      t('pricing.unlimitedStorage'),
+      t('pricing.customAiSearch'),
+      t('pricing.dedicatedSupport'),
+      t('pricing.fullApiAccess'),
+      t('pricing.whiteLabel'),
+      t('pricing.onPremiseDeploy'),
+      t('pricing.sla9999')
     ],
     recommended: false,
     type: 'standalone',
-    cta_text: 'Связаться с нами'
+    cta_text: t('cta.contact')
   }
-]
+])
 
 const displayPlans = computed(() => {
-  const plans = props.plans.length ? props.plans : defaultPlans
+  const plans = props.plans.length ? props.plans : defaultPlans.value
   return plans.filter(plan => {
     if (deploymentType.value === 'standalone') {
       return plan.type === 'standalone' || plan.id === 'enterprise'

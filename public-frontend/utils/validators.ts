@@ -19,7 +19,8 @@ export const registerSchema = z.object({
 export const contactSchema = z.object({
   name: z.string().min(2, 'Minimum 2 characters'),
   email: emailSchema,
-  message: z.string().min(10, 'Minimum 10 characters')
+  phone: z.string().regex(/^[+]?[\d\s\-()]{7,20}$/, 'Invalid phone number').optional().or(z.literal('')),
+  message: z.string().min(10, 'Minimum 10 characters').max(2000, 'Maximum 2000 characters')
 })
 
 export const loginSchema = z.object({

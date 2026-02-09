@@ -1,15 +1,65 @@
 # Active Context: Prime-EDMS
 
 **Последнее обновление:** 2026-02-05  
-**Текущий фокус:** UI/UX улучшения и оптимизация производительности DAM компонентов
+**Текущий фокус:** Multi-tenancy инфраструктура, SSR improvements в Public Frontend, UI/UX оптимизации
 
 ---
 
 ## 🎯 Current Focus (Текущий фокус)
 
-### Активная разработка (Последние 10 коммитов)
+### Активная разработка (Последние коммиты)
 
-#### 1. Immersive Grid Implementation
+#### 1. Multi-tenancy Infrastructure (Новый)
+**Статус:** Базовая инфраструктура реализована  
+**Коммит:** `7f41e418fe`
+
+**Что сделано:**
+- ✅ Создан базовый модуль `mayan.apps.organizations`
+- ✅ Настройки для Organizations (installation URL, base path)
+- ✅ Патчи для HttpRequest (поддержка organization URLs)
+- ✅ Тесты для settings и requests
+- ✅ Интеграция в apps.py с патчингом при старте
+
+**Что еще требуется:**
+- 🚧 Модели: Organization, Subscription, Plan, DomainSettings
+- 🚧 TenantAwareManager и TenantAwareMixin
+- 🚧 TenantResolverMiddleware
+- 🚧 Миграции для привязки существующих данных
+- 🚧 API endpoints для управления Organizations
+
+**Архитектурные решения:**
+- Использование патчей для расширения HttpRequest без модификации core
+- Настройки через Mayan settings system
+- Готовность к интеграции с существующими модулями
+
+#### 2. Public Frontend SSR Improvements
+**Статус:** Реализовано  
+**Коммит:** `c4e42302b9`
+
+**Что сделано:**
+- ✅ SSR support для animations (client-side плагин)
+- ✅ Обновлена конфигурация Nuxt для SSR
+- ✅ Оптимизация Vite build (manual chunks)
+- ✅ Новые страницы: forgot-password, changelog, roadmap
+- ✅ Улучшения компонентов (Footer, Navigation, Forms)
+- ✅ Обновления локализации (en/ru)
+
+**Архитектурные решения:**
+- Разделение client/server плагинов для SSR compatibility
+- Оптимизация bundle size через manual chunks
+- Улучшенная структура компонентов
+
+#### 3. BulkMoveModal Enhancements
+**Статус:** Улучшено  
+**Коммиты:** `d239401be2`, `2cf284790b`, `c4657bc2c6`
+
+**Что сделано:**
+- ✅ Улучшен UX для выбора папок
+- ✅ Улучшена обработка уведомлений
+- ✅ Оптимизирован workflow перемещения файлов
+- ✅ Улучшена обработка ошибок
+
+#### 4. Immersive Grid Implementation
 **Статус:** Активно разрабатывается  
 **Коммиты:** `55168e0166`, `9a35372d90`, `c2a4a28596`
 
@@ -161,7 +211,7 @@
 
 **Решение:** Shared Database + Shared Schema + ForeignKey изоляция через Organization
 
-**Статус:** ТЗ готово, реализация планируется (Sprint 1-4, 6 недель)
+**Статус:** Базовая инфраструктура реализована, модели и middleware в разработке
 
 **Обоснование:**
 - Поддержка SaaS-модели (один backend, много клиентов)
@@ -178,12 +228,17 @@
 - **Migration Strategy**: Поэтапная миграция существующих данных
 
 **Текущая реализация:**
-- Organization-aware WebSocket groups в Analytics (частично реализовано)
-- Фильтрация данных по organization в API (частично)
-- Organization-specific analytics dashboards (частично)
+- ✅ Базовый модуль `mayan.apps.organizations` создан
+- ✅ Настройки и патчи для HttpRequest реализованы
+- ✅ Organization-aware WebSocket groups в Analytics (частично реализовано)
+- ✅ Фильтрация данных по organization в API (частично)
+- ✅ Organization-specific analytics dashboards (частично)
+- 🚧 Модели Organization, Subscription, Plan (в разработке)
+- 🚧 TenantAwareManager и TenantAwareMixin (в разработке)
+- 🚧 TenantResolverMiddleware (в разработке)
 
-**Планируемая реализация (из ТЗ):**
-- Sprint 1-2: Инфраструктура (Models, Managers, Middleware)
+**Следующие шаги:**
+- Sprint 1-2: Модели и Managers (в процессе)
 - Sprint 3: Миграция существующих данных
 - Sprint 4: API и Admin панель
 - Sprint 5: Polish и Deploy

@@ -13,7 +13,7 @@ const { getPage } = useApi()
 const { locale } = useI18n()
 
 const { data: page } = await useAsyncData<PublicPage | null>(
-  () => `page-privacy-${locale.value}`,
+  `page-privacy-${locale.value}`,
   () => getPage('privacy', locale.value).catch(() => null),
   { watch: [locale] }
 )

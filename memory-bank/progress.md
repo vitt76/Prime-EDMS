@@ -129,11 +129,14 @@
 #### 11. Public Frontend (Nuxt 3)
 - ✅ Полностью реализованный публичный сайт
 - ✅ Страницы: Home, Blog, Pricing, Contact, About, Privacy, Terms
+- ✅ Новые страницы: Forgot Password, Changelog, Roadmap
 - ✅ Компоненты: Hero, Features, CTA, FAQ, Pricing Calculator
-- ✅ Формы: Contact, Login, Register
+- ✅ Формы: Contact, Login, Register, Forgot Password
+- ✅ SSR support для animations (client-side плагины)
 - ✅ SEO оптимизация (PageMeta, JsonLd)
 - ✅ Analytics интеграция
 - ✅ i18n поддержка (en/ru)
+- ✅ Оптимизация bundle size (manual chunks)
 - ✅ E2E тесты (Playwright)
 - ✅ Unit тесты (Vitest)
 
@@ -147,20 +150,34 @@
 - ✅ S3 Storage backend (Beget)
 - ✅ Health checks для всех сервисов
 
+#### 13. Multi-tenancy Infrastructure (Новый)
+- ✅ Базовый модуль `mayan.apps.organizations` создан
+- ✅ Настройки для Organizations (installation URL, base path)
+- ✅ Патчи для HttpRequest (поддержка organization URLs)
+- ✅ Тесты для settings и requests
+- ✅ Интеграция в apps.py с патчингом при старте
+
 ---
 
 ## 🚧 In Progress (В процессе разработки)
 
 ### 1. Multi-tenancy Architecture (Tenant Isolation)
-**Статус:** ТЗ готово, реализация планируется  
-**Документ:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`
+**Статус:** Базовая инфраструктура реализована, модели в разработке  
+**Документ:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`  
+**Коммит:** `7f41e418fe`
 
-**Что планируется:**
-- 🚧 Organizations Module (`mayan.apps.organizations`)
-  - Модели: Organization, Subscription, Plan, DomainSettings
-  - TenantAwareManager для автоматической фильтрации QuerySet
-  - TenantAwareMixin для tenant-aware моделей
-  - TenantResolverMiddleware для определения тенанта
+**Что реализовано:**
+- ✅ Базовый модуль `mayan.apps.organizations` создан
+- ✅ Настройки для Organizations (installation URL, base path)
+- ✅ Патчи для HttpRequest (поддержка organization URLs)
+- ✅ Тесты для settings и requests
+- ✅ Интеграция в apps.py
+
+**Что в разработке:**
+- 🚧 Модели: Organization, Subscription, Plan, DomainSettings
+- 🚧 TenantAwareManager для автоматической фильтрации QuerySet
+- 🚧 TenantAwareMixin для tenant-aware моделей
+- 🚧 TenantResolverMiddleware для определения тенанта
 - 🚧 Миграция существующих моделей:
   - Добавить FK на Organization ко всем tenant-aware моделям
   - Привязать существующие данные к default Organization
@@ -175,12 +192,13 @@
 - Поддержка SaaS и Standalone режимов
 - ContextVar для потокобезопасности
 
-**Timeline:** 6 недель (Sprint 1-4)
+**Timeline:** Sprint 1-2 в процессе (модели и managers), Sprint 3-4 планируются
 
 **Текущая частичная реализация:**
+- ✅ Базовая инфраструктура модуля
 - ✅ Organization-aware WebSocket groups в Analytics
 - ✅ Фильтрация данных по organization в некоторых API endpoints
-- ⚠️ Полная изоляция данных еще не реализована
+- ⚠️ Полная изоляция данных еще не реализована (требуются модели)
 
 ### 2. UI/UX Improvements
 - 🚧 **Immersive Grid Implementation** (активно разрабатывается)
@@ -284,13 +302,14 @@
 - **Headless API**: ✅ 90% (основные endpoints работают, некоторые gaps)
 - **Marketing CMS**: ✅ 100% (новый модуль полностью реализован)
 - **Notifications**: ✅ 95% (работает, улучшения в процессе)
+- **Organizations**: 🚧 20% (базовая инфраструктура реализована, модели в разработке)
 
 ### Frontend Components
 - **DAM Gallery**: ✅ 95% (работает, UI улучшения в процессе)
 - **Search & Filters**: ✅ 85% (базовый функционал работает, расширения в процессе)
 - **Asset Management**: ✅ 90% (CRUD работает, оптимизации в процессе)
 - **Analytics Dashboards**: ✅ 90% (дашборды работают, real-time улучшения в процессе)
-- **Public Frontend**: ✅ 100% (полностью реализован)
+- **Public Frontend**: ✅ 100% (полностью реализован, SSR improvements добавлены)
 
 ### Infrastructure
 - **Docker Setup**: ✅ 100%

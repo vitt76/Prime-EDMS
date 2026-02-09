@@ -1,3 +1,5 @@
+const apiTarget = process.env.NUXT_PUBLIC_API_URL || 'http://localhost:8080'
+
 export default defineNuxtConfig({
   devtools: { enabled: true },
   ssr: true,
@@ -14,8 +16,9 @@ export default defineNuxtConfig({
 
   // Runtime configuration
   runtimeConfig: {
+    // Server-only: direct backend URL for SSR requests (not exposed to client)
+    apiBase: apiTarget,
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_URL || 'http://localhost:8080',
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:5173',
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
       environment: process.env.NUXT_PUBLIC_ENVIRONMENT || 'development',
@@ -37,7 +40,10 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#4f46e5' }
       ],
       link: [
-        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap' }
       ]
     }
   },
@@ -166,21 +172,30 @@ export default defineNuxtConfig({
     '/blog/**': { swr: 3600 },
     // Static pages - cache longer
     '/about': { swr: 86400 },
+    '/roadmap': { swr: 86400 },
+    '/changelog': { swr: 86400 },
     '/contact': { swr: 86400 },
     '/terms': { swr: 86400 },
     '/privacy': { swr: 86400 },
     // Auth pages - no cache
     '/auth/**': { ssr: true, cache: false },
-    // API routes - no prerender
-    '/api/**': { cors: true }
+    // API routes - proxy to backend
+    '/api/**': { proxy: `${apiTarget}/api/**` }
   },
 
   // Nitro configuration
   nitro: {
     compressPublicAssets: true,
+    // Dev proxy: forward /api requests to the backend during development
+    devProxy: {
+      '/api': {
+        target: apiTarget,
+        changeOrigin: true
+      }
+    },
     prerender: {
       crawlLinks: true,
-      routes: ['/', '/pricing', '/about', '/contact', '/blog']
+      routes: ['/', '/pricing', '/about', '/contact', '/blog', '/roadmap', '/changelog']
     }
   },
 

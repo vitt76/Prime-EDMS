@@ -66,7 +66,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   useHead({
     style: [
       {
-        children: `
+        innerHTML: `
           /* Animation base styles */
           .animate-out {
             opacity: 0;
