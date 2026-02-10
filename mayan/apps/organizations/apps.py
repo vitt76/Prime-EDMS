@@ -24,6 +24,9 @@ class OrganizationsApp(MayanAppConfig):
         patch_organization_fields()
         patch_document_managers()
 
+        # Ensure Document.organization is always set before DB insert.
+        self._connect_document_tenant_binding_signal()
+
         # Connect quota enforcement signal
         self._connect_quota_signals()
 
@@ -46,6 +49,50 @@ class OrganizationsApp(MayanAppConfig):
         except Exception as exc:
             logger.warning(
                 'Could not connect storage quota signal: %s', exc
+            )
+
+    def _connect_document_tenant_binding_signal(self):
+        """
+        Connect pre_save signal to auto-bind organization for Document.
+
+        Document.organization is NOT NULL at DB level. Some create paths
+        (including /api/v4/documents/) do not pass organization explicitly,
+        so we must inject it from tenant context before insert.
+        """
+        try:
+            from django.db.models.signals import pre_save
+            from mayan.apps.documents.models import Document
+
+            from .literals import DEFAULT_ORGANIZATION_SLUG
+            from .managers import get_current_organization
+            from .models import Organization
+
+            def _bind_document_organization(sender, instance, **kwargs):
+                # Respect explicit assignment done by caller.
+                if getattr(instance, 'organization_id', None):
+                    return
+
+                organization = get_current_organization()
+
+                # Defensive fallback for non-request flows.
+                if organization is None:
+                    organization = Organization.objects.filter(
+                        slug=DEFAULT_ORGANIZATION_SLUG
+                    ).first()
+
+                if organization is not None:
+                    instance.organization = organization
+
+            pre_save.connect(
+                _bind_document_organization,
+                sender=Document,
+                dispatch_uid='organizations_bind_document_organization',
+                weak=False
+            )
+            logger.debug('Connected document tenant binding signal')
+        except Exception as exc:
+            logger.warning(
+                'Could not connect document tenant binding signal: %s', exc
             )
 
     def _connect_cache_invalidation_signals(self):

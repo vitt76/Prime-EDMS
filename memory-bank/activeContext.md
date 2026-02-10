@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
 **Последнее обновление:** 2026-02-10  
-**Текущий фокус:** Multi-tenancy Sprint 4 — Fully Verified (all endpoints tested, contribute_to_class patch applied)
+**Текущий фокус:** Multi-tenancy Sprint 4 — Fully Verified + Upload Recovery + Gallery Preview Recovery
 
 ---
 
@@ -10,7 +10,7 @@
 ### Активная разработка (Последние коммиты)
 
 #### 1. Multi-tenancy Infrastructure
-**Статус:** Sprint 1-4 + Hotfix + Tech Debt + Sprint 4.2 + Sprint 4.3 (Verification & FK Patch) завершены  
+**Статус:** Sprint 1-4 + Hotfix + Tech Debt + Sprint 4.2 + Sprint 4.3 + Sprint 4.4 + Sprint 4.5 (Gallery Preview Recovery) завершены  
 **Коммит:** `7f41e418fe`
 
 **Что сделано (Sprint 1 Infrastructure — ЗАВЕРШЁН 2026-02-09):**
@@ -133,6 +133,37 @@
   - POST `/organizations/{id}/activate/` → 200 (activate)
 - ✅ **Lifecycle тест пройден:** CREATE(trial) → GET(detail) → SUSPEND(suspended) → GET(suspended) → ACTIVATE(active) → GET(active)
 - ✅ Docker container restart достаточен (пересборка образов не требуется)
+
+**Sprint 4.4 Upload Recovery (ЗАВЕРШЁН 2026-02-10):**
+- ✅ **Критический баг обнаружен и исправлен:** Upload Wizard падал на шаге 1 (`POST /api/v4/documents/`) с HTTP 500
+- ✅ **Корневая причина:** `documents_document.organization_id` имеет NOT NULL constraint, но при создании Document в API-path поле organization не проставлялось автоматически
+- ✅ **Трейсбек подтвержден:** `django.db.utils.IntegrityError: null value in column "organization_id" violates not-null constraint`
+- ✅ **Исправление:** в `organizations/apps.py` добавен `pre_save` binding signal для `Document`, который:
+  - устанавливает `instance.organization` из tenant context (`get_current_organization()`)
+  - использует fallback на default organization
+  - подключается с `weak=False` (receiver не теряется GC)
+- ✅ **Верификация после фикса:**
+  - `POST /api/v4/documents/` -> 201 Created
+  - `POST /api/v4/documents/{id}/files/` -> 202 Accepted
+  - `GET /api/v4/documents/{id}/files/` -> файл присутствует в results
+  - проверка в shell: у созданного `Document` `organization_id` заполнен (не NULL)
+- ⚠️ Отдельное наблюдение: `ws://localhost:8080/ws/notifications/` возвращает 404 (не блокирует upload-flow, вынесено отдельно)
+
+**Sprint 4.5 Gallery Preview Recovery (ЗАВЕРШЁН 2026-02-10):**
+- ✅ **Критический регресс обнаружен:** в SPA-галерее (`http://localhost:5173/dam`) карточки показывали placeholder `DOCUMENT` вместо превью, часть file metadata не отображалась
+- ✅ **Корневые причины:**
+  - `optimized` API возвращал некорректный fallback `thumbnail_url` (`.../versions/latest/pages/1/image/...`) для части документов
+  - prefetch latest file был нестабилен, из-за чего `file_latest_filename/mimetype/size` могли приходить `null`
+  - endpoint превью защищён токеном; обычный `<img>` не отправляет `Authorization` header
+- ✅ **Исправления backend:**
+  - `optimized_document_api_views.py`: исправлен prefetch latest file (стабильное заполнение `file_latest_*`)
+  - `optimized_document_serializers.py`: убран некорректный fallback `versions/latest`, обновлена логика fallback и cache key для `thumbnail/preview` (учёт version/page/file)
+- ✅ **Исправления frontend:**
+  - `frontend/src/components/DAM/AssetCard.vue`: защищённые `/api/v4/.../image` загружаются через `apiService` как `blob` + `ObjectURL` (с токеном)
+- ✅ **Верификация:**
+  - `GET /api/v4/documents/optimized/` возвращает заполненные `file_latest_filename`, `file_latest_mimetype`, `file_latest_size`
+  - `thumbnail_url` валиден (`/api/v4/documents/{id}/versions/{version_id}/pages/{page_id}/image/...`)
+  - визуальная проверка после reload: изображение в SPA-галерее отображается
 
 **Архитектурные решения:**
 - Использование патчей для расширения HttpRequest без модификации core

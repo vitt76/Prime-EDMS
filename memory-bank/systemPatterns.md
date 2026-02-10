@@ -190,7 +190,7 @@ def transform_ai_tags(value):
 
 **Назначение:** Поддержка SaaS-модели (один backend, много клиентов) и Standalone-модели (один клиент на выделенном сервере).
 
-**Статус:** Базовая инфраструктура реализована (модуль создан, настройки и патчи), модели и middleware в разработке.
+**Статус:** Полностью реализовано (Sprint 1-4 + Hotfix + Tech Debt + Verification + Upload Recovery).
 
 **Компоненты:**
 
@@ -331,6 +331,35 @@ def _has_concrete_field(model, field_name):
 - Поля **должны** совпадать с определениями в миграциях (related_name, on_delete, db_index)
 - `_has_concrete_field()` обеспечивает идемпотентность (безопасен при повторных вызовах)
 - Без этого патча любой ORM lookup через `organization` на core моделях невозможен
+
+### 11. Document Tenant Binding on Create (NOT NULL Safety)
+
+**Назначение:** Гарантировать заполнение `Document.organization` при всех create-paths (включая upload wizard), когда в БД стоит NOT NULL.
+
+**Проблема:** При `POST /api/v4/documents/` возможно создание `Document` без `organization`, что вызывает:
+`IntegrityError: null value in column "organization_id" violates not-null constraint`.
+
+**Решение:** pre-save signal в `organizations/apps.py`:
+- если `instance.organization` уже задан — не трогать;
+- иначе взять tenant из ContextVar (`get_current_organization()`);
+- если tenant отсутствует — fallback на default organization;
+- подключение сигнала с `weak=False`, чтобы receiver не был удален GC.
+
+**Результат:** Upload flow восстановлен (`POST /documents/` -> 201, `POST /documents/{id}/files/` -> 202).
+
+### 12. Protected Thumbnail Rendering Pattern (SPA)
+
+**Назначение:** Корректный показ превью в SPA, когда backend image endpoint требует токен.
+
+**Проблема:** URL превью вида `/api/v4/.../image/` защищён. Стандартный `<img src="...">` не отправляет `Authorization` header, из-за чего в галерее появляется placeholder вместо изображения.
+
+**Решение:**
+- На фронтенде (`AssetCard`) загружать защищённые превью через `apiService` (`responseType: 'blob'`) с auth interceptor.
+- Преобразовывать blob в `ObjectURL` и использовать его как `img src`.
+- При unmount компонента освобождать `ObjectURL` через `URL.revokeObjectURL`.
+- На backend для optimized list endpoint держать валидные `thumbnail_url/preview_url` и корректные `file_latest_*` поля (стабильный latest-file prefetch + правильный cache key).
+
+**Результат:** Восстановлен рендер изображений и file metadata в SPA-галерее (`/dam`) после Sprint 4.5 fix.
 
 ## Компоненты системы
 

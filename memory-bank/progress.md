@@ -102,6 +102,7 @@
 - ✅ Persistence UI preferences (density, layout, sort)
 - ✅ Error handling и retry механизмы
 - ✅ Loading states и skeletons
+- ✅ Восстановлен рендер превью в SPA-галерее для защищённых API thumbnail URL (blob/object URL через auth)
 
 #### 8. Headless API
 - ✅ REST API v4 endpoints для фронтенда
@@ -210,6 +211,7 @@
 - ✅ Suspend/Activate API endpoints (ТЗ Section 4.5.3)
 - ✅ `contribute_to_class` patch: Document/Tag/Cabinet FK `organization` зарегистрирован на уровне Python (patches.py)
 - ✅ **Полная API верификация:** all endpoints 200 OK, lifecycle test passed, no 500 errors
+- ✅ **Upload recovery:** исправлен 500 на `POST /api/v4/documents/` (NOT NULL `organization_id`) через pre_save tenant binding signal для Document
 
 **Архитектурный подход:**
 - Shared Database + Shared Schema
@@ -385,6 +387,8 @@
 
 - **Organizations migrations (2026-02-10):** Операции AddField/AlterField/AddIndex для Document, Tag, Cabinet перенесены из org 0002/0004 в documents, tags, cabinets (Django не поддерживает app_label в этих операциях). org 0002/0004 — точки синхронизации; полная логика задокументирована в docstrings миграций.
 - **contribute_to_class patch (2026-02-10):** Миграции добавляют столбцы в БД, но Python-класс core моделей (Document, Tag, Cabinet) не знает о поле `organization`. Без `contribute_to_class()` ORM lookup `document__organization` вызывает ValueError. Исправлено в `patches.py:patch_organization_fields()`, вызывается в `apps.py` ДО `patch_document_managers()`.
+- **Upload 500 fix (2026-02-10):** root cause в `documents_document.organization_id NOT NULL` при создании Document из Upload Wizard (`POST /api/v4/documents/`). Добавлен `pre_save` signal bind в `organizations/apps.py`, который автопроставляет `Document.organization` из tenant context + fallback default-org, подключение с `weak=False`.
+- **Gallery preview regression fix (2026-02-10):** устранён кейс с placeholder `DOCUMENT` в SPA (`/dam`): исправлены latest-file prefetch и thumbnail/preview fallback в optimized API, фронтенд `AssetCard` переведён на auth blob-loading для защищённых `/api/v4/.../image`.
 - **Docker:** organizations и tags добавлены в Dockerfile.app и docker-compose volumes.
 - **distribution 0001:** Зависимость от documents 0081 для корректного разрешения DocumentFile.
 - Большинство core функций полностью работают и используются в production

@@ -62,7 +62,8 @@ class CachedThumbnailMixin:
         width: int = 150, 
         height: int = 150,
         version_id: Optional[int] = None,
-        page_id: Optional[int] = None
+        page_id: Optional[int] = None,
+        file_id: Optional[int] = None
     ) -> Optional[str]:
         """
         Get thumbnail URL with caching.
@@ -72,7 +73,10 @@ class CachedThumbnailMixin:
         2. If miss: Generate URL -> Save to cache (TTL 1 hour) -> Return
         3. If hit: Return immediately
         """
-        cache_key = f'thumbnail_url_{document_id}_{width}x{height}'
+        cache_key = (
+            f'thumbnail_url_{document_id}_{width}x{height}_'
+            f'v{version_id or "na"}_p{page_id or "na"}_f{file_id or "na"}'
+        )
         
         # Try cache first
         cached_url = cache.get(cache_key)
@@ -85,16 +89,19 @@ class CachedThumbnailMixin:
                 f'/api/v4/documents/{document_id}/versions/{version_id}'
                 f'/pages/{page_id}/image/?width={width}&height={height}'
             )
-        else:
-            # Fallback URL pattern
+        elif file_id:
             url = (
-                f'/api/v4/documents/{document_id}/versions/latest'
+                f'/api/v4/documents/{document_id}/files/{file_id}'
                 f'/pages/1/image/?width={width}&height={height}'
             )
+        else:
+            # Final fallback when no page/file id is available yet.
+            url = None
         
         # Cache the URL
-        cache.set(cache_key, url, THUMBNAIL_CACHE_TTL)
-        
+        if url:
+            cache.set(cache_key, url, THUMBNAIL_CACHE_TTL)
+
         return self._make_absolute(url)
     
     def _get_cached_preview_url(
@@ -102,10 +109,14 @@ class CachedThumbnailMixin:
         document_id: int,
         width: int = 800,
         version_id: Optional[int] = None,
-        page_id: Optional[int] = None
+        page_id: Optional[int] = None,
+        file_id: Optional[int] = None
     ) -> Optional[str]:
         """Get preview URL with caching."""
-        cache_key = f'preview_url_{document_id}_{width}'
+        cache_key = (
+            f'preview_url_{document_id}_{width}_'
+            f'v{version_id or "na"}_p{page_id or "na"}_f{file_id or "na"}'
+        )
         
         cached_url = cache.get(cache_key)
         if cached_url is not None:
@@ -116,14 +127,17 @@ class CachedThumbnailMixin:
                 f'/api/v4/documents/{document_id}/versions/{version_id}'
                 f'/pages/{page_id}/image/?width={width}'
             )
-        else:
+        elif file_id:
             url = (
-                f'/api/v4/documents/{document_id}/versions/latest'
+                f'/api/v4/documents/{document_id}/files/{file_id}'
                 f'/pages/1/image/?width={width}'
             )
-        
-        cache.set(cache_key, url, THUMBNAIL_CACHE_TTL)
-        
+        else:
+            url = None
+
+        if url:
+            cache.set(cache_key, url, THUMBNAIL_CACHE_TTL)
+
         return self._make_absolute(url)
     
     def _get_cached_download_url(
@@ -240,10 +254,12 @@ class OptimizedDocumentListSerializer(
         """Get prefetched file_latest or fallback to property."""
         if hasattr(obj, '_prefetched_latest_file_list'):
             files = obj._prefetched_latest_file_list
-            return files[0] if files else None
+            if files:
+                return files[0]
         if hasattr(obj, '_prefetched_file_latest_list'):
             files = obj._prefetched_file_latest_list
-            return files[0] if files else None
+            if files:
+                return files[0]
         if hasattr(obj, '_cached_file_latest'):
             return obj._cached_file_latest
         # Fallback (triggers query - should not happen with optimized view)
@@ -289,7 +305,14 @@ class OptimizedDocumentListSerializer(
                 if request:
                     return request.build_absolute_uri(url)
             return url
-        return getattr(obj, 'latest_file_id', None)
+        file_id = getattr(obj, 'latest_file_id', None)
+        if file_id:
+            url = f'/api/v4/documents/{obj.pk}/files/{file_id}/'
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return None
     
     def get_file_latest_filename(self, obj):
         file = self._get_file_latest(obj)
@@ -359,9 +382,12 @@ class OptimizedDocumentListSerializer(
                         version_id=version.pk,
                         page_id=page_list[0].pk
                     )
-        
-        # Fallback URL
-        return self._get_cached_thumbnail_url(document_id=obj.pk)
+
+        file = self._get_file_latest(obj)
+        file_id = file.pk if file else getattr(obj, 'latest_file_id', None)
+        return self._get_cached_thumbnail_url(
+            document_id=obj.pk, width=150, height=150, file_id=file_id
+        )
     
     def get_preview_url(self, obj):
         """Get cached preview URL."""
@@ -377,8 +403,12 @@ class OptimizedDocumentListSerializer(
                         version_id=version.pk,
                         page_id=page_list[0].pk
                     )
-        
-        return self._get_cached_preview_url(document_id=obj.pk)
+
+        file = self._get_file_latest(obj)
+        file_id = file.pk if file else getattr(obj, 'latest_file_id', None)
+        return self._get_cached_preview_url(
+            document_id=obj.pk, width=800, file_id=file_id
+        )
     
     def get_download_url(self, obj):
         """Get download URL for latest file."""

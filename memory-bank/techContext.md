@@ -246,6 +246,13 @@ public-frontend/
 4. **app**: Основное приложение на Gunicorn (порт 8080)
 5. **app_websocket**: WebSocket сервер на Daphne (порт 8001)
 
+#### Задействованные порты (текущий dev-статус)
+- **8080** → `app` (Django/Gunicorn + REST API), внешний доступ: `http://localhost:8080`
+- **8001** → `app_websocket` (Daphne/ASGI), внешний доступ: `ws://localhost:8001/ws/notifications/`
+- **5173** → DAM SPA (Vite dev server), внешний доступ: `http://localhost:5173/dam`
+- **3000** → Public Frontend (Nuxt dev server), внешний доступ: `http://localhost:3000`
+- **5432 / 6379 / 5672 / 15672** — внутренние порты Docker-сети для PostgreSQL, Redis, RabbitMQ (в хост обычно не проброшены)
+
 #### Volumes:
 - `postgres_data`: Данные PostgreSQL
 - `rabbitmq_data`: Данные RabbitMQ
@@ -268,6 +275,22 @@ public-frontend/
 ### Docker образы
 - **Базовый образ**: `mayanedms/mayanedms:s4.3`
 - **Кастомный Dockerfile**: `Dockerfile.app` с дополнительными зависимостями
+
+### Краткая инструкция по подъёму всех сервисов
+1. В корне проекта (`c:\\DAM\\Prime-EDMS`) проверить Docker Engine и Docker Compose.
+2. Запустить backend стек:
+   - `docker compose up -d --build postgresql redis rabbitmq app app_websocket`
+3. Проверить готовность:
+   - `docker compose ps`
+   - `docker compose logs --tail 100 app`
+4. Запустить DAM SPA:
+   - `cd frontend && npm install && npm run dev`
+5. (Опционально) запустить Public Frontend:
+   - `cd public-frontend && npm install && npm run dev`
+6. Проверка доступности:
+   - API: `http://localhost:8080/api/v4/`
+   - DAM UI: `http://localhost:5173/dam`
+   - Public UI: `http://localhost:3000`
 
 ## Ограничения и требования
 

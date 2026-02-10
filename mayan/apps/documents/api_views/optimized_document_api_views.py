@@ -109,9 +109,9 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
             # Prefetch latest file with all its fields
             Prefetch(
                 'files',
-                queryset=DocumentFile.objects.annotate(
-                    is_latest=Subquery(latest_file_subquery)
-                ).filter(pk=Subquery(latest_file_subquery)),
+                queryset=DocumentFile.objects.order_by(
+                    'document_id', '-timestamp'
+                ).distinct('document_id'),
                 to_attr='_prefetched_latest_file_list'
             ),
             # Prefetch active version with pages
