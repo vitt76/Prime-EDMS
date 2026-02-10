@@ -58,28 +58,26 @@ interface Stat {
   label: string
 }
 
+const { t } = useI18n()
+
 withDefaults(
   defineProps<{
-    title?: string
-    subtitle?: string
-    ctaText?: string
     ctaUrl?: string
-    secondaryCtaText?: string
     secondaryCtaUrl?: string
-    stats?: Stat[]
   }>(),
   {
-    title: 'Готовы начать?',
-    subtitle: 'Присоединяйтесь к тысячам команд, которые уже управляют своим контентом эффективнее',
-    ctaText: 'Начать бесплатно',
     ctaUrl: '/auth/register',
-    secondaryCtaText: 'Связаться с нами',
-    secondaryCtaUrl: '/contact',
-    stats: () => [
-      { value: '14 дней', label: 'Бесплатный период' },
-      { value: '5 мин', label: 'Время настройки' },
-      { value: '24/7', label: 'Поддержка' }
-    ]
+    secondaryCtaUrl: '/contact'
   }
 )
+
+const title = computed(() => t('cta.title'))
+const subtitle = computed(() => t('cta.subtitle'))
+const ctaText = computed(() => t('cta.start'))
+const secondaryCtaText = computed(() => t('cta.contact'))
+const stats = computed<Stat[]>(() => [
+  { value: t('cta.trialDays'), label: t('cta.trialPeriod') },
+  { value: t('cta.setupMinutes'), label: t('cta.setupTime') },
+  { value: t('cta.support247'), label: t('cta.support') }
+])
 </script>

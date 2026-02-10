@@ -6,12 +6,12 @@
     />
 
     <!-- Hero -->
-    <section class="bg-gradient-to-b from-primary-50 to-white py-16 lg:py-20">
+    <section class="bg-gradient-to-b from-primary-50 to-white py-16 lg:py-20 dark:from-neutral-900 dark:to-neutral-950">
       <div class="mx-auto max-w-container px-4 text-center">
-        <h1 class="text-4xl font-bold tracking-tight text-neutral-900 md:text-5xl">
+        <h1 class="text-4xl font-bold tracking-tight text-neutral-900 md:text-5xl dark:text-white">
           Простое и прозрачное ценообразование
         </h1>
-        <p class="mt-4 text-lg text-neutral-600">
+        <p class="mt-4 text-lg text-neutral-600 dark:text-neutral-400">
           Выберите план, который подходит вашей команде. Начните бесплатно.
         </p>
       </div>
@@ -24,10 +24,10 @@
 
     <!-- Feature Comparison Table -->
     <section class="mx-auto max-w-container px-4 py-16">
-      <h2 class="text-center text-2xl font-bold text-neutral-900 md:text-3xl">
+      <h2 class="text-center text-2xl font-bold text-neutral-900 md:text-3xl dark:text-white">
         Сравнение функций
       </h2>
-      <p class="mt-2 text-center text-neutral-600">
+      <p class="mt-2 text-center text-neutral-600 dark:text-neutral-400">
         Детальное сравнение всех тарифных планов
       </p>
 
@@ -89,12 +89,12 @@
     </section>
 
     <!-- FAQ Section -->
-    <section class="bg-neutral-50 py-16 lg:py-20">
+    <section class="bg-neutral-50 py-16 lg:py-20 dark:bg-neutral-900">
       <div class="mx-auto max-w-container px-4">
-        <h2 class="text-center text-2xl font-bold text-neutral-900 md:text-3xl">
+        <h2 class="text-center text-2xl font-bold text-neutral-900 md:text-3xl dark:text-white">
           Часто задаваемые вопросы
         </h2>
-        <p class="mt-2 text-center text-neutral-600">
+        <p class="mt-2 text-center text-neutral-600 dark:text-neutral-400">
           Ответы на популярные вопросы о тарифах
         </p>
 
@@ -108,7 +108,7 @@
               @click="toggleFaq(idx)"
               class="flex w-full items-center justify-between text-left"
             >
-              <span class="text-base font-semibold text-neutral-900">{{ faq.question }}</span>
+              <span class="text-base font-semibold text-neutral-900 dark:text-white">{{ faq.question }}</span>
               <ChevronDownIcon 
                 class="h-5 w-5 flex-shrink-0 text-neutral-500 transition-transform"
                 :class="openFaqs.has(idx) ? 'rotate-180' : ''"
@@ -124,7 +124,7 @@
             >
               <p 
                 v-if="openFaqs.has(idx)"
-                class="mt-4 text-sm leading-relaxed text-neutral-600"
+                class="mt-4 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400"
               >
                 {{ faq.answer }}
               </p>

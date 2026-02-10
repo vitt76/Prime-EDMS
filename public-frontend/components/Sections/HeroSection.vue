@@ -60,8 +60,8 @@
             </div>
           </div>
           <div class="text-sm">
-            <div class="font-semibold text-neutral-900">2,500+ teams</div>
-            <div class="text-neutral-500">уже используют MADDAM</div>
+            <div class="font-semibold text-neutral-900">{{ $t('hero.teams') }}</div>
+            <div class="text-neutral-500">{{ $t('hero.socialProof') }}</div>
           </div>
         </div>
       </div>

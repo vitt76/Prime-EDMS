@@ -38,10 +38,10 @@
           type="checkbox"
           class="h-4 w-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
         />
-        <span class="text-sm text-neutral-600">Запомнить меня</span>
+        <span class="text-sm text-neutral-600 dark:text-neutral-400">{{ $t('forms.rememberMe') }}</span>
       </label>
-      <NuxtLink to="/auth/forgot-password" class="text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline">
-        Забыли пароль?
+      <NuxtLink to="/auth/forgot-password" class="text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline dark:text-primary-400">
+        {{ $t('forms.forgotPassword') }}
       </NuxtLink>
     </div>
 
@@ -68,23 +68,16 @@
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
         </svg>
-        Вход...
+        {{ $t('auth.loggingIn') }}
       </span>
-      <span v-else>Войти</span>
+      <span v-else>{{ $t('auth.login') }}</span>
     </CommonButton>
 
-    <!-- Info -->
-    <div class="rounded-lg bg-neutral-50 p-4">
-      <p class="text-xs text-neutral-500">
-        Авторизация обрабатывается основным приложением. После входа вы будете перенаправлены в панель управления.
-      </p>
-    </div>
-
     <!-- Register Link -->
-    <p class="text-center text-sm text-neutral-600">
-      Нет аккаунта? 
-      <NuxtLink to="/auth/register" class="font-medium text-primary-600 hover:text-primary-700 hover:underline">
-        Зарегистрироваться
+    <p class="text-center text-sm text-neutral-600 dark:text-neutral-400">
+      {{ $t('auth.noAccount') }}
+      <NuxtLink to="/auth/register" class="font-medium text-primary-600 hover:text-primary-700 hover:underline dark:text-primary-400">
+        {{ $t('auth.register') }}
       </NuxtLink>
     </p>
   </form>
@@ -124,12 +117,40 @@ const onSubmit = async () => {
   loading.value = true
   
   try {
-    // Login is handled by the main Django app
-    // This redirects to the admin panel login
-    window.location.href = `/api/v4/auth/login/?email=${encodeURIComponent(form.email)}&remember=${form.remember}`
+    const config = useRuntimeConfig()
+    const appUrl = config.public.appUrl || 'http://localhost:5173'
+    
+    // Attempt login via API (POST, credentials in body, not URL)
+    await $fetch('/api/v4/public/auth/login/', {
+      method: 'POST',
+      body: {
+        email: form.email,
+        password: form.password,
+        remember: form.remember
+      }
+    })
+    
+    status.value = 'success'
+    message.value = 'Вход выполнен! Перенаправляем...'
+    
+    // Redirect to main app after successful login
+    setTimeout(() => {
+      window.location.href = appUrl
+    }, 1000)
   } catch (error: any) {
     status.value = 'error'
-    message.value = error?.data?.message || 'Ошибка входа. Попробуйте позже.'
+    
+    if (error?.statusCode === 401 || error?.status === 401) {
+      message.value = 'Неверный email или пароль.'
+    } else if (error?.data?.message) {
+      message.value = error.data.message
+    } else {
+      // Fallback: redirect to Django login page
+      const config = useRuntimeConfig()
+      const apiBase = config.public.apiBase || 'http://localhost:8080'
+      window.location.href = `${apiBase}/authentication/login/`
+    }
+  } finally {
     loading.value = false
   }
 }

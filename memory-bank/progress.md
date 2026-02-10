@@ -1,6 +1,6 @@
 # Progress: Prime-EDMS
 
-**Последнее обновление:** 2026-02-05  
+**Последнее обновление:** 2026-02-10  
 **Источник:** Анализ последних 10 git коммитов и кодовой базы
 
 ---
@@ -129,11 +129,14 @@
 #### 11. Public Frontend (Nuxt 3)
 - ✅ Полностью реализованный публичный сайт
 - ✅ Страницы: Home, Blog, Pricing, Contact, About, Privacy, Terms
+- ✅ Новые страницы: Forgot Password, Changelog, Roadmap
 - ✅ Компоненты: Hero, Features, CTA, FAQ, Pricing Calculator
-- ✅ Формы: Contact, Login, Register
+- ✅ Формы: Contact, Login, Register, Forgot Password
+- ✅ SSR support для animations (client-side плагины)
 - ✅ SEO оптимизация (PageMeta, JsonLd)
 - ✅ Analytics интеграция
 - ✅ i18n поддержка (en/ru)
+- ✅ Оптимизация bundle size (manual chunks)
 - ✅ E2E тесты (Playwright)
 - ✅ Unit тесты (Vitest)
 
@@ -147,40 +150,72 @@
 - ✅ S3 Storage backend (Beget)
 - ✅ Health checks для всех сервисов
 
+#### 13. Multi-tenancy Infrastructure (Новый)
+- ✅ Базовый модуль `mayan.apps.organizations` создан
+- ✅ Настройки для Organizations (installation URL, base path)
+- ✅ Патчи для HttpRequest (поддержка organization URLs)
+- ✅ Тесты для settings и requests
+- ✅ Интеграция в apps.py с патчингом при старте
+
 ---
 
 ## 🚧 In Progress (В процессе разработки)
 
-### 1. Multi-tenancy Architecture (Tenant Isolation)
-**Статус:** ТЗ готово, реализация планируется  
-**Документ:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`
+### 1. Multi-tenancy Architecture (Tenant Isolation)  — ЗАВЕРШЁН
+**Статус:** Sprint 1-4 + Hotfix + Tech Debt завершены, Suspend/Activate endpoints добавлены  
+**Документ:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`  
+**Коммит:** `7f41e418fe`
 
-**Что планируется:**
-- 🚧 Organizations Module (`mayan.apps.organizations`)
-  - Модели: Organization, Subscription, Plan, DomainSettings
-  - TenantAwareManager для автоматической фильтрации QuerySet
-  - TenantAwareMixin для tenant-aware моделей
-  - TenantResolverMiddleware для определения тенанта
-- 🚧 Миграция существующих моделей:
-  - Добавить FK на Organization ко всем tenant-aware моделям
-  - Привязать существующие данные к default Organization
-  - Сделать FK обязательным
-- 🚧 API endpoints для управления Organizations
-- 🚧 Django Admin панель для SuperAdmin
-- 🚧 Permissions для Super Admin vs Org Admin
+**Sprint 1 (ЗАВЕРШЁН):**
+- ✅ Базовый модуль `mayan.apps.organizations` создан
+- ✅ Настройки для Organizations (installation URL, base path)
+- ✅ Патчи для HttpRequest (поддержка organization URLs)
+- ✅ Модели: Organization, Plan, Subscription, DomainSettings, UserOrganizationRole
+- ✅ TenantAwareManager + TenantAwareMixin (ContextVar)
+- ✅ TenantResolverMiddleware (domain, subdomain, user, standalone)
+- ✅ Unit-тесты
+
+**Sprint 2 (ЗАВЕРШЁН):**
+- ✅ Гибридные менеджеры: TenantAwareDocumentManager, TenantAwareTrashCanManager, TenantAwareValidDocumentManager
+- ✅ Миграция 0002: nullable organization FK к Document, Tag, Cabinet (операции в documents/0085, tags/0010, cabinets/0007)
+- ✅ Миграция 0003: data migration — привязка к default Organization
+- ✅ Миграция 0004: NOT NULL + composite indexes (операции в documents/0086, tags/0011, cabinets/0008)
+- ✅ Restructuring 2026-02-10: org 0002/0004 — dependency sync; логика в docstrings + целевых приложениях
+- ✅ Monkey-patching Document managers на tenant-aware версии
+- ✅ Django Admin для Organizations (все модели + inlines)
+- ✅ DRF Serializers (Organization, Plan, Subscription, Members, CurrentOrg)
+- ✅ REST API: Organizations CRUD, Members, Plans, Current org
+- ✅ Integration тесты: cross-tenant isolation, hybrid managers, security
+
+**Sprint 3 (ЗАВЕРШЁН):**
+- ✅ auth/me enrichment: organization + organizations list
+- ✅ Reusable DRF permission classes (IsOrganizationMember, IsOrganizationAdmin, IsOrganizationOwner, IsSuperAdminOrOrgAdmin)
+- ✅ X-Organization-Id header resolution в middleware
+- ✅ TenantAwareTask: Celery base class с organization context
+- ✅ DAM/Analytics tasks обновлены на TenantAwareTask
+- ✅ Quota enforcement: storage (pre_save signal), AI (task check), users
+- ✅ Frontend: TypeScript types, organizationService, organizationStore (Pinia)
+- ✅ Frontend: apiService X-Organization-Id header, authStore org init/cleanup
+- ✅ Frontend: OrganizationSelector component в Header
+- ✅ Frontend: OrganizationSettingsPage (General, Members, Quota, Plan)
+- ✅ Frontend: router с requiresOrgAdmin guard
+- ✅ Backend tests: permission classes (12 tests), Celery context (5 tests), X-Organization-Id header (4 tests)
+
+**Sprint 4 (ЗАВЕРШЁН):**
+- ✅ Performance indexes, Redis caching, N+1 устранение, пагинация
+- ✅ Security hardening: UUID validation, audit logging, OrgScopedAPIMixin
+- ✅ Hotfix: cross-org access vulnerability, URL routing mismatch
+- ✅ Tech Debt: DRY annotations, specific exceptions, type cleanup
+- ✅ Migration restructuring: cross-app operations moved to target apps
+- ✅ Suspend/Activate API endpoints (ТЗ Section 4.5.3)
+- ✅ `contribute_to_class` patch: Document/Tag/Cabinet FK `organization` зарегистрирован на уровне Python (patches.py)
+- ✅ **Полная API верификация:** all endpoints 200 OK, lifecycle test passed, no 500 errors
 
 **Архитектурный подход:**
 - Shared Database + Shared Schema
 - ForeignKey изоляция через Organization
 - Поддержка SaaS и Standalone режимов
 - ContextVar для потокобезопасности
-
-**Timeline:** 6 недель (Sprint 1-4)
-
-**Текущая частичная реализация:**
-- ✅ Organization-aware WebSocket groups в Analytics
-- ✅ Фильтрация данных по organization в некоторых API endpoints
-- ⚠️ Полная изоляция данных еще не реализована
 
 ### 2. UI/UX Improvements
 - 🚧 **Immersive Grid Implementation** (активно разрабатывается)
@@ -189,8 +224,8 @@
   - ✅ Google Photos style selection
   - ✅ Quick actions на hover
   - ✅ Density control (compact/comfortable)
-  - 🚧 Оптимизация производительности для больших списков (>100 активов)
-  - 🚧 Виртуальный скроллинг для очень больших коллекций
+  - ✅ Оптимизация производительности для больших списков (>100 активов) - Intersection Observer lazy rendering
+  - ✅ Виртуальный скроллинг: IntersectionObserver-based lazy rendering в AssetGrid + infinite scroll sentinel
 
 ### 2. Analytics Enhancements
 - 🚧 **YouTube Analytics Integration**
@@ -203,7 +238,8 @@
 - ✅ Базовый поиск работает
 - ✅ Фильтры по типам документов
 - ✅ Keyword search
-- 🚧 Расширенные фильтры (дата, размер, владелец)
+- ✅ Расширенные фильтры (дата, размер, теги, владелец) — с persistence в URL
+- ✅ Owner filter добавлен в FiltersPanel + useDamSearchFilters composable
 - 🚧 Faceted search улучшения
 - 🚧 Search history persistence
 
@@ -211,14 +247,15 @@
 - ✅ Lazy loading активов
 - ✅ Оптимизация API запросов (предотвращение N+1)
 - ✅ Кеширование метаданных
-- 🚧 Виртуальный скроллинг для больших списков
+- ✅ Виртуальный скроллинг для больших списков (IntersectionObserver lazy rendering)
 - 🚧 Оптимизация изображений (lazy loading, responsive images)
 - 🚧 CDN интеграция для статики
 
-### 5. Multi-tenancy
+### 5. Multi-tenancy — ЗАВЕРШЁН (Sprint 1-4)
 - ✅ Organization-specific WebSocket groups в analytics
-- 🚧 Полная изоляция данных по организациям
-- 🚧 Organization-level settings
+- ✅ Полная изоляция данных по организациям (Document, Tag, Cabinet FK + TenantAwareManager + OrgScopedAPIMixin)
+- ✅ Organization-level settings (quotas, branding, domain settings)
+- ✅ Suspend/Activate API endpoints (ТЗ 4.5.3)
 
 ### 6. Error Handling & Resilience
 - ✅ Базовое error handling в компонентах
@@ -231,12 +268,25 @@
 
 ## ❌ Incomplete / TODO (Неполные функции)
 
-### 1. Multi-tenancy Implementation
-- ❌ **Organizations Module** - Требуется полная реализация
-  - ТЗ готово (`docs/transformation-2025/TZ_Django_Tenant_Isolation.md`)
-  - Статус: Ready for Development
-  - Компоненты: Models, Managers, Middleware, Migrations, API
-  - Timeline: 6 недель (Sprint 1-4)
+### 1. Multi-tenancy Implementation — ЗАВЕРШЁН (Sprint 1-4 + Hotfix + Tech Debt)
+- ✅ **Organizations Module** — полностью реализован
+  - ТЗ: `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`
+  - ✅ Модели: Organization, Plan, Subscription, DomainSettings, UserOrganizationRole
+  - ✅ TenantAwareManager + TenantAwareMixin + Hybrid Managers
+  - ✅ TenantResolverMiddleware (domain, subdomain, X-Organization-Id header, user, standalone fallback)
+  - ✅ Document, Tag, Cabinet привязаны к Organization (FK: documents 0085/0086, tags 0010/0011, cabinets 0007/0008; org 0002/0004 sync)
+  - ✅ Monkey-patching Document managers (objects/trash/valid)
+  - ✅ Django Admin для всех моделей Organizations
+  - ✅ REST API: Organizations CRUD, Members, Plans, Current org, Suspend, Activate
+  - ✅ DRF Serializers для всех endpoints
+  - ✅ Reusable permission classes (IsOrganizationMember/Admin/Owner, IsSuperAdminOrOrgAdmin, IsTargetOrgAdminOrSuperAdmin)
+  - ✅ auth/me enrichment: organization context в ответе
+  - ✅ TenantAwareTask: Celery tasks с organization context
+  - ✅ Quota enforcement: storage, AI, users (Redis-cached)
+  - ✅ Frontend: org store, selector, settings page, API header, router guard, suspend/activate
+  - ✅ Integration тесты: cross-tenant isolation, permissions, Celery context, header, suspend/activate
+  - ✅ Sprint 4: Performance indexes, Redis caching, security hardening, audit logging
+  - ✅ Migration restructuring: cross-app operations in target apps, dependency sync points
 
 ### 2. AI Providers
 - ❌ **Claude Provider** - только placeholder, требует реализации
@@ -247,13 +297,14 @@
   - Статус: Все методы возвращают пустые значения
 
 ### 2. API Endpoints
-- ❌ **Change Password API** - отсутствует endpoint для смены пароля
-  - Проблема: Frontend ожидает `POST /api/v4/users/current/password/`
-  - Статус: Только HTML формы доступны
-  - Документ: `docs/transformation-2025/ARCHITECTURE_GAP_REPORT_V2.md`
-- ❌ **User Activity Feed API** - отсутствует user-specific activity feed
-  - Проблема: Backend имеет `GET /api/v4/events/` но нет user-specific endpoint
-  - Статус: Frontend не имеет соответствующего service
+- ✅ **Change Password API** - реализован
+  - Endpoint: `POST /api/v4/headless/password/change/`
+  - Файл: `mayan/apps/headless_api/views/password_views.py`
+  - Поддерживает current_password, new_password, new_password_confirm
+- ✅ **User Activity Feed API** - реализован
+  - Endpoint: `GET /api/v4/headless/activity/feed/`
+  - Файл: `mayan/apps/headless_api/views/activity_views.py`
+  - Фильтры: my_actions, my_documents, all; пагинация, system events
 
 ### 3. Features Parity
 - ⚠️ **Feature Parity** - большинство функций реализовано, но есть gaps
@@ -284,13 +335,14 @@
 - **Headless API**: ✅ 90% (основные endpoints работают, некоторые gaps)
 - **Marketing CMS**: ✅ 100% (новый модуль полностью реализован)
 - **Notifications**: ✅ 95% (работает, улучшения в процессе)
+- **Organizations**: ✅ 100% (Sprint 1-4 + Hotfix + Tech Debt завершены: модели, managers, middleware, data binding, API, admin, permissions, Celery context, quota, frontend, indexes, Redis, audit, security, suspend/activate endpoints, comprehensive tests)
 
 ### Frontend Components
-- **DAM Gallery**: ✅ 95% (работает, UI улучшения в процессе)
-- **Search & Filters**: ✅ 85% (базовый функционал работает, расширения в процессе)
+- **DAM Gallery**: ✅ 98% (IntersectionObserver lazy rendering, infinite scroll)
+- **Search & Filters**: ✅ 95% (расширенные фильтры + owner + URL persistence)
 - **Asset Management**: ✅ 90% (CRUD работает, оптимизации в процессе)
 - **Analytics Dashboards**: ✅ 90% (дашборды работают, real-time улучшения в процессе)
-- **Public Frontend**: ✅ 100% (полностью реализован)
+- **Public Frontend**: ✅ 100% (полностью реализован, SSR improvements добавлены)
 
 ### Infrastructure
 - **Docker Setup**: ✅ 100%
@@ -304,10 +356,13 @@
 ## 🎯 Приоритеты разработки
 
 ### Высокий приоритет
-1. **Multi-tenancy Implementation** (ТЗ готово, критично для SaaS)
-   - Реализация Organizations модуля
-   - TenantAwareManager и Middleware
-   - Миграция существующих данных
+1. **Multi-tenancy Implementation** (Sprint 1-4 ЗАВЕРШЕНЫ)
+   - ✅ Organizations модуль полностью реализован
+   - ✅ TenantAwareManager и Middleware
+   - ✅ Миграция существующих данных
+   - ✅ Performance оптимизация (indexes, Redis caching, N+1 fix)
+   - ✅ Security hardening (UUID validation, audit logging)
+   - ✅ Frontend integration (org switching, settings page, type safety)
 2. Завершение Immersive Grid оптимизаций
 3. Реализация Change Password API endpoint
 4. Завершение YouTube Analytics интеграции
@@ -317,7 +372,6 @@
 1. Реализация Claude и Gemini AI провайдеров
 2. User Activity Feed API
 3. Расширенные фильтры поиска
-4. Multi-tenancy изоляция данных
 
 ### Низкий приоритет
 1. Analytics Transformation Phase 3 (AI/ML, real-time)
@@ -329,6 +383,10 @@
 
 ## 📝 Примечания
 
+- **Organizations migrations (2026-02-10):** Операции AddField/AlterField/AddIndex для Document, Tag, Cabinet перенесены из org 0002/0004 в documents, tags, cabinets (Django не поддерживает app_label в этих операциях). org 0002/0004 — точки синхронизации; полная логика задокументирована в docstrings миграций.
+- **contribute_to_class patch (2026-02-10):** Миграции добавляют столбцы в БД, но Python-класс core моделей (Document, Tag, Cabinet) не знает о поле `organization`. Без `contribute_to_class()` ORM lookup `document__organization` вызывает ValueError. Исправлено в `patches.py:patch_organization_fields()`, вызывается в `apps.py` ДО `patch_document_managers()`.
+- **Docker:** organizations и tags добавлены в Dockerfile.app и docker-compose volumes.
+- **distribution 0001:** Зависимость от documents 0081 для корректного разрешения DocumentFile.
 - Большинство core функций полностью работают и используются в production
 - Активная разработка сосредоточена на UI/UX улучшениях и оптимизации производительности
 - Новые модули (Marketing CMS, Public Frontend) полностью реализованы и готовы к использованию

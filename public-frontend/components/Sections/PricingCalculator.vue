@@ -1,17 +1,17 @@
 <template>
-  <section class="bg-gradient-to-br from-primary-50 via-white to-neutral-50 py-16 lg:py-20">
+  <section class="bg-gradient-to-br from-primary-50 via-white to-neutral-50 py-16 lg:py-20 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900">
     <div class="mx-auto max-w-3xl px-4">
       <div class="text-center">
-        <h2 class="text-3xl font-bold text-neutral-900">Рассчитайте свою цену</h2>
-        <p class="mt-2 text-neutral-600">Настройте параметры под ваши потребности</p>
+        <h2 class="text-3xl font-bold text-neutral-900 dark:text-white">Рассчитайте свою цену</h2>
+        <p class="mt-2 text-neutral-600 dark:text-neutral-400">Настройте параметры под ваши потребности</p>
       </div>
 
-      <div class="mt-10 rounded-2xl bg-white p-8 shadow-lg ring-1 ring-neutral-200">
+      <div class="mt-10 rounded-2xl bg-white p-8 shadow-lg ring-1 ring-neutral-200 dark:bg-neutral-800 dark:ring-neutral-700">
         <div class="space-y-8">
           <div>
             <div class="flex items-center justify-between">
-              <label class="text-sm font-medium text-neutral-700">Количество пользователей</label>
-              <span class="text-2xl font-bold text-primary-600">{{ users }}</span>
+              <label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Количество пользователей</label>
+              <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">{{ users }}</span>
             </div>
             <input
               v-model.number="users"
@@ -29,8 +29,8 @@
 
           <div>
             <div class="flex items-center justify-between">
-              <label class="text-sm font-medium text-neutral-700">Хранилище (ГБ)</label>
-              <span class="text-2xl font-bold text-primary-600">{{ storage }}</span>
+              <label class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Хранилище (ГБ)</label>
+              <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">{{ storage }}</span>
             </div>
             <input
               v-model.number="storage"
@@ -47,7 +47,7 @@
           </div>
 
           <label class="flex items-center justify-between">
-            <span class="text-sm font-medium text-neutral-700">Продвинутый AI-поиск</span>
+            <span class="text-sm font-medium text-neutral-700 dark:text-neutral-300">Продвинутый AI-поиск</span>
             <input
               v-model="aiFeatures"
               type="checkbox"
@@ -56,15 +56,15 @@
           </label>
         </div>
 
-        <div class="mt-8 border-t border-neutral-200 pt-8">
+          <div class="mt-8 border-t border-neutral-200 pt-8 dark:border-neutral-700">
           <div class="flex flex-col items-start gap-6 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div class="text-sm text-neutral-600">Итого в месяц</div>
+              <div class="text-sm text-neutral-600 dark:text-neutral-400">Итого в месяц</div>
               <div class="mt-1 flex items-baseline gap-2">
-                <span class="text-4xl font-bold text-neutral-900">{{ calculatedPrice }}</span>
-                <span class="text-xl text-neutral-500">/мес</span>
+                <span class="text-4xl font-bold text-neutral-900 dark:text-white">{{ calculatedPrice }}</span>
+                <span class="text-xl text-neutral-500 dark:text-neutral-400">/мес</span>
               </div>
-              <div class="mt-1 text-sm text-neutral-500">
+              <div class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
                 или {{ yearlyPrice }} при оплате за год <span class="text-success">(-20%)</span>
               </div>
             </div>
@@ -77,10 +77,10 @@
           </div>
         </div>
 
-        <div v-if="recommendedPlan" class="mt-6 rounded-lg bg-primary-50 p-4">
+        <div v-if="recommendedPlan" class="mt-6 rounded-lg bg-primary-50 p-4 dark:bg-primary-900/20">
           <div class="flex items-center gap-2">
             <SparklesIcon class="h-5 w-5 text-primary-600" />
-            <span class="text-sm font-medium text-primary-900">
+            <span class="text-sm font-medium text-primary-900 dark:text-primary-300">
               Мы рекомендуем план "{{ recommendedPlan }}"
             </span>
           </div>

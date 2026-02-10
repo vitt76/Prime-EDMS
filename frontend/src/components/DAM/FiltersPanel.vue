@@ -65,6 +65,29 @@
       </div>
     </div>
 
+    <!-- Owner/Uploader Filter -->
+    <div class="mb-6">
+      <label class="block text-sm font-semibold text-neutral-900 dark:text-neutral-900 mb-3">
+        Загрузил
+      </label>
+      <select
+        v-model="selectedOwner"
+        class="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-300 rounded-md text-sm
+               bg-neutral-0 dark:bg-neutral-0 text-neutral-900 dark:text-neutral-900
+               focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[44px]"
+        aria-label="Фильтр по владельцу"
+      >
+        <option :value="null">Все пользователи</option>
+        <option
+          v-for="user in availableUsers"
+          :key="user.id"
+          :value="user.id"
+        >
+          {{ user.full_name || user.username }}
+        </option>
+      </select>
+    </div>
+
     <!-- Tags Filter with Autocomplete -->
     <div class="mb-6">
       <label class="block text-sm font-semibold text-neutral-900 dark:text-neutral-900 mb-3">
@@ -203,12 +226,22 @@ import TagInput from '@/components/Common/TagInput.vue'
 import DateRangePicker from '@/components/Common/DateRangePicker.vue'
 import type { Facets, SearchFilters } from '@/types/api'
 
+interface UserOption {
+  id: number
+  username: string
+  full_name?: string
+}
+
 interface Props {
   facets?: Facets
   modelValue: SearchFilters
+  /** List of available users for owner filter */
+  users?: UserOption[]
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  users: () => []
+})
 
 const emit = defineEmits<{
   'update:modelValue': [filters: SearchFilters]
@@ -226,10 +259,14 @@ const selectedTypes = ref<string[]>([])
 const dateRange = ref<[string, string] | null>(null)
 const sizeMin = ref<number | null>(null)
 const sizeMax = ref<number | null>(null)
+const selectedOwner = ref<number | null>(null)
 const selectedTags = ref<string[]>([])
 const showCustomMetadata = ref(false)
 const customMetadataFilters = ref<Array<{ key: string; value: string }>>([])
 const isHydrating = ref(false)
+
+// Available users for the owner filter dropdown
+const availableUsers = computed(() => props.users || [])
 
 function hydrateFromModel(filters: SearchFilters) {
   selectedTypes.value = filters.type || []
@@ -241,6 +278,7 @@ function hydrateFromModel(filters: SearchFilters) {
     sizeMin.value = null
     sizeMax.value = null
   }
+  selectedOwner.value = filters.owner || null
   selectedTags.value = filters.tags || []
   if (filters.custom_metadata) {
     customMetadataFilters.value = Object.entries(filters.custom_metadata).map(([key, value]) => ({
@@ -282,6 +320,7 @@ const hasActiveFilters = computed(() => {
     dateRange.value !== null ||
     sizeMin.value !== null ||
     sizeMax.value !== null ||
+    selectedOwner.value !== null ||
     selectedTags.value.length > 0 ||
     customMetadataFilters.value.length > 0
   )
@@ -297,6 +336,10 @@ const activeFiltersSummary = computed(() => {
   }
   if (sizeMin.value !== null || sizeMax.value !== null) {
     summary.size = `Размер: ${sizeMin.value || 0} - ${sizeMax.value || '∞'} MB`
+  }
+  if (selectedOwner.value !== null) {
+    const user = availableUsers.value.find(u => u.id === selectedOwner.value)
+    summary.owner = `Загрузил: ${user?.full_name || user?.username || selectedOwner.value}`
   }
   if (selectedTags.value.length > 0) {
     summary.tags = `Теги: ${selectedTags.value.join(', ')}`
@@ -333,6 +376,9 @@ function clearFilter(key: string) {
       sizeMin.value = null
       sizeMax.value = null
       break
+    case 'owner':
+      selectedOwner.value = null
+      break
     case 'tags':
       selectedTags.value = []
       break
@@ -355,6 +401,10 @@ function emitModelUpdate() {
       min: sizeMin.value ? sizeMin.value * 1024 * 1024 : undefined, // Convert to bytes
       max: sizeMax.value ? sizeMax.value * 1024 * 1024 : undefined
     }
+  }
+
+  if (selectedOwner.value !== null) {
+    filters.owner = selectedOwner.value
   }
 
   if (selectedTags.value.length > 0) {
@@ -381,6 +431,7 @@ function handleReset() {
   dateRange.value = null
   sizeMin.value = null
   sizeMax.value = null
+  selectedOwner.value = null
   selectedTags.value = []
   customMetadataFilters.value = []
   emitModelUpdate()
@@ -389,7 +440,7 @@ function handleReset() {
 
 // Auto-apply (reactive). Debounce happens outside (in composable).
 watch(
-  () => [selectedTypes.value, dateRange.value, sizeMin.value, sizeMax.value, selectedTags.value, customMetadataFilters.value],
+  () => [selectedTypes.value, dateRange.value, sizeMin.value, sizeMax.value, selectedOwner.value, selectedTags.value, customMetadataFilters.value],
   () => {
     if (isHydrating.value) return
     emitModelUpdate()

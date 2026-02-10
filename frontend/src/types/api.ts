@@ -149,6 +149,8 @@ export interface SearchFilters {
     min?: number
     max?: number
   }
+  owner?: number // User ID of the uploader/owner
+  status?: string[] // Workflow status filter
   custom_metadata?: Record<string, unknown>
 }
 

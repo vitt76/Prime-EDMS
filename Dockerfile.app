@@ -70,6 +70,8 @@ COPY mayan/apps/analytics /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps
 COPY mayan/apps/events /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/events
 COPY mayan/apps/marketing_cms /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/marketing_cms
 COPY mayan/apps/rest_api/urls.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/rest_api/urls.py
+COPY mayan/apps/organizations /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/organizations
+COPY mayan/apps/tags /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/tags
 COPY mayan/settings/base.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
 COPY mayan/asgi.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/asgi.py
 

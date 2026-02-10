@@ -97,17 +97,13 @@ interface Stat {
   label: string
 }
 
-withDefaults(
-  defineProps<{
-    trustedByText?: string
-    clientLogos?: ClientLogo[]
-    testimonials?: Testimonial[]
-    stats?: Stat[]
-  }>(),
-  {
-    trustedByText: 'Нам доверяют компании по всему миру'
-  }
-)
+const { t } = useI18n()
+
+defineProps<{
+  clientLogos?: ClientLogo[]
+}>()
+
+const trustedByText = computed(() => t('socialProof.trustedBy'))
 
 // Default data
 const clientLogos: ClientLogo[] = [
@@ -118,34 +114,34 @@ const clientLogos: ClientLogo[] = [
   { name: 'Ozon' }
 ]
 
-const testimonials: Testimonial[] = [
+const testimonials = computed<Testimonial[]>(() => [
   {
-    quote: 'MADDAM полностью изменила наш подход к управлению медиаактивами. AI-поиск экономит нам часы работы каждый день.',
-    author: 'Анна Петрова',
-    role: 'Creative Director',
-    company: 'Digital Agency',
+    quote: t('socialProof.testimonial1Quote'),
+    author: t('socialProof.testimonial1Author'),
+    role: t('socialProof.testimonial1Role'),
+    company: t('socialProof.testimonial1Company'),
     rating: 5
   },
   {
-    quote: 'Наконец-то решение, которое понимает потребности маркетологов. Интеграция с нашими инструментами заняла минуты.',
-    author: 'Михаил Сидоров',
-    role: 'Head of Marketing',
-    company: 'E-commerce Corp',
+    quote: t('socialProof.testimonial2Quote'),
+    author: t('socialProof.testimonial2Author'),
+    role: t('socialProof.testimonial2Role'),
+    company: t('socialProof.testimonial2Company'),
     rating: 5
   },
   {
-    quote: 'Отличная поддержка и постоянные обновления. Команда MADDAM реально слушает обратную связь.',
-    author: 'Елена Козлова',
-    role: 'Product Manager',
-    company: 'Tech Startup',
+    quote: t('socialProof.testimonial3Quote'),
+    author: t('socialProof.testimonial3Author'),
+    role: t('socialProof.testimonial3Role'),
+    company: t('socialProof.testimonial3Company'),
     rating: 5
   }
-]
+])
 
-const stats: Stat[] = [
-  { value: '2,500+', label: 'Активных команд' },
-  { value: '10M+', label: 'Файлов под управлением' },
-  { value: '99.9%', label: 'Uptime' },
-  { value: '4.8/5', label: 'Средний рейтинг' }
-]
+const stats = computed<Stat[]>(() => [
+  { value: '2,500+', label: t('socialProof.activeTeams') },
+  { value: '10M+', label: t('socialProof.filesManaged') },
+  { value: '99.9%', label: t('socialProof.uptime') },
+  { value: '4.8/5', label: t('socialProof.rating') }
+])
 </script>

@@ -1,7 +1,7 @@
 <template>
   <div>
     <SEOPageMeta
-      :title="page?.meta_title || 'DAM-система для управления медиафайлами | MADDAM'"
+      :title="page?.meta_title || $t('meta.defaultTitle')"
       :description="page?.meta_description"
       :og-image="page?.og_image"
       :canonical="page?.canonical_url"
@@ -46,14 +46,16 @@ const { data: plans } = await useAsyncData<PublicPlan[]>(
   { default: () => [], watch: [locale] }
 )
 
+const { t } = useI18n()
+
 const hero = computed(() => {
   const heroSection = page.value?.sections?.find((s) => s.type === 'hero')
   return {
-    heading: heroSection?.content?.heading || 'Управляйте контентом быстрее, чем когда-либо',
-    subheading: heroSection?.content?.subheading || 'Облачное хранилище + AI-поиск + Аналитика для вашей команды',
-    cta_text: heroSection?.content?.cta_text || 'Начать бесплатно',
+    heading: heroSection?.content?.heading || t('hero.heading'),
+    subheading: heroSection?.content?.subheading || t('hero.subheading'),
+    cta_text: heroSection?.content?.cta_text || t('cta.start'),
     cta_url: heroSection?.content?.cta_url || '/auth/register',
-    badge: heroSection?.content?.badge || 'Новинка: AI Search 2.0'
+    badge: heroSection?.content?.badge || t('hero.badge')
   }
 })
 
@@ -61,7 +63,7 @@ const jsonLd = computed(() => ({
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   name: 'MADDAM',
-  description: page.value?.meta_description || 'Облачная DAM-система для управления медиафайлами',
+  description: page.value?.meta_description || t('meta.defaultDescription'),
   url: page.value?.canonical_url || 'http://localhost:3000',
   applicationCategory: 'BusinessApplication',
   offers: {
