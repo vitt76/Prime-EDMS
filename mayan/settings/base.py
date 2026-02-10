@@ -546,6 +546,13 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Extend default headers with custom X-Organization-Id used by frontend
+from corsheaders.defaults import default_headers  # noqa: E402
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-organization-id',
+]
+
 # ------ Timezone --------
 
 TIMEZONE_COOKIE_NAME = 'django_timezone'
