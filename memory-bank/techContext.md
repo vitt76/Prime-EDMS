@@ -296,7 +296,7 @@ public-frontend/
 - **Headless API**: REST API для фронтенда
 - **Image Editor**: Редактор изображений
 - **Distribution**: Распределение контента
-- **Organizations app**: Multi-tenancy изоляция (базовая инфраструктура реализована, модели в разработке)
+- **Organizations app**: Multi-tenancy изоляция (полностью реализован: модели, managers, middleware, API, permissions, quotas, frontend, suspend/activate, contribute_to_class FK patch)
 
 ## Multi-tenancy Architecture
 
@@ -307,17 +307,18 @@ public-frontend/
 **Компоненты:**
 
 #### Organizations Module (mayan.apps.organizations)
-**Статус:** Базовая инфраструктура реализована, модели и middleware в разработке  
+**Статус:** Полностью реализован (Sprint 1-4 + Hotfix + Tech Debt + Verification)  
 **Коммит:** `7f41e418fe`
 
 **Реализовано:**
 - ✅ Базовый модуль создан (`mayan.apps.organizations`)
 - ✅ Настройки: `ORGANIZATIONS_INSTALLATION_URL`, `ORGANIZATIONS_URL_BASE_PATH`
-- ✅ Патчи для HttpRequest (поддержка organization URLs)
-- ✅ Тесты для settings и requests
-- ✅ Интеграция в apps.py с патчингом при старте
-
-**В разработке:**
+- ✅ Патчи: HttpRequest, organization FK (contribute_to_class), document managers
+- ✅ Тесты: settings, requests, API views, permissions, cross-tenant isolation, suspend/activate
+- ✅ Интеграция в apps.py с тремя уровнями патчей при старте
+- ✅ REST API: CRUD, Members, Plans, Current org, Suspend, Activate
+- ✅ Frontend: org store, selector, settings page, service methods
+- ✅ Quota enforcement (Redis-cached), audit logging, security hardening
 
 **Модели:**
 - **Organization**: Тенант/компания (UUID primary key)
@@ -358,10 +359,12 @@ public-frontend/
 - `DEPLOYMENT_MODE`: SAAS или STANDALONE
 - `MAYAN_ORGANIZATIONS_AUTO_CREATE`: Автосоздание при регистрации
 
-**Миграции:**
-- Фаза 1: Добавить FK на Organization (nullable=True)
-- Фаза 2: Привязать существующие данные к default Organization
-- Фаза 3: Сделать FK обязательным (null=False)
+**Миграции (структура после restructuring 2026-02-10):**
+- Фаза 1: AddField organization (nullable) — операции в documents/0085, tags/0010, cabinets/0007; org 0002 — sync point
+- Фаза 2: RunPython populate — org 0003 привязывает данные к default Organization
+- Фаза 3: AlterField NOT NULL + AddIndex — операции в documents/0086, tags/0011, cabinets/0008; org 0004 — sync point
+- Причина: Django AddField/AlterField не принимают app_label; cross-app операции должны быть в app-владельце модели
+- **Фаза 4 (runtime):** `patch_organization_fields()` регистрирует FK organization на Document/Tag/Cabinet через `contribute_to_class()` — необходимо для ORM lookups (`document__organization`)
 
 **Tenant-aware модели (требуют FK на Organization):**
 - Document, DocumentFile, DocumentVersion

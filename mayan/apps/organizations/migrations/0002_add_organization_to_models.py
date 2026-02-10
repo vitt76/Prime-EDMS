@@ -1,105 +1,41 @@
 """
 Phase 1: Add nullable organization FK to core models.
 
-Adds organization ForeignKey (nullable) to:
-- documents.Document
-- tags.Tag
-- cabinets.Cabinet
+ОБЪЕМ И ЛОГИКА (перенесены в целевые приложения, 2026-02-10):
 
-Also updates unique constraints:
-- tags.Tag: label unique -> unique_together (organization, label)
-- cabinets.Cabinet: unique_together (parent, label) -> (organization, parent, label)
+Django AddField/AlterField НЕ принимают параметр app_label — cross-app миграции
+должны содержать операции в приложении-владельце модели. Исходная логика сохранена
+в следующих файлах:
+
+1) documents/migrations/0085_add_organization.py:
+   - AddField(document, organization) — nullable FK на organizations.Organization
+   - blank=True, null=True, db_index=True, related_name='documents'
+
+2) tags/migrations/0010_add_organization.py:
+   - AddField(tag, organization) — nullable FK на organizations.Organization
+   - AlterField(tag, label) — снятие unique=True (label → db_index=True)
+   - AlterUniqueTogether(tag, [('organization', 'label')])
+
+3) cabinets/migrations/0007_add_organization.py:
+   - AddField(cabinet, organization) — nullable FK на organizations.Organization
+   - AlterUniqueTogether(cabinet, [('organization', 'parent', 'label')])
+
+Цель этой миграции: точка синхронизации зависимостей — гарантирует порядок:
+org 0001 → documents 0085, tags 0010, cabinets 0007 → org 0002.
 """
 
-import django.db.models.deletion
-from django.db import migrations, models
+from django.db import migrations
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
         ('organizations', '0001_initial'),
-        ('documents', '0084_document_fulltext_search'),
-        ('tags', '0009_alter_tag_color'),
-        ('cabinets', '0006_auto_20210525_0604'),
+        ('documents', '0085_add_organization'),
+        ('tags', '0010_add_organization'),
+        ('cabinets', '0007_add_organization'),
     ]
 
     operations = [
-        # --- Document: add organization FK ---
-        migrations.AddField(
-            model_name='document',
-            name='organization',
-            field=models.ForeignKey(
-                blank=True,
-                db_index=True,
-                help_text='Organization this document belongs to',
-                null=True,
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name='documents',
-                to='organizations.organization',
-                verbose_name='Organization',
-            ),
-            app_label='documents',
-        ),
-
-        # --- Tag: add organization FK ---
-        migrations.AddField(
-            model_name='tag',
-            name='organization',
-            field=models.ForeignKey(
-                blank=True,
-                db_index=True,
-                help_text='Organization this tag belongs to',
-                null=True,
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name='tags',
-                to='organizations.organization',
-                verbose_name='Organization',
-            ),
-            app_label='tags',
-        ),
-
-        # --- Tag: change unique constraint from label to (organization, label) ---
-        migrations.AlterField(
-            model_name='tag',
-            name='label',
-            field=models.CharField(
-                db_index=True,
-                help_text='A short text used as the tag name.',
-                max_length=128,
-                verbose_name='Label',
-                # Remove unique=True; uniqueness will be enforced by
-                # unique_together below.
-            ),
-            app_label='tags',
-        ),
-        migrations.AlterUniqueTogether(
-            name='tag',
-            unique_together={('organization', 'label')},
-            app_label='tags',
-        ),
-
-        # --- Cabinet: add organization FK ---
-        migrations.AddField(
-            model_name='cabinet',
-            name='organization',
-            field=models.ForeignKey(
-                blank=True,
-                db_index=True,
-                help_text='Organization this cabinet belongs to',
-                null=True,
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name='cabinets',
-                to='organizations.organization',
-                verbose_name='Organization',
-            ),
-            app_label='cabinets',
-        ),
-
-        # --- Cabinet: update unique_together to include organization ---
-        migrations.AlterUniqueTogether(
-            name='cabinet',
-            unique_together={('organization', 'parent', 'label')},
-            app_label='cabinets',
-        ),
+        # All operations moved to documents, tags, cabinets apps
     ]

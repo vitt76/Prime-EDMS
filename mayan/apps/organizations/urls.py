@@ -12,9 +12,11 @@ from django.urls import path, re_path
 
 from .api_views import (
     CurrentOrganizationView,
+    OrganizationActivateView,
     OrganizationDetailView,
     OrganizationListCreateView,
     OrganizationMembersView,
+    OrganizationSuspendView,
     PlanListView,
 )
 
@@ -50,6 +52,22 @@ api_urls = [
         ),
         OrganizationMembersView.as_view(),
         name='api-organization-members'
+    ),
+
+    # Suspend / Activate (SuperAdmin only, ТЗ Section 4.5.3)
+    re_path(
+        r'^headless/organizations/(?P<organization_id>{uuid})/suspend/$'.format(
+            uuid=_UUID
+        ),
+        OrganizationSuspendView.as_view(),
+        name='api-organization-suspend'
+    ),
+    re_path(
+        r'^headless/organizations/(?P<organization_id>{uuid})/activate/$'.format(
+            uuid=_UUID
+        ),
+        OrganizationActivateView.as_view(),
+        name='api-organization-activate'
     ),
 
     # Plans

@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
-**Последнее обновление:** 2026-02-09  
-**Текущий фокус:** Multi-tenancy Sprint 4 — Hotfix Applied, Ready for Validation
+**Последнее обновление:** 2026-02-10  
+**Текущий фокус:** Multi-tenancy Sprint 4 — Fully Verified (all endpoints tested, contribute_to_class patch applied)
 
 ---
 
@@ -10,7 +10,7 @@
 ### Активная разработка (Последние коммиты)
 
 #### 1. Multi-tenancy Infrastructure
-**Статус:** Sprint 1-4 + Hotfix реализованы, Sprint 4.1 Tech Debt завершён  
+**Статус:** Sprint 1-4 + Hotfix + Tech Debt + Sprint 4.2 + Sprint 4.3 (Verification & FK Patch) завершены  
 **Коммит:** `7f41e418fe`
 
 **Что сделано (Sprint 1 Infrastructure — ЗАВЕРШЁН 2026-02-09):**
@@ -28,9 +28,9 @@
 
 **Что сделано (Sprint 2 Data Binding & API — ЗАВЕРШЁН 2026-02-09):**
 - ✅ Гибридные менеджеры: TenantAwareDocumentManager, TenantAwareTrashCanManager, TenantAwareValidDocumentManager
-- ✅ Миграция 0002: nullable organization FK к Document, Tag, Cabinet + обновление unique_together
+- ✅ Миграция 0002: nullable organization FK к Document, Tag, Cabinet + unique_together (операции в documents 0085, tags 0010, cabinets 0007; org 0002 — dependency sync)
 - ✅ Миграция 0003: data migration — привязка всех данных к default Organization + UserOrganizationRole
-- ✅ Миграция 0004: organization FK обязательным (NOT NULL) + composite DB indexes
+- ✅ Миграция 0004: organization FK обязательным (NOT NULL) + composite indexes (операции в documents 0086, tags 0011, cabinets 0008; org 0004 — dependency sync)
 - ✅ Monkey-patching Document.objects/trash/valid на гибридные менеджеры (patches.py + apps.py)
 - ✅ Django Admin: OrganizationAdmin, PlanAdmin, SubscriptionAdmin, UserOrganizationRoleAdmin, DomainSettingsAdmin
 - ✅ DRF Serializers: Organization, Plan, Subscription, UserOrganizationRole, CurrentOrganization, AddMember
@@ -91,8 +91,12 @@
 **Definition of Done — Sprint 4 Closure:**
 - [ ] All tests pass: `python manage.py test mayan.apps.organizations`
 - [ ] No cross-org access possible for non-staff users (verified by CrossOrganizationAccessTestCase)
-- [ ] Frontend organization + plans API calls return 200 (not 404)
-- [ ] Production migration applied without rollback
+- [x] Frontend organization + plans API calls return 200 (not 404) — **verified 2026-02-10**
+- [x] Suspend/Activate endpoints work: POST suspend -> 200, POST activate -> 200 — **verified 2026-02-10**
+- [x] GET organization detail returns 200 with storage/member data — **verified 2026-02-10 (after FK patch)**
+- [x] PATCH organization update returns 200 — **verified 2026-02-10**
+- [x] Full lifecycle test: create → detail → suspend → activate → detail — **passed 2026-02-10**
+- [x] Production migration applied without rollback — **verified 2026-02-10 (showmigrations all [X])**
 - [ ] 403/404 error rates stable post-deploy (monitor Nginx/Django logs)
 - [ ] Code review approved by peer
 
@@ -103,10 +107,44 @@
 - ✅ I6: `apiService.deleteWithBody()` — clean DELETE-with-body pattern, simplified `removeMember()`
 - ✅ I7: activeContext.md cleanup — stale markers, contradictions, Long-term section updated
 
+**Sprint 4.2 Stabilization (ЗАВЕРШЁН 2026-02-10):**
+- ✅ Root cause analysis: migration restructuring (cross-app operations), distribution dependency fix, Docker volumes
+- ✅ Suspend endpoint: `POST /api/v4/headless/organizations/{id}/suspend/` (ТЗ Section 4.5.3)
+- ✅ Activate endpoint: `POST /api/v4/headless/organizations/{id}/activate/`
+- ✅ OrganizationSuspendView + OrganizationActivateView (SuperAdmin only, OrgScopedAPIMixin)
+- ✅ Frontend: `organizationService.suspendOrganization()` + `activateOrganization()`
+- ✅ 18 tests: auth, permissions, suspend/activate lifecycle, edge cases (archived, already-suspended, 404)
+- ✅ Memory Bank synchronized: progress.md cleaned up, stale markers removed
+
+**Sprint 4.3 Verification & FK Patch (ЗАВЕРШЁН 2026-02-10):**
+- ✅ **Критический баг обнаружен и исправлен:** GET `/organizations/{id}/` возвращал 500 (ValueError: Cannot query "Organization": Must be "Document" instance)
+- ✅ **Корневая причина:** Миграции documents/0085-0086 добавили столбец `organization_id` в БД, но Python-класс `Document` (core Mayan) не знал об этом поле. Django ORM не мог разрешить lookup `document__organization` в `get_storage_used_gb()`
+- ✅ **Исправление:** Добавлена `patch_organization_fields()` в `patches.py` — использует `contribute_to_class()` для динамической регистрации FK `organization` на моделях Document, Tag, Cabinet при старте приложения
+- ✅ `_has_concrete_field()` — идемпотентная проверка наличия поля перед патчем
+- ✅ Порядок вызовов в `apps.py`: `patch_organization_fields()` → `patch_document_managers()` (FK сначала, менеджеры потом)
+- ✅ **Полная верификация API endpoints:**
+  - GET `/organizations/` → 200 (list, 2 организации)
+  - GET `/organizations/{id}/` → 200 (detail с `storage_used_gb`, `member_count`)
+  - PATCH `/organizations/{id}/` → 200 (update name)
+  - GET `/organizations/{id}/members/` → 200 (members list)
+  - GET `/plans/` → 200 (plans list)
+  - POST `/organizations/{id}/suspend/` → 200 (suspend)
+  - POST `/organizations/{id}/suspend/` (повторно) → 400 (already suspended)
+  - POST `/organizations/{id}/activate/` → 200 (activate)
+- ✅ **Lifecycle тест пройден:** CREATE(trial) → GET(detail) → SUSPEND(suspended) → GET(suspended) → ACTIVATE(active) → GET(active)
+- ✅ Docker container restart достаточен (пересборка образов не требуется)
+
 **Архитектурные решения:**
 - Использование патчей для расширения HttpRequest без модификации core
 - Настройки через Mayan settings system
 - Готовность к интеграции с существующими модулями
+
+**Restructuring миграций и FK patching (2026-02-10):**
+- Django AddField/AlterField не принимают `app_label` — cross-app операции должны быть в app-владельце модели
+- Операции из org 0002/0004 перенесены: documents (0085, 0086), tags (0010, 0011), cabinets (0007, 0008)
+- org 0002 и 0004 — точки синхронизации зависимостей (operations = []); полная логика задокументирована в docstrings
+- distribution 0001: добавлена зависимость от documents 0081 (исправлен ValueError: DocumentFile cannot be resolved)
+- **ВАЖНО:** Миграции добавляют столбцы в БД, но НЕ регистрируют поля в Python-классах core моделей. Для ORM lookups вида `document__organization` необходим `contribute_to_class()` при старте — реализован в `patches.py:patch_organization_fields()`
 
 #### 2. Public Frontend SSR Improvements
 **Статус:** Реализовано  

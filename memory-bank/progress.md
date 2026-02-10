@@ -1,6 +1,6 @@
 # Progress: Prime-EDMS
 
-**Последнее обновление:** 2026-02-05  
+**Последнее обновление:** 2026-02-10  
 **Источник:** Анализ последних 10 git коммитов и кодовой базы
 
 ---
@@ -161,8 +161,8 @@
 
 ## 🚧 In Progress (В процессе разработки)
 
-### 1. Multi-tenancy Architecture (Tenant Isolation)
-**Статус:** Sprint 1-2 завершены, data binding и API реализованы  
+### 1. Multi-tenancy Architecture (Tenant Isolation)  — ЗАВЕРШЁН
+**Статус:** Sprint 1-4 + Hotfix + Tech Debt завершены, Suspend/Activate endpoints добавлены  
 **Документ:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`  
 **Коммит:** `7f41e418fe`
 
@@ -177,9 +177,10 @@
 
 **Sprint 2 (ЗАВЕРШЁН):**
 - ✅ Гибридные менеджеры: TenantAwareDocumentManager, TenantAwareTrashCanManager, TenantAwareValidDocumentManager
-- ✅ Миграция 0002: nullable organization FK к Document, Tag, Cabinet
+- ✅ Миграция 0002: nullable organization FK к Document, Tag, Cabinet (операции в documents/0085, tags/0010, cabinets/0007)
 - ✅ Миграция 0003: data migration — привязка к default Organization
-- ✅ Миграция 0004: NOT NULL + composite indexes
+- ✅ Миграция 0004: NOT NULL + composite indexes (операции в documents/0086, tags/0011, cabinets/0008)
+- ✅ Restructuring 2026-02-10: org 0002/0004 — dependency sync; логика в docstrings + целевых приложениях
 - ✅ Monkey-patching Document managers на tenant-aware версии
 - ✅ Django Admin для Organizations (все модели + inlines)
 - ✅ DRF Serializers (Organization, Plan, Subscription, Members, CurrentOrg)
@@ -200,8 +201,15 @@
 - ✅ Frontend: router с requiresOrgAdmin guard
 - ✅ Backend tests: permission classes (12 tests), Celery context (5 tests), X-Organization-Id header (4 tests)
 
-**Что осталось:**
-- 🚧 Sprint 4: Production migration, performance testing, security audit, Redis cache for quotas
+**Sprint 4 (ЗАВЕРШЁН):**
+- ✅ Performance indexes, Redis caching, N+1 устранение, пагинация
+- ✅ Security hardening: UUID validation, audit logging, OrgScopedAPIMixin
+- ✅ Hotfix: cross-org access vulnerability, URL routing mismatch
+- ✅ Tech Debt: DRY annotations, specific exceptions, type cleanup
+- ✅ Migration restructuring: cross-app operations moved to target apps
+- ✅ Suspend/Activate API endpoints (ТЗ Section 4.5.3)
+- ✅ `contribute_to_class` patch: Document/Tag/Cabinet FK `organization` зарегистрирован на уровне Python (patches.py)
+- ✅ **Полная API верификация:** all endpoints 200 OK, lifecycle test passed, no 500 errors
 
 **Архитектурный подход:**
 - Shared Database + Shared Schema
@@ -243,10 +251,11 @@
 - 🚧 Оптимизация изображений (lazy loading, responsive images)
 - 🚧 CDN интеграция для статики
 
-### 5. Multi-tenancy
+### 5. Multi-tenancy — ЗАВЕРШЁН (Sprint 1-4)
 - ✅ Organization-specific WebSocket groups в analytics
-- 🚧 Полная изоляция данных по организациям
-- 🚧 Organization-level settings
+- ✅ Полная изоляция данных по организациям (Document, Tag, Cabinet FK + TenantAwareManager + OrgScopedAPIMixin)
+- ✅ Organization-level settings (quotas, branding, domain settings)
+- ✅ Suspend/Activate API endpoints (ТЗ 4.5.3)
 
 ### 6. Error Handling & Resilience
 - ✅ Базовое error handling в компонентах
@@ -259,24 +268,25 @@
 
 ## ❌ Incomplete / TODO (Неполные функции)
 
-### 1. Multi-tenancy Implementation
-- ✅ **Organizations Module** - Sprint 1-3 завершены
+### 1. Multi-tenancy Implementation — ЗАВЕРШЁН (Sprint 1-4 + Hotfix + Tech Debt)
+- ✅ **Organizations Module** — полностью реализован
   - ТЗ: `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`
   - ✅ Модели: Organization, Plan, Subscription, DomainSettings, UserOrganizationRole
   - ✅ TenantAwareManager + TenantAwareMixin + Hybrid Managers
   - ✅ TenantResolverMiddleware (domain, subdomain, X-Organization-Id header, user, standalone fallback)
-  - ✅ Document, Tag, Cabinet привязаны к Organization (FK, migrations 0002-0004)
+  - ✅ Document, Tag, Cabinet привязаны к Organization (FK: documents 0085/0086, tags 0010/0011, cabinets 0007/0008; org 0002/0004 sync)
   - ✅ Monkey-patching Document managers (objects/trash/valid)
   - ✅ Django Admin для всех моделей Organizations
-  - ✅ REST API: Organizations CRUD, Members, Plans, Current org
+  - ✅ REST API: Organizations CRUD, Members, Plans, Current org, Suspend, Activate
   - ✅ DRF Serializers для всех endpoints
-  - ✅ Reusable permission classes (IsOrganizationMember/Admin/Owner, IsSuperAdminOrOrgAdmin)
+  - ✅ Reusable permission classes (IsOrganizationMember/Admin/Owner, IsSuperAdminOrOrgAdmin, IsTargetOrgAdminOrSuperAdmin)
   - ✅ auth/me enrichment: organization context в ответе
   - ✅ TenantAwareTask: Celery tasks с organization context
-  - ✅ Quota enforcement: storage, AI, users
-  - ✅ Frontend: org store, selector, settings page, API header, router guard
-  - ✅ Integration тесты: cross-tenant isolation, permissions, Celery context, header
-  - 🚧 Sprint 4: Production migration
+  - ✅ Quota enforcement: storage, AI, users (Redis-cached)
+  - ✅ Frontend: org store, selector, settings page, API header, router guard, suspend/activate
+  - ✅ Integration тесты: cross-tenant isolation, permissions, Celery context, header, suspend/activate
+  - ✅ Sprint 4: Performance indexes, Redis caching, security hardening, audit logging
+  - ✅ Migration restructuring: cross-app operations in target apps, dependency sync points
 
 ### 2. AI Providers
 - ❌ **Claude Provider** - только placeholder, требует реализации
@@ -325,7 +335,7 @@
 - **Headless API**: ✅ 90% (основные endpoints работают, некоторые gaps)
 - **Marketing CMS**: ✅ 100% (новый модуль полностью реализован)
 - **Notifications**: ✅ 95% (работает, улучшения в процессе)
-- **Organizations**: ✅ 98% (Sprint 1-4 завершены: модели, managers, middleware, data binding, API, admin, permissions, Celery context, quota, frontend integration, performance indexes, Redis caching, audit logging, security hardening, comprehensive tests)
+- **Organizations**: ✅ 100% (Sprint 1-4 + Hotfix + Tech Debt завершены: модели, managers, middleware, data binding, API, admin, permissions, Celery context, quota, frontend, indexes, Redis, audit, security, suspend/activate endpoints, comprehensive tests)
 
 ### Frontend Components
 - **DAM Gallery**: ✅ 98% (IntersectionObserver lazy rendering, infinite scroll)
@@ -362,7 +372,6 @@
 1. Реализация Claude и Gemini AI провайдеров
 2. User Activity Feed API
 3. Расширенные фильтры поиска
-4. Multi-tenancy изоляция данных
 
 ### Низкий приоритет
 1. Analytics Transformation Phase 3 (AI/ML, real-time)
@@ -374,6 +383,10 @@
 
 ## 📝 Примечания
 
+- **Organizations migrations (2026-02-10):** Операции AddField/AlterField/AddIndex для Document, Tag, Cabinet перенесены из org 0002/0004 в documents, tags, cabinets (Django не поддерживает app_label в этих операциях). org 0002/0004 — точки синхронизации; полная логика задокументирована в docstrings миграций.
+- **contribute_to_class patch (2026-02-10):** Миграции добавляют столбцы в БД, но Python-класс core моделей (Document, Tag, Cabinet) не знает о поле `organization`. Без `contribute_to_class()` ORM lookup `document__organization` вызывает ValueError. Исправлено в `patches.py:patch_organization_fields()`, вызывается в `apps.py` ДО `patch_document_managers()`.
+- **Docker:** organizations и tags добавлены в Dockerfile.app и docker-compose volumes.
+- **distribution 0001:** Зависимость от documents 0081 для корректного разрешения DocumentFile.
 - Большинство core функций полностью работают и используются в production
 - Активная разработка сосредоточена на UI/UX улучшениях и оптимизации производительности
 - Новые модули (Marketing CMS, Public Frontend) полностью реализованы и готовы к использованию

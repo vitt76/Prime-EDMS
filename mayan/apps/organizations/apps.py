@@ -4,7 +4,9 @@ from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.common.apps import MayanAppConfig
 
-from .patches import patch_HttpRequest, patch_document_managers
+from .patches import (
+    patch_HttpRequest, patch_document_managers, patch_organization_fields
+)
 
 logger = logging.getLogger(name=__name__)
 
@@ -19,6 +21,7 @@ class OrganizationsApp(MayanAppConfig):
         super().ready()
 
         patch_HttpRequest()
+        patch_organization_fields()
         patch_document_managers()
 
         # Connect quota enforcement signal

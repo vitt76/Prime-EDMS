@@ -514,22 +514,26 @@ User → Group → Role ← Permissions
 5. **Workflow для медиа** - Специализированные процессы согласования
 6. **Интеграции** - Яндекс.Диск, российские AI-сервисы
 7. **Vue 3 SPA** - Современный пользовательский интерфейс
-8. **Multi-tenancy Architecture** - Поддержка SaaS и Standalone моделей (планируется)
+8. **Multi-tenancy Architecture** - Поддержка SaaS и Standalone моделей (реализовано, Sprint 1-4)
 
-### Multi-tenancy Support
+### Multi-tenancy Support (РЕАЛИЗОВАНО)
 
-**Планируемая функциональность:**
-- Поддержка множественных организаций на одном сервере (SaaS)
-- Изоляция данных между организациями через Organization FK
-- Управление подписками и тарифными планами
-- Enforcement квот (storage, users, AI analyses)
-- Кастомные домены для SaaS клиентов
-- Standalone режим для on-premises развертывания
+**Функциональность (Sprint 1-4 завершены):**
+- ✅ Поддержка множественных организаций на одном сервере (SaaS)
+- ✅ Изоляция данных между организациями через Organization FK
+- ✅ Управление подписками и тарифными планами
+- ✅ Enforcement квот (storage, users, AI analyses) с Redis-кешированием
+- ✅ Кастомные домены для SaaS клиентов (DomainSettings)
+- ✅ Standalone режим для on-premises развертывания
+- ✅ Suspend/Activate endpoints для управления статусом организаций
+- ✅ Frontend: org selector, settings page, API header, service methods
 
 **Архитектура:**
 - Shared Database + Shared Schema подход
 - TenantAwareManager для автоматической фильтрации
 - TenantResolverMiddleware для определения тенанта
+- `contribute_to_class()` для расширения core моделей FK полями
+- OrgScopedAPIMixin + IsTargetOrgAdminOrSuperAdmin для security
 - Готовность к шардированию в будущем
 
 ### Соответствие трендам DAM 2025-2026

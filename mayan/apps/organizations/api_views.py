@@ -17,10 +17,15 @@ from rest_framework.views import APIView
 
 from .audit import (
     log_org_event,
-    EVENT_MEMBER_ADD, EVENT_MEMBER_REMOVE, EVENT_ORG_ARCHIVE,
-    EVENT_ORG_CREATE, EVENT_ORG_UPDATE,
+    EVENT_MEMBER_ADD, EVENT_MEMBER_REMOVE, EVENT_ORG_ACTIVATE,
+    EVENT_ORG_ARCHIVE, EVENT_ORG_CREATE, EVENT_ORG_SUSPEND,
+    EVENT_ORG_UPDATE,
 )
-from .models import Organization, Plan, UserOrganizationRole
+from .models import (
+    ORGANIZATION_STATUS_ACTIVE, ORGANIZATION_STATUS_ARCHIVED,
+    ORGANIZATION_STATUS_SUSPENDED, ORGANIZATION_STATUS_TRIAL,
+    Organization, Plan, UserOrganizationRole,
+)
 from .permission_classes import (
     IsTargetOrgAdminOrSuperAdmin, OrgScopedAPIMixin,
 )
@@ -335,3 +340,103 @@ class CurrentOrganizationView(APIView):
             organization, context={'request': request}
         )
         return Response(serializer.data)
+
+
+class OrganizationSuspendView(OrgScopedAPIMixin, APIView):
+    """
+    POST — Suspend an organization (SuperAdmin only).
+
+    Sets ``status='suspended'`` and ``is_active=False``.
+    Suspended organizations are blocked by TenantResolverMiddleware.
+    Accepts optional ``reason`` field in the request body.
+
+    ТЗ Section 4.5.3.
+    """
+    authentication_classes = (TokenAuthentication, SessionAuthentication)
+    permission_classes = (IsAuthenticated, IsAdminUser)
+
+    def post(self, request, organization_id):
+        organization = self.get_target_organization()
+
+        if organization.status == ORGANIZATION_STATUS_SUSPENDED:
+            return Response(
+                {
+                    'detail': 'Organization is already suspended.',
+                    'organization_id': str(organization.pk),
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if organization.status == ORGANIZATION_STATUS_ARCHIVED:
+            return Response(
+                {
+                    'detail': 'Cannot suspend an archived organization.',
+                    'organization_id': str(organization.pk),
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        organization.status = ORGANIZATION_STATUS_SUSPENDED
+        organization.is_active = False
+        organization.save(update_fields=('status', 'is_active'))
+
+        log_org_event(
+            organization, EVENT_ORG_SUSPEND, user=request.user,
+            details={
+                'reason': request.data.get('reason', ''),
+                'previous_status': organization.status,
+            }
+        )
+
+        return Response({
+            'success': True,
+            'message': 'Organization suspended',
+            'organization_id': str(organization.pk),
+        })
+
+
+class OrganizationActivateView(OrgScopedAPIMixin, APIView):
+    """
+    POST — Activate a suspended or trial organization (SuperAdmin only).
+
+    Sets ``status='active'`` and ``is_active=True``.
+    Only organizations in ``suspended`` or ``trial`` status can be activated.
+    """
+    authentication_classes = (TokenAuthentication, SessionAuthentication)
+    permission_classes = (IsAuthenticated, IsAdminUser)
+
+    def post(self, request, organization_id):
+        organization = self.get_target_organization()
+
+        activatable_statuses = (
+            ORGANIZATION_STATUS_SUSPENDED,
+            ORGANIZATION_STATUS_TRIAL,
+        )
+
+        if organization.status not in activatable_statuses:
+            return Response(
+                {
+                    'detail': (
+                        'Only suspended or trial organizations can be '
+                        'activated. Current status: %s' % organization.status
+                    ),
+                    'organization_id': str(organization.pk),
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        previous_status = organization.status
+        organization.status = ORGANIZATION_STATUS_ACTIVE
+        organization.is_active = True
+        organization.save(update_fields=('status', 'is_active'))
+
+        log_org_event(
+            organization, EVENT_ORG_ACTIVATE, user=request.user,
+            details={'previous_status': previous_status}
+        )
+
+        return Response({
+            'success': True,
+            'message': 'Organization activated',
+            'organization_id': str(organization.pk),
+        })

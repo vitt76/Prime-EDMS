@@ -151,10 +151,12 @@ services:
       - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
       - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
       - ./mayan/apps/dam:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
+      - ./mayan/apps/organizations:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/organizations
       - ./mayan/apps/analytics:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/analytics
       - ./mayan/apps/headless_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
       - ./mayan/apps/autoadmin:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/autoadmin
-      - ./mayan/apps/cabinets:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/cabinets                                                                  
+      - ./mayan/apps/cabinets:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/cabinets
+      - ./mayan/apps/tags:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/tags
       - ./mayan/apps/dynamic_search:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dynamic_search
       - ./mayan/apps/documents:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents
       - ./mayan/apps/api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/api
@@ -211,6 +213,7 @@ services:
       - ./mayan/apps/distribution:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/distribution
       - ./mayan/apps/image_editor:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/image_editor
       - ./mayan/apps/dam:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
+      - ./mayan/apps/organizations:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/organizations
       - ./mayan/apps/analytics:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/analytics
       - ./mayan/apps/headless_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
       - ./mayan/apps/autoadmin:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/autoadmin

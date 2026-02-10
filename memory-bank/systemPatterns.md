@@ -274,12 +274,63 @@ class TenantResolverMiddleware:
 - Поддержка ≥100 тенантов на одном сервере
 - Оптимизация запросов через select_related('organization')
 
-**Текущая реализация:**
+**Текущая реализация (ЗАВЕРШЕНА — Sprint 1-4 + Hotfix + Tech Debt + Verification):**
 - ✅ Базовый модуль `mayan.apps.organizations` создан
 - ✅ Настройки через Mayan settings system
 - ✅ Патчи для HttpRequest (расширение без модификации core)
-- 🚧 Модели и Managers (в разработке)
-- 🚧 Middleware (в разработке)
+- ✅ Модели: Organization, Plan, Subscription, DomainSettings, UserOrganizationRole
+- ✅ TenantAwareManager + TenantAwareMixin + Hybrid Document Managers
+- ✅ TenantResolverMiddleware (domain, subdomain, X-Organization-Id, user, standalone)
+- ✅ `patch_organization_fields()` — contribute_to_class для core FK registration
+- ✅ OrgScopedAPIMixin + IsTargetOrgAdminOrSuperAdmin
+- ✅ REST API: CRUD, Members, Plans, Suspend, Activate
+- ✅ Frontend: org store, selector, settings, API header, service methods
+- ✅ Quota enforcement (Redis-cached), audit logging, security hardening
+- ✅ Полная API верификация: все endpoints 200 OK, lifecycle test passed
+
+### 10. Contribute-to-Class Pattern (Dynamic FK Registration)
+
+**Назначение:** Расширение core Mayan моделей ForeignKey полями без модификации исходного кода.
+
+**Проблема:** Django миграции (`AddField`) добавляют столбцы в БД, но **не** регистрируют поля на уровне Python-класса модели. Без регистрации ORM lookup вида `document__organization` вызывает `ValueError`.
+
+**Решение:**
+```python
+# mayan/apps/organizations/patches.py
+def patch_organization_fields():
+    """
+    Динамически регистрирует FK organization на core моделях.
+    Вызывается из apps.py ДО patch_document_managers().
+    """
+    from mayan.apps.documents.models import Document
+
+    if not _has_concrete_field(Document, 'organization'):
+        field = models.ForeignKey(
+            'organizations.Organization',
+            on_delete=models.CASCADE,
+            related_name='documents',
+            db_index=True,
+        )
+        field.contribute_to_class(Document, 'organization')
+    # Аналогично для Tag, Cabinet...
+
+def _has_concrete_field(model, field_name):
+    """Идемпотентная проверка наличия поля."""
+    try:
+        return model._meta.get_field(field_name).concrete
+    except Exception:
+        return False
+```
+
+**Порядок вызовов в `apps.py`:**
+1. `patch_HttpRequest()` — URL support
+2. `patch_organization_fields()` — FK registration (contribute_to_class)
+3. `patch_document_managers()` — manager replacement
+
+**Важно:**
+- Поля **должны** совпадать с определениями в миграциях (related_name, on_delete, db_index)
+- `_has_concrete_field()` обеспечивает идемпотентность (безопасен при повторных вызовах)
+- Без этого патча любой ORM lookup через `organization` на core моделях невозможен
 
 ## Компоненты системы
 
@@ -412,6 +463,11 @@ mayan/apps/dam/tests/
 - Каждое изменение модели требует миграцию
 - Миграции в `migrations/` директории каждого app
 - GIN индексы для JSON полей (PostgreSQL специфичные)
+
+**Cross-app migrations (organizations):**
+- Django AddField/AlterField **не принимают** параметр `app_label` — операции должны быть в app-владельце модели
+- Для привязки Document, Tag, Cabinet к Organization: операции в documents (0085/0086), tags (0010/0011), cabinets (0007/0008)
+- org 0002 и 0004 — точки синхронизации зависимостей (operations = []); полная логика в docstrings
 
 ### API Versioning
 

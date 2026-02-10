@@ -554,3 +554,191 @@ class CrossOrganizationAccessTestCase(
             response.status_code,
             (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
         )
+
+
+class OrganizationSuspendActivateTestCase(
+    OrganizationAPITestMixin, TestCase
+):
+    """
+    Tests for POST suspend/ and activate/ endpoints.
+
+    ТЗ Section 4.5.3: SuperAdmin can suspend and activate organizations.
+    """
+
+    def _suspend_url(self, org_id=None):
+        org_id = org_id or self.org.pk
+        return '/api/v4/headless/organizations/{}/suspend/'.format(org_id)
+
+    def _activate_url(self, org_id=None):
+        org_id = org_id or self.org.pk
+        return '/api/v4/headless/organizations/{}/activate/'.format(org_id)
+
+    # ------------------------------------------------------------------
+    # Suspend tests
+    # ------------------------------------------------------------------
+
+    def test_suspend_requires_authentication(self):
+        """Anonymous users cannot suspend organizations."""
+        response = self.client.post(self._suspend_url())
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_suspend_requires_admin(self):
+        """Non-admin users cannot suspend organizations."""
+        self.client.force_authenticate(user=self.org_owner)
+        response = self.client.post(self._suspend_url())
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_suspend_superadmin_success(self):
+        """SuperAdmin can suspend an active organization."""
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(self._suspend_url())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(response.data['message'], 'Organization suspended')
+
+        self.org.refresh_from_db()
+        self.assertEqual(self.org.status, 'suspended')
+        self.assertFalse(self.org.is_active)
+
+    def test_suspend_with_reason(self):
+        """SuperAdmin can provide a reason when suspending."""
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(
+            self._suspend_url(),
+            {'reason': 'Non-payment'},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.org.refresh_from_db()
+        self.assertEqual(self.org.status, 'suspended')
+
+    def test_suspend_already_suspended_returns_400(self):
+        """Suspending an already suspended org returns 400."""
+        self.org.status = 'suspended'
+        self.org.is_active = False
+        self.org.save(update_fields=['status', 'is_active'])
+
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(self._suspend_url())
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already suspended', response.data['detail'].lower())
+
+    def test_suspend_archived_returns_400(self):
+        """Suspending an archived org returns 400."""
+        self.org.status = 'archived'
+        self.org.is_active = False
+        self.org.save(update_fields=['status', 'is_active'])
+
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(self._suspend_url())
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('archived', response.data['detail'].lower())
+
+    def test_suspend_nonexistent_org_returns_404(self):
+        """Suspending a non-existent organization returns 404."""
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(
+            self._suspend_url('00000000-0000-0000-0000-000000000000')
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_suspend_trial_org_success(self):
+        """SuperAdmin can suspend a trial organization."""
+        self.org.status = 'trial'
+        self.org.save(update_fields=['status'])
+
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(self._suspend_url())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.org.refresh_from_db()
+        self.assertEqual(self.org.status, 'suspended')
+        self.assertFalse(self.org.is_active)
+
+    # ------------------------------------------------------------------
+    # Activate tests
+    # ------------------------------------------------------------------
+
+    def test_activate_requires_authentication(self):
+        """Anonymous users cannot activate organizations."""
+        response = self.client.post(self._activate_url())
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_activate_requires_admin(self):
+        """Non-admin users cannot activate organizations."""
+        self.client.force_authenticate(user=self.org_owner)
+        response = self.client.post(self._activate_url())
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_activate_suspended_org_success(self):
+        """SuperAdmin can activate a suspended organization."""
+        self.org.status = 'suspended'
+        self.org.is_active = False
+        self.org.save(update_fields=['status', 'is_active'])
+
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(self._activate_url())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(response.data['message'], 'Organization activated')
+
+        self.org.refresh_from_db()
+        self.assertEqual(self.org.status, 'active')
+        self.assertTrue(self.org.is_active)
+
+    def test_activate_trial_org_success(self):
+        """SuperAdmin can activate a trial organization."""
+        self.org.status = 'trial'
+        self.org.save(update_fields=['status'])
+
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(self._activate_url())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.org.refresh_from_db()
+        self.assertEqual(self.org.status, 'active')
+        self.assertTrue(self.org.is_active)
+
+    def test_activate_already_active_returns_400(self):
+        """Activating an already active org returns 400."""
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(self._activate_url())
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_activate_archived_returns_400(self):
+        """Cannot activate an archived organization."""
+        self.org.status = 'archived'
+        self.org.is_active = False
+        self.org.save(update_fields=['status', 'is_active'])
+
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(self._activate_url())
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_activate_nonexistent_org_returns_404(self):
+        """Activating a non-existent organization returns 404."""
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(
+            self._activate_url('00000000-0000-0000-0000-000000000000')
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    # ------------------------------------------------------------------
+    # Round-trip: suspend -> activate
+    # ------------------------------------------------------------------
+
+    def test_suspend_then_activate_round_trip(self):
+        """Full lifecycle: active -> suspended -> active."""
+        self.client.force_authenticate(user=self.superadmin)
+
+        # Suspend
+        response = self.client.post(self._suspend_url())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.org.refresh_from_db()
+        self.assertEqual(self.org.status, 'suspended')
+        self.assertFalse(self.org.is_active)
+
+        # Activate
+        response = self.client.post(self._activate_url())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.org.refresh_from_db()
+        self.assertEqual(self.org.status, 'active')
+        self.assertTrue(self.org.is_active)

@@ -10,6 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+        ('documents', '0081_documentfile_filename_index'),
     ]
 
     operations = [

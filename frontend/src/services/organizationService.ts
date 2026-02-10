@@ -69,6 +69,21 @@ class OrganizationService {
     )
   }
 
+  /** POST /organizations/:id/suspend/ — SuperAdmin only (ТЗ 4.5.3) */
+  async suspendOrganization(
+    id: string,
+    reason?: string
+  ): Promise<{ success: boolean; message: string; organization_id: string }> {
+    return apiService.post(`${BASE}/${id}/suspend/`, reason ? { reason } : {})
+  }
+
+  /** POST /organizations/:id/activate/ — SuperAdmin only */
+  async activateOrganization(
+    id: string
+  ): Promise<{ success: boolean; message: string; organization_id: string }> {
+    return apiService.post(`${BASE}/${id}/activate/`, {})
+  }
+
   /** GET /plans/ — plans live at /api/v4/headless/plans/, not under /organizations/ */
   async listPlans(): Promise<Plan[]> {
     return apiService.get<Plan[]>(`${PLANS_BASE}/`, undefined, true)

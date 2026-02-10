@@ -1,90 +1,38 @@
 """
-Phase 3: Make organization FK required (NOT NULL) and add indexes.
+Phase 3: Make organization FK required (NOT NULL) and add composite indexes.
 
-After data migration (0003) has populated all records with the default
-Organization, this migration enforces the NOT NULL constraint and adds
-composite indexes for query performance.
+ОБЪЕМ И ЛОГИКА (перенесены в целевые приложения, 2026-02-10):
+
+После 0003_populate_default_organization все записи привязаны к default Organization.
+Исходная логика (AlterField NOT NULL + AddIndex) сохранена в:
+
+1) documents/migrations/0086_make_organization_required.py:
+   - AlterField(document, organization) — убрать null=True, blank=True
+   - AddIndex(document, ['organization', '-datetime_created'], name='idx_doc_org_created')
+
+2) tags/migrations/0011_make_organization_required.py:
+   - AlterField(tag, organization) — NOT NULL
+   - AddIndex(tag, ['organization', 'label'], name='idx_tag_org_label')
+
+3) cabinets/migrations/0008_make_organization_required.py:
+   - AlterField(cabinet, organization) — NOT NULL
+   - AddIndex(cabinet, ['organization', 'label'], name='idx_cabinet_org_label')
+
+Цель: точка синхронизации — org 0004 выполняется после 0003 и всех *make_organization_required.
 """
 
-import django.db.models.deletion
-from django.db import migrations, models
+from django.db import migrations
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
         ('organizations', '0003_populate_default_organization'),
+        ('documents', '0086_make_organization_required'),
+        ('tags', '0011_make_organization_required'),
+        ('cabinets', '0008_make_organization_required'),
     ]
 
     operations = [
-        # --- Document: make organization required ---
-        migrations.AlterField(
-            model_name='document',
-            name='organization',
-            field=models.ForeignKey(
-                db_index=True,
-                help_text='Organization this document belongs to',
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name='documents',
-                to='organizations.organization',
-                verbose_name='Organization',
-            ),
-            app_label='documents',
-        ),
-
-        # --- Tag: make organization required ---
-        migrations.AlterField(
-            model_name='tag',
-            name='organization',
-            field=models.ForeignKey(
-                db_index=True,
-                help_text='Organization this tag belongs to',
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name='tags',
-                to='organizations.organization',
-                verbose_name='Organization',
-            ),
-            app_label='tags',
-        ),
-
-        # --- Cabinet: make organization required ---
-        migrations.AlterField(
-            model_name='cabinet',
-            name='organization',
-            field=models.ForeignKey(
-                db_index=True,
-                help_text='Organization this cabinet belongs to',
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name='cabinets',
-                to='organizations.organization',
-                verbose_name='Organization',
-            ),
-            app_label='cabinets',
-        ),
-
-        # --- Composite indexes for performance ---
-        migrations.AddIndex(
-            model_name='document',
-            index=models.Index(
-                fields=['organization', '-datetime_created'],
-                name='idx_doc_org_created',
-            ),
-            app_label='documents',
-        ),
-        migrations.AddIndex(
-            model_name='tag',
-            index=models.Index(
-                fields=['organization', 'label'],
-                name='idx_tag_org_label',
-            ),
-            app_label='tags',
-        ),
-        migrations.AddIndex(
-            model_name='cabinet',
-            index=models.Index(
-                fields=['organization', 'label'],
-                name='idx_cabinet_org_label',
-            ),
-            app_label='cabinets',
-        ),
+        # All operations moved to documents, tags, cabinets apps
     ]
