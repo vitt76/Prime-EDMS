@@ -292,6 +292,16 @@ public-frontend/
    - DAM UI: `http://localhost:5173/dam`
    - Public UI: `http://localhost:3000`
 
+### Остановка, перезапуск и проверка здоровья
+
+- **Остановить весь backend:** `docker compose down` (опционально `-v` для удаления volumes).
+- **Перезапуск одного сервиса:** `docker compose restart app` или `docker compose restart app_websocket`.
+- **Статус контейнеров:** `docker compose ps` (healthy/unhealthy по healthcheck).
+- **Логи:** `docker compose logs --tail 100 app`, `docker compose logs -f app` для follow.
+- **Smoke-check endpoints (без токена):**
+  - `curl -s -o NUL -w "%{http_code}" http://localhost:8080/api/v4/` → ожидается 200 или 401.
+- **С токеном (после логина):** `GET http://localhost:8080/api/v4/documents/optimized/?page_size=1` → 200, `GET http://localhost:8080/api/v4/headless/auth/me/` → 200.
+
 ## Ограничения и требования
 
 ### Версии Python
