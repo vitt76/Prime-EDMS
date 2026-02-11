@@ -199,6 +199,7 @@ public-frontend/
 #### Контейнеризация
 - **Docker**: (контейнеризация приложения)
 - **Docker Compose**: (оркестрация сервисов)
+- **Django-команды в контейнере:** выполняются через `/opt/mayan-edms/bin/mayan-edms.py` (в образе Mayan EDMS нет `python manage.py` в PATH). Пример: `docker compose exec app /opt/mayan-edms/bin/mayan-edms.py showmigrations dam`, `migrate dam`, `shell -c "..."`.
 
 #### Мониторинг и логирование
 - **Sentry SDK**: 1.5.8 (отслеживание ошибок)
@@ -397,14 +398,45 @@ public-frontend/
 - Фаза 2: RunPython populate — org 0003 привязывает данные к default Organization
 - Фаза 3: AlterField NOT NULL + AddIndex — операции в documents/0086, tags/0011, cabinets/0008; org 0004 — sync point
 - Причина: Django AddField/AlterField не принимают app_label; cross-app операции должны быть в app-владельце модели
+
+**Part 3 Integration (Планируется — из ТЗ Part 3):**
+- 🚧 **Sprint 1 (Неделя 1-2):** DAM модуль
+  - DocumentAIAnalysis → TenantAwareMixin
+  - Миграция для organization FK
+  - Обновление Celery tasks
+  - Story Points: 8-13 (US-DAM-002)
+- 🚧 **Sprint 2 (Неделя 3-4):** Analytics модуль
+  - AssetEvent → TenantAwareMixin
+  - Analytics Dashboard API с фильтрацией по Organization
+  - Story Points: 21 (US-ANALYTICS-001 + US-ANALYTICS-002)
+- 🚧 **Sprint 3 (Неделя 5-6):** Distribution + Notifications
+  - ShareLink → TenantAwareMixin
+  - Notifications WebSocket с валидацией Organization
+  - Story Points: 21 (US-DISTRIBUTION-001 + US-NOTIFICATIONS-001)
+- 🚧 **Sprint 4 (Неделя 7):** Security + Performance
+  - Security audit (penetration testing)
+  - Performance optimization (caching, query optimization)
+
+**Tenant-aware модели (реализовано):**
+- ✅ Document (имеет organization FK, миграции documents/0085, 0086)
+- ✅ Cabinet, Tag (имеют organization FK)
+
+**Tenant-aware модели (требуют реализации — Part 3):**
+- ❌ DocumentAIAnalysis (DAM) — требуется TenantAwareMixin (Sprint 1)
+- ❌ AssetEvent (Analytics) — требуется TenantAwareMixin (Sprint 2)
+- ❌ ShareLink (Distribution) — требуется TenantAwareMixin (Sprint 3)
+- ⚠️ DocumentFile, DocumentVersion — требуется проверка наличия organization FK
 - **Фаза 4 (runtime):** `patch_organization_fields()` регистрирует FK organization на Document/Tag/Cabinet через `contribute_to_class()` — необходимо для ORM lookups (`document__organization`)
 
-**Tenant-aware модели (требуют FK на Organization):**
-- Document, DocumentFile, DocumentVersion
-- Cabinet, Tag
-- DocumentAIAnalysis (DAM)
-- AssetEvent, CampaignAsset (Analytics)
-- Publication, ShareLink (Distribution)
+**Tenant-aware модели (реализовано):**
+- ✅ Document (имеет organization FK)
+- ✅ Cabinet, Tag (имеют organization FK)
+
+**Tenant-aware модели (требуют реализации — Part 3):**
+- ❌ DocumentAIAnalysis (DAM) — требуется TenantAwareMixin
+- ❌ AssetEvent (Analytics) — требуется TenantAwareMixin
+- ❌ ShareLink (Distribution) — требуется TenantAwareMixin
+- ⚠️ DocumentFile, DocumentVersion — требуется проверка
 
 **Глобальные модели (НЕ tenant-aware):**
 - Plan (тарифные планы)

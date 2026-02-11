@@ -1,7 +1,7 @@
 # Progress: Prime-EDMS
 
-**Последнее обновление:** 2026-02-10  
-**Источник:** Анализ последних 10 git коммитов и кодовой базы
+**Последнее обновление:** 2026-02-11  
+**Источник:** Анализ последних коммитов, кодовой базы и деплоя Sprint 1 Part 3
 
 ---
 
@@ -34,6 +34,7 @@
   - ✅ Доминирующие цвета (dominant colors)
   - ✅ Alt text для accessibility
 - ✅ Модель DocumentAIAnalysis для хранения результатов
+- ✅ **DocumentAIAnalysis tenant-aware (Sprint 1 Part 3):** TenantAwareMixin, FK organization, миграции dam 0007-0009, API/tasks/signals/serializers с propagation organization_id, pre-save binding, тесты изоляции; задеплоено в Docker (2026-02-11)
 - ✅ Пресеты метаданных (DAMMetadataPreset) для настройки извлечения
 - ✅ Интеграция с поиском через transformation функции
 - ✅ Celery tasks для асинхронной AI обработки (очередь `ai_analysis`)
@@ -162,9 +163,12 @@
 
 ## 🚧 In Progress (В процессе разработки)
 
-### 1. Multi-tenancy Architecture (Tenant Isolation)  — ЗАВЕРШЁН
-**Статус:** Sprint 1-4 + Hotfix + Tech Debt завершены, Suspend/Activate endpoints добавлены  
-**Документ:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`  
+### 1. Multi-tenancy Architecture (Tenant Isolation) — Базовая инфраструктура завершена
+**Статус:** Sprint 1-4 завершены. Part 3 интеграция планируется  
+**Документы:** 
+- `docs/transformation-2025/TZ_Django_Tenant_Isolation.md` (Part 2 — завершено)
+- `docs/transformation-2025/АНАЛИЗ КОНТЕКСТА И ОБНОВЛЕННОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ.md` (Part 3 — планируется)
+- `tmp/GAPS_REPORT_PART3.md` (GAPS отчет)  
 **Коммит:** `7f41e418fe`
 
 **Sprint 1 (ЗАВЕРШЁН):**
@@ -218,6 +222,24 @@
 - ForeignKey изоляция через Organization
 - Поддержка SaaS и Standalone режимов
 - ContextVar для потокобезопасности
+
+**Part 3 Integration:**
+- ✅ **Sprint 1 (Неделя 1-2):** DAM модуль — **ЗАВЕРШЁН И ЗАДЕПЛОЕН 2026-02-11**
+  - DocumentAIAnalysis → TenantAwareMixin, FK organization, миграции dam 0007-0009
+  - API/views/serializers/tasks/signals обновлены (organization_id), pre-save binding в organizations
+  - Тесты tenant isolation (модель, API, Celery), Pre-Deployment Static Analysis пройден
+  - Деплой: backup БД, rebuild app, migrate dam, restart app/app_websocket, smoke test OK
+- 🚧 **Sprint 2 (Неделя 3-4):** Analytics модуль
+  - AssetEvent → TenantAwareMixin
+  - Analytics Dashboard API с фильтрацией
+  - Story Points: 21 (US-ANALYTICS-001 + US-ANALYTICS-002)
+- 🚧 **Sprint 3 (Неделя 5-6):** Distribution + Notifications
+  - ShareLink → TenantAwareMixin
+  - Notifications WebSocket с валидацией Organization
+  - Story Points: 21 (US-DISTRIBUTION-001 + US-NOTIFICATIONS-001)
+- 🚧 **Sprint 4 (Неделя 7):** Security + Performance
+  - Security audit (penetration testing)
+  - Performance optimization (caching, query optimization)
 
 ### 2. UI/UX Improvements
 - 🚧 **Immersive Grid Implementation** (активно разрабатывается)
@@ -391,6 +413,7 @@
 - **Gallery preview regression fix (2026-02-10):** устранён кейс с placeholder `DOCUMENT` в SPA (`/dam`): исправлены latest-file prefetch и thumbnail/preview fallback в optimized API, фронтенд `AssetCard` переведён на auth blob-loading для защищённых `/api/v4/.../image`.
 - **Docker:** organizations и tags добавлены в Dockerfile.app и docker-compose volumes.
 - **distribution 0001:** Зависимость от documents 0081 для корректного разрешения DocumentFile.
+- **Sprint 1 Part 3 деплой (2026-02-11):** Бэкап БД (backup_pre_dam_tenant.sql), применение миграций dam 0007–0009 (AddField → populate → NOT NULL+index), перезапуск app и app_websocket; smoke test: DocumentAIAnalysis без organization = 0. В контейнере Django-команды запускать через `/opt/mayan-edms/bin/mayan-edms.py`.
 - Большинство core функций полностью работают и используются в production
 - Активная разработка сосредоточена на UI/UX улучшениях и оптимизации производительности
 - Новые модули (Marketing CMS, Public Frontend) полностью реализованы и готовы к использованию

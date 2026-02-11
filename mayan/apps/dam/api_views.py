@@ -47,7 +47,9 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
     API endpoint for managing AI analysis of documents.
     """
     serializer_class = DocumentAIAnalysisSerializer
-    queryset = DocumentAIAnalysis.objects.select_related('document').prefetch_related('document__files')
+    queryset = DocumentAIAnalysis.objects.select_related(
+        'document', 'organization'
+    ).prefetch_related('document__files')
     renderer_classes = (JSONRenderer,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (AIAnalysisThrottle,)
@@ -97,6 +99,17 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
             logger.error(f'Failed to check Celery worker availability: {e}')
             # Return False to prevent task execution when Celery is unavailable
             return False, f'Celery worker check failed: {str(e)}'
+
+    def _get_organization_id_for_task(self, document):
+        organization_id = getattr(document, 'organization_id', None)
+        if organization_id:
+            return str(organization_id)
+
+        request_organization = getattr(self.request, 'organization', None)
+        if request_organization is not None:
+            return str(request_organization.pk)
+
+        return None
 
     @action(detail=False, methods=['post'])
     def analyze(self, request):
@@ -380,7 +393,16 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
                     }
                 )
                 
-                result = analyze_document_with_ai.delay(document.id)
+                task_kwargs = {}
+                organization_id = self._get_organization_id_for_task(
+                    document=document
+                )
+                if organization_id:
+                    task_kwargs['organization_id'] = organization_id
+
+                result = analyze_document_with_ai.delay(
+                    document.id, **task_kwargs
+                )
                 
                 logger.info(
                     'AI analysis task started successfully',
@@ -489,7 +511,16 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
                     status=status.HTTP_429_TOO_MANY_REQUESTS
                 )
 
-            result = analyze_document_with_ai.delay(document.id)
+            task_kwargs = {}
+            organization_id = self._get_organization_id_for_task(
+                document=document
+            )
+            if organization_id:
+                task_kwargs['organization_id'] = organization_id
+
+            result = analyze_document_with_ai.delay(
+                document.id, **task_kwargs
+            )
 
             logger.info(
                 'AI re-analysis requested',
@@ -569,12 +600,18 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
             from .tasks import bulk_analyze_documents
 
             bulk_id = str(uuid4())
+            task_kwargs = {}
+            request_organization = getattr(request, 'organization', None)
+            if request_organization is not None:
+                task_kwargs['organization_id'] = str(request_organization.pk)
+
             result = bulk_analyze_documents.delay(
                 document_ids=validated_data['document_ids'],
                 ai_service=validated_data['ai_service'],
                 analysis_type=validated_data['analysis_type'],
                 user_id=request.user.id,
-                bulk_id=bulk_id
+                bulk_id=bulk_id,
+                **task_kwargs
             )
 
             logger.info(

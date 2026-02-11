@@ -26,6 +26,7 @@ class OrganizationsApp(MayanAppConfig):
 
         # Ensure Document.organization is always set before DB insert.
         self._connect_document_tenant_binding_signal()
+        self._connect_ai_analysis_tenant_binding_signal()
 
         # Connect quota enforcement signal
         self._connect_quota_signals()
@@ -93,6 +94,55 @@ class OrganizationsApp(MayanAppConfig):
         except Exception as exc:
             logger.warning(
                 'Could not connect document tenant binding signal: %s', exc
+            )
+
+    def _connect_ai_analysis_tenant_binding_signal(self):
+        """
+        Connect pre_save signal to auto-bind organization for DocumentAIAnalysis.
+
+        Priority:
+        1) Existing explicit assignment.
+        2) Current tenant context.
+        3) Parent document organization.
+        4) Default organization fallback.
+        """
+        try:
+            from django.db.models.signals import pre_save
+
+            from mayan.apps.dam.models import DocumentAIAnalysis
+
+            from .literals import DEFAULT_ORGANIZATION_SLUG
+            from .managers import get_current_organization
+            from .models import Organization
+
+            def _bind_ai_analysis_organization(sender, instance, **kwargs):
+                if getattr(instance, 'organization_id', None):
+                    return
+
+                organization = get_current_organization()
+
+                if organization is None:
+                    document = getattr(instance, 'document', None)
+                    organization = getattr(document, 'organization', None)
+
+                if organization is None:
+                    organization = Organization.objects.filter(
+                        slug=DEFAULT_ORGANIZATION_SLUG
+                    ).first()
+
+                if organization is not None:
+                    instance.organization = organization
+
+            pre_save.connect(
+                _bind_ai_analysis_organization,
+                sender=DocumentAIAnalysis,
+                dispatch_uid='organizations_bind_ai_analysis_organization',
+                weak=False
+            )
+            logger.debug('Connected AI analysis tenant binding signal')
+        except Exception as exc:
+            logger.warning(
+                'Could not connect AI analysis tenant binding signal: %s', exc
             )
 
     def _connect_cache_invalidation_signals(self):

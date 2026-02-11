@@ -235,6 +235,9 @@ def analyze_document_with_ai(self, document_id: int, **kwargs):
                 ai_analysis, _ = DocumentAIAnalysis.objects.get_or_create(
                     document=document,
                     defaults={
+                        'organization_id': getattr(
+                            document, 'organization_id', None
+                        ),
                         'analysis_status': 'failed',
                         'task_id': self.request.id,
                         'progress': 0,
@@ -284,6 +287,9 @@ def analyze_document_with_ai(self, document_id: int, **kwargs):
                 ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
                     document=document,
                     defaults={
+                        'organization_id': getattr(
+                            document, 'organization_id', None
+                        ),
                         'analysis_status': 'failed',
                         'task_id': self.request.id,
                         'progress': 0,
@@ -306,12 +312,20 @@ def analyze_document_with_ai(self, document_id: int, **kwargs):
         ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
             document=document,
             defaults={
+                'organization_id': getattr(document, 'organization_id', None),
                 'analysis_status': 'processing',
                 'task_id': self.request.id,
                 'progress': 0,
                 'current_step': 'Initializing AI analysis'
             }
         )
+
+        if (
+            getattr(ai_analysis, 'organization_id', None) is None and
+            getattr(document, 'organization_id', None) is not None
+        ):
+            ai_analysis.organization_id = document.organization_id
+            ai_analysis.save(update_fields=['organization'])
 
         logger.info(f"🔍 AI Analysis record: created={created}, status={ai_analysis.analysis_status}")
 

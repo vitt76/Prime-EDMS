@@ -1,15 +1,60 @@
 # Active Context: Prime-EDMS
 
-**Последнее обновление:** 2026-02-10  
-**Текущий фокус:** Multi-tenancy Sprint 4 — Fully Verified + Upload Recovery + Gallery Preview Recovery
+**Последнее обновление:** 2026-02-11  
+**Текущий фокус:** Multi-Tenancy Integration Part 3 — Sprint 1 (DAM) завершён и задеплоен; следующий — Sprint 2 (Analytics)
 
 ---
 
 ## 🎯 Current Focus (Текущий фокус)
 
-### Активная разработка (Последние коммиты)
+### Активная разработка (Текущий фокус)
 
-#### 1. Multi-tenancy Infrastructure
+#### 1. Multi-Tenancy Integration Part 3 (Новый ТЗ)
+**Статус:** Sprint 1 (DAM) завершён и задеплоен 2026-02-11; Sprint 2 (Analytics) — следующий  
+**ТЗ:** `docs/transformation-2025/АНАЛИЗ КОНТЕКСТА И ОБНОВЛЕННОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ.md` (Part 3)  
+**GAPS Report:** `tmp/GAPS_REPORT_PART3.md`
+
+**Контекст:**
+- Базовая инфраструктура Multi-tenancy (Sprint 1-4) завершена
+- Organizations Module полностью реализован
+- Document модель имеет organization FK
+- **Sprint 1 Part 3 (DAM):** DocumentAIAnalysis сделан tenant-aware, миграции применены, деплой выполнен
+
+**Оставшиеся GAPS (из аудита):**
+- ✅ ~~DocumentAIAnalysis НЕ tenant-aware~~ — **исправлено (Sprint 1 Part 3)**
+- ❌ **AssetEvent** НЕ tenant-aware (нет organization FK)
+- ❌ **ShareLink** НЕ tenant-aware (нет TenantAwareMixin)
+- ❌ **Analytics Dashboard** не фильтрует по Organization
+- ❌ **Notifications WebSocket** не валидирует Organization
+
+**Sprint'ы Part 3:**
+- **Sprint 1 (Неделя 1-2):** DAM модуль — ✅ **ЗАВЕРШЁН** (DocumentAIAnalysis tenant-aware, миграции 0007-0009, API/tasks/signals, pre-save binding, тесты изоляции, Pre-Deployment Static Analysis, деплой по Action Plan)
+- **Sprint 2 (Неделя 3-4):** Analytics модуль — AssetEvent + Dashboard API (следующий)
+- **Sprint 3 (Неделя 5-6):** Distribution + Notifications — ShareLink + WebSocket
+- **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning
+
+**Общая трудоемкость:** 50-55 story points
+
+**Архитектурные решения:**
+- Использование TenantAwareMixin для всех tenant-aware моделей
+- Celery tasks передают organization_id явно (TenantAwareTask)
+- Middleware устанавливает request.organization для всех запросов
+- ContextVar для потокобезопасности в async контексте
+
+**Sprint 1 Part 3 (DAM) — ЗАВЕРШЁН И ЗАДЕПЛОЕН 2026-02-11:**
+- ✅ DocumentAIAnalysis: TenantAwareMixin, явный FK `organization`, composite index (organization, -created)
+- ✅ Миграции dam: 0007 (AddField nullable), 0008 (RunPython populate из document.organization_id), 0009 (AlterField NOT NULL + AddIndex)
+- ✅ API: DocumentAIAnalysisViewSet — select_related('organization'), _get_organization_id_for_task(), передача organization_id в Celery (analyze, reanalyze, bulk_analyze)
+- ✅ Serializers: DocumentAIAnalysisSerializer — read-only поля organization, organization_name
+- ✅ Tasks: analyze_document_with_ai, get_or_create с organization_id из document; fallback при отсутствии; bulk_analyze_documents передаёт org в дочерние задачи
+- ✅ Signals: trigger_ai_analysis передаёт organization_id в apply_async; pre_save binding в organizations/apps.py для DocumentAIAnalysis (context → document.organization → default org)
+- ✅ Тесты: mayan.apps.dam.tests.test_tenant_isolation — модель, API (X-Organization-Id), Celery, DocumentFile/DocumentVersion через Document
+- ✅ Pre-Deployment Static Analysis: миграции без циклов, нет циклических импортов, organization_id передаётся как str(UUID), signal без рекурсии
+- ✅ Деплой по Action Plan: бэкап БД (backup_pre_dam_tenant.sql), пересборка app, migrate dam, перезапуск app + app_websocket, smoke test (Without org: 0) — **успешно**
+
+**Важно для Docker:** команды Django в контейнере выполняются через `/opt/mayan-edms/bin/mayan-edms.py` (не `python manage.py`).
+
+#### 2. Multi-tenancy Infrastructure (Завершено)
 **Статус:** Sprint 1-4 + Hotfix + Tech Debt + Sprint 4.2 + Sprint 4.3 + Sprint 4.4 + Sprint 4.5 (Gallery Preview Recovery) завершены  
 **Коммит:** `7f41e418fe`
 
@@ -446,7 +491,51 @@
 
 ## 📋 Next Steps (Ближайшие шаги)
 
-### Immediate (Следующие 1-2 недели)
+### Immediate (Sprint 1: DAM Module Integration)
+1. **DocumentAIAnalysis Tenant-Aware:**
+   - Добавить TenantAwareMixin к DocumentAIAnalysis модели
+   - Миграция для добавления organization FK
+   - Обновить Celery tasks для передачи organization_id
+   - Тесты для изоляции AI анализов по тенантам
+   - Story Points: 8-13 (US-DAM-002)
+
+2. **DocumentFile и DocumentVersion проверка:**
+   - Проверить наличие organization FK
+   - При необходимости добавить TenantAwareMixin
+
+### Short-term (Sprint 2: Analytics Module Integration)
+1. **AssetEvent Tenant-Aware:**
+   - Добавить TenantAwareMixin к AssetEvent модели
+   - Миграция для добавления organization FK
+   - Обновить middleware для автоматической регистрации событий
+   - Story Points: 8 (US-ANALYTICS-001)
+
+2. **Analytics Dashboard API:**
+   - Фильтрация всех queryset'ов по request.organization
+   - Обновление агрегаций для tenant-aware метрик
+   - Story Points: 13 (US-ANALYTICS-002)
+
+### Medium-term (Sprint 3: Distribution + Notifications)
+1. **ShareLink Tenant-Aware:**
+   - Добавить TenantAwareMixin к ShareLink модели
+   - Обновить публичный API для проверки organization
+   - Story Points: 8 (US-DISTRIBUTION-001)
+
+2. **Notifications WebSocket:**
+   - Валидация Organization в WebSocket consumer
+   - Tenant-aware уведомления
+   - Story Points: 13 (US-NOTIFICATIONS-001)
+
+### Long-term (Sprint 4: Security + Performance)
+1. **Security Audit:**
+   - Penetration testing для cross-tenant access
+   - Audit logging всех операций с Organization
+
+2. **Performance Optimization:**
+   - Кеширование метрик по Organization
+   - Query optimization для tenant-aware запросов
+
+### Previous Immediate (Следующие 1-2 недели)
 
 1. **Завершение Immersive Grid:**
    - Оптимизация для больших списков (>100 активов)

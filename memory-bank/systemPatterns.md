@@ -67,7 +67,8 @@ mayan/apps/dam/
 
 ```python
 # Пример из mayan/apps/dam/models.py
-class DocumentAIAnalysis(models.Model):
+class DocumentAIAnalysis(TenantAwareMixin, ExtraDataModelMixin, models.Model):
+    organization = models.ForeignKey('organizations.Organization', ...)  # tenant-aware
     document = models.OneToOneField(
         Document,
         on_delete=models.CASCADE,
@@ -80,6 +81,7 @@ class DocumentAIAnalysis(models.Model):
 - Core модели (Document) остаются неизменными
 - Расширения через ForeignKey/OneToOneField
 - Обратная совместимость с базовым Mayan EDMS
+- Tenant-aware расширения (например DocumentAIAnalysis) добавляют TenantAwareMixin и явный FK organization; изоляция через TenantAwareManager и pre_save binding в organizations/apps.py
 
 ### 3. Celery Task Pattern
 
@@ -190,7 +192,7 @@ def transform_ai_tags(value):
 
 **Назначение:** Поддержка SaaS-модели (один backend, много клиентов) и Standalone-модели (один клиент на выделенном сервере).
 
-**Статус:** Полностью реализовано (Sprint 1-4 + Hotfix + Tech Debt + Verification + Upload Recovery).
+**Статус:** Базовая инфраструктура реализована (Sprint 1-4 завершены). Интеграция с модулями (Part 3) в планировании.
 
 **Компоненты:**
 
@@ -273,6 +275,14 @@ class TenantResolverMiddleware:
 - Готовность к шардированию (future)
 - Поддержка ≥100 тенантов на одном сервере
 - Оптимизация запросов через select_related('organization')
+- Composite индексы на (organization_id, timestamp) для производительности
+
+**Code Style Rules:**
+- Всегда используй `TenantAwareManager` для бизнес-логики
+- Используй `.objects_unfiltered` только для SuperAdmin операций
+- Celery tasks должны явно передавать `organization_id` в kwargs
+- Все tenant-aware модели должны наследовать `TenantAwareMixin`
+- Middleware устанавливает `request.organization` для всех запросов
 
 **Текущая реализация (ЗАВЕРШЕНА — Sprint 1-4 + Hotfix + Tech Debt + Verification):**
 - ✅ Базовый модуль `mayan.apps.organizations` создан
@@ -287,6 +297,11 @@ class TenantResolverMiddleware:
 - ✅ Frontend: org store, selector, settings, API header, service methods
 - ✅ Quota enforcement (Redis-cached), audit logging, security hardening
 - ✅ Полная API верификация: все endpoints 200 OK, lifecycle test passed
+- ✅ Document модель имеет organization FK
+- ✅ Celery tasks используют TenantAwareTask base class
+- ❌ DocumentAIAnalysis НЕ tenant-aware (GAP — Part 3 Sprint 1)
+- ❌ AssetEvent НЕ tenant-aware (GAP — Part 3 Sprint 2)
+- ❌ ShareLink НЕ tenant-aware (GAP — Part 3 Sprint 3)
 
 ### 10. Contribute-to-Class Pattern (Dynamic FK Registration)
 
