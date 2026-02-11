@@ -27,6 +27,7 @@ from django_redis import get_redis_connection
 from mayan.apps.analytics.cache import invalidate_asset_analytics_cache
 from mayan.apps.analytics.models import AssetEvent, PortalSession, UserSession
 from mayan.apps.analytics.realtime import notify_analytics_refresh
+from mayan.apps.documents.models import Document
 from mayan.apps.analytics.metrics import analytics_events_processed_total, analytics_redis_stream_lag
 
 logger = logging.getLogger(name=__name__)
@@ -269,6 +270,20 @@ class Command(BaseCommand):
                             'metadata': metadata or {},
                         }
                     )
+
+            # Resolve organization_id from documents (bulk_create does not run pre_save).
+            doc_ids = list({e.document_id for e in asset_events})
+            doc_to_org = dict(
+                Document.objects.filter(pk__in=doc_ids).values_list('pk', 'organization_id')
+            )
+            valid_events = []
+            for ev in asset_events:
+                org_id = doc_to_org.get(ev.document_id)
+                if org_id is None:
+                    continue
+                ev.organization_id = org_id
+                valid_events.append(ev)
+            asset_events = valid_events
 
             # Persist.
             try:

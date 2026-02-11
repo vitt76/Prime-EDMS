@@ -11,18 +11,161 @@ from django.utils import timezone
 from typing import Optional
 
 from mayan.apps.documents.models import Document
+from mayan.apps.organizations.models import Organization
 from mayan.apps.organizations.tasks import TenantAwareTask
 
 from .models import (
-    ApprovalWorkflowEvent, AnalyticsAlert, AssetDailyMetrics, AssetEvent,
-    CampaignDailyMetrics, CDNDailyCost, CDNRate, SearchDailyMetrics, SearchQuery,
-    SearchSession, UserDailyMetrics, CampaignEngagementEvent, DistributionEvent
+    ApprovalWorkflowEvent, AnalyticsAlert, AnalyticsReportTask,
+    AssetDailyMetrics, AssetEvent, CampaignDailyMetrics, CDNDailyCost, CDNRate,
+    SearchDailyMetrics, SearchQuery, SearchSession, UserDailyMetrics,
+    CampaignEngagementEvent, DistributionEvent
 )
 from .realtime import notify_analytics_refresh
 from .providers.registry import AnalyticsProviderRegistry, register_default_providers
 from .reports import CampaignPDFReport
 
 logger = logging.getLogger(name=__name__)
+
+
+@shared_task(
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+    queue='documents',
+    base=TenantAwareTask,
+)
+def track_asset_event_async(
+    self,
+    organization_id: str,
+    user_id: Optional[int],
+    document_id: Optional[int],
+    event_type: str,
+    ip_address: str = '',
+    user_agent: str = '',
+    referrer: str = '',
+    metadata: Optional[dict] = None,
+    **kwargs
+) -> None:
+    """Create a single AssetEvent asynchronously (e.g. from middleware).
+
+    TenantAwareTask sets tenant context from organization_id in kwargs.
+    """
+    try:
+        org_id = kwargs.get('organization_id') or organization_id
+        if not org_id:
+            logger.warning('track_asset_event_async: missing organization_id')
+            return
+        if not document_id:
+            logger.warning('track_asset_event_async: missing document_id')
+            return
+        try:
+            organization = Organization.objects.get(pk=int(org_id))
+        except (Organization.DoesNotExist, ValueError, TypeError):
+            logger.warning('track_asset_event_async: organization_id=%s not found', org_id)
+            return
+        document = Document.objects.filter(pk=document_id).first()
+        if not document:
+            logger.warning('track_asset_event_async: document_id=%s not found', document_id)
+            return
+        org_from_doc = getattr(document, 'organization_id', None)
+        if org_from_doc is not None and org_from_doc != organization.pk:
+            logger.warning(
+                'track_asset_event_async: document %s does not belong to org %s',
+                document_id, org_id
+            )
+            return
+        AssetEvent.objects.create(
+            organization_id=organization.pk,
+            document_id=document_id,
+            user_id=user_id,
+            event_type=event_type,
+            channel='api',
+            user_department='',
+            intended_use='',
+            metadata=(metadata or {}).copy(),
+        )
+    except Exception as exc:
+        logger.exception('track_asset_event_async failed: %s', exc)
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
+
+
+@shared_task(
+    bind=True,
+    max_retries=2,
+    default_retry_delay=60,
+    queue='documents',
+    base=TenantAwareTask,
+)
+def generate_analytics_report(self, report_task_id: int, **kwargs) -> None:
+    """Generate analytics report (JSON) and save to MEDIA_ROOT; update task status."""
+    import json
+    import os
+
+    organization_id = kwargs.get('organization_id')
+    if not organization_id:
+        logger.warning('generate_analytics_report: missing organization_id')
+        return
+    try:
+        report_task = AnalyticsReportTask.objects_unfiltered.get(pk=report_task_id)
+    except AnalyticsReportTask.DoesNotExist:
+        logger.warning('generate_analytics_report: task %s not found', report_task_id)
+        return
+    if str(report_task.organization_id) != str(organization_id):
+        logger.warning(
+            'generate_analytics_report: task %s org %s != %s',
+            report_task_id, report_task.organization_id, organization_id
+        )
+        return
+    report_task.status = AnalyticsReportTask.STATUS_PROCESSING
+    report_task.save(update_fields=['status'])
+
+    try:
+        params = report_task.parameters or {}
+        date_range = params.get('date_range') or {}
+        date_from = date_range.get('date_from') or date_range.get('from')
+        date_to = date_range.get('date_to') or date_range.get('to')
+        from django.utils.dateparse import parse_date
+        from django.db.models import Sum
+
+        qs = AssetEvent.objects_unfiltered.filter(organization_id=report_task.organization_id)
+        if date_from:
+            qs = qs.filter(timestamp__date__gte=parse_date(date_from))
+        if date_to:
+            qs = qs.filter(timestamp__date__lte=parse_date(date_to))
+
+        by_type = dict(
+            qs.values('event_type').annotate(cnt=Count('id')).values_list('event_type', 'cnt')
+        )
+        total_events = qs.count()
+        report_data = {
+            'report_type': report_task.report_type,
+            'organization_id': str(report_task.organization_id),
+            'date_range': {'from': date_from, 'to': date_to},
+            'total_events': total_events,
+            'by_event_type': by_type,
+        }
+
+        from django.conf import settings
+        media_root = getattr(settings, 'MEDIA_ROOT', None) or ''
+        reports_dir = os.path.join(media_root, 'reports', str(report_task.organization_id))
+        os.makedirs(reports_dir, exist_ok=True)
+        filename = f'{report_task_id}.json'
+        file_path = os.path.join(reports_dir, filename)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(report_data, f, indent=2, ensure_ascii=False)
+
+        report_task.status = AnalyticsReportTask.STATUS_COMPLETED
+        report_task.file_path = file_path
+        report_task.completed_at = timezone.now()
+        report_task.save(update_fields=['status', 'file_path', 'completed_at'])
+    except Exception as exc:
+        logger.exception('generate_analytics_report failed: %s', exc)
+        report_task.status = AnalyticsReportTask.STATUS_FAILED
+        report_task.completed_at = timezone.now()
+        report_task.save(update_fields=['status', 'completed_at'])
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
 
 
 @shared_task(

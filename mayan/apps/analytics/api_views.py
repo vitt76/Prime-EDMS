@@ -1,225 +1,145 @@
-"""Analytics extra API views (non-headless).
+"""API views for analytics (tenant-scoped dashboard and report generation)."""
 
-This module contains webhook endpoints for external analytics providers.
-They are designed to be lightweight and never block on DB writes:
-webhooks publish to Redis Streams; the consumer persists events in PostgreSQL.
-"""
+from datetime import timedelta
 
-from __future__ import annotations
-
-import json
-import logging
-from typing import Any, Dict, Iterable, List, Optional
-
-from django.conf import settings
-from django.http import StreamingHttpResponse
+from django.db.models import Count
 from django.utils import timezone
-from django.db import connection
-
-from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework import status, viewsets
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
-from django_ratelimit.decorators import ratelimit
+from mayan.apps.acls.classes import Permission
+from mayan.apps.documents.models import Document
+from mayan.apps.organizations.models import Organization
 
-from .event_stream import publish_asset_event
-from .models import AssetEvent
+from .models import AssetEvent, AnalyticsReportTask
+from .permissions import permission_analytics_view_asset_bank
+from .serializers import DashboardMetricsSerializer
+from .tasks import generate_analytics_report
 
-logger = logging.getLogger(__name__)
 
+class AnalyticsDashboardViewSet(viewsets.ViewSet):
+    """Single endpoint: tenant-scoped dashboard metrics (GET list = dashboard)."""
 
-class EmailClickWebhookView(APIView):
-    """POST /api/v4/analytics/webhooks/email/click/
+    permission_classes = (IsAuthenticated,)
 
-    Supports:
-      - SendGrid Event Webhook (expects list of events)
-      - Generic provider payloads containing document_id/asset_id
-
-    Security:
-      - Optional shared secret header: X-Analytics-Webhook-Secret
-    """
-
-    permission_classes = (AllowAny,)
-
-    def post(self, request, *args, **kwargs):
-        secret = (getattr(settings, 'ANALYTICS_EMAIL_WEBHOOK_SECRET', '') or '').strip()
-        if secret:
-            provided = (request.headers.get('X-Analytics-Webhook-Secret') or '').strip()
-            if provided != secret:
-                return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
-
-        payload = request.data
-        events: List[Dict[str, Any]] = []
-        if isinstance(payload, list):
-            events = payload
-        elif isinstance(payload, dict):
-            # Accept a single event or wrapper with "events"
-            if isinstance(payload.get('events'), list):
-                events = payload.get('events') or []
-            else:
-                events = [payload]
-        else:
-            return Response({'detail': 'Invalid payload'}, status=status.HTTP_400_BAD_REQUEST)
-
-        published = 0
-        errors = 0
-        for ev in events:
-            try:
-                doc_id = ev.get('document_id') or ev.get('asset_id') or ev.get('documentId')
-                if not doc_id:
-                    # SendGrid click event often has URL; support query param document_id=...
-                    url = (ev.get('url') or ev.get('link') or '').strip()
-                    if url and 'document_id=' in url:
-                        try:
-                            doc_id = int(url.split('document_id=')[1].split('&')[0])
-                        except Exception:
-                            doc_id = None
-                doc_id = int(doc_id)
-            except Exception:
-                errors += 1
-                continue
-
-            provider = (getattr(settings, 'ANALYTICS_EMAIL_PROVIDER', '') or '').strip().lower() or 'unknown'
-            publish_asset_event(
-                document_id=doc_id,
-                event_type=AssetEvent.EVENT_TYPE_EMAIL_CLICK,
-                user_id=None,
-                user_department='',
-                channel='email',
-                intended_use='',
-                latency_seconds=None,
-                bandwidth_bytes=None,
-                metadata={
-                    'provider': provider,
-                    'event': ev.get('event') or ev.get('type') or 'click',
-                    'email': ev.get('email') or ev.get('recipient') or '',
-                    'url': ev.get('url') or ev.get('link') or '',
-                    'campaign_id': ev.get('campaign_id') or ev.get('campaign') or '',
-                    'timestamp': ev.get('timestamp') or timezone.now().isoformat(),
-                }
+    def list(self, request):
+        """GET /api/v4/headless/analytics/dashboard/ — metrics for current organization."""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_asset_bank,), user=request.user
+        )
+        organization = getattr(request, 'organization', None)
+        if not organization:
+            return Response(
+                {'detail': 'Organization context required (e.g. X-Organization-Id).'},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            published += 1
+        try:
+            org = Organization.objects.get(pk=organization.pk)
+        except Organization.DoesNotExist:
+            return Response(
+                {'detail': 'Organization not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
-        logger.info('email_click_webhook processed: published=%d errors=%d', published, errors)
-        return Response({'published': published, 'errors': errors}, status=status.HTTP_200_OK)
+        total_documents = Document.valid.filter(
+            organization=org, in_trash=False
+        ).count()
+        storage_used_gb = org.get_storage_used_gb()
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        active_users_30d = AssetEvent.objects.filter(
+            organization=org,
+            timestamp__gte=thirty_days_ago,
+            user_id__isnull=False
+        ).values('user_id').distinct().count()
 
-
-class AnalyticsEventsExportView(APIView):
-    """GET /api/v4/analytics/export/events/
-
-    Produces JSON Lines for BI systems (cursor-based pagination).
-
-    Query params:
-      - start_date (YYYY-MM-DD)
-      - end_date (YYYY-MM-DD)
-      - event_type (optional)
-      - user_id (optional)
-      - cursor (last seen id, optional)
-      - limit (max 5000)
-    """
-
-    permission_classes = (AllowAny,)
-
-    @ratelimit(key='ip', rate='1/m', block=True)
-    def get(self, request, *args, **kwargs):
-        start_date = request.query_params.get('start_date')
-        end_date = request.query_params.get('end_date')
-        event_type = (request.query_params.get('event_type') or '').strip()
-        user_id = request.query_params.get('user_id')
-        cursor = request.query_params.get('cursor')
-        limit = min(int(request.query_params.get('limit') or 1000), 5000)
-
-        qs = AssetEvent.objects.all().order_by('id')
-        if cursor:
-            try:
-                qs = qs.filter(id__gt=int(cursor))
-            except Exception:
-                return Response({'detail': 'Invalid cursor'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if start_date:
-            qs = qs.filter(timestamp__date__gte=start_date)
-        if end_date:
-            qs = qs.filter(timestamp__date__lte=end_date)
-        if event_type:
-            qs = qs.filter(event_type=event_type)
-        if user_id:
-            qs = qs.filter(user_id=user_id)
-
-        rows = list(
-            qs.values(
-                'id', 'document_id', 'event_type', 'user_id', 'user_department', 'channel',
-                'intended_use', 'bandwidth_bytes', 'latency_seconds', 'timestamp', 'metadata'
-            )[:limit]
+        top_documents = list(
+            AssetEvent.objects.filter(
+                organization=org,
+                event_type=AssetEvent.EVENT_TYPE_VIEW,
+                timestamp__gte=thirty_days_ago
+            ).values('document_id').annotate(
+                view_count=Count('id')
+            ).order_by('-view_count')[:5]
         )
 
-        def gen():
-            for row in rows:
-                row['timestamp'] = row['timestamp'].isoformat() if row.get('timestamp') else None
-                yield json.dumps(row, ensure_ascii=False) + '\n'
-
-        response = StreamingHttpResponse(gen(), content_type='application/x-ndjson')
-        if rows:
-            response['X-Next-Cursor'] = str(rows[-1]['id'])
-        response['Cache-Control'] = 'no-store'
-        return response
-
-
-class AnalyticsHealthCheckView(APIView):
-    """GET /api/v4/analytics/health/
-
-    Lightweight health check for monitoring (Prometheus/Grafana probes).
-    """
-
-    permission_classes = (AllowAny,)
-
-    def get(self, request, *args, **kwargs):
-        overall_ok = True
-
-        # Redis stream connectivity / lag (best-effort).
-        redis_status = {'status': 'unknown', 'stream_length': None}
-        try:
-            from django_redis import get_redis_connection
-            conn = get_redis_connection('default')
-            stream_key = getattr(settings, 'ANALYTICS_EVENT_STREAM_KEY', 'dam:analytics:events')
-            redis_status['stream_length'] = int(conn.xlen(stream_key))
-            redis_status['status'] = 'connected'
-        except Exception as exc:
-            overall_ok = False
-            redis_status['status'] = 'error'
-            redis_status['error'] = str(exc)
-
-        # Database connectivity / latency.
-        db_status = {'status': 'unknown', 'latency_ms': None}
-        try:
-            import time
-            t0 = time.perf_counter()
-            with connection.cursor() as cursor:
-                cursor.execute('SELECT 1')
-                cursor.fetchone()
-            db_status['latency_ms'] = int((time.perf_counter() - t0) * 1000)
-            db_status['status'] = 'connected'
-        except Exception as exc:
-            overall_ok = False
-            db_status['status'] = 'error'
-            db_status['error'] = str(exc)
-
-        # Last aggregation timestamp (best-effort).
-        last_aggregation = None
-        try:
-            from .models import AssetDailyMetrics
-            row = AssetDailyMetrics.objects.order_by('-date').values_list('date', flat=True).first()
-            if row:
-                last_aggregation = timezone.make_aware(timezone.datetime.combine(row, timezone.datetime.min.time())).isoformat()
-        except Exception:
-            last_aggregation = None
+        ai_count = org.get_ai_analyses_this_month()
+        ai_usage = {
+            'count_this_month': ai_count,
+            'token_usage': getattr(org, 'ai_token_usage_this_month', None),
+        }
 
         data = {
-            'status': 'healthy' if overall_ok else 'degraded',
-            'redis_streams': redis_status,
-            'database': db_status,
-            'last_aggregation': last_aggregation,
+            'organization': str(org.pk),
+            'organization_name': org.name,
+            'total_documents': total_documents,
+            'storage_used_gb': storage_used_gb,
+            'active_users_30d': active_users_30d,
+            'top_documents': top_documents,
+            'ai_usage': ai_usage,
         }
-        return Response(data, status=status.HTTP_200_OK if overall_ok else status.HTTP_503_SERVICE_UNAVAILABLE)
+        serializer = DashboardMetricsSerializer(data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class AnalyticsReportGenerateViewSet(viewsets.ViewSet):
+    """POST generate report (async); GET status by task id."""
+
+    permission_classes = (IsAuthenticated,)
+
+    def create(self, request):
+        """POST /api/v4/headless/analytics/reports/generate/ — enqueue report generation."""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_asset_bank,), user=request.user
+        )
+        organization = getattr(request, 'organization', None)
+        if not organization:
+            return Response(
+                {'detail': 'Organization context required (e.g. X-Organization-Id).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        report_type = request.data.get('report_type') or AnalyticsReportTask.REPORT_TYPE_ASSET_USAGE
+        date_range = request.data.get('date_range') or {}
+        export_format = request.data.get('export_format') or 'json'
+
+        report_task = AnalyticsReportTask.objects.create(
+            organization=organization,
+            user=request.user,
+            report_type=report_type,
+            parameters={'date_range': date_range, 'export_format': export_format},
+            status=AnalyticsReportTask.STATUS_PENDING,
+        )
+        generate_analytics_report.delay(
+            report_task.pk,
+            organization_id=str(organization.pk),
+        )
+        return Response(
+            {'task_id': report_task.pk, 'status': 'processing'},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    def retrieve(self, request, pk=None):
+        """GET /api/v4/headless/analytics/reports/{id}/ — report task status."""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_asset_bank,), user=request.user
+        )
+        organization = getattr(request, 'organization', None)
+        if not organization:
+            return Response(
+                {'detail': 'Organization context required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            task = AnalyticsReportTask.objects.get(pk=pk, organization=organization)
+        except AnalyticsReportTask.DoesNotExist:
+            return Response(
+                {'detail': 'Not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        return Response({
+            'task_id': task.pk,
+            'status': task.status,
+            'file_path': task.file_path,
+            'created_at': task.created_at,
+            'completed_at': task.completed_at,
+        })

@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from mayan.apps.documents.models import Document, DocumentType
+from mayan.apps.organizations.models import Organization
 
 from mayan.apps.analytics.models import AssetEvent, SearchQuery, SearchSession
 from mayan.apps.analytics.services import link_download_to_latest_search_session
@@ -15,8 +16,16 @@ class SearchToFindLinkingTestCase(TestCase):
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(username='u1', password='test')
+        self.organization = Organization.objects.create(
+            name='Test Org', slug='test-org', email='test@test.com',
+            is_active=True, status='active',
+        )
         self.document_type = DocumentType.objects.create(label='T1')
-        self.document = Document.objects.create(document_type=self.document_type, label='D1')
+        self.document = Document.objects.create(
+            document_type=self.document_type,
+            label='D1',
+            organization=self.organization,
+        )
 
     def test_link_download_to_latest_search_session(self):
         started_at = timezone.now() - timezone.timedelta(minutes=10)

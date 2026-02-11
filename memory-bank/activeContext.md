@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
 **Последнее обновление:** 2026-02-11  
-**Текущий фокус:** Multi-Tenancy Integration Part 3 — Sprint 1 (DAM) завершён и задеплоен; следующий — Sprint 2 (Analytics)
+**Текущий фокус:** Multi-Tenancy Integration Part 3 — Sprint 2 (Analytics) завершён; следующий — Sprint 3 (Distribution + Notifications)
 
 ---
 
@@ -10,7 +10,7 @@
 ### Активная разработка (Текущий фокус)
 
 #### 1. Multi-Tenancy Integration Part 3 (Новый ТЗ)
-**Статус:** Sprint 1 (DAM) завершён и задеплоен 2026-02-11; Sprint 2 (Analytics) — следующий  
+**Статус:** Sprint 1 (DAM) и Sprint 2 (Analytics) завершены; Sprint 3 (Distribution + Notifications) — следующий  
 **ТЗ:** `docs/transformation-2025/АНАЛИЗ КОНТЕКСТА И ОБНОВЛЕННОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ.md` (Part 3)  
 **GAPS Report:** `tmp/GAPS_REPORT_PART3.md`
 
@@ -22,14 +22,14 @@
 
 **Оставшиеся GAPS (из аудита):**
 - ✅ ~~DocumentAIAnalysis НЕ tenant-aware~~ — **исправлено (Sprint 1 Part 3)**
-- ❌ **AssetEvent** НЕ tenant-aware (нет organization FK)
+- ✅ ~~AssetEvent НЕ tenant-aware~~ — **исправлено (Sprint 2)**
 - ❌ **ShareLink** НЕ tenant-aware (нет TenantAwareMixin)
-- ❌ **Analytics Dashboard** не фильтрует по Organization
+- ✅ ~~Analytics Dashboard не фильтрует по Organization~~ — **исправлено (Sprint 2)**
 - ❌ **Notifications WebSocket** не валидирует Organization
 
 **Sprint'ы Part 3:**
 - **Sprint 1 (Неделя 1-2):** DAM модуль — ✅ **ЗАВЕРШЁН** (DocumentAIAnalysis tenant-aware, миграции 0007-0009, API/tasks/signals, pre-save binding, тесты изоляции, Pre-Deployment Static Analysis, деплой по Action Plan)
-- **Sprint 2 (Неделя 3-4):** Analytics модуль — AssetEvent + Dashboard API (следующий)
+- **Sprint 2 (Неделя 3-4):** Analytics модуль — ✅ **ЗАВЕРШЁН** (AssetEvent tenant-aware, middleware, dashboard API, reports, isolation tests; code review 2026-02-11, critical date_range fix applied)
 - **Sprint 3 (Неделя 5-6):** Distribution + Notifications — ShareLink + WebSocket
 - **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning
 
@@ -53,6 +53,16 @@
 - ✅ Деплой по Action Plan: бэкап БД (backup_pre_dam_tenant.sql), пересборка app, migrate dam, перезапуск app + app_websocket, smoke test (Without org: 0) — **успешно**
 
 **Важно для Docker:** команды Django в контейнере выполняются через `/opt/mayan-edms/bin/mayan-edms.py` (не `python manage.py`).
+
+**Sprint 2 Part 3 (Analytics) — ЗАВЕРШЁН 2026-02-11:**
+- AssetEvent: TenantAwareMixin, organization FK, migrations 0010–0012, pre_save binding, consume_analytics_events org mapping.
+- Middleware: AssetEventTrackingMiddleware, track_asset_event_async (TenantAwareTask).
+- Dashboard: AnalyticsDashboardViewSet, GET /api/v4/headless/analytics/dashboard/, tenant-scoped metrics.
+- Reports: AnalyticsReportTask, 0013, generate_analytics_report (JSON), POST/GET reports API.
+- Tests: middleware, dashboard isolation, reports, test_tenant_isolation.
+- Code review: one CRITICAL fix (report date_range from parameters['date_range']) applied; optional 0011 orphan hardening documented.
+
+**Следующий фокус:** Sprint 3 — Distribution + Notifications (ShareLink tenant-aware, WebSocket org validation).
 
 #### 2. Multi-tenancy Infrastructure (Завершено)
 **Статус:** Sprint 1-4 + Hotfix + Tech Debt + Sprint 4.2 + Sprint 4.3 + Sprint 4.4 + Sprint 4.5 (Gallery Preview Recovery) завершены  

@@ -20,6 +20,12 @@
 - **Celery**: 5.2.3 (асинхронная обработка задач)
 - **Celery Beat**: 2.2.1 (периодические задачи)
 
+#### Analytics (tenant-aware, Sprint 2)
+- **AssetEvent:** TenantAwareMixin, FK organization; индексы (organization, event_type, -timestamp), (organization, document, -timestamp). Создание: pre_save signal (organizations) или явная передача organization_id (Celery, consume_analytics_events).
+- **AssetEventTrackingMiddleware:** В цепочке после TenantResolverMiddleware; срабатывает на GET /api/v4/documents/, /api/v4/headless/documents/ и путях с "download"; вызывает track_asset_event_async.delay (fire-and-forget). Не трекает при отсутствии request.organization или при response.status_code >= 400.
+- **Dashboard API:** GET /api/v4/headless/analytics/dashboard/ — один endpoint с метриками по текущей организации (X-Organization-Id); Document.valid.filter(organization=org), AssetEvent.objects.filter(organization=org), org.get_storage_used_gb(), org.get_ai_analyses_this_month().
+- **Reports:** AnalyticsReportTask (status pending/processing/completed/failed); Celery generate_analytics_report читает parameters['date_range']['from'|'to'], фильтрует AssetEvent по organization_id, пишет JSON в MEDIA_ROOT/reports/{org_id}/{task_id}.json.
+
 #### Веб-серверы
 - **Gunicorn**: 20.1.0 (WSGI сервер для основного приложения)
 - **Daphne**: 3.0.2 (ASGI сервер для WebSocket уведомлений)

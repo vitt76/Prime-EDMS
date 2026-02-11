@@ -5,9 +5,11 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 
+from mayan.apps.organizations.managers import TenantAwareMixin
 
-class AssetEvent(models.Model):
-    """Raw analytics events for a single document (Level 1)."""
+
+class AssetEvent(TenantAwareMixin, models.Model):
+    """Raw analytics events for a single document (Level 1). Tenant-aware."""
 
     EVENT_TYPE_DOWNLOAD = 'download'
     EVENT_TYPE_VIEW = 'view'
@@ -26,6 +28,14 @@ class AssetEvent(models.Model):
     )
 
     id = models.BigAutoField(primary_key=True)
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='analytics_assetevent_set',
+        verbose_name=_('Organization'),
+        help_text=_('Organization this record belongs to'),
+        db_index=True
+    )
     document = models.ForeignKey(
         to='documents.Document',
         on_delete=models.CASCADE,
@@ -75,11 +85,19 @@ class AssetEvent(models.Model):
         db_table = 'analytics_asset_events'
         verbose_name = _('Asset event')
         verbose_name_plural = _('Asset events')
-        indexes = (
+        indexes = [
+            models.Index(
+                fields=['organization', 'event_type', '-timestamp'],
+                name='idx_analytics_ae_org_type_ts'
+            ),
+            models.Index(
+                fields=['organization', 'document', '-timestamp'],
+                name='idx_analytics_ae_org_doc_ts'
+            ),
             models.Index(fields=('document', '-timestamp')),
             models.Index(fields=('event_type', 'timestamp')),
             models.Index(fields=('user', 'timestamp')),
-        )
+        ]
 
     def __str__(self):
         return f'{self.event_type} - {self.document_id}'
@@ -921,3 +939,91 @@ class DistributionEvent(models.Model):
 
     def __str__(self):
         return f'{self.channel} - {self.event_type} - {self.status}'
+
+
+class AnalyticsReportTask(TenantAwareMixin, models.Model):
+    """Asynchronous report generation request (tenant-scoped)."""
+
+    REPORT_TYPE_ASSET_USAGE = 'asset_usage'
+    REPORT_TYPE_CAMPAIGN_ROI = 'campaign_roi'
+    REPORT_TYPE_USER_ACTIVITY = 'user_activity'
+
+    REPORT_TYPE_CHOICES = (
+        (REPORT_TYPE_ASSET_USAGE, _('Asset usage')),
+        (REPORT_TYPE_CAMPAIGN_ROI, _('Campaign ROI')),
+        (REPORT_TYPE_USER_ACTIVITY, _('User activity')),
+    )
+
+    STATUS_PENDING = 'pending'
+    STATUS_PROCESSING = 'processing'
+    STATUS_COMPLETED = 'completed'
+    STATUS_FAILED = 'failed'
+
+    STATUS_CHOICES = (
+        (STATUS_PENDING, _('Pending')),
+        (STATUS_PROCESSING, _('Processing')),
+        (STATUS_COMPLETED, _('Completed')),
+        (STATUS_FAILED, _('Failed')),
+    )
+
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='analytics_report_tasks',
+        verbose_name=_('Organization'),
+        db_index=True,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='analytics_report_tasks',
+        verbose_name=_('User'),
+    )
+    report_type = models.CharField(
+        max_length=50,
+        choices=REPORT_TYPE_CHOICES,
+        db_index=True,
+        verbose_name=_('Report type'),
+    )
+    parameters = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_('Parameters'),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+        verbose_name=_('Status'),
+    )
+    file_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name=_('File path'),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name=_('Created at'),
+    )
+    completed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=_('Completed at'),
+    )
+
+    class Meta:
+        db_table = 'analytics_report_tasks'
+        verbose_name = _('Analytics report task')
+        verbose_name_plural = _('Analytics report tasks')
+        indexes = [
+            models.Index(
+                fields=['organization', '-created_at'],
+                name='idx_analytics_rt_org_created',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.report_type} - {self.status} - {self.pk}'
