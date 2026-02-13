@@ -6,5 +6,6 @@ django-silk==4.3.0
 flake8==4.0.1
 ipython==7.32.0
 readme==0.7.1
+bandit==1.7.5
 safety==1.10.3
 transifex-client==0.14.4

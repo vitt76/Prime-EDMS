@@ -514,6 +514,8 @@ mayan/apps/dam/tests/
 - Для привязки Document, Tag, Cabinet к Organization: операции в documents (0085/0086), tags (0010/0011), cabinets (0007/0008)
 - org 0002 и 0004 — точки синхронизации зависимостей (operations = []); полная логика в docstrings
 
+**Index names:** Django E034 — имя индекса ≤30 символов (Oracle limit; distribution: idx_dist_sl_org_created).
+
 ### API Versioning
 
 - Версионирование через URL: `/api/v4/`

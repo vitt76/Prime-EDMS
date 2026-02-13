@@ -403,7 +403,7 @@ class ShareLink(TenantAwareMixin, models.Model):
         indexes = [
             models.Index(
                 fields=['organization', '-created'],
-                name='idx_distribution_sl_org_created',
+                name='idx_dist_sl_org_created',
             ),
         ]
 

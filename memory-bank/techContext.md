@@ -23,7 +23,7 @@
 #### Analytics (tenant-aware, Sprint 2)
 - **AssetEvent:** TenantAwareMixin, FK organization (NOT NULL); индексы idx_analytics_ae_org_type_ts (organization, event_type, -timestamp), idx_analytics_ae_org_doc_ts (organization, document, -timestamp). Создание: pre_save signal в organizations/apps.py (context → document.organization → default org) или явная передача organization_id в track_asset_event_async.delay().
 - **AssetEventTrackingMiddleware:** Синхронный (MiddlewareMixin, process_response). Срабатывает на GET /api/v4/documents/, /api/v4/headless/documents/ и путях, содержащих "download"; вызывает track_asset_event_async.delay(organization_id=..., document_id=..., ...) (fire-and-forget). Не трекает при отсутствии request.organization или при response.status_code >= 400. Порядок в цепочке: после TenantResolverMiddleware (чтобы request.organization был установлен).
-- **Dashboard API:** GET /api/v4/headless/analytics/dashboard/ — один endpoint; строго требует request.organization (400 при отсутствии); метрики по организации: Document.valid.filter(organization=org), AssetEvent.objects.filter(organization=org), org.get_storage_used_gb(), org.get_ai_analyses_this_month(), top_documents по просмотрам за 30 дней.
+- **Dashboard API:** GET /api/v4/headless/analytics/dashboard/ — один endpoint; строго требует request.organization (400 при отсутствии); метрики по организации: Document.valid.filter(organization=org), AssetEvent.objects.filter(organization=org), org.get_storage_used_gb(), org.get_ai_analyses_this_month(), top_documents по просмотрам за 30 дней. **Sprint 4:** ответ кэшируется в Redis (TTL 5 мин, ключ analytics:dashboard:{org_id}); инвалидация при создании/обновлении AssetEvent (analytics/dashboard_cache.py, signal в signals.py).
 - **Reports:** AnalyticsReportTask (status pending/processing/completed/failed); Celery generate_analytics_report читает parameters['date_range'] (ключи from/to или date_from/date_to), фильтрует AssetEvent по organization_id, пишет только JSON в MEDIA_ROOT/reports/{org_id}/{task_id}.json. Параметр export_format в API сохраняется в parameters, но task его не использует (экспорт только JSON).
 
 #### Веб-серверы
@@ -398,6 +398,8 @@ public-frontend/
 **Переменные окружения:**
 - `DEPLOYMENT_MODE`: SAAS или STANDALONE
 - `MAYAN_ORGANIZATIONS_AUTO_CREATE`: Автосоздание при регистрации
+
+**Индексы БД:** Django E034 — имя индекса не более 30 символов (distribution: idx_dist_sl_org_created, не idx_distribution_sl_org_created).
 
 **Миграции (структура после restructuring 2026-02-10):**
 - Фаза 1: AddField organization (nullable) — операции в documents/0085, tags/0010, cabinets/0007; org 0002 — sync point

@@ -5,13 +5,17 @@ from datetime import timedelta
 from django.db.models import Count
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from mayan.apps.acls.classes import Permission
+from mayan.apps.permissions.classes import Permission
 from mayan.apps.documents.models import Document
 from mayan.apps.organizations.models import Organization
 
+from .dashboard_cache import (
+    get_dashboard_cached, set_dashboard_cached,
+)
 from .models import AssetEvent, AnalyticsReportTask
 from .permissions import permission_analytics_view_asset_bank
 from .serializers import DashboardMetricsSerializer
@@ -41,6 +45,10 @@ class AnalyticsDashboardViewSet(viewsets.ViewSet):
                 {'detail': 'Organization not found.'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+        data = get_dashboard_cached(org.pk)
+        if data is not None:
+            return Response(data, status=status.HTTP_200_OK)
 
         total_documents = Document.valid.filter(
             organization=org, in_trash=False
@@ -78,6 +86,7 @@ class AnalyticsDashboardViewSet(viewsets.ViewSet):
             'top_documents': top_documents,
             'ai_usage': ai_usage,
         }
+        set_dashboard_cached(org.pk, data)
         serializer = DashboardMetricsSerializer(data)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -143,3 +152,30 @@ class AnalyticsReportGenerateViewSet(viewsets.ViewSet):
             'created_at': task.created_at,
             'completed_at': task.completed_at,
         })
+
+
+class EmailClickWebhookView(APIView):
+    """Webhook for external email tracking (e.g. Mailchimp click events)."""
+    permission_classes = (AllowAny,)
+
+    def post(self, request):
+        return Response({'status': 'received'}, status=status.HTTP_200_OK)
+
+
+class AnalyticsEventsExportView(APIView):
+    """Export analytics events (filtered by date range, event type)."""
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        return Response(
+            {'detail': 'Export not implemented'},
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+
+
+class AnalyticsHealthCheckView(APIView):
+    """Health check for analytics module."""
+    permission_classes = (AllowAny,)
+
+    def get(self, request):
+        return Response({'status': 'ok'}, status=status.HTTP_200_OK)

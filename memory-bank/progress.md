@@ -1,7 +1,7 @@
 # Progress: Prime-EDMS
 
-**Последнее обновление:** 2026-02-11  
-**Источник:** Sprint 3 Part 3 (Distribution + Notifications) завершён — ShareLink tenant-aware, WebSocket org validation; Memory Bank синхронизирован.
+**Последнее обновление:** 2026-02-13  
+**Источник:** Deployment Hotfixes 2026-02-13 — analytics Permission import, EmailClickWebhookView stubs, distribution index name; Backend 8080, Frontend 5173, Public 3000 рабочие.
 
 ---
 
@@ -80,7 +80,7 @@
 - ✅ Публикации (Publications) для группировки активов
 - ✅ Рендишены (Renditions) - преобразованные версии файлов
 - ✅ Share Links - защищенные ссылки с паролями, лимитами, сроками
-- ✅ **ShareLink tenant-aware (Sprint 3 Part 3):** TenantAwareMixin, миграции 0012–0014, pre_save binding, портал/сигналы с objects_unfiltered, тесты изоляции (distribution/tests/test_tenant_isolation.py)
+- ✅ **ShareLink tenant-aware (Sprint 3 Part 3):** TenantAwareMixin, миграции 0012–0014, pre_save binding, портал/сигналы с objects_unfiltered, тесты изоляции (distribution/tests/test_tenant_isolation.py). Hotfix 2026-02-13: индекс idx_dist_sl_org_created (≤30 символов).
 - ✅ Recipient Lists - списки получателей
 - ✅ Distribution Campaigns - маркетинговые кампании
 - ✅ Access Log - логирование доступа
@@ -245,9 +245,10 @@
   - AssetEventTrackingMiddleware, track_asset_event_async (TenantAwareTask)
   - Analytics Dashboard API: GET /api/v4/headless/analytics/dashboard/ (tenant-scoped), AnalyticsReportTask + generate_analytics_report (JSON)
   - Тесты: middleware, dashboard/report isolation, test_tenant_isolation; code review 2026-02-11 (date_range fix applied)
-- 🚧 **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning
-  - Security audit (penetration testing)
-  - Performance optimization (caching, query optimization)
+- ✅ **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning — **ЗАВЕРШЁН 2026-02-11**
+  - Security: отчёт SPRINT4_SECURITY_AUDIT_REPORT.md, аудит objects_unfiltered, cross-tenant тесты (organizations/tests/test_cross_tenant_security.py), Bandit в dev requirements
+  - Performance: отчёт SPRINT4_PERFORMANCE_REPORT.md, кэш dashboard (dashboard_cache.py + signal), индексы проверены
+  - Load: locustfile расширен (dashboard, documents), отчёт SPRINT4_LOAD_TEST_REPORT.md
 
 ### 2. UI/UX Improvements
 - 🚧 **Immersive Grid Implementation** (активно разрабатывается)
@@ -422,6 +423,7 @@
 - **Docker:** organizations и tags добавлены в Dockerfile.app и docker-compose volumes.
 - **distribution 0001:** Зависимость от documents 0081 для корректного разрешения DocumentFile.
 - **Sprint 1 Part 3 деплой (2026-02-11):** Бэкап БД (backup_pre_dam_tenant.sql), применение миграций dam 0007–0009 (AddField → populate → NOT NULL+index), перезапуск app и app_websocket; smoke test: DocumentAIAnalysis без organization = 0. В контейнере Django-команды запускать через `/opt/mayan-edms/bin/mayan-edms.py`.
+- **Deployment Hotfixes (2026-02-13):** analytics: Permission import (`permissions.classes`), EmailClickWebhookView/AnalyticsEventsExportView/AnalyticsHealthCheckView (stubs для rest_api/urls); distribution: индекс `idx_dist_sl_org_created` (≤30 символов, Django E034). Backend 8080, Frontend 5173, Public 3000 — работают.
 - Большинство core функций полностью работают и используются в production
 - Активная разработка сосредоточена на UI/UX улучшениях и оптимизации производительности
 - Новые модули (Marketing CMS, Public Frontend) полностью реализованы и готовы к использованию

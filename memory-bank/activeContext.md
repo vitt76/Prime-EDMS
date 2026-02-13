@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
-**Последнее обновление:** 2026-02-11  
-**Текущий фокус:** Multi-Tenancy Integration Part 3 — Sprint 3 (Distribution + Notifications) завершён; следующий — Sprint 4 (Security Audit + Performance Tuning)
+**Последнее обновление:** 2026-02-13  
+**Текущий фокус:** Multi-Tenancy Part 3 завершён; Deployment Hotfixes 2026-02-13 применены; Backend, Frontend, Public Frontend работоспособны
 
 ---
 
@@ -31,7 +31,7 @@
 - **Sprint 1 (Неделя 1-2):** DAM модуль — ✅ **ЗАВЕРШЁН** (DocumentAIAnalysis tenant-aware, миграции 0007-0009, API/tasks/signals, pre-save binding, тесты изоляции, Pre-Deployment Static Analysis, деплой по Action Plan)
 - **Sprint 2 (Неделя 3-4):** Analytics модуль — ✅ **ЗАВЕРШЁН** (AssetEvent tenant-aware, middleware, dashboard API, reports, isolation tests; code review 2026-02-11, critical date_range fix applied)
 - **Sprint 3 (Неделя 5-6):** Distribution + Notifications — ✅ **ЗАВЕРШЁН** (ShareLink tenant-aware, WebSocket org validation)
-- **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning
+- **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning — ✅ **ЗАВЕРШЁН 2026-02-11**
 
 **Общая трудоемкость:** 50-55 story points
 
@@ -54,6 +54,11 @@
 
 **Важно для Docker:** команды Django в контейнере выполняются через `/opt/mayan-edms/bin/mayan-edms.py` (не `python manage.py`).
 
+**Deployment Hotfixes 2026-02-13 (при перезапуске контейнеров):**
+- ✅ analytics/api_views.py: исправлен импорт `Permission` — был `acls.classes` (ImportError), заменён на `permissions.classes`
+- ✅ analytics/api_views.py: добавлены отсутствовавшие views для rest_api/urls: `EmailClickWebhookView`, `AnalyticsEventsExportView`, `AnalyticsHealthCheckView` (заглушки: webhook 200 OK, export 501, health 200 OK)
+- ✅ distribution/models.py + migration 0014: индекс `idx_distribution_sl_org_created` (31 символ) сокращён до `idx_dist_sl_org_created` — Django E034: имя индекса не более 30 символов
+
 **Sprint 2 Part 3 (Analytics) — ЗАВЕРШЁН 2026-02-11:**
 - AssetEvent: TenantAwareMixin, organization FK, migrations 0010–0012, pre_save binding в organizations/apps.py (context → document.organization → default org). Создание событий: track_asset_event_async (явный organization_id) или pre_save при ручном создании.
 - Middleware: AssetEventTrackingMiddleware (sync, process_response), fire-and-forget вызов track_asset_event_async.delay(); пути /api/v4/documents/, /api/v4/headless/documents/, "download"; требует request.organization, не трекает при response.status_code >= 400.
@@ -70,7 +75,13 @@
 - ✅ send_websocket_notification: хелпер get_organization_id_for_notification (action.target/action_object Document → organization_id, иначе default org пользователя); group_send в группу notifications_{org_id}_{user_id}.
 - ✅ Тесты: distribution/tests/test_tenant_isolation.py (изоляция по контексту, API с X-Organization-Id, публичный доступ по токену); notifications test_tasks (org-scoped group), test_consumers (connect без org / чужая org → 4003, с valid org → accepted).
 
-**Следующий фокус:** Sprint 4 — Security Audit + Performance Tuning.
+**Sprint 4 Part 3 (Security Audit + Performance Tuning) — ЗАВЕРШЁН 2026-02-11:**
+- ✅ Security: отчёт `docs/transformation-2025/SPRINT4_SECURITY_AUDIT_REPORT.md` (аудит objects_unfiltered, cross-tenant тесты); Bandit добавлен в requirements/development.txt; интеграционные тесты в `mayan/apps/organizations/tests/test_cross_tenant_security.py` (dashboard/reports с X-Organization-Id другой org → default org).
+- ✅ Performance: отчёт `docs/transformation-2025/SPRINT4_PERFORMANCE_REPORT.md`; индексы проверены (дополнений не требуется); кэш ответа dashboard (TTL 5 мин, `analytics/dashboard_cache.py`), инвалидация при AssetEvent (signal в analytics/signals.py).
+- ✅ Load testing: сценарии в `tests/load/locustfile.py` (AnalyticsUser: dashboard, top-metrics, document list optimized; DocumentListUser); отчёт `docs/transformation-2025/SPRINT4_LOAD_TEST_REPORT.md`.
+- ✅ DoD: Security 0 High/Critical (по отчёту); Performance тесты и NFR — см. отчёты; Memory Bank обновлён.
+
+**Следующий фокус:** Part 3 завершён; дальнейшие приоритеты — по roadmap (Immersive Grid, Search, Analytics).
 
 #### 2. Multi-tenancy Infrastructure (Завершено)
 **Статус:** Sprint 1-4 + Hotfix + Tech Debt + Sprint 4.2 + Sprint 4.3 + Sprint 4.4 + Sprint 4.5 (Gallery Preview Recovery) завершены  

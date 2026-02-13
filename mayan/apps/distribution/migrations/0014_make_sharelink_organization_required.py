@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
             model_name='sharelink',
             index=models.Index(
                 fields=['organization', '-created'],
-                name='idx_distribution_sl_org_created',
+                name='idx_dist_sl_org_created',
             ),
         ),
     ]
