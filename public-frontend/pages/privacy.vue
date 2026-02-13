@@ -1,25 +1,25 @@
 <template>
   <div class="mx-auto max-w-container px-4 py-12">
-    <SEOPageMeta :title="page?.meta_title || 'Privacy | MADDAM'" :description="page?.meta_description" />
-    <h1 class="text-3xl font-semibold">{{ page?.title || 'Privacy' }}</h1>
-    <div class="prose mt-6 max-w-none" v-html="contentHtml"></div>
+    <SEOPageMeta :title="title" :description="metaDescription" />
+    <h1 class="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">{{ title }}</h1>
+    <div class="prose prose-neutral mt-6 max-w-none dark:prose-invert" v-html="contentHtml"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { PublicPage } from '~/types/content'
+const LEGAL_TITLE = 'Политика конфиденциальности'
 
-const { getPage } = useApi()
-const { locale } = useI18n()
-
-const { data: page } = await useAsyncData<PublicPage | null>(
-  `page-privacy-${locale.value}`,
-  () => getPage('privacy', locale.value).catch(() => null),
-  { watch: [locale] }
-)
-
-const contentHtml = computed(() => {
-  const section = page.value?.sections?.[0]
-  return section?.content?.html || '<p>Политика конфиденциальности.</p>'
+const { data } = await useAsyncData('legal-privacy', async () => {
+  const raw = await $fetch<string>('/legal/privacy-policy-ru.md', { responseType: 'text' })
+  const MarkdownIt = (await import('markdown-it')).default
+  const md = new MarkdownIt()
+  const html = md.render(raw)
+  const titleMatch = raw.match(/^#\s+(.+)$/m)
+  const title = titleMatch ? titleMatch[1].trim() : LEGAL_TITLE
+  return { html, title }
 })
+
+const title = data.value?.title ?? LEGAL_TITLE
+const contentHtml = data.value?.html ?? ''
+const metaDescription = 'Политика конфиденциальности ООО «Мэддам». Обработка персональных данных в соответствии с 152-ФЗ.'
 </script>

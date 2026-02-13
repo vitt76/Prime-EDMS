@@ -5,6 +5,9 @@ export const API_ENDPOINTS = {
   FAQ: '/api/v4/public/faq',
   LEADS: '/api/v4/public/leads',
   NEWSLETTER: '/api/v4/public/newsletter',
+  LEGAL: {
+    CONSENT: '/api/v4/public/legal/consent/'
+  },
   AUTH: {
     REGISTER: '/api/v4/public/auth/register',
     LOGIN: '/api/v4/public/auth/login',

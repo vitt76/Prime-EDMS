@@ -20,6 +20,7 @@ export function useApi() {
     submitLead: apiService.submitLead.bind(apiService),
     subscribeNewsletter: apiService.subscribeNewsletter.bind(apiService),
     register: apiService.register.bind(apiService),
-    verifyEmail: apiService.verifyEmail.bind(apiService)
+    verifyEmail: apiService.verifyEmail.bind(apiService),
+    submitConsent: apiService.submitConsent.bind(apiService)
   }
 }

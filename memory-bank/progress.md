@@ -1,7 +1,7 @@
 # Progress: Prime-EDMS
 
 **Последнее обновление:** 2026-02-13  
-**Источник:** Deployment Hotfixes 2026-02-13 — analytics Permission import, EmailClickWebhookView stubs, distribution index name; Backend 8080, Frontend 5173, Public 3000 рабочие.
+**Источник:** SEO (public-frontend): robots.txt server route, sitemap + dynamic blog URLs, meta/OG/canonical (useSeo), useJsonld + Organization/SoftwareApplication, SEO_CHECKLIST.md. Аудит 152-ФЗ: COMPLIANCE_REPORT_152FZ_2026.md (compliant; риск — плейсхолдеры в п. 9 Политики).
 
 ---
 
@@ -145,11 +145,19 @@
 - ✅ Формы: Contact, Login, Register, Forgot Password
 - ✅ SSR support для animations (client-side плагины)
 - ✅ SEO оптимизация (PageMeta, JsonLd)
-- ✅ Analytics интеграция
+- ✅ Analytics интеграция (Yandex.Metrika; без Google Analytics)
 - ✅ i18n поддержка (en/ru)
 - ✅ Оптимизация bundle size (manual chunks)
 - ✅ E2E тесты (Playwright)
 - ✅ Unit тесты (Vitest)
+- ✅ **Legal / Cookie Consent (152-FZ):** CookieConsentModal в default layout; страницы Privacy и Terms с контентом из docs/legal (privacy-policy-ru.md, user-agreement-ru.md); submitConsent через useApi → POST /api/v4/public/legal/consent/; согласие по ymId (Yandex.Metrika)
+- ✅ **SEO (индексация Yandex/Google):** robots.txt — server/routes/robots.txt.get.ts (Host, Sitemap из NUXT_PUBLIC_SITE_URL); sitemap — @nuxtjs/sitemap, sources /api/sitemap-urls (блог из Django API); meta/OG/canonical — useSeo, SEOPageMeta (canonicalFromRoute); JSON-LD — useJsonld(), Organization + SoftwareApplication на главной, BlogPosting в блоге; чеклист public-frontend/docs/SEO_CHECKLIST.md
+
+#### 11.1 Legal Module (Backend)
+- ✅ Приложение `mayan.apps.legal`: модель UserConsentLog (consent_type, ip_address, user_agent, timestamp, session_id, url_referer)
+- ✅ API: POST /api/v4/public/legal/consent/ для фиксации выбора пользователя (full / necessary / rejected)
+- ✅ Документы: docs/legal/privacy-policy-ru.md, user-agreement-ru.md (оператор ООО «Мэддам», только Yandex.Metrika, определения, порядок согласия, права субъекта)
+- ✅ Регистрация в config.yml и docker-compose
 
 #### 12. Infrastructure
 - ✅ Docker Compose конфигурация
@@ -367,6 +375,7 @@
 - **Distribution Module**: ✅ 95% (полностью функционален)
 - **Headless API**: ✅ 90% (основные endpoints работают, некоторые gaps)
 - **Marketing CMS**: ✅ 100% (новый модуль полностью реализован)
+- **Legal**: ✅ 100% (UserConsentLog, POST /api/v4/public/legal/consent/, docs/legal, CookieConsentModal)
 - **Notifications**: ✅ 95% (работает, улучшения в процессе)
 - **Organizations**: ✅ 100% (Sprint 1-4 + Hotfix + Tech Debt завершены: модели, managers, middleware, data binding, API, admin, permissions, Celery context, quota, frontend, indexes, Redis, audit, security, suspend/activate endpoints, comprehensive tests)
 
@@ -424,6 +433,9 @@
 - **distribution 0001:** Зависимость от documents 0081 для корректного разрешения DocumentFile.
 - **Sprint 1 Part 3 деплой (2026-02-11):** Бэкап БД (backup_pre_dam_tenant.sql), применение миграций dam 0007–0009 (AddField → populate → NOT NULL+index), перезапуск app и app_websocket; smoke test: DocumentAIAnalysis без organization = 0. В контейнере Django-команды запускать через `/opt/mayan-edms/bin/mayan-edms.py`.
 - **Deployment Hotfixes (2026-02-13):** analytics: Permission import (`permissions.classes`), EmailClickWebhookView/AnalyticsEventsExportView/AnalyticsHealthCheckView (stubs для rest_api/urls); distribution: индекс `idx_dist_sl_org_created` (≤30 символов, Django E034). Backend 8080, Frontend 5173, Public 3000 — работают.
+- **Legal / Cookie Consent (2026-02-13):** mayan.apps.legal с UserConsentLog и POST /api/v4/public/legal/consent/; docs/legal (privacy-policy-ru.md, user-agreement-ru.md) для ООО «Мэддам», только Yandex.Metrika; public-frontend: CookieConsentModal в default layout, useApi.submitConsent(), страницы Privacy/Terms с контентом из API/server routes, ymId вместо gaId.
+- **Аудит 152-ФЗ (2026-02-13):** Отчёт docs/legal/COMPLIANCE_REPORT_152FZ_2026.md. Соответствие: блокировка YM до согласия, баннер, чекбоксы в формах, логирование. Риск: п. 9 Политики — заменить плейсхолдеры реквизитов до production.
+- **SEO Public Frontend (2026-02-13):** robots.txt (server route, Host + Sitemap); sitemap с динамическими URL блога из API; meta/OG/canonical (useSeo, canonicalFromRoute); useJsonld, Organization + SoftwareApplication, BlogPosting; public-frontend/docs/SEO_CHECKLIST.md. Production: NUXT_PUBLIC_SITE_URL (e.g. https://maddam.io), og-default.png, logo.png.
 - Большинство core функций полностью работают и используются в production
 - Активная разработка сосредоточена на UI/UX улучшениях и оптимизации производительности
 - Новые модули (Marketing CMS, Public Frontend) полностью реализованы и готовы к использованию

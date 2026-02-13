@@ -80,6 +80,7 @@ const relatedPosts = computed(() => {
   return relatedData.value.results.filter(p => p.slug !== route.params.slug)
 })
 
+const { siteUrl } = useJsonld()
 const jsonLd = computed(() => ({
   '@context': 'https://schema.org',
   '@type': 'BlogPosting',
@@ -97,12 +98,12 @@ const jsonLd = computed(() => ({
     name: 'MADDAM',
     logo: {
       '@type': 'ImageObject',
-      url: 'http://localhost:3000/logo.png'
+      url: `${siteUrl}/logo.png`
     }
   },
   mainEntityOfPage: {
     '@type': 'WebPage',
-    '@id': `http://localhost:3000/blog/${route.params.slug}`
+    '@id': `${siteUrl}/blog/${route.params.slug}`
   }
 }))
 </script>

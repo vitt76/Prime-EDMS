@@ -106,6 +106,13 @@ export class ApiService {
       body: payload
     })
   }
+
+  async submitConsent(payload: { consent_type: string; session_id?: string; url_referer?: string }) {
+    return this.fetch<{ status: string }>(API_ENDPOINTS.LEGAL.CONSENT, {
+      method: 'POST',
+      body: payload
+    })
+  }
 }
 
 export const createApiService = (baseURL: string) => new ApiService(baseURL)

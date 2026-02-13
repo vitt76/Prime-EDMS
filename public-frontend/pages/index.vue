@@ -59,24 +59,34 @@ const hero = computed(() => {
   }
 })
 
-const jsonLd = computed(() => ({
-  '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: 'MADDAM',
-  description: page.value?.meta_description || t('meta.defaultDescription'),
-  url: page.value?.canonical_url || 'http://localhost:3000',
-  applicationCategory: 'BusinessApplication',
-  offers: {
-    '@type': 'AggregateOffer',
-    priceCurrency: 'USD',
-    lowPrice: '29',
-    highPrice: 'custom',
-    offerCount: '3'
-  },
-  aggregateRating: {
-    '@type': 'AggregateRating',
-    ratingValue: '4.8',
-    ratingCount: '250'
+const { siteUrl, organizationSchema, softwareApplicationSchema } = useJsonld()
+
+const jsonLd = computed(() => {
+  const appUrl = page.value?.canonical_url || siteUrl
+  const description = page.value?.meta_description || t('meta.defaultDescription')
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      organizationSchema({ url: appUrl }),
+      {
+        ...softwareApplicationSchema({
+          description,
+          url: appUrl,
+          offers: {
+            '@type': 'AggregateOffer',
+            priceCurrency: 'USD',
+            lowPrice: '29',
+            highPrice: 'custom',
+            offerCount: '3'
+          },
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: '4.8',
+            ratingCount: '250'
+          }
+        })
+      }
+    ]
   }
-}))
+})
 </script>

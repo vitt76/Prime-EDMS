@@ -1,11 +1,53 @@
 # Active Context: Prime-EDMS
 
 **Последнее обновление:** 2026-02-13  
-**Текущий фокус:** Multi-Tenancy Part 3 завершён; Deployment Hotfixes 2026-02-13 применены; Backend, Frontend, Public Frontend работоспособны
+**Текущий фокус:** Multi-Tenancy Part 3 завершён; Legal + SEO для Public Frontend реализованы; аудит 152-ФЗ выполнен
 
 ---
 
 ## 🎯 Current Focus (Текущий фокус)
+
+### Недавно завершённое (2026-02-13)
+
+#### SEO (Public Frontend, Nuxt 3) — Yandex / Google
+**Статус:** Реализовано  
+**Контекст:** Индексация публичного сайта, robots.txt, sitemap, meta/OG, JSON-LD.
+
+**Реализовано:**
+- **robots.txt:** Динамический ответ `server/routes/robots.txt.get.ts` — Allow публичных страниц, Disallow `/auth/`, `/admin`, `/app/`, `/account/`, `/api/`; директива `Host` (Yandex); `Sitemap` из `NUXT_PUBLIC_SITE_URL` (production: e.g. https://maddam.io).
+- **Sitemap:** @nuxtjs/sitemap в nuxt.config: exclude приватных путей; `sources: ['/api/sitemap-urls']` — динамические URL блога из Django API (`server/api/sitemap-urls.get.ts`).
+- **Meta / OG / canonical:** В app.head добавлены description, og:type, og:site_name, og:image (fallback), twitter:card. Composable `useSeo()`: setPageMeta с canonicalFromRoute и абсолютными og:image/og:url через siteUrl. SEOPageMeta — проп canonicalFromRoute по умолчанию true.
+- **JSON-LD:** Composable `useJsonld()` (organizationSchema, softwareApplicationSchema, setSchema, siteUrl). Главная: Organization + SoftwareApplication через @graph в index.vue. Блог-пост: BlogPosting с абсолютными URL (siteUrl) в blog/[slug].vue.
+- **Документация:** `public-frontend/docs/SEO_CHECKLIST.md` — чеклист по robots, sitemap, meta, canonical, JSON-LD, production (og-default.png, logo.png, NUXT_PUBLIC_SITE_URL).
+
+#### Аудит 152-ФЗ (Cookie Consent & Privacy)
+**Статус:** Выполнен, отчёт зафиксирован  
+**Документ:** `docs/legal/COMPLIANCE_REPORT_152FZ_2026.md`
+
+**Итоги:** Критических нарушений нет. COMPLIANT: блокировка аналитики до согласия (YM только после «Принять все»), баннер с ссылкой на Политику и тремя кнопками, чекбоксы в формах регистрации/контакта, логирование согласия (UserConsentLog). RISK: раздел 9 Политики (реквизиты оператора) содержит плейсхолдеры `[указать при публикации]` — до production заменить на фактические данные ООО «Мэддам».
+
+#### Legal & Cookie Consent (152-FZ, ООО Мэддам)
+**Статус:** Реализовано  
+**Контекст:** Соответствие требованиям ФЗ-152 и прозрачность обработки ПД для публичного сайта.
+
+**Backend (mayan.apps.legal):**
+- Модель `UserConsentLog`: фиксация выбора пользователя (full / necessary / rejected), IP, user_agent, timestamp, session_id, url_referer — глобальный аудит без привязки к tenant.
+- API: `POST /api/v4/public/legal/consent/` — приём согласия, заполнение полей из request.
+- Сериализатор, API view, URL в public API; приложение зарегистрировано в `config.yml` и `docker-compose.yml` (при необходимости).
+
+**Документы:**
+- `docs/legal/privacy-policy-ru.md` — политика конфиденциальности (оператор ООО «Мэддам», только Yandex.Metrika, без Google Analytics; определения, порядок согласия, хранение, права субъекта).
+- `docs/legal/user-agreement-ru.md` — пользовательское соглашение (условия использования, ответственность, ФЗ-152).
+
+**Public Frontend (Nuxt 3):**
+- Страницы `/privacy` и `/terms`: отображение Markdown из публичного API (`/api/legal/privacy`, `/api/legal/terms` или эквивалент через server routes `server/api/legal/privacy.get.ts`, `terms.get.ts`).
+- Компонент `CookieConsentModal.vue`: баннер согласия на cookies; отправка выбора через `useApi().submitConsent()` на backend; сохранение предпочтения (например, в cookie/localStorage); использование **ymId** (Yandex.Metrika) вместо gaId.
+- Интеграция модалки в `layouts/default.vue` (position="banner").
+- Константа API и `useApi` composable: метод `submitConsent()` для вызова `POST /api/v4/public/legal/consent/`.
+
+**Паттерны:** Новый Django app в `mayan/apps/legal`, REST API без tenant; фронт — только Yandex.Metrika, без Google.
+
+---
 
 ### Активная разработка (Текущий фокус)
 

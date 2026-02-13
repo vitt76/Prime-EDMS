@@ -22,11 +22,12 @@ export default defineNuxtConfig({
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:5173',
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
       environment: process.env.NUXT_PUBLIC_ENVIRONMENT || 'development',
-      gaId: process.env.NUXT_PUBLIC_GA_ID || ''
+      // Яндекс.Метрика (соответствует законодательству РФ); для cookie «Принять все»
+      ymId: process.env.NUXT_PUBLIC_YM_ID || ''
     }
   },
 
-  // App configuration
+  // App configuration (SEO: defaults for og:image, og:type; page-level overrides via useSeoMeta)
   app: {
     head: {
       htmlAttrs: {
@@ -37,7 +38,12 @@ export default defineNuxtConfig({
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'format-detection', content: 'telephone=no' },
-        { name: 'theme-color', content: '#4f46e5' }
+        { name: 'theme-color', content: '#4f46e5' },
+        { name: 'description', content: 'MADDAM — система управления цифровыми активами (DAM). Хранение, AI-метаданные, аналитика. Yandex, GigaChat, ФЗ-152.' },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:site_name', content: 'MADDAM' },
+        { property: 'og:image', content: '/og-default.png' },
+        { name: 'twitter:card', content: 'summary_large_image' }
       ],
       link: [
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
@@ -143,15 +149,24 @@ export default defineNuxtConfig({
     classSuffix: ''
   },
 
-  // Site URL (used by sitemap and other modules)
+  // Site URL (used by sitemap, robots.txt, canonical; production: e.g. https://maddam.io)
   site: {
     url: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000'
   },
 
-  // Sitemap configuration
+  // Sitemap configuration (@nuxtjs/sitemap)
   sitemap: {
     autoLastmod: true,
-    exclude: ['/auth/**', '/api/**']
+    exclude: [
+      '/auth/**',
+      '/api/**',
+      '/admin',
+      '/account/**',
+      '/app/**',
+      '/**/error'
+    ],
+    // Dynamic blog URLs from Django API (server/api/sitemap-urls.get.ts)
+    sources: ['/api/sitemap-urls']
   },
 
   // Performance optimizations

@@ -117,7 +117,7 @@ services:
       MAYAN_WORKER_D_MAX_TASKS_PER_CHILD: "10"
       COMMAND_WORKER_D: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker -c %(ENV_MAYAN_WORKER_D_CONCURRENCY)s --hostname=mayan-edms-worker_d.%%h --loglevel=INFO -Ofair --queues=ai_analysis --max-memory-per-child %(ENV_MAYAN_WORKER_D_MAX_MEMORY_PER_CHILD)s --max-tasks-per-child %(ENV_MAYAN_WORKER_D_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
       # Force add our extensions via environment
-      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor', 'mayan.apps.dam.apps.DAMApp', 'mayan.apps.marketing_cms']"
+      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor', 'mayan.apps.dam.apps.DAMApp', 'mayan.apps.marketing_cms', 'mayan.apps.legal']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
       PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
       # AI Provider configurations
@@ -165,6 +165,7 @@ services:
       - ./mayan/apps/notifications:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/notifications
       - ./mayan/apps/events:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/events
       - ./mayan/apps/marketing_cms:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/marketing_cms
+      - ./mayan/apps/legal:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/legal
       - ./mayan/settings/base.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/settings/base.py
       - ./mayan/asgi.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/asgi.py
     ports:
@@ -227,6 +228,7 @@ services:
       - ./mayan/asgi.py:/opt/mayan-edms/lib/python3.9/site-packages/mayan/asgi.py
       - ./mayan/apps/notifications:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/notifications
       - ./mayan/apps/marketing_cms:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/marketing_cms
+      - ./mayan/apps/legal:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/legal
     ports:
       - "8001:8001"
     depends_on:

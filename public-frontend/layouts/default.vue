@@ -5,5 +5,6 @@
       <slot />
     </main>
     <Footer />
+    <CookieConsentModal position="banner" />
   </div>
 </template>
