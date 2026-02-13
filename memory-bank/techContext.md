@@ -21,14 +21,14 @@
 - **Celery Beat**: 2.2.1 (периодические задачи)
 
 #### Analytics (tenant-aware, Sprint 2)
-- **AssetEvent:** TenantAwareMixin, FK organization; индексы (organization, event_type, -timestamp), (organization, document, -timestamp). Создание: pre_save signal (organizations) или явная передача organization_id (Celery, consume_analytics_events).
-- **AssetEventTrackingMiddleware:** В цепочке после TenantResolverMiddleware; срабатывает на GET /api/v4/documents/, /api/v4/headless/documents/ и путях с "download"; вызывает track_asset_event_async.delay (fire-and-forget). Не трекает при отсутствии request.organization или при response.status_code >= 400.
-- **Dashboard API:** GET /api/v4/headless/analytics/dashboard/ — один endpoint с метриками по текущей организации (X-Organization-Id); Document.valid.filter(organization=org), AssetEvent.objects.filter(organization=org), org.get_storage_used_gb(), org.get_ai_analyses_this_month().
-- **Reports:** AnalyticsReportTask (status pending/processing/completed/failed); Celery generate_analytics_report читает parameters['date_range']['from'|'to'], фильтрует AssetEvent по organization_id, пишет JSON в MEDIA_ROOT/reports/{org_id}/{task_id}.json.
+- **AssetEvent:** TenantAwareMixin, FK organization (NOT NULL); индексы idx_analytics_ae_org_type_ts (organization, event_type, -timestamp), idx_analytics_ae_org_doc_ts (organization, document, -timestamp). Создание: pre_save signal в organizations/apps.py (context → document.organization → default org) или явная передача organization_id в track_asset_event_async.delay().
+- **AssetEventTrackingMiddleware:** Синхронный (MiddlewareMixin, process_response). Срабатывает на GET /api/v4/documents/, /api/v4/headless/documents/ и путях, содержащих "download"; вызывает track_asset_event_async.delay(organization_id=..., document_id=..., ...) (fire-and-forget). Не трекает при отсутствии request.organization или при response.status_code >= 400. Порядок в цепочке: после TenantResolverMiddleware (чтобы request.organization был установлен).
+- **Dashboard API:** GET /api/v4/headless/analytics/dashboard/ — один endpoint; строго требует request.organization (400 при отсутствии); метрики по организации: Document.valid.filter(organization=org), AssetEvent.objects.filter(organization=org), org.get_storage_used_gb(), org.get_ai_analyses_this_month(), top_documents по просмотрам за 30 дней.
+- **Reports:** AnalyticsReportTask (status pending/processing/completed/failed); Celery generate_analytics_report читает parameters['date_range'] (ключи from/to или date_from/date_to), фильтрует AssetEvent по organization_id, пишет только JSON в MEDIA_ROOT/reports/{org_id}/{task_id}.json. Параметр export_format в API сохраняется в parameters, но task его не использует (экспорт только JSON).
 
 #### Веб-серверы
 - **Gunicorn**: 20.1.0 (WSGI сервер для основного приложения)
-- **Daphne**: 3.0.2 (ASGI сервер для WebSocket уведомлений)
+- **Daphne**: 3.0.2 (ASGI сервер для WebSocket уведомлений; подключение к ws/notifications/ с query token и organization_id; группа notifications_{org_id}_{user_id})
 
 #### API и интеграции
 - **Django REST Framework**: 3.13.1 (REST API)
@@ -415,10 +415,9 @@ public-frontend/
   - AssetEvent → TenantAwareMixin
   - Analytics Dashboard API с фильтрацией по Organization
   - Story Points: 21 (US-ANALYTICS-001 + US-ANALYTICS-002)
-- 🚧 **Sprint 3 (Неделя 5-6):** Distribution + Notifications
-  - ShareLink → TenantAwareMixin
-  - Notifications WebSocket с валидацией Organization
-  - Story Points: 21 (US-DISTRIBUTION-001 + US-NOTIFICATIONS-001)
+- ✅ **Sprint 3 (Неделя 5-6):** Distribution + Notifications — **ЗАВЕРШЁН 2026-02-11**
+  - ShareLink → TenantAwareMixin, миграции 0012–0014, pre_save binding, objects_unfiltered в портале/сигналах
+  - Notifications WebSocket: organization_id в query, проверка членства, group notifications_{org_id}_{user_id}
 - 🚧 **Sprint 4 (Неделя 7):** Security + Performance
   - Security audit (penetration testing)
   - Performance optimization (caching, query optimization)
@@ -427,22 +426,17 @@ public-frontend/
 - ✅ Document (имеет organization FK, миграции documents/0085, 0086)
 - ✅ Cabinet, Tag (имеют organization FK)
 
-**Tenant-aware модели (требуют реализации — Part 3):**
-- ❌ DocumentAIAnalysis (DAM) — требуется TenantAwareMixin (Sprint 1)
-- ❌ AssetEvent (Analytics) — требуется TenantAwareMixin (Sprint 2)
-- ❌ ShareLink (Distribution) — требуется TenantAwareMixin (Sprint 3)
-- ⚠️ DocumentFile, DocumentVersion — требуется проверка наличия organization FK
+**Tenant-aware модели (реализовано — Part 3):**
+- ✅ DocumentAIAnalysis (DAM) — TenantAwareMixin (Sprint 1)
+- ✅ AssetEvent (Analytics) — TenantAwareMixin (Sprint 2)
+- ✅ ShareLink (Distribution) — TenantAwareMixin (Sprint 3)
 - **Фаза 4 (runtime):** `patch_organization_fields()` регистрирует FK organization на Document/Tag/Cabinet через `contribute_to_class()` — необходимо для ORM lookups (`document__organization`)
 
 **Tenant-aware модели (реализовано):**
 - ✅ Document (имеет organization FK)
 - ✅ Cabinet, Tag (имеют organization FK)
-
-**Tenant-aware модели (требуют реализации — Part 3):**
-- ❌ DocumentAIAnalysis (DAM) — требуется TenantAwareMixin
-- ❌ AssetEvent (Analytics) — требуется TenantAwareMixin
-- ❌ ShareLink (Distribution) — требуется TenantAwareMixin
-- ⚠️ DocumentFile, DocumentVersion — требуется проверка
+- ✅ DocumentAIAnalysis, AssetEvent, ShareLink (Part 3 Sprints 1–3)
+- ⚠️ DocumentFile, DocumentVersion — доступ к organization через document (проверка при необходимости)
 
 **Глобальные модели (НЕ tenant-aware):**
 - Plan (тарифные планы)

@@ -1,7 +1,7 @@
 # Progress: Prime-EDMS
 
 **Последнее обновление:** 2026-02-11  
-**Источник:** Анализ последних коммитов, кодовой базы и деплоя Sprint 1 Part 3
+**Источник:** Sprint 3 Part 3 (Distribution + Notifications) завершён — ShareLink tenant-aware, WebSocket org validation; Memory Bank синхронизирован.
 
 ---
 
@@ -70,17 +70,17 @@
 - ✅ Multi-tenancy поддержка (organization-specific groups)
 
 #### 3. Analytics Module (Sprint 2 Part 3 — Tenant-aware)
-- ✅ **AssetEvent tenant-aware:** TenantAwareMixin, FK `organization`, composite indexes; миграции analytics 0010 (AddField nullable), 0011 (populate from document.organization_id), 0012 (NOT NULL + indexes); pre_save binding в organizations/apps.py; consume_analytics_events — ручная подстановка organization_id перед bulk_create.
-- ✅ **Ingestion:** AssetEventTrackingMiddleware (fire-and-forget), track_asset_event_async Celery task (TenantAwareTask); маршруты /api/v4/documents/, /api/v4/headless/documents/, пути с "download"; регистрация после TenantResolverMiddleware.
-- ✅ **Dashboard API:** GET /api/v4/headless/analytics/dashboard/ — tenant-scoped метрики (total_documents, storage_used_gb, active_users_30d, top_documents, ai_usage); AnalyticsDashboardViewSet, DashboardMetricsSerializer; обязательный request.organization (X-Organization-Id).
-- ✅ **Reports:** AnalyticsReportTask (organization, user, report_type, parameters, status, file_path); миграция 0013; generate_analytics_report (JSON в MEDIA_ROOT/reports/{org_id}/); POST .../analytics/reports/generate/, GET .../analytics/reports/{id}/; параметры date_range (from/to) в task — чтение из parameters['date_range'].
-- ✅ **Tests:** test_middleware (track_asset_event_async.delay с organization_id), test_api (dashboard isolation по X-Organization-Id), test_reports (sync run + API), test_tenant_isolation (AssetEvent, dashboard, report isolation).
-- ✅ **Code review (2026-02-11):** Signal vs task org_id — PASS; bulk_create org mapping — PASS; migrations deps — PASS; middleware path/non-blocking/no-org — PASS; dashboard N+1 — PASS; report org/failure — PASS; report date_range — CRITICAL fix applied.
+- ✅ **AssetEvent tenant-aware:** TenantAwareMixin, FK `organization`, composite indexes (organization+event_type+-timestamp, organization+document+-timestamp); миграции 0010–0012; pre_save binding в organizations/apps.py. Создание событий: track_asset_event_async (organization_id в kwargs) или pre_save при создании в коде.
+- ✅ **Ingestion:** AssetEventTrackingMiddleware (sync Django middleware, process_response), fire-and-forget: track_asset_event_async.delay(organization_id=...); пути /api/v4/documents/, /api/v4/headless/documents/, подстрока "download"; требует request.organization, пропуск при response.status_code >= 400.
+- ✅ **Dashboard API:** GET /api/v4/headless/analytics/dashboard/ — строго по request.organization (400 без org); метрики: total_documents, storage_used_gb, active_users_30d, top_documents, ai_usage; AnalyticsDashboardViewSet, DashboardMetricsSerializer.
+- ✅ **Reports:** AnalyticsReportTask (миграция 0013); generate_analytics_report выводит только JSON в MEDIA_ROOT/reports/{org_id}/{task_id}.json; export_format в запросе сохраняется в parameters, но task всегда генерирует JSON. date_range: parameters['date_range'] с ключами from/to или date_from/date_to. POST .../reports/generate/, GET .../reports/{id}/.
+- ✅ **Tests:** test_middleware.py (track_asset_event_async.delay с organization_id), test_api.py (dashboard isolation), test_reports.py (sync run + API), test_tenant_isolation.py (AssetEvent, dashboard, report isolation).
 
 #### 4. Distribution Module
 - ✅ Публикации (Publications) для группировки активов
 - ✅ Рендишены (Renditions) - преобразованные версии файлов
 - ✅ Share Links - защищенные ссылки с паролями, лимитами, сроками
+- ✅ **ShareLink tenant-aware (Sprint 3 Part 3):** TenantAwareMixin, миграции 0012–0014, pre_save binding, портал/сигналы с objects_unfiltered, тесты изоляции (distribution/tests/test_tenant_isolation.py)
 - ✅ Recipient Lists - списки получателей
 - ✅ Distribution Campaigns - маркетинговые кампании
 - ✅ Access Log - логирование доступа
@@ -125,6 +125,7 @@
 - ✅ Event-based уведомления
 - ✅ Notification preferences
 - ✅ Real-time доставка через WebSocket
+- ✅ **WebSocket org-scoped (Sprint 3 Part 3):** connect() требует organization_id в query, проверка членства (UserOrganizationRole), группа notifications_{org_id}_{user_id}; send_websocket_notification с get_organization_id_for_notification; тесты consumer (4003 без org / чужая org) и task (org-scoped group)
 - ✅ Notification popover в UI
 - ✅ Error handling для corrupted notifications
 
@@ -235,18 +236,16 @@
 - ✅ **Sprint 1 (Неделя 1-2):** DAM модуль — **ЗАВЕРШЁН И ЗАДЕПЛОЕН 2026-02-11**
   - DocumentAIAnalysis → TenantAwareMixin, FK organization, миграции dam 0007-0009
   - API/views/serializers/tasks/signals обновлены (organization_id), pre-save binding в organizations
-  - Тесты tenant isolation (модель, API, Celery), Pre-Deployment Static Analysis пройден
-  - Деплой: backup БД, rebuild app, migrate dam, restart app/app_websocket, smoke test OK
+- ✅ **Sprint 3 (Неделя 5-6):** Distribution + Notifications — **ЗАВЕРШЁН 2026-02-11**
+  - ShareLink → TenantAwareMixin, миграции distribution 0012–0014, pre_save binding, portal/signals objects_unfiltered
+  - Notifications WebSocket: organization_id в query, проверка членства, group notifications_{org_id}_{user_id}; send_websocket_notification с resolve org_id
+  - Тесты: distribution/test_tenant_isolation, notifications test_consumers, test_tasks (org-scoped group)
 - ✅ **Sprint 2 (Неделя 3-4):** Analytics модуль — **ЗАВЕРШЁН 2026-02-11**
   - AssetEvent → TenantAwareMixin, FK organization, миграции analytics 0010–0012, pre_save binding, consume_analytics_events org mapping
   - AssetEventTrackingMiddleware, track_asset_event_async (TenantAwareTask)
   - Analytics Dashboard API: GET /api/v4/headless/analytics/dashboard/ (tenant-scoped), AnalyticsReportTask + generate_analytics_report (JSON)
   - Тесты: middleware, dashboard/report isolation, test_tenant_isolation; code review 2026-02-11 (date_range fix applied)
-- 🚧 **Sprint 3 (Неделя 5-6):** Distribution + Notifications
-  - ShareLink → TenantAwareMixin
-  - Notifications WebSocket с валидацией Organization
-  - Story Points: 21 (US-DISTRIBUTION-001 + US-NOTIFICATIONS-001)
-- 🚧 **Sprint 4 (Неделя 7):** Security + Performance
+- 🚧 **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning
   - Security audit (penetration testing)
   - Performance optimization (caching, query optimization)
 

@@ -97,6 +97,7 @@ def analyze_document_with_ai(self, document_id: int):
 **Очереди задач:**
 - `converter`: Конвертация файлов
 - `ai_analysis`: AI обработка (отдельный worker)
+- `documents`: В т.ч. track_asset_event_async, generate_analytics_report (TenantAwareTask; отчёты — только JSON в MEDIA_ROOT/reports/{org_id}/)
 - `sources_fast`: Быстрые операции с источниками
 - `distribution`: Распределение контента
 - `notifications`: Уведомления
@@ -299,9 +300,9 @@ class TenantResolverMiddleware:
 - ✅ Полная API верификация: все endpoints 200 OK, lifecycle test passed
 - ✅ Document модель имеет organization FK
 - ✅ Celery tasks используют TenantAwareTask base class
-- ❌ DocumentAIAnalysis НЕ tenant-aware (GAP — Part 3 Sprint 1)
-- ❌ AssetEvent НЕ tenant-aware (GAP — Part 3 Sprint 2)
-- ❌ ShareLink НЕ tenant-aware (GAP — Part 3 Sprint 3)
+- ✅ DocumentAIAnalysis tenant-aware (Part 3 Sprint 1)
+- ✅ AssetEvent tenant-aware (Part 3 Sprint 2): pre_save binding, track_asset_event_async.delay(organization_id=...)
+- ✅ ShareLink tenant-aware (Part 3 Sprint 3)
 
 ### 10. Contribute-to-Class Pattern (Dynamic FK Registration)
 

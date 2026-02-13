@@ -189,7 +189,7 @@ class CleanupOldNotificationsTestCase(TestCase):
 
 
 class SendWebSocketNotificationTestCase(TestCase):
-    """Test send_websocket_notification Celery task."""
+    """Test send_websocket_notification Celery task (org-scoped group)."""
 
     def setUp(self):
         super().setUp()
@@ -207,11 +207,29 @@ class SendWebSocketNotificationTestCase(TestCase):
             self.notification.title = 'Test'
             self.notification.message = 'Test message'
             self.notification.save()
+        # User's default org for group name (when action target is not Document)
+        try:
+            from mayan.apps.organizations.models import Organization, UserOrganizationRole
+            self.org = Organization.objects.create(
+                name='Test Org',
+                slug='test-org',
+                email='test@example.com',
+                status='active',
+                deployment_mode='saas',
+            )
+            UserOrganizationRole.objects.create(
+                user=self.user,
+                organization=self.org,
+                role=UserOrganizationRole.ROLE_OWNER,
+                is_default=True,
+            )
+        except Exception:
+            self.org = None
 
     @mock.patch('asgiref.sync.async_to_sync')
     @mock.patch('channels.layers.get_channel_layer')
     def test_send_websocket_notification_sends_message(self, mock_get_channel_layer, mock_async_to_sync):
-        """Test that WebSocket message is sent to user's group."""
+        """Test that WebSocket message is sent to org-scoped group notifications_{org_id}_{user_id}."""
         if not hasattr(self.notification, 'title'):
             self.skipTest('Notification model not extended yet')
 
@@ -225,6 +243,30 @@ class SendWebSocketNotificationTestCase(TestCase):
         mock_get_channel_layer.assert_called_once()
         mock_group_send.assert_called_once()
         call_args = mock_group_send.call_args
-        self.assertEqual(call_args[0][0], f'notifications_{self.user.pk}')
+        group_name = call_args[0][0]
+        self.assertTrue(
+            group_name.startswith('notifications_'),
+            msg='Group name should be notifications_{org_id}_{user_id}',
+        )
+        self.assertIn(str(self.user.pk), group_name)
         self.assertEqual(call_args[0][1]['type'], 'notification.new')
+
+    @mock.patch('asgiref.sync.async_to_sync')
+    @mock.patch('channels.layers.get_channel_layer')
+    def test_send_websocket_notification_group_includes_org_and_user(self, mock_get_channel_layer, mock_async_to_sync):
+        """When user has default org, group_send is called with notifications_{org_id}_{user_id}."""
+        if not hasattr(self.notification, 'title'):
+            self.skipTest('Notification model not extended yet')
+        if not getattr(self, 'org', None):
+            self.skipTest('Organizations app not available')
+
+        mock_channel_layer = mock.MagicMock()
+        mock_get_channel_layer.return_value = mock_channel_layer
+        mock_group_send = mock.MagicMock()
+        mock_async_to_sync.return_value = mock_group_send
+
+        send_websocket_notification(self.notification.pk)
+
+        expected_group = 'notifications_{}_{}'.format(self.org.pk, self.user.pk)
+        self.assertEqual(mock_group_send.call_args[0][0], expected_group)
 

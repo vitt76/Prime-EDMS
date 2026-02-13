@@ -76,7 +76,9 @@ def handler_cleanup_on_file_delete(sender, instance, **kwargs):
             from .models import Publication
             Publication.objects.filter(id__in=empty_pubs).delete()
 
-        ShareLink.objects.filter(rendition__publication_item__document_file=instance).delete()
+        ShareLink.objects_unfiltered.filter(
+            rendition__publication_item__document_file=instance
+        ).delete()
     except Exception as exc:
         logger.warning('cleanup_on_file_delete failed: %s', exc)
 
@@ -136,11 +138,11 @@ def handler_cleanup_on_document_trash(sender, instance, **kwargs):
             
             logger.info(f'[Distribution] Deleted {len(empty_pubs)} empty publications and {campaign_pubs_count} campaign links')
 
-        # Удаляем связанные share links
-        share_links_count = ShareLink.objects.filter(
+        # Удаляем связанные share links (objects_unfiltered: вне контекста org)
+        share_links_count = ShareLink.objects_unfiltered.filter(
             rendition__publication_item__document_file_id__in=file_ids
         ).count()
-        ShareLink.objects.filter(
+        ShareLink.objects_unfiltered.filter(
             rendition__publication_item__document_file_id__in=file_ids
         ).delete()
         
@@ -175,7 +177,9 @@ def handler_cleanup_on_document_delete(sender, instance, **kwargs):
             from .models import Publication
             Publication.objects.filter(id__in=empty_pubs).delete()
 
-        ShareLink.objects.filter(rendition__publication_item__document_file_id__in=file_ids).delete()
+        ShareLink.objects_unfiltered.filter(
+            rendition__publication_item__document_file_id__in=file_ids
+        ).delete()
     except Exception as exc:
         logger.warning('cleanup_on_document_delete failed: %s', exc)
 

@@ -99,9 +99,67 @@ def cleanup_old_notifications():
     logger.info('cleanup_old_notifications deleted=%s', deleted_count)
 
 
+def _document_organization_id(document_pk):
+    """Get organization_id for a Document by pk (unfiltered)."""
+    from mayan.apps.documents.models import Document
+    qs = Document.objects
+    if hasattr(qs, 'all_organizations'):
+        qs = qs.all_organizations()
+    row = qs.filter(pk=document_pk).values_list('organization_id', flat=True).first()
+    return str(row) if row is not None else None
+
+
+def get_organization_id_for_notification(notification):
+    """
+    Resolve organization_id for a notification (Variant A: no events schema change).
+
+    Priority: action.target if Document -> target.organization_id;
+    else action.action_object if Document -> action_object.organization_id;
+    else user's default organization from UserOrganizationRole.
+    Returns str UUID or None.
+    """
+    from django.contrib.contenttypes.models import ContentType
+
+    try:
+        action = notification.action
+        if not action:
+            return _default_organization_id_for_user(notification.user_id)
+
+        from mayan.apps.documents.models import Document
+        doc_ct = ContentType.objects.get_for_model(Document)
+
+        if action.target_content_type_id == doc_ct.pk and action.target_object_id:
+            org_id = _document_organization_id(action.target_object_id)
+            if org_id:
+                return org_id
+
+        if action.action_object_content_type_id == doc_ct.pk and action.action_object_object_id:
+            org_id = _document_organization_id(action.action_object_object_id)
+            if org_id:
+                return org_id
+
+        return _default_organization_id_for_user(notification.user_id)
+    except Exception:
+        logger.debug('get_organization_id_for_notification failed', exc_info=True)
+        return _default_organization_id_for_user(notification.user_id)
+
+
+def _default_organization_id_for_user(user_id):
+    """User's default organization or first organization they belong to."""
+    from mayan.apps.organizations.models import UserOrganizationRole
+    row = UserOrganizationRole.objects.filter(
+        user_id=user_id,
+        is_default=True,
+    ).values_list('organization_id', flat=True).first()
+    if row is not None:
+        return str(row)
+    row = UserOrganizationRole.objects.filter(user_id=user_id).values_list('organization_id', flat=True).first()
+    return str(row) if row is not None else None
+
+
 @shared_task
 def send_websocket_notification(notification_id: int):
-    """Send notification to Channels group (Phase 4)."""
+    """Send notification to Channels group (Phase 4). Group is scoped by organization_id."""
 
     try:
         from asgiref.sync import async_to_sync
@@ -112,12 +170,18 @@ def send_websocket_notification(notification_id: int):
         if not hasattr(notification, 'title'):
             return
 
+        organization_id = get_organization_id_for_notification(notification)
+        if not organization_id:
+            logger.debug('send_websocket_notification: no organization_id for notification=%s', notification_id)
+            return
+
         channel_layer = get_channel_layer()
         if not channel_layer:
             return
 
+        group_name = 'notifications_{}_{}'.format(organization_id, notification.user_id)
         async_to_sync(channel_layer.group_send)(
-            'notifications_{}'.format(notification.user_id),
+            group_name,
             {
                 'type': 'notification.new',
                 'data': {

@@ -28,6 +28,7 @@ class OrganizationsApp(MayanAppConfig):
         self._connect_document_tenant_binding_signal()
         self._connect_ai_analysis_tenant_binding_signal()
         self._connect_assetevent_tenant_binding_signal()
+        self._connect_sharelink_tenant_binding_signal()
 
         # Connect quota enforcement signal
         self._connect_quota_signals()
@@ -192,6 +193,71 @@ class OrganizationsApp(MayanAppConfig):
         except Exception as exc:
             logger.warning(
                 'Could not connect AssetEvent tenant binding signal: %s', exc
+            )
+
+    def _connect_sharelink_tenant_binding_signal(self):
+        """
+        Connect pre_save signal to auto-bind organization for ShareLink.
+
+        Priority: explicit assignment, current tenant, organization from
+        rendition → publication_item → document_file → document, default org.
+        Lazy import of ShareLink to avoid circular imports with distribution.
+        """
+        try:
+            from django.db.models.signals import pre_save
+
+            from .literals import DEFAULT_ORGANIZATION_SLUG
+            from .managers import get_current_organization
+            from .models import Organization
+
+            def _bind_sharelink_organization(sender, instance, **kwargs):
+                if getattr(instance, 'organization_id', None):
+                    return
+
+                organization = get_current_organization()
+
+                if organization is None:
+                    try:
+                        rendition = getattr(instance, 'rendition', None)
+                        if rendition:
+                            pub_item = getattr(
+                                rendition, 'publication_item', None
+                            )
+                            if pub_item:
+                                doc_file = getattr(
+                                    pub_item, 'document_file', None
+                                )
+                                if doc_file:
+                                    document = getattr(
+                                        doc_file, 'document', None
+                                    )
+                                    if document:
+                                        organization = getattr(
+                                            document, 'organization', None
+                                        )
+                    except Exception:
+                        pass
+
+                if organization is None:
+                    organization = Organization.objects.filter(
+                        slug=DEFAULT_ORGANIZATION_SLUG
+                    ).first()
+
+                if organization is not None:
+                    instance.organization = organization
+
+            from mayan.apps.distribution.models import ShareLink
+
+            pre_save.connect(
+                _bind_sharelink_organization,
+                sender=ShareLink,
+                dispatch_uid='organizations_bind_sharelink_organization',
+                weak=False
+            )
+            logger.debug('Connected ShareLink tenant binding signal')
+        except Exception as exc:
+            logger.warning(
+                'Could not connect ShareLink tenant binding signal: %s', exc
             )
 
     def _connect_cache_invalidation_signals(self):

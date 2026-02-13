@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
 **Последнее обновление:** 2026-02-11  
-**Текущий фокус:** Multi-Tenancy Integration Part 3 — Sprint 2 (Analytics) завершён; следующий — Sprint 3 (Distribution + Notifications)
+**Текущий фокус:** Multi-Tenancy Integration Part 3 — Sprint 3 (Distribution + Notifications) завершён; следующий — Sprint 4 (Security Audit + Performance Tuning)
 
 ---
 
@@ -10,7 +10,7 @@
 ### Активная разработка (Текущий фокус)
 
 #### 1. Multi-Tenancy Integration Part 3 (Новый ТЗ)
-**Статус:** Sprint 1 (DAM) и Sprint 2 (Analytics) завершены; Sprint 3 (Distribution + Notifications) — следующий  
+**Статус:** Sprint 1 (DAM), Sprint 2 (Analytics) и Sprint 3 (Distribution + Notifications) завершены; Sprint 4 — следующий  
 **ТЗ:** `docs/transformation-2025/АНАЛИЗ КОНТЕКСТА И ОБНОВЛЕННОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ.md` (Part 3)  
 **GAPS Report:** `tmp/GAPS_REPORT_PART3.md`
 
@@ -23,14 +23,14 @@
 **Оставшиеся GAPS (из аудита):**
 - ✅ ~~DocumentAIAnalysis НЕ tenant-aware~~ — **исправлено (Sprint 1 Part 3)**
 - ✅ ~~AssetEvent НЕ tenant-aware~~ — **исправлено (Sprint 2)**
-- ❌ **ShareLink** НЕ tenant-aware (нет TenantAwareMixin)
+- ✅ ~~**ShareLink** НЕ tenant-aware~~ — **исправлено (Sprint 3)**
 - ✅ ~~Analytics Dashboard не фильтрует по Organization~~ — **исправлено (Sprint 2)**
-- ❌ **Notifications WebSocket** не валидирует Organization
+- ✅ ~~**Notifications WebSocket** не валидирует Organization~~ — **исправлено (Sprint 3)**
 
 **Sprint'ы Part 3:**
 - **Sprint 1 (Неделя 1-2):** DAM модуль — ✅ **ЗАВЕРШЁН** (DocumentAIAnalysis tenant-aware, миграции 0007-0009, API/tasks/signals, pre-save binding, тесты изоляции, Pre-Deployment Static Analysis, деплой по Action Plan)
 - **Sprint 2 (Неделя 3-4):** Analytics модуль — ✅ **ЗАВЕРШЁН** (AssetEvent tenant-aware, middleware, dashboard API, reports, isolation tests; code review 2026-02-11, critical date_range fix applied)
-- **Sprint 3 (Неделя 5-6):** Distribution + Notifications — ShareLink + WebSocket
+- **Sprint 3 (Неделя 5-6):** Distribution + Notifications — ✅ **ЗАВЕРШЁН** (ShareLink tenant-aware, WebSocket org validation)
 - **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning
 
 **Общая трудоемкость:** 50-55 story points
@@ -55,14 +55,22 @@
 **Важно для Docker:** команды Django в контейнере выполняются через `/opt/mayan-edms/bin/mayan-edms.py` (не `python manage.py`).
 
 **Sprint 2 Part 3 (Analytics) — ЗАВЕРШЁН 2026-02-11:**
-- AssetEvent: TenantAwareMixin, organization FK, migrations 0010–0012, pre_save binding, consume_analytics_events org mapping.
-- Middleware: AssetEventTrackingMiddleware, track_asset_event_async (TenantAwareTask).
-- Dashboard: AnalyticsDashboardViewSet, GET /api/v4/headless/analytics/dashboard/, tenant-scoped metrics.
-- Reports: AnalyticsReportTask, 0013, generate_analytics_report (JSON), POST/GET reports API.
-- Tests: middleware, dashboard isolation, reports, test_tenant_isolation.
-- Code review: one CRITICAL fix (report date_range from parameters['date_range']) applied; optional 0011 orphan hardening documented.
+- AssetEvent: TenantAwareMixin, organization FK, migrations 0010–0012, pre_save binding в organizations/apps.py (context → document.organization → default org). Создание событий: track_asset_event_async (явный organization_id) или pre_save при ручном создании.
+- Middleware: AssetEventTrackingMiddleware (sync, process_response), fire-and-forget вызов track_asset_event_async.delay(); пути /api/v4/documents/, /api/v4/headless/documents/, "download"; требует request.organization, не трекает при response.status_code >= 400.
+- Dashboard: AnalyticsDashboardViewSet, GET /api/v4/headless/analytics/dashboard/, строго по request.organization (400 при отсутствии); метрики tenant-scoped.
+- Reports: AnalyticsReportTask (миграция 0013), generate_analytics_report — вывод только JSON в MEDIA_ROOT/reports/{org_id}/{task_id}.json; параметр export_format в API сохраняется в parameters, но task его не использует. date_range из parameters['date_range'] (from/to или date_from/date_to).
+- Tests: test_middleware (track_asset_event_async.delay с organization_id), test_api (dashboard isolation), test_reports (sync run + API), test_tenant_isolation (AssetEvent, dashboard, report isolation).
+- Code review: date_range читается из parameters['date_range']; optional 0011 orphan hardening documented.
 
-**Следующий фокус:** Sprint 3 — Distribution + Notifications (ShareLink tenant-aware, WebSocket org validation).
+**Sprint 3 Part 3 (Distribution + Notifications) — ЗАВЕРШЁН 2026-02-11:**
+- ✅ ShareLink: TenantAwareMixin в модели, миграции distribution 0012 (AddField org nullable), 0013 (populate из rendition→document + сироты → default org), 0014 (NOT NULL + индексы org, org+created).
+- ✅ Pre_save binding: _connect_sharelink_tenant_binding_signal() в organizations/apps.py (lazy import ShareLink); приоритет: явное → контекст → document по rendition → default org.
+- ✅ Views/signals: портал и get_object_or_404(ShareLink, token=...) переведены на ShareLink.objects_unfiltered; в сигналах очистки (file delete, document trash/delete) — objects_unfiltered; при создании ShareLink передаётся organization=request.organization при наличии.
+- ✅ Notifications WebSocket: в consumers.py при connect() читается organization_id из query string; при отсутствии или при отказе проверки членства (UserOrganizationRole) соединение закрывается с кодом 4003; group_name = notifications_{organization_id}_{user_id}.
+- ✅ send_websocket_notification: хелпер get_organization_id_for_notification (action.target/action_object Document → organization_id, иначе default org пользователя); group_send в группу notifications_{org_id}_{user_id}.
+- ✅ Тесты: distribution/tests/test_tenant_isolation.py (изоляция по контексту, API с X-Organization-Id, публичный доступ по токену); notifications test_tasks (org-scoped group), test_consumers (connect без org / чужая org → 4003, с valid org → accepted).
+
+**Следующий фокус:** Sprint 4 — Security Audit + Performance Tuning.
 
 #### 2. Multi-tenancy Infrastructure (Завершено)
 **Статус:** Sprint 1-4 + Hotfix + Tech Debt + Sprint 4.2 + Sprint 4.3 + Sprint 4.4 + Sprint 4.5 (Gallery Preview Recovery) завершены  
