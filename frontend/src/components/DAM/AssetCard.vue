@@ -98,7 +98,7 @@
       <!-- Optimized Image with smart object-fit -->
       <img
         v-if="!props.isLoading && shouldLoadImage && !imageError"
-        :src="imageSrc"
+        :src="effectiveImageSrc"
         :alt="props.asset.label"
         loading="lazy"
         :class="imageObjectFitClass"
@@ -340,7 +340,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import type { Asset } from '@/types/api'
 import { formatFileSize, formatDate } from '@/utils/formatters'
 import { useIntersectionObserver } from '@/composables/useIntersectionObserver'
@@ -386,6 +386,8 @@ const thumbnailRef = ref<HTMLElement | null>(null)
 const isDragging = ref(false)
 const favoritesStore = useFavoritesStore()
 const imageSrc = computed(() => resolveAssetImageUrl(props.asset))
+const resolvedImageSrc = ref<string | null>(null)
+const blobObjectUrl = ref<string | null>(null)
 const showActionsMenu = ref(false)
 const moreBtnRef = ref<HTMLElement | null>(null)
 const actionsMenuRef = ref<HTMLElement | null>(null)
@@ -401,6 +403,10 @@ const { hasIntersected } = useIntersectionObserver(thumbnailRef, {
 
 const shouldLoadImage = computed(() => {
   return hasIntersected.value || props.isLoading
+})
+
+const effectiveImageSrc = computed(() => {
+  return resolvedImageSrc.value || imageSrc.value
 })
 
 // Combine custom tags and AI tags
@@ -483,6 +489,64 @@ const isFavorite = computed(() => favoritesStore.isFavorite(props.asset.id))
 
 function handleImageError() {
   imageError.value = true
+}
+
+function isProtectedApiUrl(url?: string | null): boolean {
+  if (!url) return false
+  return url.includes('/api/v4/')
+}
+
+function revokeBlobUrl(): void {
+  if (blobObjectUrl.value) {
+    URL.revokeObjectURL(blobObjectUrl.value)
+    blobObjectUrl.value = null
+  }
+}
+
+async function loadProtectedThumbnail(): Promise<void> {
+  if (!shouldLoadImage.value || props.isLoading) return
+
+  imageError.value = false
+  revokeBlobUrl()
+  resolvedImageSrc.value = null
+
+  const candidates = [
+    props.asset.thumbnail_url,
+    props.asset.preview_url,
+    props.asset.download_url
+  ].filter(Boolean) as string[]
+
+  // Prefer protected API URLs first (they require auth header).
+  const ordered = [
+    ...candidates.filter(url => isProtectedApiUrl(url)),
+    ...candidates.filter(url => !isProtectedApiUrl(url))
+  ]
+
+  for (const candidate of ordered) {
+    try {
+      if (isProtectedApiUrl(candidate)) {
+        const response: any = await apiService.get(candidate, {
+          responseType: 'blob',
+          headers: { Accept: '*/*' } as any
+        })
+        const blob = response?.data as Blob
+        if (blob && blob.size > 0) {
+          const objectUrl = URL.createObjectURL(blob)
+          blobObjectUrl.value = objectUrl
+          resolvedImageSrc.value = objectUrl
+          return
+        }
+      } else {
+        resolvedImageSrc.value = candidate
+        return
+      }
+    } catch {
+      // Try next candidate URL.
+    }
+  }
+
+  // Last fallback from existing resolver (may already be placeholder).
+  resolvedImageSrc.value = imageSrc.value
 }
 
 function getFileTypeLabel(): string {
@@ -703,7 +767,22 @@ onMounted(() => {
   // List endpoint already provides file_latest_* fields; eager fetching causes N+1.
 })
 
+watch(
+  () => [
+    shouldLoadImage.value,
+    props.asset.id,
+    props.asset.thumbnail_url,
+    props.asset.preview_url,
+    props.asset.download_url
+  ],
+  () => {
+    void loadProtectedThumbnail()
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
+  revokeBlobUrl()
   window.removeEventListener('click', handleGlobalClick)
   window.removeEventListener('keydown', handleGlobalEscape)
   window.removeEventListener('resize', handleGlobalResizeScroll)

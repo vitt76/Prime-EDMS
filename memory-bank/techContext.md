@@ -20,9 +20,15 @@
 - **Celery**: 5.2.3 (асинхронная обработка задач)
 - **Celery Beat**: 2.2.1 (периодические задачи)
 
+#### Analytics (tenant-aware, Sprint 2)
+- **AssetEvent:** TenantAwareMixin, FK organization (NOT NULL); индексы idx_analytics_ae_org_type_ts (organization, event_type, -timestamp), idx_analytics_ae_org_doc_ts (organization, document, -timestamp). Создание: pre_save signal в organizations/apps.py (context → document.organization → default org) или явная передача organization_id в track_asset_event_async.delay().
+- **AssetEventTrackingMiddleware:** Синхронный (MiddlewareMixin, process_response). Срабатывает на GET /api/v4/documents/, /api/v4/headless/documents/ и путях, содержащих "download"; вызывает track_asset_event_async.delay(organization_id=..., document_id=..., ...) (fire-and-forget). Не трекает при отсутствии request.organization или при response.status_code >= 400. Порядок в цепочке: после TenantResolverMiddleware (чтобы request.organization был установлен).
+- **Dashboard API:** GET /api/v4/headless/analytics/dashboard/ — один endpoint; строго требует request.organization (400 при отсутствии); метрики по организации: Document.valid.filter(organization=org), AssetEvent.objects.filter(organization=org), org.get_storage_used_gb(), org.get_ai_analyses_this_month(), top_documents по просмотрам за 30 дней. **Sprint 4:** ответ кэшируется в Redis (TTL 5 мин, ключ analytics:dashboard:{org_id}); инвалидация при создании/обновлении AssetEvent (analytics/dashboard_cache.py, signal в signals.py).
+- **Reports:** AnalyticsReportTask (status pending/processing/completed/failed); Celery generate_analytics_report читает parameters['date_range'] (ключи from/to или date_from/date_to), фильтрует AssetEvent по organization_id, пишет только JSON в MEDIA_ROOT/reports/{org_id}/{task_id}.json. Параметр export_format в API сохраняется в parameters, но task его не использует (экспорт только JSON).
+
 #### Веб-серверы
 - **Gunicorn**: 20.1.0 (WSGI сервер для основного приложения)
-- **Daphne**: 3.0.2 (ASGI сервер для WebSocket уведомлений)
+- **Daphne**: 3.0.2 (ASGI сервер для WebSocket уведомлений; подключение к ws/notifications/ с query token и organization_id; группа notifications_{org_id}_{user_id})
 
 #### API и интеграции
 - **Django REST Framework**: 3.13.1 (REST API)
@@ -199,6 +205,7 @@ public-frontend/
 #### Контейнеризация
 - **Docker**: (контейнеризация приложения)
 - **Docker Compose**: (оркестрация сервисов)
+- **Django-команды в контейнере:** выполняются через `/opt/mayan-edms/bin/mayan-edms.py` (в образе Mayan EDMS нет `python manage.py` в PATH). Пример: `docker compose exec app /opt/mayan-edms/bin/mayan-edms.py showmigrations dam`, `migrate dam`, `shell -c "..."`.
 
 #### Мониторинг и логирование
 - **Sentry SDK**: 1.5.8 (отслеживание ошибок)
@@ -246,6 +253,13 @@ public-frontend/
 4. **app**: Основное приложение на Gunicorn (порт 8080)
 5. **app_websocket**: WebSocket сервер на Daphne (порт 8001)
 
+#### Задействованные порты (текущий dev-статус)
+- **8080** → `app` (Django/Gunicorn + REST API), внешний доступ: `http://localhost:8080`
+- **8001** → `app_websocket` (Daphne/ASGI), внешний доступ: `ws://localhost:8001/ws/notifications/`
+- **5173** → DAM SPA (Vite dev server), внешний доступ: `http://localhost:5173/dam`
+- **3000** → Public Frontend (Nuxt dev server), внешний доступ: `http://localhost:3000`
+- **5432 / 6379 / 5672 / 15672** — внутренние порты Docker-сети для PostgreSQL, Redis, RabbitMQ (в хост обычно не проброшены)
+
 #### Volumes:
 - `postgres_data`: Данные PostgreSQL
 - `rabbitmq_data`: Данные RabbitMQ
@@ -268,6 +282,32 @@ public-frontend/
 ### Docker образы
 - **Базовый образ**: `mayanedms/mayanedms:s4.3`
 - **Кастомный Dockerfile**: `Dockerfile.app` с дополнительными зависимостями
+
+### Краткая инструкция по подъёму всех сервисов
+1. В корне проекта (`c:\\DAM\\Prime-EDMS`) проверить Docker Engine и Docker Compose.
+2. Запустить backend стек:
+   - `docker compose up -d --build postgresql redis rabbitmq app app_websocket`
+3. Проверить готовность:
+   - `docker compose ps`
+   - `docker compose logs --tail 100 app`
+4. Запустить DAM SPA:
+   - `cd frontend && npm install && npm run dev`
+5. (Опционально) запустить Public Frontend:
+   - `cd public-frontend && npm install && npm run dev`
+6. Проверка доступности:
+   - API: `http://localhost:8080/api/v4/`
+   - DAM UI: `http://localhost:5173/dam`
+   - Public UI: `http://localhost:3000`
+
+### Остановка, перезапуск и проверка здоровья
+
+- **Остановить весь backend:** `docker compose down` (опционально `-v` для удаления volumes).
+- **Перезапуск одного сервиса:** `docker compose restart app` или `docker compose restart app_websocket`.
+- **Статус контейнеров:** `docker compose ps` (healthy/unhealthy по healthcheck).
+- **Логи:** `docker compose logs --tail 100 app`, `docker compose logs -f app` для follow.
+- **Smoke-check endpoints (без токена):**
+  - `curl -s -o NUL -w "%{http_code}" http://localhost:8080/api/v4/` → ожидается 200 или 401.
+- **С токеном (после логина):** `GET http://localhost:8080/api/v4/documents/optimized/?page_size=1` → 200, `GET http://localhost:8080/api/v4/headless/auth/me/` → 200.
 
 ## Ограничения и требования
 
@@ -359,19 +399,46 @@ public-frontend/
 - `DEPLOYMENT_MODE`: SAAS или STANDALONE
 - `MAYAN_ORGANIZATIONS_AUTO_CREATE`: Автосоздание при регистрации
 
+**Индексы БД:** Django E034 — имя индекса не более 30 символов (distribution: idx_dist_sl_org_created, не idx_distribution_sl_org_created).
+
 **Миграции (структура после restructuring 2026-02-10):**
 - Фаза 1: AddField organization (nullable) — операции в documents/0085, tags/0010, cabinets/0007; org 0002 — sync point
 - Фаза 2: RunPython populate — org 0003 привязывает данные к default Organization
 - Фаза 3: AlterField NOT NULL + AddIndex — операции в documents/0086, tags/0011, cabinets/0008; org 0004 — sync point
 - Причина: Django AddField/AlterField не принимают app_label; cross-app операции должны быть в app-владельце модели
+
+**Part 3 Integration (Планируется — из ТЗ Part 3):**
+- 🚧 **Sprint 1 (Неделя 1-2):** DAM модуль
+  - DocumentAIAnalysis → TenantAwareMixin
+  - Миграция для organization FK
+  - Обновление Celery tasks
+  - Story Points: 8-13 (US-DAM-002)
+- 🚧 **Sprint 2 (Неделя 3-4):** Analytics модуль
+  - AssetEvent → TenantAwareMixin
+  - Analytics Dashboard API с фильтрацией по Organization
+  - Story Points: 21 (US-ANALYTICS-001 + US-ANALYTICS-002)
+- ✅ **Sprint 3 (Неделя 5-6):** Distribution + Notifications — **ЗАВЕРШЁН 2026-02-11**
+  - ShareLink → TenantAwareMixin, миграции 0012–0014, pre_save binding, objects_unfiltered в портале/сигналах
+  - Notifications WebSocket: organization_id в query, проверка членства, group notifications_{org_id}_{user_id}
+- 🚧 **Sprint 4 (Неделя 7):** Security + Performance
+  - Security audit (penetration testing)
+  - Performance optimization (caching, query optimization)
+
+**Tenant-aware модели (реализовано):**
+- ✅ Document (имеет organization FK, миграции documents/0085, 0086)
+- ✅ Cabinet, Tag (имеют organization FK)
+
+**Tenant-aware модели (реализовано — Part 3):**
+- ✅ DocumentAIAnalysis (DAM) — TenantAwareMixin (Sprint 1)
+- ✅ AssetEvent (Analytics) — TenantAwareMixin (Sprint 2)
+- ✅ ShareLink (Distribution) — TenantAwareMixin (Sprint 3)
 - **Фаза 4 (runtime):** `patch_organization_fields()` регистрирует FK organization на Document/Tag/Cabinet через `contribute_to_class()` — необходимо для ORM lookups (`document__organization`)
 
-**Tenant-aware модели (требуют FK на Organization):**
-- Document, DocumentFile, DocumentVersion
-- Cabinet, Tag
-- DocumentAIAnalysis (DAM)
-- AssetEvent, CampaignAsset (Analytics)
-- Publication, ShareLink (Distribution)
+**Tenant-aware модели (реализовано):**
+- ✅ Document (имеет organization FK)
+- ✅ Cabinet, Tag (имеют organization FK)
+- ✅ DocumentAIAnalysis, AssetEvent, ShareLink (Part 3 Sprints 1–3)
+- ⚠️ DocumentFile, DocumentVersion — доступ к organization через document (проверка при необходимости)
 
 **Глобальные модели (НЕ tenant-aware):**
 - Plan (тарифные планы)

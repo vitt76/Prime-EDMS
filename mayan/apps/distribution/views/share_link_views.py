@@ -184,11 +184,13 @@ def create_share_link_simple(request):
                     logger.error(f'Failed to generate rendition: {e}')
                     # Continue with other items
             
-            # Create share link for this rendition
+            # Create share link for this rendition (organization from context or pre_save)
+            org = getattr(request, 'organization', None)
             share_link = ShareLink.objects.create(
                 rendition=rendition,
                 expires_at=expires_at,
-                max_downloads=max_downloads
+                max_downloads=max_downloads,
+                **({'organization': org} if org is not None else {})
             )
             share_links.append(share_link)
 

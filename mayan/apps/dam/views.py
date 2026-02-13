@@ -156,7 +156,12 @@ class DocumentAIAnalysisReanalyzeView(ConfirmView):
         ai_analysis.analysis_status = 'pending'
         ai_analysis.save()
 
-        analyze_document_with_ai.delay(ai_analysis.document.id)
+        task_kwargs = {}
+        if getattr(ai_analysis.document, 'organization_id', None):
+            task_kwargs['organization_id'] = str(
+                ai_analysis.document.organization_id
+            )
+        analyze_document_with_ai.delay(ai_analysis.document.id, **task_kwargs)
 
         messages.success(
             self.request,
@@ -262,12 +267,18 @@ class DocumentDAMMetadataView(DetailView):
         # Get or create AI analysis
         ai_analysis, created = DocumentAIAnalysis.objects.get_or_create(
             document=document,
-            defaults={'analysis_status': 'pending'}
+            defaults={
+                'analysis_status': 'pending',
+                'organization_id': getattr(document, 'organization_id', None)
+            }
         )
 
         # Trigger analysis if newly created
         if created:
-            analyze_document_with_ai.delay(document.id)
+            task_kwargs = {}
+            if getattr(document, 'organization_id', None):
+                task_kwargs['organization_id'] = str(document.organization_id)
+            analyze_document_with_ai.delay(document.id, **task_kwargs)
 
         return ai_analysis
 

@@ -6,6 +6,83 @@ Contains lightweight feature usage tracking without impacting core requests.
 from django.utils.deprecation import MiddlewareMixin
 
 from .services import track_feature_usage
+from .tasks import track_asset_event_async
+
+
+class AssetEventTrackingMiddleware(MiddlewareMixin):
+    """Fire-and-forget tracking of document view/download via API (tenant-aware)."""
+
+    TRACK_PREFIXES = (
+        '/api/v4/documents/',
+        '/api/v4/headless/documents/',
+    )
+    DOWNLOAD_SUBSTR = 'download'
+
+    def process_response(self, request, response):
+        if getattr(response, 'status_code', 500) >= 400:
+            return response
+        organization = getattr(request, 'organization', None)
+        if not organization:
+            return response
+        path = (request.path or '').strip()
+        if not path:
+            return response
+
+        event_type = None
+        if self.DOWNLOAD_SUBSTR in path.lower():
+            event_type = AssetEventTrackingMiddleware._event_download()
+        else:
+            for prefix in self.TRACK_PREFIXES:
+                if path.startswith(prefix) and request.method == 'GET':
+                    event_type = AssetEventTrackingMiddleware._event_view()
+                    break
+        if not event_type:
+            return response
+
+        document_id = None
+        try:
+            match = getattr(request, 'resolver_match', None)
+            if match and getattr(match, 'kwargs', None):
+                document_id = (
+                    match.kwargs.get('document_id') or
+                    match.kwargs.get('document_pk') or
+                    match.kwargs.get('pk') or
+                    match.kwargs.get('id')
+                )
+        except Exception:
+            pass
+        if document_id is not None:
+            try:
+                document_id = int(document_id)
+            except (TypeError, ValueError):
+                document_id = None
+        if not document_id:
+            return response
+
+        try:
+            track_asset_event_async.delay(
+                organization_id=str(organization.pk),
+                user_id=request.user.pk if getattr(request, 'user', None) and request.user.is_authenticated else None,
+                document_id=document_id,
+                event_type=event_type,
+                ip_address=(request.META.get('REMOTE_ADDR') or '')[:45],
+                user_agent=(request.META.get('HTTP_USER_AGENT') or '')[:500],
+                referrer=(request.META.get('HTTP_REFERER') or '')[:500],
+                metadata={},
+            )
+        except Exception:
+            pass
+        return response
+
+    @staticmethod
+    def _event_view():
+        from .models import AssetEvent
+        return AssetEvent.EVENT_TYPE_VIEW
+
+    @staticmethod
+    def _event_download():
+        from .models import AssetEvent
+        return AssetEvent.EVENT_TYPE_DOWNLOAD
 
 
 class FeatureUsageMiddleware(MiddlewareMixin):

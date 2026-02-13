@@ -67,7 +67,8 @@ mayan/apps/dam/
 
 ```python
 # Пример из mayan/apps/dam/models.py
-class DocumentAIAnalysis(models.Model):
+class DocumentAIAnalysis(TenantAwareMixin, ExtraDataModelMixin, models.Model):
+    organization = models.ForeignKey('organizations.Organization', ...)  # tenant-aware
     document = models.OneToOneField(
         Document,
         on_delete=models.CASCADE,
@@ -80,6 +81,7 @@ class DocumentAIAnalysis(models.Model):
 - Core модели (Document) остаются неизменными
 - Расширения через ForeignKey/OneToOneField
 - Обратная совместимость с базовым Mayan EDMS
+- Tenant-aware расширения (например DocumentAIAnalysis) добавляют TenantAwareMixin и явный FK organization; изоляция через TenantAwareManager и pre_save binding в organizations/apps.py
 
 ### 3. Celery Task Pattern
 
@@ -95,6 +97,7 @@ def analyze_document_with_ai(self, document_id: int):
 **Очереди задач:**
 - `converter`: Конвертация файлов
 - `ai_analysis`: AI обработка (отдельный worker)
+- `documents`: В т.ч. track_asset_event_async, generate_analytics_report (TenantAwareTask; отчёты — только JSON в MEDIA_ROOT/reports/{org_id}/)
 - `sources_fast`: Быстрые операции с источниками
 - `distribution`: Распределение контента
 - `notifications`: Уведомления
@@ -190,7 +193,7 @@ def transform_ai_tags(value):
 
 **Назначение:** Поддержка SaaS-модели (один backend, много клиентов) и Standalone-модели (один клиент на выделенном сервере).
 
-**Статус:** Базовая инфраструктура реализована (модуль создан, настройки и патчи), модели и middleware в разработке.
+**Статус:** Базовая инфраструктура реализована (Sprint 1-4 завершены). Интеграция с модулями (Part 3) в планировании.
 
 **Компоненты:**
 
@@ -273,6 +276,14 @@ class TenantResolverMiddleware:
 - Готовность к шардированию (future)
 - Поддержка ≥100 тенантов на одном сервере
 - Оптимизация запросов через select_related('organization')
+- Composite индексы на (organization_id, timestamp) для производительности
+
+**Code Style Rules:**
+- Всегда используй `TenantAwareManager` для бизнес-логики
+- Используй `.objects_unfiltered` только для SuperAdmin операций
+- Celery tasks должны явно передавать `organization_id` в kwargs
+- Все tenant-aware модели должны наследовать `TenantAwareMixin`
+- Middleware устанавливает `request.organization` для всех запросов
 
 **Текущая реализация (ЗАВЕРШЕНА — Sprint 1-4 + Hotfix + Tech Debt + Verification):**
 - ✅ Базовый модуль `mayan.apps.organizations` создан
@@ -287,6 +298,11 @@ class TenantResolverMiddleware:
 - ✅ Frontend: org store, selector, settings, API header, service methods
 - ✅ Quota enforcement (Redis-cached), audit logging, security hardening
 - ✅ Полная API верификация: все endpoints 200 OK, lifecycle test passed
+- ✅ Document модель имеет organization FK
+- ✅ Celery tasks используют TenantAwareTask base class
+- ✅ DocumentAIAnalysis tenant-aware (Part 3 Sprint 1)
+- ✅ AssetEvent tenant-aware (Part 3 Sprint 2): pre_save binding, track_asset_event_async.delay(organization_id=...)
+- ✅ ShareLink tenant-aware (Part 3 Sprint 3)
 
 ### 10. Contribute-to-Class Pattern (Dynamic FK Registration)
 
@@ -331,6 +347,35 @@ def _has_concrete_field(model, field_name):
 - Поля **должны** совпадать с определениями в миграциях (related_name, on_delete, db_index)
 - `_has_concrete_field()` обеспечивает идемпотентность (безопасен при повторных вызовах)
 - Без этого патча любой ORM lookup через `organization` на core моделях невозможен
+
+### 11. Document Tenant Binding on Create (NOT NULL Safety)
+
+**Назначение:** Гарантировать заполнение `Document.organization` при всех create-paths (включая upload wizard), когда в БД стоит NOT NULL.
+
+**Проблема:** При `POST /api/v4/documents/` возможно создание `Document` без `organization`, что вызывает:
+`IntegrityError: null value in column "organization_id" violates not-null constraint`.
+
+**Решение:** pre-save signal в `organizations/apps.py`:
+- если `instance.organization` уже задан — не трогать;
+- иначе взять tenant из ContextVar (`get_current_organization()`);
+- если tenant отсутствует — fallback на default organization;
+- подключение сигнала с `weak=False`, чтобы receiver не был удален GC.
+
+**Результат:** Upload flow восстановлен (`POST /documents/` -> 201, `POST /documents/{id}/files/` -> 202).
+
+### 12. Protected Thumbnail Rendering Pattern (SPA)
+
+**Назначение:** Корректный показ превью в SPA, когда backend image endpoint требует токен.
+
+**Проблема:** URL превью вида `/api/v4/.../image/` защищён. Стандартный `<img src="...">` не отправляет `Authorization` header, из-за чего в галерее появляется placeholder вместо изображения.
+
+**Решение:**
+- На фронтенде (`AssetCard`) загружать защищённые превью через `apiService` (`responseType: 'blob'`) с auth interceptor.
+- Преобразовывать blob в `ObjectURL` и использовать его как `img src`.
+- При unmount компонента освобождать `ObjectURL` через `URL.revokeObjectURL`.
+- На backend для optimized list endpoint держать валидные `thumbnail_url/preview_url` и корректные `file_latest_*` поля (стабильный latest-file prefetch + правильный cache key).
+
+**Результат:** Восстановлен рендер изображений и file metadata в SPA-галерее (`/dam`) после Sprint 4.5 fix.
 
 ## Компоненты системы
 
@@ -468,6 +513,8 @@ mayan/apps/dam/tests/
 - Django AddField/AlterField **не принимают** параметр `app_label` — операции должны быть в app-владельце модели
 - Для привязки Document, Tag, Cabinet к Organization: операции в documents (0085/0086), tags (0010/0011), cabinets (0007/0008)
 - org 0002 и 0004 — точки синхронизации зависимостей (operations = []); полная логика в docstrings
+
+**Index names:** Django E034 — имя индекса ≤30 символов (Oracle limit; distribution: idx_dist_sl_org_created).
 
 ### API Versioning
 

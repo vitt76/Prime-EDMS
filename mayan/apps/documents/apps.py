@@ -593,8 +593,27 @@ class DocumentsApp(MayanAppConfig):
             source=FavoriteDocumentProxy
         )
 
-        # RecentlyAccessedDocument
+        # RecentlyAccessedDocument (model used by dashboard widget list)
+        SourceColumn(
+            attribute='datetime_accessed',
+            include_label=True,
+            is_sortable=True,
+            label=_('Access date and time'),
+            name='datetime_accessed',
+            sort_field='datetime_accessed',
+            source=RecentlyAccessedDocument
+        )
+        SourceColumn(
+            attribute='document__label',
+            include_label=True,
+            is_identifier=True,
+            is_sortable=True,
+            label=_('Label'),
+            name='label',
+            source=RecentlyAccessedDocument
+        )
 
+        # RecentlyAccessedDocumentProxy (list view uses proxy)
         SourceColumn(
             func=lambda context: context['object'].recent.first().datetime_accessed,
             include_label=True,

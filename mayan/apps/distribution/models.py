@@ -4,6 +4,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 
+from mayan.apps.organizations.managers import TenantAwareMixin
 from mayan.apps.storage.classes import DefinedStorageLazy
 
 from .literals import STORAGE_NAME_DISTRIBUTION_RENDITIONS
@@ -332,9 +333,9 @@ class PublicationItem(models.Model):
         return f"{self.publication.title} → {self.document_file}"
 
 
-class ShareLink(models.Model):
+class ShareLink(TenantAwareMixin, models.Model):
     """
-    Ссылка для доступа к рендишену файла.
+    Ссылка для доступа к рендишену файла. Tenant-aware (organization из TenantAwareMixin).
     """
     rendition = models.ForeignKey(
         'GeneratedRendition',
@@ -399,6 +400,12 @@ class ShareLink(models.Model):
         ordering = ['-created']
         verbose_name = _('Share Link')
         verbose_name_plural = _('Share Links')
+        indexes = [
+            models.Index(
+                fields=['organization', '-created'],
+                name='idx_dist_sl_org_created',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.rendition.publication_item.publication.title} → {self.rendition.preset.name} → {self.token[:8]}..."

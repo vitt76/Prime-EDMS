@@ -33,6 +33,10 @@ class DocumentAIAnalysisSerializer(serializers.ModelSerializer):
     Serializer for Document AI Analysis model.
     """
     document_title = serializers.CharField(source='document.label', read_only=True)
+    organization = serializers.UUIDField(source='organization_id', read_only=True)
+    organization_name = serializers.CharField(
+        source='organization.name', read_only=True
+    )
     document_filename = serializers.SerializerMethodField()
     ocr_text = serializers.SerializerMethodField()
     ocr_status = serializers.SerializerMethodField()
@@ -40,7 +44,8 @@ class DocumentAIAnalysisSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentAIAnalysis
         fields = [
-            'id', 'document', 'document_title', 'document_filename',
+            'id', 'document', 'organization', 'organization_name',
+            'document_title', 'document_filename',
             'ai_description', 'ai_tags', 'dominant_colors', 'alt_text',
             'categories', 'language', 'people', 'locations',
             'copyright_notice', 'usage_rights', 'rights_expiry',

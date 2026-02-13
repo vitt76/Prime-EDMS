@@ -4,15 +4,25 @@ from django.contrib.postgres.indexes import GinIndex
 
 from mayan.apps.documents.models import Document
 from mayan.apps.databases.model_mixins import ExtraDataModelMixin
+from mayan.apps.organizations.managers import TenantAwareMixin
 
 
-class DocumentAIAnalysis(ExtraDataModelMixin, models.Model):
+class DocumentAIAnalysis(TenantAwareMixin, ExtraDataModelMixin, models.Model):
     """
     AI analysis results for documents.
 
     Stores AI-generated metadata like descriptions, tags, colors, etc.
     Links to existing Document model without duplicating data.
     """
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='dam_documentaianalysis_set',
+        verbose_name=_('Organization'),
+        help_text=_('Organization this record belongs to'),
+        db_index=True
+    )
+
     document = models.OneToOneField(
         Document,
         on_delete=models.CASCADE,
@@ -167,6 +177,10 @@ class DocumentAIAnalysis(ExtraDataModelMixin, models.Model):
         verbose_name = _('Document AI Analysis')
         verbose_name_plural = _('Document AI Analyses')
         indexes = [
+            models.Index(
+                fields=['organization', '-created'],
+                name='idx_ai_analysis_org_created'
+            ),
             GinIndex(fields=['ai_tags'], name='dam_ai_tags_gin_idx'),
             GinIndex(fields=['categories'], name='dam_categories_gin_idx'),
             GinIndex(fields=['people'], name='dam_people_gin_idx'),

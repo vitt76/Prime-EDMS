@@ -7,10 +7,8 @@ with proper S3 availability checking to avoid race conditions.
 import logging
 import time
 
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
-
-from django.db.models.signals import post_save, post_delete
 
 from mayan.apps.documents.models import Document, DocumentFile
 
@@ -179,6 +177,7 @@ def trigger_ai_analysis(sender, instance, created, **kwargs):
     ai_analysis, analysis_created = DocumentAIAnalysis.objects.get_or_create(
         document=document,
         defaults={
+            'organization_id': getattr(document, 'organization_id', None),
             'analysis_status': 'pending',
             'progress': 0,
             'current_step': 'Queued for AI analysis',
@@ -214,6 +213,13 @@ def trigger_ai_analysis(sender, instance, created, **kwargs):
         
         task_result = analyze_document_with_ai.apply_async(
             args=[document.id],
+            kwargs={
+                'organization_id': (
+                    str(document.organization_id)
+                    if getattr(document, 'organization_id', None)
+                    else None
+                )
+            },
             countdown=countdown_seconds
         )
         

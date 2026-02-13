@@ -33,6 +33,10 @@ from .views.analytics_views import (
     ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet,
     DistributionAnalyticsViewSet, ContentIntelligenceViewSet
 )
+from mayan.apps.analytics.api_views import (
+    AnalyticsDashboardViewSet,
+    AnalyticsReportGenerateViewSet,
+)
 from mayan.apps.organizations.urls import api_urls as organizations_api_urls
 
 app_name = 'headless_api'
@@ -149,6 +153,22 @@ api_urls = [
         regex=r'^notifications/preferences/$',
         view=HeadlessNotificationPreferenceView.as_view(),
         name='api-notifications-preferences'
+    ),
+    # Analytics (tenant-scoped unified dashboard)
+    url(
+        regex=r'^analytics/dashboard/$',
+        view=AnalyticsDashboardViewSet.as_view({'get': 'list'}),
+        name='api-analytics-dashboard'
+    ),
+    url(
+        regex=r'^analytics/reports/generate/$',
+        view=AnalyticsReportGenerateViewSet.as_view({'post': 'create'}),
+        name='api-analytics-reports-generate'
+    ),
+    url(
+        regex=r'^analytics/reports/(?P<pk>\d+)/$',
+        view=AnalyticsReportGenerateViewSet.as_view({'get': 'retrieve'}),
+        name='api-analytics-reports-detail'
     ),
     # Analytics (Asset Bank, Phase 1)
     url(

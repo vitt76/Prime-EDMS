@@ -1,7 +1,7 @@
 # Progress: Prime-EDMS
 
-**Последнее обновление:** 2026-02-10  
-**Источник:** Анализ последних 10 git коммитов и кодовой базы
+**Последнее обновление:** 2026-02-13  
+**Источник:** Deployment Hotfixes 2026-02-13 — analytics Permission import, EmailClickWebhookView stubs, distribution index name; Backend 8080, Frontend 5173, Public 3000 рабочие.
 
 ---
 
@@ -34,6 +34,7 @@
   - ✅ Доминирующие цвета (dominant colors)
   - ✅ Alt text для accessibility
 - ✅ Модель DocumentAIAnalysis для хранения результатов
+- ✅ **DocumentAIAnalysis tenant-aware (Sprint 1 Part 3):** TenantAwareMixin, FK organization, миграции dam 0007-0009, API/tasks/signals/serializers с propagation organization_id, pre-save binding, тесты изоляции; задеплоено в Docker (2026-02-11)
 - ✅ Пресеты метаданных (DAMMetadataPreset) для настройки извлечения
 - ✅ Интеграция с поиском через transformation функции
 - ✅ Celery tasks для асинхронной AI обработки (очередь `ai_analysis`)
@@ -68,10 +69,18 @@
 - ✅ Real-time обновления через WebSocket (Daphne)
 - ✅ Multi-tenancy поддержка (organization-specific groups)
 
+#### 3. Analytics Module (Sprint 2 Part 3 — Tenant-aware)
+- ✅ **AssetEvent tenant-aware:** TenantAwareMixin, FK `organization`, composite indexes (organization+event_type+-timestamp, organization+document+-timestamp); миграции 0010–0012; pre_save binding в organizations/apps.py. Создание событий: track_asset_event_async (organization_id в kwargs) или pre_save при создании в коде.
+- ✅ **Ingestion:** AssetEventTrackingMiddleware (sync Django middleware, process_response), fire-and-forget: track_asset_event_async.delay(organization_id=...); пути /api/v4/documents/, /api/v4/headless/documents/, подстрока "download"; требует request.organization, пропуск при response.status_code >= 400.
+- ✅ **Dashboard API:** GET /api/v4/headless/analytics/dashboard/ — строго по request.organization (400 без org); метрики: total_documents, storage_used_gb, active_users_30d, top_documents, ai_usage; AnalyticsDashboardViewSet, DashboardMetricsSerializer.
+- ✅ **Reports:** AnalyticsReportTask (миграция 0013); generate_analytics_report выводит только JSON в MEDIA_ROOT/reports/{org_id}/{task_id}.json; export_format в запросе сохраняется в parameters, но task всегда генерирует JSON. date_range: parameters['date_range'] с ключами from/to или date_from/date_to. POST .../reports/generate/, GET .../reports/{id}/.
+- ✅ **Tests:** test_middleware.py (track_asset_event_async.delay с organization_id), test_api.py (dashboard isolation), test_reports.py (sync run + API), test_tenant_isolation.py (AssetEvent, dashboard, report isolation).
+
 #### 4. Distribution Module
 - ✅ Публикации (Publications) для группировки активов
 - ✅ Рендишены (Renditions) - преобразованные версии файлов
 - ✅ Share Links - защищенные ссылки с паролями, лимитами, сроками
+- ✅ **ShareLink tenant-aware (Sprint 3 Part 3):** TenantAwareMixin, миграции 0012–0014, pre_save binding, портал/сигналы с objects_unfiltered, тесты изоляции (distribution/tests/test_tenant_isolation.py). Hotfix 2026-02-13: индекс idx_dist_sl_org_created (≤30 символов).
 - ✅ Recipient Lists - списки получателей
 - ✅ Distribution Campaigns - маркетинговые кампании
 - ✅ Access Log - логирование доступа
@@ -102,6 +111,7 @@
 - ✅ Persistence UI preferences (density, layout, sort)
 - ✅ Error handling и retry механизмы
 - ✅ Loading states и skeletons
+- ✅ Восстановлен рендер превью в SPA-галерее для защищённых API thumbnail URL (blob/object URL через auth)
 
 #### 8. Headless API
 - ✅ REST API v4 endpoints для фронтенда
@@ -115,6 +125,7 @@
 - ✅ Event-based уведомления
 - ✅ Notification preferences
 - ✅ Real-time доставка через WebSocket
+- ✅ **WebSocket org-scoped (Sprint 3 Part 3):** connect() требует organization_id в query, проверка членства (UserOrganizationRole), группа notifications_{org_id}_{user_id}; send_websocket_notification с get_organization_id_for_notification; тесты consumer (4003 без org / чужая org) и task (org-scoped group)
 - ✅ Notification popover в UI
 - ✅ Error handling для corrupted notifications
 
@@ -161,9 +172,12 @@
 
 ## 🚧 In Progress (В процессе разработки)
 
-### 1. Multi-tenancy Architecture (Tenant Isolation)  — ЗАВЕРШЁН
-**Статус:** Sprint 1-4 + Hotfix + Tech Debt завершены, Suspend/Activate endpoints добавлены  
-**Документ:** `docs/transformation-2025/TZ_Django_Tenant_Isolation.md`  
+### 1. Multi-tenancy Architecture (Tenant Isolation) — Базовая инфраструктура завершена
+**Статус:** Sprint 1-4 завершены. Part 3 интеграция планируется  
+**Документы:** 
+- `docs/transformation-2025/TZ_Django_Tenant_Isolation.md` (Part 2 — завершено)
+- `docs/transformation-2025/АНАЛИЗ КОНТЕКСТА И ОБНОВЛЕННОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ.md` (Part 3 — планируется)
+- `tmp/GAPS_REPORT_PART3.md` (GAPS отчет)  
 **Коммит:** `7f41e418fe`
 
 **Sprint 1 (ЗАВЕРШЁН):**
@@ -210,12 +224,31 @@
 - ✅ Suspend/Activate API endpoints (ТЗ Section 4.5.3)
 - ✅ `contribute_to_class` patch: Document/Tag/Cabinet FK `organization` зарегистрирован на уровне Python (patches.py)
 - ✅ **Полная API верификация:** all endpoints 200 OK, lifecycle test passed, no 500 errors
+- ✅ **Upload recovery:** исправлен 500 на `POST /api/v4/documents/` (NOT NULL `organization_id`) через pre_save tenant binding signal для Document
 
 **Архитектурный подход:**
 - Shared Database + Shared Schema
 - ForeignKey изоляция через Organization
 - Поддержка SaaS и Standalone режимов
 - ContextVar для потокобезопасности
+
+**Part 3 Integration:**
+- ✅ **Sprint 1 (Неделя 1-2):** DAM модуль — **ЗАВЕРШЁН И ЗАДЕПЛОЕН 2026-02-11**
+  - DocumentAIAnalysis → TenantAwareMixin, FK organization, миграции dam 0007-0009
+  - API/views/serializers/tasks/signals обновлены (organization_id), pre-save binding в organizations
+- ✅ **Sprint 3 (Неделя 5-6):** Distribution + Notifications — **ЗАВЕРШЁН 2026-02-11**
+  - ShareLink → TenantAwareMixin, миграции distribution 0012–0014, pre_save binding, portal/signals objects_unfiltered
+  - Notifications WebSocket: organization_id в query, проверка членства, group notifications_{org_id}_{user_id}; send_websocket_notification с resolve org_id
+  - Тесты: distribution/test_tenant_isolation, notifications test_consumers, test_tasks (org-scoped group)
+- ✅ **Sprint 2 (Неделя 3-4):** Analytics модуль — **ЗАВЕРШЁН 2026-02-11**
+  - AssetEvent → TenantAwareMixin, FK organization, миграции analytics 0010–0012, pre_save binding, consume_analytics_events org mapping
+  - AssetEventTrackingMiddleware, track_asset_event_async (TenantAwareTask)
+  - Analytics Dashboard API: GET /api/v4/headless/analytics/dashboard/ (tenant-scoped), AnalyticsReportTask + generate_analytics_report (JSON)
+  - Тесты: middleware, dashboard/report isolation, test_tenant_isolation; code review 2026-02-11 (date_range fix applied)
+- ✅ **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning — **ЗАВЕРШЁН 2026-02-11**
+  - Security: отчёт SPRINT4_SECURITY_AUDIT_REPORT.md, аудит objects_unfiltered, cross-tenant тесты (organizations/tests/test_cross_tenant_security.py), Bandit в dev requirements
+  - Performance: отчёт SPRINT4_PERFORMANCE_REPORT.md, кэш dashboard (dashboard_cache.py + signal), индексы проверены
+  - Load: locustfile расширен (dashboard, documents), отчёт SPRINT4_LOAD_TEST_REPORT.md
 
 ### 2. UI/UX Improvements
 - 🚧 **Immersive Grid Implementation** (активно разрабатывается)
@@ -385,8 +418,12 @@
 
 - **Organizations migrations (2026-02-10):** Операции AddField/AlterField/AddIndex для Document, Tag, Cabinet перенесены из org 0002/0004 в documents, tags, cabinets (Django не поддерживает app_label в этих операциях). org 0002/0004 — точки синхронизации; полная логика задокументирована в docstrings миграций.
 - **contribute_to_class patch (2026-02-10):** Миграции добавляют столбцы в БД, но Python-класс core моделей (Document, Tag, Cabinet) не знает о поле `organization`. Без `contribute_to_class()` ORM lookup `document__organization` вызывает ValueError. Исправлено в `patches.py:patch_organization_fields()`, вызывается в `apps.py` ДО `patch_document_managers()`.
+- **Upload 500 fix (2026-02-10):** root cause в `documents_document.organization_id NOT NULL` при создании Document из Upload Wizard (`POST /api/v4/documents/`). Добавлен `pre_save` signal bind в `organizations/apps.py`, который автопроставляет `Document.organization` из tenant context + fallback default-org, подключение с `weak=False`.
+- **Gallery preview regression fix (2026-02-10):** устранён кейс с placeholder `DOCUMENT` в SPA (`/dam`): исправлены latest-file prefetch и thumbnail/preview fallback в optimized API, фронтенд `AssetCard` переведён на auth blob-loading для защищённых `/api/v4/.../image`.
 - **Docker:** organizations и tags добавлены в Dockerfile.app и docker-compose volumes.
 - **distribution 0001:** Зависимость от documents 0081 для корректного разрешения DocumentFile.
+- **Sprint 1 Part 3 деплой (2026-02-11):** Бэкап БД (backup_pre_dam_tenant.sql), применение миграций dam 0007–0009 (AddField → populate → NOT NULL+index), перезапуск app и app_websocket; smoke test: DocumentAIAnalysis без organization = 0. В контейнере Django-команды запускать через `/opt/mayan-edms/bin/mayan-edms.py`.
+- **Deployment Hotfixes (2026-02-13):** analytics: Permission import (`permissions.classes`), EmailClickWebhookView/AnalyticsEventsExportView/AnalyticsHealthCheckView (stubs для rest_api/urls); distribution: индекс `idx_dist_sl_org_created` (≤30 символов, Django E034). Backend 8080, Frontend 5173, Public 3000 — работают.
 - Большинство core функций полностью работают и используются в production
 - Активная разработка сосредоточена на UI/UX улучшениях и оптимизации производительности
 - Новые модули (Marketing CMS, Public Frontend) полностью реализованы и готовы к использованию

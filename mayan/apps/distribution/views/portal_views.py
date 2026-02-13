@@ -34,6 +34,13 @@ class PublicationPortalView(DetailView):
         """
         return super().dispatch(request, *args, **kwargs)
 
+    def get_queryset(self):
+        """
+        Public access by token: use unfiltered queryset so token works
+        regardless of organization (token is globally unique).
+        """
+        return ShareLink.objects_unfiltered.all()
+
     def get_object(self, queryset=None):
         """
         Get the share link.
@@ -118,8 +125,8 @@ def share_link_view(request, token):
     Public view for direct access to a rendition file via share link token.
     Displays the file inline in the browser instead of downloading.
     """
-    # Get share link
-    share_link = get_object_or_404(ShareLink, token=token)
+    # Get share link (unfiltered: public access by token is global)
+    share_link = get_object_or_404(ShareLink.objects_unfiltered, token=token)
 
     # Check if link is valid
     if not share_link.is_valid():
@@ -232,8 +239,8 @@ def check_share_link_password(request, token):
     """
     API endpoint to check password for share link.
     """
-    share_link = get_object_or_404(ShareLink, token=token)
-    
+    share_link = get_object_or_404(ShareLink.objects_unfiltered, token=token)
+
     try:
         data = json.loads(request.body)
         password = data.get('password', '')
@@ -257,8 +264,8 @@ def download_rendition(request, token, rendition_id):
     """
     Public view for downloading a specific rendition.
     """
-    # Get share link
-    share_link = get_object_or_404(ShareLink, token=token)
+    # Get share link (unfiltered: public access by token is global)
+    share_link = get_object_or_404(ShareLink.objects_unfiltered, token=token)
 
     # Check if link is valid
     if not share_link.is_valid():

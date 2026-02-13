@@ -277,3 +277,15 @@ def handler_workflow_instance_log_entry(sender, instance, created, **kwargs):
         return
 
 
+@receiver(signal=post_save)
+def invalidate_dashboard_cache_on_asset_event(sender, instance, **kwargs):
+    """Invalidate dashboard cache when AssetEvent is created/updated (Sprint 4)."""
+    try:
+        from .models import AssetEvent
+        from .dashboard_cache import invalidate_dashboard_cache_for_org
+    except Exception:
+        return
+    if sender is not AssetEvent:
+        return
+    if getattr(instance, 'organization_id', None):
+        invalidate_dashboard_cache_for_org(instance.organization_id)
