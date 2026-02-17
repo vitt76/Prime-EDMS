@@ -30,7 +30,11 @@ class SearchToFindLinkingTestCase(TestCase):
     def test_link_download_to_latest_search_session(self):
         started_at = timezone.now() - timezone.timedelta(minutes=10)
 
-        session = SearchSession.objects.create(user=self.user, started_at=started_at)
+        session = SearchSession.objects.create(
+            organization=self.organization,
+            user=self.user,
+            started_at=started_at,
+        )
         query = SearchQuery.objects.create(
             user=self.user,
             query_text='test',
@@ -48,6 +52,7 @@ class SearchToFindLinkingTestCase(TestCase):
 
         download_ts = timezone.now()
         download_event = AssetEvent.objects.create(
+            organization=self.organization,
             document=self.document,
             event_type=AssetEvent.EVENT_TYPE_DOWNLOAD,
             user=self.user,

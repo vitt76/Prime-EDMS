@@ -262,14 +262,14 @@
   - Load: locustfile расширен (dashboard, documents), отчёт SPRINT4_LOAD_TEST_REPORT.md
 
 ### 2. UI/UX Improvements
-- 🚧 **Immersive Grid Implementation** (активно разрабатывается)
+- ✅ **Immersive Grid Implementation** (Sprint 5 завершён 2026-02-17)
   - ✅ Убраны границы и тени в покое
   - ✅ Metadata overlay на hover
   - ✅ Google Photos style selection
   - ✅ Quick actions на hover
   - ✅ Density control (compact/comfortable)
-  - ✅ Оптимизация производительности для больших списков (>100 активов) - Intersection Observer lazy rendering
-  - ✅ Виртуальный скроллинг: IntersectionObserver-based lazy rendering в AssetGrid + infinite scroll sentinel
+  - ✅ Оптимизация производительности для больших списков (80+ активов): ImmersiveGrid на @tanstack/vue-virtual, виртуализация по строкам, infinite scroll, Shift+Click и drag-select
+  - ✅ Порог в GalleryView: < 80 — AssetGrid, 80+ — ImmersiveGrid
 
 ### 2. Analytics Enhancements
 - 🚧 **YouTube Analytics Integration**
@@ -284,16 +284,16 @@
 - ✅ Keyword search
 - ✅ Расширенные фильтры (дата, размер, теги, владелец) — с persistence в URL
 - ✅ Owner filter добавлен в FiltersPanel + useDamSearchFilters composable
-- 🚧 Faceted search улучшения
-- 🚧 Search history persistence
+- ✅ Search history (фронт): localStorage dam_search_history (до 10), блок «Недавние запросы» в Header (Sprint 5)
+- 🚧 Faceted search улучшения (опционально)
 
 ### 4. Performance Optimizations
-- ✅ Lazy loading активов
+- ✅ Lazy loading активов (AssetThumbnail, lazy load; Sprint 5)
 - ✅ Оптимизация API запросов (предотвращение N+1)
 - ✅ Кеширование метаданных
-- ✅ Виртуальный скроллинг для больших списков (IntersectionObserver lazy rendering)
-- 🚧 Оптимизация изображений (lazy loading, responsive images)
-- 🚧 CDN интеграция для статики
+- ✅ Виртуальный скроллинг для больших списков (ImmersiveGrid @tanstack/vue-virtual; Sprint 5)
+- 🚧 Оптимизация изображений (responsive images, srcset) — опционально
+- 🚧 CDN интеграция для статики — опционально
 
 ### 5. Multi-tenancy — ЗАВЕРШЁН (Sprint 1-4)
 - ✅ Organization-specific WebSocket groups в analytics
@@ -305,8 +305,8 @@
 - ✅ Базовое error handling в компонентах
 - ✅ Retry механизмы
 - ✅ Graceful degradation
-- 🚧 Улучшенная обработка ошибок API
-- 🚧 Offline support
+- 🚧 Улучшенная обработка ошибок API (опционально)
+- 🚧 Offline support (низкий приоритет)
 
 ---
 
@@ -333,12 +333,12 @@
   - ✅ Migration restructuring: cross-app operations in target apps, dependency sync points
 
 ### 2. AI Providers
-- ❌ **Claude Provider** - только placeholder, требует реализации
+- ✅ **Claude Provider** — реализован (Anthropic Messages API, vision)
   - Файл: `mayan/apps/dam/ai_providers/claude.py`
-  - Статус: Все методы возвращают пустые значения
-- ❌ **Gemini Provider** - только placeholder, требует реализации
+  - Статус: analyze_image, describe_image, extract_tags, extract_colors, generate_alt_text; ключ DAM_CLAUDE_API_KEY, модель из конфига
+- ✅ **Gemini Provider** — реализован (Google Gemini generateContent API, vision)
   - Файл: `mayan/apps/dam/ai_providers/gemini.py`
-  - Статус: Все методы возвращают пустые значения
+  - Статус: те же методы; ключ DAM_GEMINI_API_KEY, модель из конфига
 
 ### 2. API Endpoints
 - ✅ **Change Password API** - реализован
@@ -357,15 +357,15 @@
   - Performance, Accessibility, Mobile Support требуют оценки
 
 ### 4. Analytics Roadmap
-- 🚧 **Analytics Transformation** - Phase 1-2 частично завершены
-  - Документ: `ANALYTICS_TRANSFORMATION_ROADMAP.md`
+- ✅ **Analytics Transformation** — Phase 1–2 и Backlog завершены (2026-02-17)
+  - Документ: `ANALYTICS_TRANSFORMATION_ROADMAP.md` (или план в .cursor/plans)
   - ✅ Базовый трекинг событий (AssetEvent, SearchQuery)
   - ✅ Базовые дашборды
-  - 🚧 Search-to-Find Time метрика (требует SearchSession)
-  - 🚧 CDN Cost/month tracking
-  - 🚧 Feature Adoption метрики
-  - 🚧 Гео-данные
-  - 🚧 Автоматизация retention
+  - ✅ Search-to-Find Time (SearchSession tenant-aware, search_session_id, дашборд avg_search_to_find_seconds)
+  - ✅ CDN Cost/month tracking (OrganizationBandwidthDaily, Plan.cdn_cost_per_gb, calculate_organization_bandwidth_daily)
+  - ✅ Feature Adoption (FeatureUsage tenant-aware, ai_analysis/share_link_create, виджет в дашборде)
+  - ✅ Гео-данные (IP в metadata, enrich_event_geo_data, get_geo_from_ip)
+  - ✅ Автоматизация retention (user_activity в отчёте: DAU, MAU, churn_count)
 
 ---
 

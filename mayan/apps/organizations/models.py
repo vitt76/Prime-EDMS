@@ -142,6 +142,15 @@ class Plan(ExtraDataModelMixin, models.Model):
         verbose_name=_('Max documents'),
         help_text=_('Maximum number of documents. NULL = unlimited')
     )
+    cdn_cost_per_gb = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        default=0.10,
+        null=True,
+        blank=True,
+        verbose_name=_('CDN cost per GB (USD)'),
+        help_text=_('Cost per GB for CDN/bandwidth billing. NULL = use system default.')
+    )
 
     # Feature flags
     has_advanced_ai = models.BooleanField(

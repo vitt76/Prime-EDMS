@@ -80,6 +80,11 @@ class AssetEvent(TenantAwareMixin, models.Model):
     metadata = models.JSONField(
         blank=True, default=dict, verbose_name=_('Metadata')
     )
+    search_session_id = models.UUIDField(
+        blank=True, null=True, db_index=True,
+        verbose_name=_('Search session ID'),
+        help_text=_('Links this event to a search session for search-to-find metrics')
+    )
 
     class Meta:
         db_table = 'analytics_asset_events'
@@ -483,14 +488,23 @@ class UserDailyMetrics(models.Model):
         return f'{self.user_id} - {self.date}'
 
 
-class SearchSession(models.Model):
+class SearchSession(TenantAwareMixin, models.Model):
     """Group search queries with the subsequent 'find' action (download).
 
     This enables measuring Search-to-Find / Search-to-Download time in a way that
     is robust to multiple searches and downloads by the same user.
+    Tenant-aware for multi-organization isolation.
     """
 
     id = models.UUIDField(primary_key=True, editable=False, default=uuid.uuid4)
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='analytics_search_sessions',
+        verbose_name=_('Organization'),
+        help_text=_('Organization this session belongs to'),
+        db_index=True
+    )
     user = models.ForeignKey(
         to=settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -527,6 +541,10 @@ class SearchSession(models.Model):
         indexes = (
             models.Index(fields=('user', '-started_at')),
             models.Index(fields=('ended_at',)),
+            models.Index(
+                fields=['organization', 'user', '-started_at'],
+                name='idx_anal_ss_org_usr_ts'
+            ),
         )
 
     def __str__(self):
@@ -787,9 +805,47 @@ class CDNDailyCost(models.Model):
         return f'{self.date} {self.channel}: {self.cost_usd}'
 
 
-class FeatureUsage(models.Model):
-    """Feature usage tracking (Level 3)."""
+class OrganizationBandwidthDaily(models.Model):
+    """Daily bandwidth and CDN cost per organization (tenant-scoped)."""
 
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='analytics_bandwidth_daily',
+        verbose_name=_('Organization'),
+        db_index=True
+    )
+    date = models.DateField(db_index=True, verbose_name=_('Date'))
+    bandwidth_gb = models.FloatField(default=0.0, verbose_name=_('Bandwidth (GB)'))
+    cost_usd = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0.0,
+        verbose_name=_('Cost (USD)')
+    )
+
+    class Meta:
+        db_table = 'analytics_organization_bandwidth_daily'
+        verbose_name = _('Organization bandwidth daily')
+        verbose_name_plural = _('Organization bandwidth daily')
+        unique_together = (('organization', 'date'),)
+        indexes = (
+            models.Index(fields=('organization', '-date')),
+        )
+
+    def __str__(self):
+        return f'{self.organization_id} {self.date}: {self.cost_usd}'
+
+
+class FeatureUsage(TenantAwareMixin, models.Model):
+    """Feature usage tracking (Level 3). Tenant-aware."""
+
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='analytics_feature_usage',
+        verbose_name=_('Organization'),
+        help_text=_('Organization this record belongs to'),
+        db_index=True
+    )
     user = models.ForeignKey(
         to=settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -810,6 +866,10 @@ class FeatureUsage(models.Model):
         indexes = (
             models.Index(fields=('feature_name', '-timestamp')),
             models.Index(fields=('user', '-timestamp')),
+            models.Index(
+                fields=['organization', 'feature_name', '-timestamp'],
+                name='idx_anal_fu_org_feat_ts'
+            ),
         )
 
     def __str__(self):

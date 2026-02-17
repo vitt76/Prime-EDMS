@@ -42,14 +42,15 @@ class HeadlessFavoriteListView(APIView):
                 "document": {
                     "id": 1,
                     "label": "...",
-                    "thumbnail_url": "http://localhost:8080/api/v4/documents/1/versions/latest/pages/1/image/?width=150&height=150",
-                    "preview_url": "http://localhost:8080/api/v4/documents/1/versions/latest/pages/1/image/?width=800",
+                    "thumbnail_url": "{BASE_URL}/api/v4/documents/1/versions/latest/pages/1/image/?width=150&height=150",
+                    "preview_url": "{BASE_URL}/api/v4/documents/1/versions/latest/pages/1/image/?width=800",
                     ...
                 },
                 "datetime_added": "2025-12-08T10:00:00Z"
             }
         ]
     }
+    (BASE_URL is the request origin or value from settings; do not use hardcoded localhost in production.)
     """
 
     authentication_classes = [SessionAuthentication, TokenAuthentication]

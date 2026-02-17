@@ -11,6 +11,8 @@ from typing import Optional
 
 from django.utils import timezone
 
+from mayan.apps.organizations.managers import get_current_organization
+
 from .models import AssetEvent, FeatureUsage, SearchQuery, SearchSession
 
 
@@ -53,8 +55,13 @@ def link_download_to_latest_search_session(
 
     window_start = download_event.timestamp - timedelta(minutes=int(max_window_minutes))
 
+    org_id = getattr(download_event, 'organization_id', None)
+    if not org_id:
+        return None
+
     session = (
         SearchSession.objects.filter(
+            organization_id=org_id,
             user=user,
             ended_at__isnull=True,
             started_at__gte=window_start
@@ -95,28 +102,35 @@ def track_feature_usage(
     user,
     feature_name: str,
     was_successful: bool = True,
-    metadata: Optional[dict] = None
+    metadata: Optional[dict] = None,
+    organization=None,
 ) -> Optional[FeatureUsage]:
-    """Record feature usage as an analytics event.
+    """Record feature usage as an analytics event (tenant-aware).
 
     Args:
         user: Authenticated user.
-        feature_name: Stable feature identifier, e.g. 'analytics.asset_bank'.
+        feature_name: Stable feature identifier, e.g. 'ai_analysis', 'share_link_create'.
         was_successful: Whether the action completed successfully.
         metadata: Optional JSON metadata.
+        organization: Organization instance (optional). If None, uses get_current_organization().
 
     Returns:
         FeatureUsage row or None on failure.
     """
-    if not user or getattr(user, 'is_authenticated', False) is False:
-        return None
-
     feature_name = (feature_name or '').strip()
     if not feature_name:
         return None
 
+    org = organization or get_current_organization()
+    if not org:
+        return None
+
+    if user is not None and getattr(user, 'is_authenticated', False) is False:
+        return None
+
     try:
         return FeatureUsage.objects.create(
+            organization=org,
             user=user,
             feature_name=feature_name[:100],
             was_successful=bool(was_successful),

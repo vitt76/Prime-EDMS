@@ -15,6 +15,7 @@ from mayan.apps.documents.models import Document, DocumentFile, DocumentType
 from mayan.apps.dam import settings as dam_settings
 from mayan.apps.dynamic_search.tasks import task_index_instance
 
+from .literals import KIEAI_DEFAULT_BASE_URL, KIEAI_DEFAULT_UPLOAD_URL
 from .models import DocumentAIAnalysis, DAMMetadataPreset
 from .services import (
     YandexDiskClient, YandexDiskClientError, YandexDiskImporter
@@ -410,6 +411,21 @@ def analyze_document_with_ai(self, document_id: int, **kwargs):
                 'AI analysis completed event trigger failed for document %s: %s',
                 document_id, notif_exc
             )
+
+        try:
+            from mayan.apps.analytics.literals import FEATURE_AI_ANALYSIS
+            from mayan.apps.analytics.services import track_feature_usage
+            org = getattr(document, 'organization', None)
+            if org:
+                track_feature_usage(
+                    user=None,
+                    feature_name=FEATURE_AI_ANALYSIS,
+                    was_successful=True,
+                    organization=org,
+                    metadata={'document_id': document_id},
+                )
+        except Exception as feat_exc:
+            logger.debug('Feature adoption track (ai_analysis) failed: %s', feat_exc)
 
         # Progress: 100% - Complete, now reindexing
         logger.info(f"📊 Progress: 100% - Analysis complete, reindexing...")
@@ -831,8 +847,8 @@ def get_provider_config(provider_name: str) -> Dict[str, Any]:
 
         return {
             'api_key': api_key,
-            'base_url': base_url or 'https://api.kie.ai/api/v1/flux/kontext',
-            'upload_url': upload_url or 'https://kieai.redpandaai.co/api/file-stream-upload',
+            'base_url': base_url or KIEAI_DEFAULT_BASE_URL,
+            'upload_url': upload_url or KIEAI_DEFAULT_UPLOAD_URL,
             'ocr_endpoint': ocr_endpoint or 'generate',
             'status_endpoint': status_endpoint or 'record-info',
             'default_language': default_language,

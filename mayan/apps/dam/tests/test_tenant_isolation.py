@@ -183,6 +183,17 @@ class DocumentAIAnalysisTenantApiTestCase(
             str(results[0]['organization']), str(self.organization_a.pk)
         )
 
+    def test_ai_analysis_detail_cross_tenant_returns_404(self):
+        """With X-Organization-Id for org A, GET analysis of org B by id returns 404."""
+        analysis_b = DocumentAIAnalysis.objects_unfiltered.get(
+            document=self.document_b
+        )
+        response = self.client.get(
+            f'/api/dam/ai-analysis/{analysis_b.pk}/',
+            HTTP_X_ORGANIZATION_ID=str(self.organization_a.pk),
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
 
 class DocumentAIAnalysisTenantTaskTestCase(DocumentTestMixin, TestCase):
     """

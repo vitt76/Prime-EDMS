@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 
-from django.db.models import Count
+from django.db.models import Avg, Count
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -16,7 +16,8 @@ from mayan.apps.organizations.models import Organization
 from .dashboard_cache import (
     get_dashboard_cached, set_dashboard_cached,
 )
-from .models import AssetEvent, AnalyticsReportTask
+from .literals import FEATURE_ADOPTION_NAMES
+from .models import AssetEvent, AnalyticsReportTask, FeatureUsage, SearchSession
 from .permissions import permission_analytics_view_asset_bank
 from .serializers import DashboardMetricsSerializer
 from .tasks import generate_analytics_report
@@ -77,6 +78,28 @@ class AnalyticsDashboardViewSet(viewsets.ViewSet):
             'token_usage': getattr(org, 'ai_token_usage_this_month', None),
         }
 
+        search_sessions_qs = SearchSession.objects.filter(
+            organization=org,
+            started_at__gte=thirty_days_ago,
+            time_to_find_seconds__isnull=False
+        )
+        avg_stf = search_sessions_qs.aggregate(avg=Avg('time_to_find_seconds'))['avg']
+        avg_search_to_find_seconds = int(avg_stf) if avg_stf is not None else None
+
+        feature_adoption = []
+        for feat_name in FEATURE_ADOPTION_NAMES:
+            users_with_feature = FeatureUsage.objects.filter(
+                organization=org,
+                feature_name=feat_name,
+                timestamp__gte=thirty_days_ago,
+            ).values('user_id').distinct().count()
+            rate = (users_with_feature / active_users_30d * 100) if active_users_30d else 0
+            feature_adoption.append({
+                'feature_name': feat_name,
+                'users_count': users_with_feature,
+                'adoption_rate_percent': round(rate, 2),
+            })
+
         data = {
             'organization': str(org.pk),
             'organization_name': org.name,
@@ -85,6 +108,8 @@ class AnalyticsDashboardViewSet(viewsets.ViewSet):
             'active_users_30d': active_users_30d,
             'top_documents': top_documents,
             'ai_usage': ai_usage,
+            'avg_search_to_find_seconds': avg_search_to_find_seconds,
+            'feature_adoption': feature_adoption,
         }
         set_dashboard_cached(org.pk, data)
         serializer = DashboardMetricsSerializer(data)

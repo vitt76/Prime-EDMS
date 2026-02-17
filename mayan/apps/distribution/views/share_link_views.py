@@ -217,6 +217,20 @@ def create_share_link_simple(request):
             except Exception:
                 # Best-effort only; never fail share link creation due to analytics.
                 pass
+            # Feature adoption: share_link_create.
+            try:
+                from mayan.apps.analytics.literals import FEATURE_SHARE_LINK_CREATE
+                from mayan.apps.analytics.services import track_feature_usage
+                if org:
+                    track_feature_usage(
+                        user=request.user if request.user.is_authenticated else None,
+                        feature_name=FEATURE_SHARE_LINK_CREATE,
+                        was_successful=True,
+                        organization=org,
+                        metadata={'share_link_id': str(share_link.pk)},
+                    )
+            except Exception:
+                pass
         
         # Serialize the first share link (or return all if multiple)
         if len(share_links) == 1:

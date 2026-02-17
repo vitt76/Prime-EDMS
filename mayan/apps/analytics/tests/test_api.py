@@ -100,3 +100,31 @@ class AnalyticsDashboardIsolationTestCase(TestCase):
             self.doc_b.pk,
         )
         self.assertEqual(data['top_documents'][0]['view_count'], 2)
+
+    def test_dashboard_returns_400_without_organization(self):
+        """GET dashboard without X-Organization-Id returns 400 and message about organization context."""
+        response = self.client.get('/api/v4/headless/analytics/dashboard/')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertIn('detail', response.data)
+        self.assertIn('Organization', str(response.data['detail']))
+
+    def test_dashboard_returns_200_with_empty_metrics(self):
+        """Dashboard returns 200 with zero/empty metrics when org has no documents or events."""
+        org_empty = Organization.objects.create(
+            name='Empty Org',
+            slug='empty-org',
+            email='empty@test.com',
+            is_active=True,
+            status='active',
+        )
+        response = self.client.get(
+            '/api/v4/headless/analytics/dashboard/',
+            HTTP_X_ORGANIZATION_ID=str(org_empty.pk),
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        data = response.data
+        self.assertEqual(data['organization'], str(org_empty.pk))
+        self.assertEqual(data['organization_name'], 'Empty Org')
+        self.assertEqual(data['total_documents'], 0)
+        self.assertEqual(len(data['top_documents']), 0)
+        self.assertEqual(data['active_users_30d'], 0)

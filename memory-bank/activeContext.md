@@ -130,7 +130,15 @@
 - **Phase 3:** Создан `AssetThumbnail.vue` (lazy load, плейсхолдер, ошибка); в AssetCard блок превью заменён на AssetThumbnail.  
 - **Phase 4:** Создан `AssetContextMenu.vue` (правый клик: Открыть, Скачать, Поделиться, Редактировать метаданные, Удалить). В AssetCard добавлен `@contextmenu.prevent` и эмит `contextmenu`; AssetGrid и ImmersiveGrid пробрасывают `asset-contextmenu`; в GalleryView — единое контекстное меню и обработчики (в т.ч. переход на `/dam/assets/:id/edit` для редактирования метаданных). Drag-select и Shift+Click в ImmersiveGrid реализованы при создании компонента.
 
-**Следующий фокус:** Part 3 (Sprint 1–4) и Sprint 5 (Frontend) завершены; следующий этап — **Sprint 4 (итерация 2): Security Polish & Final Backend Hardening** (см. предложенный объём ниже) или дальнейшая полировка фронта (тесты, accessibility, ориентация на бэкенде при появлении полей width/height).
+#### Analytics Transformation (Backlog) — ✅ COMPLETED 2026-02-17
+- **Search-to-Find Time:** SearchSession tenant-aware (FK organization), AssetEvent.search_session_id; middleware передаёт X-Search-Session-Id; при download — обновление SearchSession или link_download_to_latest_search_session; дашборд: avg_search_to_find_seconds.
+- **CDN Cost:** Plan.cdn_cost_per_gb; при download в track_asset_event_async подставляется размер файла в bandwidth_bytes; модель OrganizationBandwidthDaily; задача calculate_organization_bandwidth_daily (агрегация по org, стоимость из Plan или ANALYTICS_CDN_COST_PER_GB).
+- **Feature Adoption:** FeatureUsage tenant-aware; константы ai_analysis, share_link_create; вызовы из dam/tasks и distribution (share link create); дашборд: feature_adoption (users_count, adoption_rate_percent по фичам).
+- **Geo:** IP в AssetEvent.metadata при создании события; get_geo_from_ip в utils; задача enrich_event_geo_data (batch или event_id); обогащение metadata полями country, city.
+- **Retention:** В generate_analytics_report добавлена секция user_activity: dau (по дням), mau, churn_count (члены org без событий 30 дней), churn_period_days.
+- Миграции: analytics 0014–0020, organizations 0006. Единый дашборд GET /api/v4/headless/analytics/dashboard/ возвращает в т.ч. avg_search_to_find_seconds и feature_adoption.
+
+**Следующий фокус:** Part 3 (Sprint 1–4) и Sprint 5 (Frontend) завершены; Analytics Transformation завершён (2026-02-17). Следующий этап — **Sprint 4 (итерация 2): Security Polish & Final Backend Hardening** (см. предложенный объём ниже) или дальнейшая полировка фронта (тесты, accessibility, ориентация на бэкенде при появлении полей width/height).
 
 **Sprint 4 (следующая итерация) — предложенный объём:**
 1. **Security Audit:** Проверка edge cases TenantResolverMiddleware (публичные API без org, exempt paths, подмена X-Organization-Id).

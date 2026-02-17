@@ -23,3 +23,8 @@ class DashboardMetricsSerializer(serializers.Serializer):
         read_only=True
     )
     ai_usage = AIUsageSerializer(read_only=True, allow_null=True)
+    avg_search_to_find_seconds = serializers.IntegerField(read_only=True, allow_null=True)
+    feature_adoption = serializers.ListField(
+        child=serializers.DictField(),
+        read_only=True
+    )

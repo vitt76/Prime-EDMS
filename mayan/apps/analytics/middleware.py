@@ -59,6 +59,10 @@ class AssetEventTrackingMiddleware(MiddlewareMixin):
         if not document_id:
             return response
 
+        search_session_id = (request.META.get('HTTP_X_SEARCH_SESSION_ID') or '').strip() or None
+        if search_session_id and len(search_session_id) > 36:
+            search_session_id = search_session_id[:36]
+
         try:
             track_asset_event_async.delay(
                 organization_id=str(organization.pk),
@@ -69,6 +73,7 @@ class AssetEventTrackingMiddleware(MiddlewareMixin):
                 user_agent=(request.META.get('HTTP_USER_AGENT') or '')[:500],
                 referrer=(request.META.get('HTTP_REFERER') or '')[:500],
                 metadata={},
+                search_session_id=search_session_id,
             )
         except Exception:
             pass

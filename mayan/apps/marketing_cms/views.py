@@ -1,5 +1,6 @@
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -204,11 +205,22 @@ class PublicVerifyEmailView(APIView):
         user = token.user
         user.is_active = True
         user.save(update_fields=['is_active'])
+        frontend_base = (
+            getattr(settings, 'FRONTEND_URL', None)
+            or getattr(settings, 'SPA_URL', '')
+            or ''
+        )
+        frontend_base = (frontend_base or '').strip()
+        redirect_url = (
+            f'{frontend_base.rstrip("/")}/login?verified=true'
+            if frontend_base
+            else 'http://localhost:5173/login?verified=true'
+        )
         return Response(
             {
                 'success': True,
                 'message': 'Email успешно подтвержден. Вы можете войти в систему.',
-                'redirect_url': 'http://localhost:5173/login?verified=true'
+                'redirect_url': redirect_url,
             },
             status=status.HTTP_200_OK
         )

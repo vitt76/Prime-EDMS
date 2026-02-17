@@ -7,8 +7,8 @@ DEFAULT_AI_PROVIDER_PRIORITY = [
     'openai',      # Best for vision and detailed analysis
     'yandexgpt',   # Good for Russian language tasks
     'gigachat',    # Sber's model, good for Russian content
-    'claude',      # Stub only; see docs/TODO.md
-    'gemini',      # Stub only; see docs/TODO.md
+    'claude',      # Anthropic Claude Vision (Messages API)
+    'gemini',      # Google Gemini Vision (generateContent API)
 ]
 
 # AI analysis timeouts (in seconds)
@@ -40,6 +40,10 @@ SUPPORTED_IMAGE_TYPES = [
 
 # Maximum file size for AI analysis (in bytes)
 MAX_AI_ANALYSIS_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Kie.ai API default URLs (fallback when settings/env are not set)
+KIEAI_DEFAULT_BASE_URL = 'https://api.kie.ai/api/v1/flux/kontext'
+KIEAI_DEFAULT_UPLOAD_URL = 'https://kieai.redpandaai.co/api/file-stream-upload'
 
 # Default metadata preset
 DEFAULT_METADATA_PRESET = {

@@ -136,3 +136,30 @@ def anonymize_ip_address(ip_address: Optional[str]) -> Optional[str]:
     return value
 
 
+def get_geo_from_ip(ip_address: Optional[str]):
+    """Best-effort GeoIP lookup (country, city).
+
+    Requires:
+        - python package: geoip2
+        - settings.GEOIP_DATABASE_PATH pointing to a MaxMind GeoLite2 City DB
+
+    Returns:
+        Tuple of (country_code, city_name); empty strings if unavailable.
+    """
+    db_path = getattr(settings, 'GEOIP_DATABASE_PATH', '') or ''
+    if not ip_address or not db_path:
+        return '', ''
+
+    try:
+        import geoip2.database
+    except Exception:
+        return '', ''
+
+    try:
+        with geoip2.database.Reader(db_path) as reader:
+            response = reader.city(ip_address)
+            country = getattr(getattr(response, 'country', None), 'iso_code', '') or ''
+            city = getattr(getattr(response, 'city', None), 'name', '') or ''
+            return (country or ''), (city or '')
+    except Exception:
+        return '', ''

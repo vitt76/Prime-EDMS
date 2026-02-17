@@ -17,10 +17,12 @@ from mayan.apps.organizations.tasks import TenantAwareTask
 from .models import (
     ApprovalWorkflowEvent, AnalyticsAlert, AnalyticsReportTask,
     AssetDailyMetrics, AssetEvent, CampaignDailyMetrics, CDNDailyCost, CDNRate,
-    SearchDailyMetrics, SearchQuery, SearchSession, UserDailyMetrics,
-    CampaignEngagementEvent, DistributionEvent
+    OrganizationBandwidthDaily, SearchDailyMetrics, SearchQuery, SearchSession,
+    UserDailyMetrics, CampaignEngagementEvent, DistributionEvent
 )
 from .realtime import notify_analytics_refresh
+from .services import link_download_to_latest_search_session
+from .utils import get_geo_from_ip
 from .providers.registry import AnalyticsProviderRegistry, register_default_providers
 from .reports import CampaignPDFReport
 
@@ -44,12 +46,16 @@ def track_asset_event_async(
     user_agent: str = '',
     referrer: str = '',
     metadata: Optional[dict] = None,
+    search_session_id: Optional[str] = None,
+    bandwidth_bytes: Optional[int] = None,
     **kwargs
 ) -> None:
     """Create a single AssetEvent asynchronously (e.g. from middleware).
 
     TenantAwareTask sets tenant context from organization_id in kwargs.
+    Stores ip_address in metadata for geo enrichment; links download to SearchSession when possible.
     """
+    import uuid as uuid_module
     try:
         org_id = kwargs.get('organization_id') or organization_id
         if not org_id:
@@ -59,7 +65,7 @@ def track_asset_event_async(
             logger.warning('track_asset_event_async: missing document_id')
             return
         try:
-            organization = Organization.objects.get(pk=int(org_id))
+            organization = Organization.objects.get(pk=org_id)
         except (Organization.DoesNotExist, ValueError, TypeError):
             logger.warning('track_asset_event_async: organization_id=%s not found', org_id)
             return
@@ -74,7 +80,27 @@ def track_asset_event_async(
                 document_id, org_id
             )
             return
-        AssetEvent.objects.create(
+
+        if event_type == AssetEvent.EVENT_TYPE_DOWNLOAD and bandwidth_bytes is None:
+            try:
+                latest_file = document.files.order_by('-timestamp').first()
+                if latest_file and getattr(latest_file, 'size', None) is not None:
+                    bandwidth_bytes = latest_file.size
+            except Exception:
+                pass
+
+        meta = (metadata or {}).copy()
+        if ip_address:
+            meta['ip_address'] = ip_address[:45]
+
+        parsed_session_uuid = None
+        if search_session_id:
+            try:
+                parsed_session_uuid = uuid_module.UUID(search_session_id)
+            except (ValueError, TypeError):
+                parsed_session_uuid = None
+
+        event = AssetEvent.objects.create(
             organization_id=organization.pk,
             document_id=document_id,
             user_id=user_id,
@@ -82,8 +108,39 @@ def track_asset_event_async(
             channel='api',
             user_department='',
             intended_use='',
-            metadata=(metadata or {}).copy(),
+            metadata=meta,
+            search_session_id=parsed_session_uuid,
+            bandwidth_bytes=bandwidth_bytes,
         )
+
+        if event_type == AssetEvent.EVENT_TYPE_DOWNLOAD and user_id:
+            user = None
+            try:
+                User = django_apps.get_model(settings.AUTH_USER_MODEL)
+                user = User.objects.filter(pk=user_id).first()
+            except Exception:
+                pass
+            if parsed_session_uuid and user:
+                try:
+                    session = SearchSession.objects_unfiltered.filter(
+                        pk=parsed_session_uuid,
+                        organization_id=organization.pk,
+                        user_id=user_id,
+                    ).first()
+                    if session:
+                        delta_seconds = int((event.timestamp - session.started_at).total_seconds())
+                        session.ended_at = event.timestamp
+                        session.last_download_event = event
+                        session.time_to_find_seconds = max(0, delta_seconds)
+                        session.save(update_fields=('ended_at', 'last_download_event', 'time_to_find_seconds'))
+                except Exception as exc:
+                    logger.debug('track_asset_event_async: could not update SearchSession: %s', exc)
+            elif user:
+                link_download_to_latest_search_session(
+                    user=user,
+                    download_event=event,
+                    max_window_minutes=30,
+                )
     except Exception as exc:
         logger.exception('track_asset_event_async failed: %s', exc)
         if self.request.retries < self.max_retries:
@@ -146,6 +203,61 @@ def generate_analytics_report(self, report_task_id: int, **kwargs) -> None:
             'by_event_type': by_type,
         }
 
+        # User Activity: DAU, MAU, Churn (inactive > 30 days).
+        try:
+            from django.utils.dateparse import parse_date as _parse_date
+            end_date = timezone.now().date()
+            if date_to:
+                try:
+                    end_date = _parse_date(date_to) or end_date
+                except Exception:
+                    pass
+            thirty_days_ago = end_date - timedelta(days=30)
+            org_id = report_task.organization_id
+            events_org = AssetEvent.objects_unfiltered.filter(
+                organization_id=org_id,
+                user_id__isnull=False,
+            )
+            dau = {}
+            if date_from and date_to:
+                try:
+                    start_d = _parse_date(date_from)
+                    end_d = _parse_date(date_to) or end_date
+                    if start_d and end_d:
+                        d = start_d
+                        while d <= end_d:
+                            cnt = events_org.filter(timestamp__date=d).values('user_id').distinct().count()
+                            dau[d.isoformat()] = cnt
+                            d = d + timedelta(days=1)
+                except Exception:
+                    pass
+            mau = events_org.filter(timestamp__date__gte=thirty_days_ago).values('user_id').distinct().count()
+            churn_period_days = 30
+            active_user_ids = set(
+                events_org.filter(timestamp__date__gte=thirty_days_ago)
+                .values_list('user_id', flat=True)
+                .distinct()
+            )
+            try:
+                UserOrganizationRole = django_apps.get_model('organizations', 'UserOrganizationRole')
+                org_member_ids = set(
+                    UserOrganizationRole.objects.filter(organization_id=org_id)
+                    .values_list('user_id', flat=True)
+                    .distinct()
+                )
+                churn_count = len(org_member_ids - active_user_ids)
+            except Exception:
+                churn_count = 0
+            report_data['user_activity'] = {
+                'dau': dau,
+                'mau': mau,
+                'churn_count': churn_count,
+                'churn_period_days': churn_period_days,
+            }
+        except Exception as ua_exc:
+            logger.debug('generate_analytics_report user_activity failed: %s', ua_exc)
+            report_data['user_activity'] = {'dau': {}, 'mau': 0, 'churn_count': 0, 'churn_period_days': 30}
+
         from django.conf import settings
         media_root = getattr(settings, 'MEDIA_ROOT', None) or ''
         reports_dir = os.path.join(media_root, 'reports', str(report_task.organization_id))
@@ -166,6 +278,60 @@ def generate_analytics_report(self, report_task_id: int, **kwargs) -> None:
         report_task.save(update_fields=['status', 'completed_at'])
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=120, queue='analytics')
+def enrich_event_geo_data(self, event_id: Optional[int] = None, batch_size: int = 500, **kwargs) -> int:
+    """Enrich AssetEvent metadata with country/city from IP using GeoIP2.
+
+    If event_id is set, process that single event. Otherwise process up to batch_size
+    events that have metadata.ip_address but no metadata.country.
+    """
+    ip_cache = {}
+
+    def resolve_geo(ip):
+        if not ip:
+            return '', ''
+        if ip in ip_cache:
+            return ip_cache[ip]
+        country, city = get_geo_from_ip(ip)
+        ip_cache[ip] = (country, city)
+        return country, city
+
+    if event_id is not None:
+        try:
+            event = AssetEvent.objects_unfiltered.filter(pk=event_id).first()
+        except Exception:
+            return 0
+        if not event:
+            return 0
+        meta = (event.metadata or {}).copy()
+        ip = meta.get('ip_address')
+        if not ip or meta.get('country'):
+            return 0
+        country, city = resolve_geo(ip)
+        meta['country'] = country
+        meta['city'] = city
+        event.metadata = meta
+        event.save(update_fields=['metadata'])
+        return 1
+
+    processed = 0
+    for event in AssetEvent.objects_unfiltered.only('id', 'metadata').iterator(chunk_size=200):
+        if processed >= batch_size:
+            break
+        meta = event.metadata or {}
+        ip = meta.get('ip_address')
+        if not ip or meta.get('country'):
+            continue
+        country, city = resolve_geo(ip)
+        meta = dict(meta)
+        meta['country'] = country
+        meta['city'] = city
+        event.metadata = meta
+        event.save(update_fields=['metadata'])
+        processed += 1
+    return processed
 
 
 @shared_task(
@@ -792,6 +958,63 @@ def calculate_cdn_daily_costs(self, date_iso: str = '') -> int:
     except Exception:
         pass
 
+    return upserts
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='documents')
+def calculate_organization_bandwidth_daily(self, date_iso: str = '') -> int:
+    """Aggregate download bandwidth per organization per day and compute CDN cost.
+
+    Uses Plan.cdn_cost_per_gb when set; otherwise ANALYTICS_CDN_COST_PER_GB (default 0.10 USD).
+    """
+    if date_iso:
+        target_date = timezone.datetime.fromisoformat(date_iso).date()
+    else:
+        target_date = timezone.now().date() - timedelta(days=1)
+
+    default_cost_per_gb = Decimal(
+        str(getattr(settings, 'ANALYTICS_CDN_COST_PER_GB', 0.10))
+    )
+
+    rows = (
+        AssetEvent.objects_unfiltered.filter(
+            timestamp__date=target_date,
+            event_type=AssetEvent.EVENT_TYPE_DOWNLOAD,
+        )
+        .exclude(bandwidth_bytes__isnull=True)
+        .exclude(bandwidth_bytes=0)
+        .values('organization_id')
+        .annotate(total_bytes=Sum('bandwidth_bytes'))
+    )
+
+    upserts = 0
+    for row in rows:
+        org_id = row.get('organization_id')
+        total_bytes = row.get('total_bytes') or 0
+        if not org_id or total_bytes <= 0:
+            continue
+        bandwidth_gb = round(float(total_bytes) / (1024 ** 3), 6)
+        cost_per_gb = default_cost_per_gb
+        try:
+            org = Organization.objects.filter(pk=org_id).select_related('subscription__plan').first()
+            if org and getattr(org, 'subscription', None) and getattr(org.subscription, 'plan', None):
+                plan = org.subscription.plan
+                if getattr(plan, 'cdn_cost_per_gb', None) is not None:
+                    cost_per_gb = Decimal(str(plan.cdn_cost_per_gb))
+        except Exception:
+            pass
+        cost_usd = (Decimal(str(bandwidth_gb)) * cost_per_gb).quantize(Decimal('0.01'))
+        OrganizationBandwidthDaily.objects.update_or_create(
+            organization_id=org_id,
+            date=target_date,
+            defaults={'bandwidth_gb': bandwidth_gb, 'cost_usd': cost_usd}
+        )
+        upserts += 1
+
+    try:
+        notify_analytics_refresh(reason='calculate_organization_bandwidth_daily')
+    except Exception:
+        pass
     return upserts
 
 

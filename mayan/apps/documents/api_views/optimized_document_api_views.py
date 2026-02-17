@@ -255,19 +255,29 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
                     user = request.user if request.user.is_authenticated else None
 
                     # Best-effort: open/reuse a search session for click/CTR/time-to-click metrics.
+                    # Tenant-aware: require request.organization to create or reuse a session.
                     search_session_id = None
-                    if user and SearchSession is not None:
+                    organization = getattr(request, 'organization', None)
+                    if user and SearchSession is not None and organization is not None:
                         now = timezone.now()
                         window_start = now - timedelta(minutes=30)
                         session = (
                             SearchSession.objects.filter(
-                                user=user, ended_at__isnull=True, started_at__gte=window_start
+                                organization=organization,
+                                user=user,
+                                ended_at__isnull=True,
+                                started_at__gte=window_start
                             )
                             .order_by('-started_at')
                             .first()
                         )
                         if not session:
-                            session = SearchSession.objects.create(id=uuid.uuid4(), user=user, started_at=now)
+                            session = SearchSession.objects.create(
+                                id=uuid.uuid4(),
+                                organization=organization,
+                                user=user,
+                                started_at=now
+                            )
                         search_session_id = session.pk
 
                     filters_applied = request.query_params.dict().copy()
