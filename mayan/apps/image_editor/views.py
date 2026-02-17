@@ -23,7 +23,6 @@ class ImageEditorView(SingleObjectDetailView):
     template_name = 'image_editor/editor.html'
 
     def get_extra_context(self):
-        print(f"=== ImageEditorView: Processing document file {self.object.pk} ===")
 
         return {
             'document_file': self.object,

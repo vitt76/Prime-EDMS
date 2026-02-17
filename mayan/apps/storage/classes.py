@@ -92,13 +92,6 @@ class DefinedStorage(AppsModuleLoaderMixin):
 
             return instance
         except Exception as exception:
-            print(f'🔴 STORAGE DEBUG: Storage initialization failed for {self.name}')
-            print(f'🔴 STORAGE DEBUG: Dotted path: {self.dotted_path}')
-            print(f'🔴 STORAGE DEBUG: Args: {self.kwargs}')
-            print(f'🔴 STORAGE DEBUG: Exception: {exception}')
-            import traceback
-            print(f'🔴 STORAGE DEBUG: Traceback: {traceback.format_exc()}')
-
             logger.error(f'Storage initialization failed for {self.name}')
             logger.error(f'Dotted path: {self.dotted_path}')
             logger.error(f'Args: {self.kwargs}')

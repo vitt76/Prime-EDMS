@@ -158,27 +158,6 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
         cabinet_id = self.request.query_params.get('cabinets__id')
         if cabinet_id:
             filtered_queryset = queryset.filter(cabinets__id=cabinet_id).distinct()
-            # #region agent log
-            try:
-                import json
-                from datetime import datetime
-                with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as fp:
-                    fp.write(json.dumps({
-                        'id': f'log_cabinet_filter_{datetime.utcnow().timestamp()}',
-                        'timestamp': datetime.utcnow().timestamp() * 1000,
-                        'sessionId': 'debug-session',
-                        'runId': 'post-fix',
-                        'hypothesisId': 'H-cabinet-backend',
-                        'location': 'optimized_document_api_views:filter',
-                        'message': 'Applied cabinet filter',
-                        'data': {
-                            'cabinet_id': cabinet_id,
-                            'count': filtered_queryset.count()
-                        }
-                    }) + '\n')
-            except Exception:
-                pass
-            # #endregion agent log
             queryset = filtered_queryset
 
         # Date range filter (ISO strings supported by Django)

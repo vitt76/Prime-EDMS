@@ -30,6 +30,10 @@
 - **Gunicorn**: 20.1.0 (WSGI сервер для основного приложения)
 - **Daphne**: 3.0.2 (ASGI сервер для WebSocket уведомлений; подключение к ws/notifications/ с query token и organization_id; группа notifications_{org_id}_{user_id})
 
+#### Event → Notification → WebSocket (Sprint 3)
+- **Поток:** DAM/другое приложение вызывает `EventType.commit(actor=..., target=...)` (например `event_dam_ai_analysis_completed.commit(actor=document, target=document)` в dam/tasks.py после успешного AI-анализа). Событие создаёт actstream Action; events app по подпискам (EventSubscription, ObjectEventSubscription) создаёт EventNotification для каждого подписчика; для каждого уведомления вызывается `send_notification_async.apply_async(notification_id)` (notifications/utils.py при enhance). В `send_notification_async` при включённом push вызывается `send_websocket_notification.apply_async(notification_id)`. Task `send_websocket_notification` вычисляет `organization_id = get_organization_id_for_notification(notification)` (из action.target/action_object Document или default org пользователя) и выполняет `channel_layer.group_send('notifications_{org_id}_{user_id}', {'type': 'notification.new', 'data': ...})`. Клиенты, подключённые к WebSocket с тем же token и organization_id (и членством в этой org), получают сообщение.
+- **Регистрация типов:** DAM события в `mayan.apps.dam.events` (namespace `dam`), для Document регистрируются через `ModelEventType.register` в dam/apps.py. Типы для DAM Notification Center перечислены в `notifications/dam_taxonomy.py` (EVENT_TYPE_TO_CATEGORY, напр. `dam.ai_analysis_completed`: `ai`).
+
 #### API и интеграции
 - **Django REST Framework**: 3.13.1 (REST API)
 - **drf-spectacular**: 0.27.2 (OpenAPI документация)
@@ -68,10 +72,14 @@
 - **Vite**: 5.4.11 (сборщик и dev-сервер)
 - **Pinia**: (state management)
 - **Axios**: (HTTP клиент)
+- **@tanstack/vue-virtual**: (виртуальная прокрутка для ImmersiveGrid, 10k+ активов)
+- **@vueuse/core**: 10.7.2 (useElementSize, useDebounceFn и др.)
 
 **UI библиотеки:**
 - **Tailwind CSS**: (utility-first CSS фреймворк)
 - **Chart.js**: 4.5.1 (графики и визуализация)
+
+**Ключевые компоненты галереи (Sprint 5):** ImmersiveGrid (виртуализация по строкам), AssetThumbnail (lazy load + плейсхолдер), AssetContextMenu (правый клик), история поиска в localStorage (dam_search_history), фильтр ориентации в URL.
 
 **Порт:** 5173 (development)
 

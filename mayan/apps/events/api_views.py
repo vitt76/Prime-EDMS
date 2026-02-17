@@ -123,7 +123,11 @@ class APINotificationListView(generics.ListAPIView):
         parameter_read = self.request.GET.get('read')
 
         if self.request.user.is_authenticated:
-            queryset = Notification.objects.filter(user=self.request.user)
+            queryset = (
+                Notification.objects
+                .filter(user=self.request.user)
+                .select_related('action', 'user')
+            )
         else:
             queryset = Notification.objects.none()
 

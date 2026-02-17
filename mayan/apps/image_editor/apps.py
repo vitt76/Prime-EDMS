@@ -14,23 +14,15 @@ class ImageEditorApp(MayanAppConfig):
     verbose_name = _('Image editor')
 
     def ready(self):
-        print('🎯 Image Editor: ready() method called')
         super().ready()
-        print('🎨 Image Editor module loaded successfully!')
-        # Register permissions
         try:
             from . import permissions as image_editor_permissions  # noqa: F401
-        except Exception as exc:
-            print(f'❌ Image Editor permissions import failed: {exc}')
-
-        # Отладка URL
+        except Exception:
+            pass
         try:
-            from .urls import ui_urlpatterns
-            print(f'📋 Image Editor UI URLs: {len(ui_urlpatterns)} patterns')
-            for pattern in ui_urlpatterns:
-                print(f'  - {pattern.pattern} -> {pattern.callback.__name__}')
-        except Exception as e:
-            print(f'❌ Error loading URLs: {e}')
+            from .urls import ui_urlpatterns  # noqa: F401
+        except Exception:
+            pass
 
         # Регистрация ссылок меню и очередей выполняется здесь
         self._register_links()

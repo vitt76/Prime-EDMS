@@ -141,6 +141,8 @@ export interface SearchQuery {
   offset?: number
 }
 
+export type OrientationFilter = 'portrait' | 'landscape' | 'square'
+
 export interface SearchFilters {
   type?: string[]
   tags?: string[]
@@ -151,6 +153,7 @@ export interface SearchFilters {
   }
   owner?: number // User ID of the uploader/owner
   status?: string[] // Workflow status filter
+  orientation?: OrientationFilter // Requires backend support (width/height)
   custom_metadata?: Record<string, unknown>
 }
 

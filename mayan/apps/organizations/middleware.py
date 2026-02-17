@@ -50,6 +50,12 @@ class TenantResolverMiddleware:
     - ContextVar: For thread-safe access in ORM managers
 
     Blocks access for suspended/archived organizations with HTTP 403.
+
+    Security: X-Organization-Id cannot be spoofed to access another tenant. The
+    header is ignored for unauthenticated requests. For authenticated
+    non-SuperAdmin users, the header is honored only if the user is a member
+    of the target organization (UserOrganizationRole); otherwise the resolver
+    falls back to the user's default organization or the global default.
     """
 
     def __init__(self, get_response):
@@ -183,8 +189,11 @@ class TenantResolverMiddleware:
         Resolve organization from the X-Organization-Id HTTP header.
 
         This allows the SPA frontend to explicitly switch organizations
-        by sending the header with each request. The user must be
-        authenticated and a member of the target organization.
+        by sending the header with each request. The header is ignored for
+        unauthenticated users. For regular users, the header is applied only
+        if the user is a member of the target organization (UserOrganizationRole);
+        SuperAdmin/staff can switch to any organization. X-Organization-Id
+        cannot be spoofed to access another tenant.
 
         Returns:
             Organization instance or None.

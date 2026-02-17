@@ -22,30 +22,23 @@ class DAMApp(MayanAppConfig):
     label = 'dam'
 
     def ready(self):
-        print(f'🔍 DAM ready() called for {self.name}')
-        print(f'📍 app_url: {self.app_url}, app_namespace: {self.app_namespace}')
         super().ready()
 
         # Регистрация настроек в системе
         try:
             from .settings import namespace
             # Namespace registration happens automatically when imported
-            print('✅ DAM settings registered!')
-        except Exception as e:
-            print(f'⚠️ DAM settings registration failed: {e}')
+        except Exception:
+            pass
 
         # Add DAM property to Document model
         self._add_dam_property_to_document()
-
-        print('🎨 DAM module ready() called!')
-        print(f'✅ DAM URL should be available at: /{self.app_url}/')
 
         # Force add ourselves to INSTALLED_APPS if not already there
         from django.conf import settings
         app_name = 'mayan.apps.dam'
         if app_name not in settings.INSTALLED_APPS:
             settings.INSTALLED_APPS.append(app_name)
-            print(f'✅ Added {app_name} to INSTALLED_APPS via ready()')
 
         # Ensure URLs are registered even if automatic wiring fails
         try:
@@ -62,32 +55,27 @@ class DAMApp(MayanAppConfig):
                         )
                     ),
                 )
-                print('✅ DAM URLs registered manually via ready().')
-        except Exception as exc:
-            print(f'⚠️ DAM URL registration failed: {exc}')
+        except Exception:
+            pass
 
         # Register supporting components
         try:
             self._register_ai_providers()
             self._register_signals()
             self._register_celery_tasks()  # Phase B4: Register tasks with queues
+            self._register_dam_events()  # Sprint 3 Phase 3: AI analysis completed event
             self._extend_search()
             self._register_ajax_templates()
             self._register_menus()
             self._register_settings_menu()
-        except Exception as exc:
-            print(f'⚠️ DAM component registration failed during ready(): {exc}')
+        except Exception:
             # Continue with other components even if one fails
             pass
-
-        print('🎨 DAM module loaded successfully!')
 
     def _register_ai_providers(self):
         """Регистрация доступных AI провайдеров"""
         try:
             from .ai_providers import AIProviderRegistry
-
-            print(f'🤖 Registering AI providers...')
 
             # Регистрация провайдеров (GigaChat первым как наиболее надежный)
             AIProviderRegistry.register('qwenlocal', 'mayan.apps.dam.ai_providers.qwen_local.LocalQwenVisionProvider')
@@ -98,12 +86,8 @@ class DAMApp(MayanAppConfig):
             AIProviderRegistry.register('yandexgpt', 'mayan.apps.dam.ai_providers.yandex.YandexGPTProvider')
             AIProviderRegistry.register('kieai', 'mayan.apps.dam.ai_providers.kieai.KieAIProvider')
 
-            print(f'🤖 AI providers registered: {list(AIProviderRegistry.get_available_providers())}')
-            print('🤖 AI providers registered successfully!')
-        except Exception as e:
-            print(f'❌ Failed to register AI providers: {e}')
-            import traceback
-            traceback.print_exc()
+        except Exception:
+            pass
 
     def _register_signals(self):
         """
@@ -116,7 +100,20 @@ class DAMApp(MayanAppConfig):
         - Preset cache invalidation on DAMMetadataPreset save/delete
         """
         from . import signals  # Import signals to register them
-        print('📡 DAM signals registered!')
+
+    def _register_dam_events(self):
+        """Sprint 3 Phase 3: Register DAM event types for Document (e.g. AI analysis completed)."""
+        try:
+            from mayan.apps.events.classes import ModelEventType
+            from mayan.apps.documents.models import Document
+            from .events import event_dam_ai_analysis_completed
+
+            ModelEventType.register(
+                model=Document,
+                event_types=(event_dam_ai_analysis_completed,)
+            )
+        except Exception:
+            pass
 
     def _register_celery_tasks(self):
         """
@@ -125,21 +122,17 @@ class DAMApp(MayanAppConfig):
         """
         try:
             from .queues import register_dam_tasks
-            if register_dam_tasks():
-                print('📋 DAM Celery tasks registered with tools queue!')
-            else:
-                print('⚠️ DAM Celery tasks registration skipped')
-        except Exception as e:
-            print(f'⚠️ DAM Celery tasks registration failed: {e}')
+            register_dam_tasks()
+        except Exception:
+            pass
 
     def _extend_search(self):
         """Extend document search with AI metadata fields."""
         try:
             from .search import extend_document_search
             extend_document_search()
-            print('🔍 DAM search fields extension enabled!')
-        except Exception as e:
-            print(f'⚠️  DAM search extension failed: {e}')
+        except Exception:
+            pass
 
     def _register_ajax_templates(self):
         """Register AJAX templates for dynamic content loading."""
@@ -148,9 +141,8 @@ class DAMApp(MayanAppConfig):
                 name='dam_document_detail',
                 template_name='dam/ajax_document_dam.html'
             )
-            print('🔄 DAM AJAX templates registered!')
-        except Exception as e:
-            print(f'⚠️  DAM AJAX templates registration failed: {e}')
+        except Exception:
+            pass
 
     def _add_dam_property_to_document(self):
         """Add dam_analysis property to Document model dynamically."""
@@ -169,9 +161,8 @@ class DAMApp(MayanAppConfig):
 
             # Add property to Document model
             Document.dam_analysis = property(dam_analysis_property)
-            print('✅ Added dam_analysis property to Document model')
-        except Exception as e:
-            print(f'⚠️  Failed to add dam_analysis property: {e}')
+        except Exception:
+            pass
 
     def _register_menus(self):
         """Register DAM links in document menus."""
@@ -186,9 +177,8 @@ class DAMApp(MayanAppConfig):
                 links=(link_dam_dashboard, link_ai_analysis_list, link_dam_test),
                 position=10
             )
-            print('📋 DAM links added to Documents menu!')
-        except Exception as e:
-            print(f'⚠️  DAM menu registration failed: {e}')
+        except Exception:
+            pass
 
     def _register_settings_menu(self):
         """Register DAM settings link in system menu."""
@@ -201,6 +191,5 @@ class DAMApp(MayanAppConfig):
                 links=(link_dam_settings,),
                 position=20
             )
-            print('📋 DAM settings link added to System menu!')
-        except Exception as e:
-            print(f'⚠️  DAM settings menu registration failed: {e}')
+        except Exception:
+            pass

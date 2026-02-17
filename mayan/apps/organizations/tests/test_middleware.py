@@ -59,6 +59,50 @@ class TenantResolverMiddlewareExemptPathsTestCase(TestCase):
         self.assertIsNone(request.organization)
 
 
+class TenantResolverMiddlewareXOrganizationIdTestCase(TestCase):
+    """Tests that X-Organization-Id cannot be spoofed by unauthenticated users."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.middleware = TenantResolverMiddleware(dummy_get_response)
+
+    @patch('mayan.apps.organizations.middleware.DEPLOYMENT_MODE', 'STANDALONE')
+    def test_x_organization_id_ignored_when_unauthenticated(self):
+        """Unauthenticated request with X-Organization-Id header must not use header org."""
+        default_org = Organization.objects.create(
+            name='Default Organization',
+            slug='default',
+            email='admin@localhost',
+            is_active=True,
+            status='active',
+            deployment_mode='standalone'
+        )
+        other_org = Organization.objects.create(
+            name='Other Org',
+            slug='other-org',
+            email='other@localhost',
+            is_active=True,
+            status='active',
+            deployment_mode='standalone'
+        )
+        request = self.factory.get(
+            '/api/v4/documents/',
+            HTTP_X_ORGANIZATION_ID=str(other_org.pk)
+        )
+        request.user = MagicMock(is_authenticated=False)
+
+        response = self.middleware(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(request.organization)
+        self.assertEqual(
+            request.organization.pk,
+            default_org.pk,
+            'Organization must be default, not the one from X-Organization-Id header'
+        )
+        self.assertNotEqual(request.organization.pk, other_org.pk)
+
+
 class TenantResolverMiddlewareStandaloneTestCase(TestCase):
     """Tests for standalone deployment mode."""
 

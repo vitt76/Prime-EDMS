@@ -15,7 +15,6 @@ from ..views import (
 from ..views.share_link_views import create_share_link_simple
 
 # API URLs для distribution
-print("DEBUG: api_urls.py loaded, creating urlpatterns")
 distribution_api_patterns = [
     path(
         route='recipients/',

@@ -49,6 +49,9 @@ EVENT_TYPE_TO_CATEGORY: Dict[str, NotificationCategory] = {
     'documents.document_trashed': 'lifecycle',
     'documents.trashed_document_restored': 'lifecycle',
     'documents.trashed_document_deleted': 'lifecycle',
+
+    # DAM: AI analysis (Sprint 3 Phase 3)
+    'dam.ai_analysis_completed': 'ai',
 }
 
 
@@ -65,5 +68,3 @@ def get_dam_category(*, event_type: str) -> Optional[NotificationCategory]:
     """Return the category for an event type or None if not a DAM event."""
 
     return EVENT_TYPE_TO_CATEGORY.get(event_type)
-
-

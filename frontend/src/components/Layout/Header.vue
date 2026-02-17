@@ -62,7 +62,7 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
       </router-link>
 
       <!-- Global Omnibox Search -->
-      <div class="flex-1 max-w-xl">
+      <div class="flex-1 max-w-xl relative">
         <div
           class="flex items-center h-10 bg-gray-100 hover:bg-gray-50 focus-within:bg-white 
                  rounded-xl px-3 border border-transparent focus-within:border-indigo-500 
@@ -92,7 +92,7 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
             class="flex-1 h-full bg-transparent border-none outline-none px-3 
                    text-sm text-gray-900 placeholder-gray-400"
             @keydown.enter="handleSearch"
-            @focus="isSearchFocused = true"
+            @focus="onSearchFocus"
             @blur="isSearchFocused = false"
           />
 
@@ -118,6 +118,28 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
             <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
+          </button>
+        </div>
+
+        <!-- Recent search history dropdown (when focused and empty) -->
+        <div
+          v-if="isSearchFocused && !searchQuery && searchHistoryList.length > 0"
+          class="absolute top-full left-0 right-0 mt-1 py-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto"
+          role="listbox"
+          aria-label="Недавние запросы"
+        >
+          <div class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Недавние запросы
+          </div>
+          <button
+            v-for="(query, idx) in searchHistoryList"
+            :key="idx"
+            type="button"
+            class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            role="option"
+            @mousedown.prevent="applyHistoryQuery(query)"
+          >
+            {{ query }}
           </button>
         </div>
       </div>
@@ -273,6 +295,7 @@ const userMenuRef = ref<HTMLElement | null>(null)
 const searchQuery = damSearch.q
 const isSearchFocused = ref(false)
 const isUserMenuOpen = ref(false)
+const searchHistoryList = ref<string[]>([])
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Computed
@@ -318,10 +341,20 @@ const isAdmin = computed(() => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Handlers
 // ═══════════════════════════════════════════════════════════════════════════════
+function onSearchFocus() {
+  isSearchFocused.value = true
+  searchHistoryList.value = damSearch.getSearchHistory()
+}
+
 function handleSearch() {
   if (String(searchQuery.value).trim()) {
     damSearch.submitSearchNow()
   }
+}
+
+function applyHistoryQuery(query: string) {
+  damSearch.applySearchFromHistory(query)
+  searchHistoryList.value = damSearch.getSearchHistory()
 }
 
 function clearSearch() {

@@ -13,6 +13,7 @@
     @keydown.space.prevent="handleClick"
     @dragstart="handleDragStart"
     @dragend="handleDragEnd"
+    @contextmenu.prevent="handleContextMenu"
   >
     <!-- Google Photos Style Checkbox (top-left, appears on hover or when selected) -->
     <Transition
@@ -95,47 +96,23 @@
         </button>
       </Transition>
 
-      <!-- Optimized Image with smart object-fit -->
-      <img
-        v-if="!props.isLoading && shouldLoadImage && !imageError"
-        :src="effectiveImageSrc"
-        :alt="props.asset.label"
-        loading="lazy"
-        :class="imageObjectFitClass"
+      <!-- Thumbnail with lazy load and placeholder -->
+      <div
         class="w-full h-full transition-transform duration-500 ease-out"
         :style="{ transform: isHovered && !isSelected ? 'scale(1.05)' : 'scale(1)' }"
-        @error="handleImageError"
-      />
-      
-      <!-- Loading Skeleton -->
-      <div
-        v-else-if="isLoading || !shouldLoadImage"
-        class="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200 animate-pulse"
       >
-        <div class="w-12 h-12 rounded-full bg-neutral-300" />
+        <AssetThumbnail
+          :src="(shouldLoadImage && effectiveImageSrc) ? effectiveImageSrc : null"
+          :alt="props.asset.label"
+          :object-fit-class="imageObjectFitClass"
+        />
       </div>
-      
-      <!-- Placeholder for missing images -->
+      <!-- File type label when asset has no thumbnail -->
       <div
-        v-else-if="imageError || !props.asset.thumbnail_url"
-        class="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200"
+        v-if="!props.asset.thumbnail_url && getFileTypeLabel()"
+        class="absolute bottom-2 left-0 right-0 text-center"
       >
-        <div class="text-center">
-          <svg
-            class="w-12 h-12 mx-auto text-neutral-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.5"
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          <p class="mt-1 text-xs text-neutral-400">{{ getFileTypeLabel() }}</p>
-        </div>
+        <p class="text-xs text-neutral-400">{{ getFileTypeLabel() }}</p>
       </div>
 
       <!-- Quick Actions (bottom-right, appears on hover)
@@ -350,6 +327,7 @@ import { resolveAssetImageUrl } from '@/utils/imageUtils'
 import { apiService } from '@/services/apiService'
 import { HeartIcon as HeartOutlineIcon } from '@heroicons/vue/24/outline'
 import { HeartIcon as HeartSolidIcon } from '@heroicons/vue/24/solid'
+import AssetThumbnail from './AssetThumbnail.vue'
 
 interface Props {
   asset: Asset
@@ -378,6 +356,7 @@ const emit = defineEmits<{
   move: [asset: Asset]
   delete: [asset: Asset]
   'toggle-favorite': [asset: Asset]
+  contextmenu: [payload: { asset: Asset; event: MouseEvent }]
 }>()
 
 const isHovered = ref(false)
@@ -731,6 +710,10 @@ function handleGlobalResizeScroll() {
 }
 
 // Drag & Drop
+function handleContextMenu(event: MouseEvent) {
+  emit('contextmenu', { asset: props.asset, event })
+}
+
 function handleDragStart(event: DragEvent) {
   if (!event.dataTransfer) return
   

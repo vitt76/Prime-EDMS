@@ -28,6 +28,7 @@
             @delete="handleAssetDelete"
             @add-tags="handleAssetAddTags"
             @move="handleAssetMove"
+            @contextmenu="(p) => emit('asset-contextmenu', p.asset, p.event)"
           />
           <!-- Skeleton placeholder for cards not yet observed -->
           <div
@@ -118,6 +119,7 @@ const emit = defineEmits<{
   'asset-delete': [asset: Asset]
   'asset-add-tags': [asset: Asset]
   'asset-move': [asset: Asset]
+  'asset-contextmenu': [asset: Asset, event: MouseEvent]
   'load-more': []
 }>()
 

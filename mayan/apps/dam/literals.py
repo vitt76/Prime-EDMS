@@ -7,8 +7,8 @@ DEFAULT_AI_PROVIDER_PRIORITY = [
     'openai',      # Best for vision and detailed analysis
     'yandexgpt',   # Good for Russian language tasks
     'gigachat',    # Sber's model, good for Russian content
-    'claude',      # TODO: Implement
-    'gemini',      # TODO: Implement
+    'claude',      # Stub only; see docs/TODO.md
+    'gemini',      # Stub only; see docs/TODO.md
 ]
 
 # AI analysis timeouts (in seconds)

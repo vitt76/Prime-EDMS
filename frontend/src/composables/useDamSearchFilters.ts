@@ -8,6 +8,8 @@ type Density = 'compact' | 'comfortable'
 type Layout = 'grid' | 'masonry'
 type Sort = 'date' | 'name' | 'size'
 
+import type { OrientationFilter } from '@/types/api'
+
 export interface DamFiltersState {
   type: string[]
   tags: string[]
@@ -17,6 +19,7 @@ export interface DamFiltersState {
   sizeMin?: number
   sizeMax?: number
   owner?: number
+  orientation?: OrientationFilter
 }
 
 export interface DamSearchState {
@@ -25,6 +28,34 @@ export interface DamSearchState {
   layout: Layout
   sort: Sort
   filters: DamFiltersState
+}
+
+const DAM_SEARCH_HISTORY_KEY = 'dam_search_history'
+const DAM_SEARCH_HISTORY_MAX = 10
+
+function getDamSearchHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(DAM_SEARCH_HISTORY_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function pushDamSearchHistory(query: string): void {
+  const trimmed = query.trim()
+  if (!trimmed) return
+  let list = getDamSearchHistory()
+  list = list.filter((q) => q !== trimmed)
+  list.unshift(trimmed)
+  list = list.slice(0, DAM_SEARCH_HISTORY_MAX)
+  try {
+    localStorage.setItem(DAM_SEARCH_HISTORY_KEY, JSON.stringify(list))
+  } catch {
+    // ignore
+  }
 }
 
 let _state: DamSearchState | null = null
@@ -75,7 +106,8 @@ export function useDamSearchFilters() {
         dateTo: undefined,
         sizeMin: undefined,
         sizeMax: undefined,
-        owner: undefined
+        owner: undefined,
+        orientation: undefined
       }
     })
   }
@@ -90,6 +122,7 @@ export function useDamSearchFilters() {
     if (state.filters.dateFrom || state.filters.dateTo) count++
     if (typeof state.filters.sizeMin === 'number' || typeof state.filters.sizeMax === 'number') count++
     if (typeof state.filters.owner === 'number') count++
+    if (state.filters.orientation) count++
     return count
   })
 
@@ -109,6 +142,8 @@ export function useDamSearchFilters() {
     state.filters.sizeMin = route.query.sizeMin ? Number(route.query.sizeMin) : undefined
     state.filters.sizeMax = route.query.sizeMax ? Number(route.query.sizeMax) : undefined
     state.filters.owner = route.query.owner ? Number(route.query.owner) : undefined
+    const or = route.query.orientation as OrientationFilter | undefined
+    state.filters.orientation = or === 'portrait' || or === 'landscape' || or === 'square' ? or : undefined
   }
 
   function writeToUrl(): void {
@@ -128,7 +163,8 @@ export function useDamSearchFilters() {
           dateTo: state.filters.dateTo || undefined,
           sizeMin: typeof state.filters.sizeMin === 'number' ? String(state.filters.sizeMin) : undefined,
           sizeMax: typeof state.filters.sizeMax === 'number' ? String(state.filters.sizeMax) : undefined,
-          owner: typeof state.filters.owner === 'number' ? String(state.filters.owner) : undefined
+          owner: typeof state.filters.owner === 'number' ? String(state.filters.owner) : undefined,
+          orientation: state.filters.orientation || undefined
         }
       })
       .finally(() => {
@@ -151,7 +187,8 @@ export function useDamSearchFilters() {
       dateTo: state.filters.dateTo,
       sizeMin: state.filters.sizeMin,
       sizeMax: state.filters.sizeMax,
-      owner: state.filters.owner
+      owner: state.filters.owner,
+      orientation: state.filters.orientation
     })
 
     uiStore.setDamGalleryDensity(state.density)
@@ -193,7 +230,20 @@ export function useDamSearchFilters() {
 
   function submitSearchNow(): void {
     ensureDamRoute()
+    if (state.q.trim()) {
+      pushDamSearchHistory(state.q)
+    }
     fetchNow()
+  }
+
+  function getSearchHistory(): string[] {
+    return getDamSearchHistory()
+  }
+
+  function applySearchFromHistory(query: string): void {
+    state.q = query
+    ensureDamRoute()
+    scheduleFetch()
   }
 
   function setSort(value: Sort): void {
@@ -228,6 +278,7 @@ export function useDamSearchFilters() {
     state.filters.sizeMin = undefined
     state.filters.sizeMax = undefined
     state.filters.owner = undefined
+    state.filters.orientation = undefined
     scheduleFetch()
   }
 
@@ -264,6 +315,8 @@ export function useDamSearchFilters() {
     activeFiltersCount,
     setSearch,
     submitSearchNow,
+    getSearchHistory,
+    applySearchFromHistory,
     setSort,
     setView,
     toggleFilter,

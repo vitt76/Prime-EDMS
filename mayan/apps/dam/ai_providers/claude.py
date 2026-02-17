@@ -26,24 +26,24 @@ class ClaudeProvider(BaseAIProvider):
 
     def __init__(self, api_key: str, **kwargs):
         super().__init__(api_key, **kwargs)
-        # TODO: Implement Claude API integration
+        # Stub; see docs/TODO.md
 
     def analyze_image(self, image_data: bytes, mime_type: str):
-        # TODO: Implement
+        # Stub
         return {}
 
     def describe_image(self, image_data: bytes, mime_type: str) -> str:
-        # TODO: Implement
+        # Stub
         return "Claude analysis not yet implemented"
 
     def extract_tags(self, image_data: bytes, mime_type: str) -> list:
-        # TODO: Implement
+        # Stub
         return []
 
     def extract_colors(self, image_data: bytes, mime_type: str) -> list:
-        # TODO: Implement
+        # Stub
         return []
 
     def generate_alt_text(self, image_data: bytes, mime_type: str) -> str:
-        # TODO: Implement
+        # Stub
         return "Alt text generation not yet implemented"

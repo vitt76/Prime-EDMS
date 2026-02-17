@@ -125,9 +125,9 @@
         />
       </Teleport>
 
-      <!-- Assets Grid (regular for small lists) -->
+      <!-- Assets Grid (regular for small lists, threshold 80) -->
       <div
-        v-if="assetStore.assets.length < 100"
+        v-if="assetStore.assets.length < 80"
         class="p-6"
         role="grid"
         aria-label="Галерея активов"
@@ -172,6 +172,8 @@
             :assets="assetStore.assets"
             :density="gridDensity"
             :layout="gridLayout"
+            :has-more="assetStore.hasNextPage"
+            :is-loading-more="assetStore.isLoadingMore"
             @asset-open="handleAssetOpen"
             @asset-preview="handleAssetPreview"
             @asset-download="handleAssetDownload"
@@ -179,87 +181,69 @@
             @asset-delete="handleAssetDelete"
             @asset-add-tags="handleAssetAddTags"
             @asset-move="handleAssetMove"
+            @asset-contextmenu="handleAssetContextMenu"
+            @load-more="assetStore.loadMore"
           />
         </div>
       </div>
 
-      <!-- Virtual Scrolling for large lists (100+ items) -->
+      <!-- Immersive Grid (virtualized for 80+ items) -->
       <div
         v-else
-        ref="virtualScrollContainer"
-        class="virtual-scroll-container p-4 relative group"
-        style="height: calc(100vh - 200px); overflow-y: auto;"
-        role="grid"
-        aria-label="Галерея активов (виртуальная прокрутка)"
-        tabindex="0"
-        @scroll="handleScroll"
+        class="p-4 relative group"
       >
-        <!-- Select All (virtual list, sticky header inside scroll container; no overlay on cards) -->
+        <!-- Select All (above grid) -->
         <div
           v-if="assetStore.assets.length > 0"
-          class="sticky top-0 z-20 -mx-4 px-4 py-2
-                 bg-white/80 backdrop-blur-md border-b border-gray-200/70"
+          class="flex items-center justify-between mb-3"
         >
-          <div class="flex items-center justify-between">
-            <button
-              type="button"
-              class="flex items-center gap-2
-                     bg-white/95 backdrop-blur-md border border-gray-200 shadow-sm
-                     rounded-xl px-3 py-2 text-sm font-medium
-                     text-gray-700 hover:text-gray-900 hover:bg-gray-50
-                     transition-all duration-150"
-              :class="assetStore.selectedCount > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
-              @click="handleSelectAllToggle"
-              aria-label="Выбрать все активы"
-            >
-              <span
-                class="w-4 h-4 rounded border border-gray-300 bg-white flex items-center justify-center"
-                aria-hidden="true"
-              >
-                <svg v-if="isAllSelected" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                </svg>
-                <svg v-else-if="isIndeterminate" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14" />
-                </svg>
-              </span>
-              <span>{{ isAllSelected ? 'Снять выделение' : 'Выбрать все' }}</span>
-            </button>
-
-            <div v-if="assetStore.selectedCount > 0" class="text-sm text-gray-600">
-              Выбрано: <span class="font-semibold text-gray-900">{{ assetStore.selectedCount }}</span> из {{ assetStore.assets.length }}
-            </div>
-          </div>
-        </div>
-
-        <div
-          :style="{ height: `${totalHeight}px`, position: 'relative' }"
-        >
-          <div
-            :style="{ transform: `translateY(${offsetY}px)` }"
+          <button
+            type="button"
+            class="flex items-center gap-2
+                   bg-white/95 backdrop-blur-md border border-gray-200 shadow-sm
+                   rounded-xl px-3 py-2 text-sm font-medium
+                   text-gray-700 hover:text-gray-900 hover:bg-gray-50
+                   transition-all duration-150"
+            :class="assetStore.selectedCount > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+            @click="handleSelectAllToggle"
+            aria-label="Выбрать все активы"
           >
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-              <AssetCard
-                v-for="asset in visibleAssets"
-                :key="asset.id"
-                :asset="asset"
-                :is-selected="isAssetSelected(asset)"
-                :is-shared="isAssetShared(asset.id)"
-                :show-checkbox="true"
-                :density="gridDensity"
-                @select="handleAssetSelect"
-                @open="handleAssetOpen"
-                @preview="handleAssetPreview"
-                @download="handleAssetDownload"
-                @share="handleAssetShare"
-                @delete="handleAssetDelete"
-                @add-tags="handleAssetAddTags"
-                @move="handleAssetMove"
-                @more="handleAssetMore"
-              />
-            </div>
+            <span
+              class="w-4 h-4 rounded border border-gray-300 bg-white flex items-center justify-center"
+              aria-hidden="true"
+            >
+              <svg v-if="isAllSelected" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+              </svg>
+              <svg v-else-if="isIndeterminate" class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14" />
+              </svg>
+            </span>
+            <span>{{ isAllSelected ? 'Снять выделение' : 'Выбрать все' }}</span>
+          </button>
+
+          <div v-if="assetStore.selectedCount > 0" class="text-sm text-gray-600">
+            Выбрано: <span class="font-semibold text-gray-900">{{ assetStore.selectedCount }}</span> из {{ assetStore.assets.length }}
           </div>
         </div>
+
+        <ImmersiveGrid
+          :assets="assetStore.assets"
+          :density="gridDensity"
+          :layout="gridLayout"
+          :has-more="assetStore.hasNextPage"
+          :is-loading-more="assetStore.isLoadingMore"
+          @asset-open="handleAssetOpen"
+          @asset-preview="handleAssetPreview"
+          @asset-download="handleAssetDownload"
+          @asset-share="handleAssetShare"
+          @asset-delete="handleAssetDelete"
+          @asset-add-tags="handleAssetAddTags"
+          @asset-move="handleAssetMove"
+          @asset-more="handleAssetMore"
+          @asset-contextmenu="handleAssetContextMenu"
+          @load-more="assetStore.loadMore"
+        />
       </div>
 
       <!-- Pagination -->
@@ -298,6 +282,20 @@
       :selected-ids="selectedAssetIds"
       @close="showBulkDownloadModal = false"
       @success="handleBulkOperationSuccess"
+    />
+
+    <!-- Asset context menu (right-click) -->
+    <AssetContextMenu
+      :open="contextMenuOpen"
+      :x="contextMenuX"
+      :y="contextMenuY"
+      :asset="contextMenuAsset"
+      @close="closeContextMenu"
+      @open="handleAssetOpen"
+      @download="handleAssetDownload"
+      @share="handleAssetShare"
+      @edit-metadata="handleAssetEditMetadata"
+      @delete="handleAssetDeleteFromContext"
     />
     <ShareModal
       :is-open="showBulkShareModal"
@@ -380,6 +378,8 @@ import { useDistributionStore } from '@/stores/distributionStore'
 import { useDamSearchFilters } from '@/composables/useDamSearchFilters'
 import AssetCard from './AssetCard.vue'
 import AssetGrid from './AssetGrid.vue'
+import ImmersiveGrid from './ImmersiveGrid.vue'
+import AssetContextMenu from './AssetContextMenu.vue'
 import BulkActionsBar from './BulkActionsBar.vue'
 import BulkTagModal from './BulkTagModal.vue'
 import BulkMoveModal from './BulkMoveModal.vue'
@@ -402,7 +402,6 @@ const router = useRouter()
 const assetStore = useAssetStore()
 const distributionStore = useDistributionStore()
 const damSearch = useDamSearchFilters()
-const virtualScrollContainer = ref<HTMLElement | null>(null)
 
 const gridDensity = computed(() => damSearch.state.density)
 const gridLayout = computed(() => damSearch.state.layout)
@@ -410,6 +409,34 @@ const gridSort = computed(() => damSearch.state.sort)
 
 // Filters drawer
 const isFiltersOpen = ref(false)
+
+// Context menu (right-click on asset)
+const contextMenuOpen = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
+const contextMenuAsset = ref<Asset | null>(null)
+
+function handleAssetContextMenu(asset: Asset, event: MouseEvent) {
+  contextMenuAsset.value = asset
+  contextMenuX.value = event.clientX
+  contextMenuY.value = event.clientY
+  contextMenuOpen.value = true
+}
+
+function closeContextMenu() {
+  contextMenuOpen.value = false
+  contextMenuAsset.value = null
+}
+
+function handleAssetEditMetadata(asset: Asset) {
+  closeContextMenu()
+  router.push(`/dam/assets/${asset.id}/edit`)
+}
+
+function handleAssetDeleteFromContext(asset: Asset) {
+  closeContextMenu()
+  handleAssetDelete(asset)
+}
 
 const activeFiltersCount = computed(() => {
   return damSearch.activeFiltersCount.value
@@ -437,7 +464,8 @@ const filtersModel = computed<SearchFilters>({
     size:
       typeof damSearch.state.filters.sizeMin === 'number' || typeof damSearch.state.filters.sizeMax === 'number'
         ? { min: damSearch.state.filters.sizeMin, max: damSearch.state.filters.sizeMax }
-        : undefined
+        : undefined,
+    orientation: damSearch.state.filters.orientation
   }),
   set: (value) => {
     // Convert SearchFilters -> composable state
@@ -447,119 +475,21 @@ const filtersModel = computed<SearchFilters>({
     damSearch.state.filters.dateTo = value.date_range?.[1]
     damSearch.state.filters.sizeMin = value.size?.min
     damSearch.state.filters.sizeMax = value.size?.max
+    damSearch.state.filters.orientation = value.orientation
     // Trigger debounced sync+fetch (without changing q)
     damSearch.scheduleFetch()
   }
 })
 
-// Virtual scrolling state
-const scrollTop = ref(0)
-const itemHeight = 280 // Height of each asset card + gap
-const itemsPerRow = ref(4) // Will be calculated based on screen size
-const containerHeight = ref(600)
-const bufferSize = 2 // Number of rows to render outside viewport
-
-// Calculate visible items for virtual scrolling
-const visibleAssets = computed(() => {
-  if (assetStore.assets.length < 100) {
-    return assetStore.assets
-  }
-
-  const rowsPerViewport = Math.ceil(containerHeight.value / itemHeight)
-  const startRow = Math.max(0, Math.floor(scrollTop.value / itemHeight) - bufferSize)
-  const endRow = Math.min(
-    Math.ceil(assetStore.assets.length / itemsPerRow.value),
-    startRow + rowsPerViewport + bufferSize * 2
-  )
-  
-  const startIndex = startRow * itemsPerRow.value
-  const endIndex = endRow * itemsPerRow.value
-
-  return assetStore.assets.slice(
-    Math.max(0, startIndex),
-    Math.min(assetStore.assets.length, endIndex)
-  )
-})
-
-const totalHeight = computed(() => {
-  if (assetStore.assets.length < 100) return 0
-  const rows = Math.ceil(assetStore.assets.length / itemsPerRow.value)
-  return rows * itemHeight
-})
-
-const offsetY = computed(() => {
-  if (assetStore.assets.length < 100) return 0
-  const startRow = Math.max(0, Math.floor(scrollTop.value / itemHeight) - bufferSize)
-  return startRow * itemHeight
-})
-
-// Handle scroll for virtual scrolling (throttled for performance)
-let scrollTimeout: number | null = null
-function handleScroll(event: Event) {
-  const target = event.target as HTMLElement
-  scrollTop.value = target.scrollTop
-  
-  // Throttle scroll updates for better performance
-  if (scrollTimeout) {
-    cancelAnimationFrame(scrollTimeout)
-  }
-  scrollTimeout = requestAnimationFrame(() => {
-    // Scroll position already updated above
-  })
-}
-
-// Load assets on mount and setup virtual scrolling
-let resizeHandler: (() => void) | null = null
-
 onMounted(() => {
   // NOTE: Do not fetch share links on gallery mount.
   // This endpoint is unstable in some deployments and creates console noise.
   // We load share links lazily when the Share modal is opened.
-
-  // Setup virtual scrolling
-  if (virtualScrollContainer.value) {
-    // Calculate items per row based on container width
-    const updateItemsPerRow = () => {
-      if (virtualScrollContainer.value) {
-        const width = virtualScrollContainer.value.clientWidth
-        // Responsive breakpoints: xl(1280px), lg(1024px), md(768px), sm(640px)
-        if (width >= 1280) itemsPerRow.value = 5
-        else if (width >= 1024) itemsPerRow.value = 4
-        else if (width >= 768) itemsPerRow.value = 3
-        else if (width >= 640) itemsPerRow.value = 2
-        else itemsPerRow.value = 1
-        
-        // Update container height for virtual scrolling calculations
-        containerHeight.value = virtualScrollContainer.value.clientHeight || 600
-      }
-    }
-    
-    updateItemsPerRow()
-    resizeHandler = () => {
-      updateItemsPerRow()
-      // Debounce resize for better performance
-      if (scrollTimeout) {
-        cancelAnimationFrame(scrollTimeout)
-      }
-      scrollTimeout = requestAnimationFrame(updateItemsPerRow)
-    }
-    window.addEventListener('resize', resizeHandler, { passive: true })
-  }
 })
 
 // NOTE: Share links are loaded lazily inside handleBulkShare()
 
-onUnmounted(() => {
-  if (virtualScrollContainer.value) {
-    virtualScrollContainer.value.removeEventListener('scroll', handleScroll)
-  }
-  if (resizeHandler) {
-    window.removeEventListener('resize', resizeHandler)
-  }
-  if (scrollTimeout) {
-    cancelAnimationFrame(scrollTimeout)
-  }
-})
+onUnmounted(() => {})
 
 // NOTE: Do not watch currentPage here — assetStore pagination actions already fetch,
 // and SSoT composable resets currentPage on filter/search changes. A watcher here

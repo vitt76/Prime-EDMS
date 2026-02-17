@@ -573,6 +573,9 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'OpenAPI schema for MADDAM (including analytics endpoints).',
     'VERSION': '4.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'POSTPROCESSING_HOOKS': [
+        'mayan.apps.rest_api.openapi_hooks.postprocess_schema_add_x_organization_id',
+    ],
 }
 
 # ----- Distribution -------

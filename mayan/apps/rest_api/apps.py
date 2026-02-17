@@ -56,12 +56,8 @@ class RESTAPIApp(MayanAppConfig):
                 except ImportError:
                     # Silently skip apps without api_urls
                     pass
-                except Exception as e:
-                    print(f"ERROR: Failed to import API URLs for {app.name}: {e}")
+                except Exception:
+                    pass
 
         if loaded_apps:
-            print(f"✅ REST API: Loaded URLs from {len(loaded_apps)} apps")
-            for app_info in loaded_apps[:5]:
-                print(f"   - {app_info}")
-            if len(loaded_apps) > 5:
-                print(f"   ... and {len(loaded_apps) - 5} more")
+            pass  # URLs loaded from apps

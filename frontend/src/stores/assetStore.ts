@@ -50,6 +50,7 @@ interface AssetFilters {
   dateTo?: string
   sizeMin?: number
   sizeMax?: number
+  orientation?: 'portrait' | 'landscape' | 'square'
   search?: string
 }
 

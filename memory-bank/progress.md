@@ -1,7 +1,7 @@
 # Progress: Prime-EDMS
 
-**Последнее обновление:** 2026-02-13  
-**Источник:** SEO (public-frontend): robots.txt server route, sitemap + dynamic blog URLs, meta/OG/canonical (useSeo), useJsonld + Organization/SoftwareApplication, SEO_CHECKLIST.md. Аудит 152-ФЗ: COMPLIANCE_REPORT_152FZ_2026.md (compliant; риск — плейсхолдеры в п. 9 Политики).
+**Последнее обновление:** 2026-02-17  
+**Источник:** Sprint 5 (High-Performance Frontend — Immersive Grid & Search) завершён; Memory Bank обновлён.
 
 ---
 
@@ -103,15 +103,17 @@
 - ✅ GalleryView с grid layout
 - ✅ AssetCard с immersive design (Google Photos style)
 - ✅ AssetGrid для оптимизированного рендеринга
-- ✅ FiltersPanel с auto-apply фильтрами
-- ✅ Search functionality с instant results
+- ✅ **ImmersiveGrid (Sprint 5):** виртуальная прокрутка на @tanstack/vue-virtual для 80+ активов (10k+), infinite scroll, скелетоны, Shift+Click и drag-select по индексам
+- ✅ FiltersPanel с auto-apply фильтрами; фильтр «Ориентация» (UI + URL; бэкенд пока без width/height)
+- ✅ Search functionality с instant results; история поиска в localStorage (dam_search_history, до 10), блок «Недавние запросы» в Header
 - ✅ Bulk operations (выбор, перемещение, тегирование)
 - ✅ GalleryHeaderActions для context-aware controls
-- ✅ Lazy loading активов
+- ✅ Lazy loading активов; AssetThumbnail с плейсхолдером и lazy load
 - ✅ Persistence UI preferences (density, layout, sort)
 - ✅ Error handling и retry механизмы
 - ✅ Loading states и skeletons
 - ✅ Восстановлен рендер превью в SPA-галерее для защищённых API thumbnail URL (blob/object URL через auth)
+- ✅ **AssetContextMenu (Sprint 5):** контекстное меню по правому клику (Открыть, Скачать, Поделиться, Редактировать метаданные, Удалить)
 
 #### 8. Headless API
 - ✅ REST API v4 endpoints для фронтенда
@@ -126,6 +128,7 @@
 - ✅ Notification preferences
 - ✅ Real-time доставка через WebSocket
 - ✅ **WebSocket org-scoped (Sprint 3 Part 3):** connect() требует organization_id в query, проверка членства (UserOrganizationRole), группа notifications_{org_id}_{user_id}; send_websocket_notification с get_organization_id_for_notification; тесты consumer (4003 без org / чужая org) и task (org-scoped group)
+- ✅ **AI Analysis Event Integration (Sprint 3 Phase 3):** при завершении AI-анализа вызывается event_dam_ai_analysis_completed.commit(actor=document, target=document); подписчики получают уведомления (в т.ч. WebSocket в org-scoped группе). Тип события dam.ai_analysis_completed зарегистрирован в dam/events.py и dam_taxonomy.
 - ✅ Notification popover в UI
 - ✅ Error handling для corrupted notifications
 

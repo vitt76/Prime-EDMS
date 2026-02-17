@@ -88,6 +88,25 @@
       </select>
     </div>
 
+    <!-- Orientation Filter (requires backend width/height support) -->
+    <div class="mb-6">
+      <label class="block text-sm font-semibold text-neutral-900 dark:text-neutral-900 mb-3">
+        Ориентация
+      </label>
+      <select
+        v-model="selectedOrientation"
+        class="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-300 rounded-md text-sm
+               bg-neutral-0 dark:bg-neutral-0 text-neutral-900 dark:text-neutral-900
+               focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[44px]"
+        aria-label="Фильтр по ориентации"
+      >
+        <option :value="null">Любая</option>
+        <option value="landscape">Альбомная</option>
+        <option value="portrait">Портретная</option>
+        <option value="square">Квадрат</option>
+      </select>
+    </div>
+
     <!-- Tags Filter with Autocomplete -->
     <div class="mb-6">
       <label class="block text-sm font-semibold text-neutral-900 dark:text-neutral-900 mb-3">
@@ -224,7 +243,7 @@ import Button from '@/components/Common/Button.vue'
 import Badge from '@/components/Common/Badge.vue'
 import TagInput from '@/components/Common/TagInput.vue'
 import DateRangePicker from '@/components/Common/DateRangePicker.vue'
-import type { Facets, SearchFilters } from '@/types/api'
+import type { Facets, OrientationFilter, SearchFilters } from '@/types/api'
 
 interface UserOption {
   id: number
@@ -260,6 +279,7 @@ const dateRange = ref<[string, string] | null>(null)
 const sizeMin = ref<number | null>(null)
 const sizeMax = ref<number | null>(null)
 const selectedOwner = ref<number | null>(null)
+const selectedOrientation = ref<OrientationFilter | null>(null)
 const selectedTags = ref<string[]>([])
 const showCustomMetadata = ref(false)
 const customMetadataFilters = ref<Array<{ key: string; value: string }>>([])
@@ -278,7 +298,8 @@ function hydrateFromModel(filters: SearchFilters) {
     sizeMin.value = null
     sizeMax.value = null
   }
-  selectedOwner.value = filters.owner || null
+  selectedOwner.value = filters.owner ?? null
+  selectedOrientation.value = filters.orientation ?? null
   selectedTags.value = filters.tags || []
   if (filters.custom_metadata) {
     customMetadataFilters.value = Object.entries(filters.custom_metadata).map(([key, value]) => ({
@@ -321,6 +342,7 @@ const hasActiveFilters = computed(() => {
     sizeMin.value !== null ||
     sizeMax.value !== null ||
     selectedOwner.value !== null ||
+    selectedOrientation.value !== null ||
     selectedTags.value.length > 0 ||
     customMetadataFilters.value.length > 0
   )
@@ -340,6 +362,10 @@ const activeFiltersSummary = computed(() => {
   if (selectedOwner.value !== null) {
     const user = availableUsers.value.find(u => u.id === selectedOwner.value)
     summary.owner = `Загрузил: ${user?.full_name || user?.username || selectedOwner.value}`
+  }
+  if (selectedOrientation.value) {
+    const labels: Record<string, string> = { landscape: 'Альбомная', portrait: 'Портретная', square: 'Квадрат' }
+    summary.orientation = `Ориентация: ${labels[selectedOrientation.value] || selectedOrientation.value}`
   }
   if (selectedTags.value.length > 0) {
     summary.tags = `Теги: ${selectedTags.value.join(', ')}`
@@ -379,6 +405,9 @@ function clearFilter(key: string) {
     case 'owner':
       selectedOwner.value = null
       break
+    case 'orientation':
+      selectedOrientation.value = null
+      break
     case 'tags':
       selectedTags.value = []
       break
@@ -407,6 +436,10 @@ function emitModelUpdate() {
     filters.owner = selectedOwner.value
   }
 
+  if (selectedOrientation.value) {
+    filters.orientation = selectedOrientation.value
+  }
+
   if (selectedTags.value.length > 0) {
     filters.tags = selectedTags.value
   }
@@ -432,6 +465,7 @@ function handleReset() {
   sizeMin.value = null
   sizeMax.value = null
   selectedOwner.value = null
+  selectedOrientation.value = null
   selectedTags.value = []
   customMetadataFilters.value = []
   emitModelUpdate()
@@ -440,7 +474,7 @@ function handleReset() {
 
 // Auto-apply (reactive). Debounce happens outside (in composable).
 watch(
-  () => [selectedTypes.value, dateRange.value, sizeMin.value, sizeMax.value, selectedOwner.value, selectedTags.value, customMetadataFilters.value],
+  () => [selectedTypes.value, dateRange.value, sizeMin.value, sizeMax.value, selectedOwner.value, selectedOrientation.value, selectedTags.value, customMetadataFilters.value],
   () => {
     if (isHydrating.value) return
     emitModelUpdate()

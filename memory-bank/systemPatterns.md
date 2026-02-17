@@ -404,6 +404,7 @@ def _has_concrete_field(model, field_name):
    - Компонентная архитектура
    - Pinia stores для state management
    - TypeScript для типизации
+   - **Sprint 5:** Для больших коллекций (80+) используется ImmersiveGrid с @tanstack/vue-virtual (виртуализация по строкам); поиск и фильтры синхронизируются с URL (useDamSearchFilters); контекстное меню и мультивыбор (Shift+Click, drag-select по индексам) в гриде.
    - Vite для сборки
 
 2. **Nuxt 3 Public Frontend** (`public-frontend/`):

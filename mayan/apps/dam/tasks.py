@@ -399,6 +399,18 @@ def analyze_document_with_ai(self, document_id: int, **kwargs):
         ai_analysis.error_message = None
         ai_analysis.save()
 
+        # Sprint 3 Phase 3: Trigger notification (AI Analysis Completed).
+        # Subscribers receive EventNotification; send_notification_async sends WebSocket
+        # to org-scoped group via get_organization_id_for_notification(target=document).
+        try:
+            from mayan.apps.dam.events import event_dam_ai_analysis_completed
+            event_dam_ai_analysis_completed.commit(actor=document, target=document)
+        except Exception as notif_exc:
+            logger.debug(
+                'AI analysis completed event trigger failed for document %s: %s',
+                document_id, notif_exc
+            )
+
         # Progress: 100% - Complete, now reindexing
         logger.info(f"📊 Progress: 100% - Analysis complete, reindexing...")
 

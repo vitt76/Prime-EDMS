@@ -58,40 +58,9 @@ def create_enhanced_notification(user, action, event_type: str, template: Option
       we fall back to synchronously marking the notification as SENT so the user can
       still see it in the UI.
     """
-    # #region agent log
-    import json
-    try:
-        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'A',
-                'location': 'notifications/utils.py:23',
-                'message': 'create_enhanced_notification entry',
-                'data': {'user_id': user.id, 'action_id': action.id, 'event_type': event_type},
-                'timestamp': int(__import__('time').time() * 1000)
-            }) + '\n')
-    except Exception:
-        pass
-    # #endregion
 
     # Schema may not be migrated yet. Keep runtime safe.
     if not hasattr(EventNotification, 'title'):
-        # #region agent log
-        try:
-            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'C',
-                    'location': 'notifications/utils.py:41',
-                    'message': 'Schema not migrated - returning None',
-                    'data': {'user_id': user.id, 'action_id': action.id},
-                    'timestamp': int(__import__('time').time() * 1000)
-                }) + '\n')
-        except Exception:
-            pass
-        # #endregion
         return None
 
     # NOTE: NotificationPreference.notifications_enabled check is removed.
@@ -100,42 +69,12 @@ def create_enhanced_notification(user, action, event_type: str, template: Option
 
     # Find "the" base notification for (user, action). Handle duplicates gracefully.
     notification = EventNotification.objects.filter(user=user, action=action).order_by('-pk').first()
-    # #region agent log
-    try:
-        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'B',
-                'location': 'notifications/utils.py:49',
-                'message': 'Base notification lookup',
-                'data': {'user_id': user.id, 'action_id': action.id, 'notification_found': notification is not None, 'notification_id': notification.pk if notification else None},
-                'timestamp': int(__import__('time').time() * 1000)
-            }) + '\n')
-    except Exception:
-        pass
-    # #endregion
     if not notification:
         logger.warning('Base notification not found for user=%s, action=%s', user.id, action.id)
         return None
 
     # Do not overwrite already enhanced notifications.
     existing_title = getattr(notification, 'title', None)
-    # #region agent log
-    try:
-        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'C',
-                'location': 'notifications/utils.py:55',
-                'message': 'Check if already enhanced',
-                'data': {'notification_id': notification.pk, 'existing_title': existing_title, 'already_enhanced': bool(existing_title)},
-                'timestamp': int(__import__('time').time() * 1000)
-            }) + '\n')
-    except Exception:
-        pass
-    # #endregion
     if existing_title:
         return notification
 
@@ -239,21 +178,6 @@ def create_enhanced_notification(user, action, event_type: str, template: Option
         # Do not fail notification creation due to enrichment issues.
         pass
     notification.save()
-    # #region agent log
-    try:
-        with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'C',
-                'location': 'notifications/utils.py:109',
-                'message': 'Notification saved with enhanced fields',
-                'data': {'notification_id': notification.pk, 'title': title, 'state': 'CREATED', 'event_type': event_type},
-                'timestamp': int(__import__('time').time() * 1000)
-            }) + '\n')
-    except Exception:
-        pass
-    # #endregion
 
     logger.info(
         'Enhanced notification id=%s for user=%s, event_type=%s',
@@ -263,77 +187,16 @@ def create_enhanced_notification(user, action, event_type: str, template: Option
     # Trigger async delivery (Phase 3).
     try:
         from .tasks import send_notification_async
-        # #region agent log
-        try:
-            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'A',
-                    'location': 'notifications/utils.py:119',
-                    'message': 'Enqueueing Celery task',
-                    'data': {'notification_id': notification.pk},
-                    'timestamp': int(__import__('time').time() * 1000)
-                }) + '\n')
-        except Exception:
-            pass
-        # #endregion
         send_notification_async.apply_async(args=(notification.pk,), queue='notifications')
-        # #region agent log
-        try:
-            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'A',
-                    'location': 'notifications/utils.py:120',
-                    'message': 'Celery task enqueued successfully',
-                    'data': {'notification_id': notification.pk},
-                    'timestamp': int(__import__('time').time() * 1000)
-                }) + '\n')
-        except Exception:
-            pass
-        # #endregion
     except Exception:
         logger.exception('Failed to enqueue send_notification_async for notification=%s', notification.pk)
-        # #region agent log
-        try:
-            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'A',
-                    'location': 'notifications/utils.py:122',
-                    'message': 'Celery task failed - using fallback',
-                    'data': {'notification_id': notification.pk},
-                    'timestamp': int(__import__('time').time() * 1000)
-                }) + '\n')
-        except Exception:
-            pass
-        # #endregion
         # Fallback for Enterprise: if Celery is unavailable, mark as SENT synchronously.
-        # This ensures notifications are visible to users even if async queue is down.
         try:
             from django.utils import timezone
 
             notification.sent_at = timezone.now()
             notification.state = 'SENT'
             notification.save(update_fields=('sent_at', 'state'))
-            # #region agent log
-            try:
-                with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'A',
-                        'location': 'notifications/utils.py:130',
-                        'message': 'Fallback: marked as SENT synchronously',
-                        'data': {'notification_id': notification.pk, 'state': 'SENT'},
-                        'timestamp': int(__import__('time').time() * 1000)
-                    }) + '\n')
-            except Exception:
-                pass
-            # #endregion
             logger.warning(
                 'Notification id=%s marked as SENT synchronously (Celery unavailable)',
                 notification.pk

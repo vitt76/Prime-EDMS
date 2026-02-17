@@ -100,25 +100,6 @@ class HeadlessNotificationListView(APIView):
         Returns all notifications (enhanced and legacy). Legacy notifications
         (without title) are handled via fallback in NotificationListSerializer.to_representation().
         """
-        # #region agent log
-        import json as json_module
-        import time as time_module
-        logger.info('HeadlessNotificationListView.get() called for user=%s', request.user.id)
-        try:
-            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'D',
-                    'location': 'headless_api/views/notification_views.py:88',
-                    'message': 'API: HeadlessNotificationListView.get() called',
-                    'data': {'user_id': request.user.id, 'username': request.user.username},
-                    'timestamp': int(time_module.time() * 1000)
-                }) + '\n')
-                f.flush()  # Force write to disk
-        except Exception as e:
-            logger.exception('Failed to write debug log: %s', e)
-        # #endregion
         state = request.query_params.get('state', 'SENT')
         event_type = request.query_params.get('event_type') or request.query_params.get('filter_event')
         category = request.query_params.get('category')
@@ -135,33 +116,25 @@ class HeadlessNotificationListView(APIView):
             or ('admin' in {name.lower() for name in user_group_names})
         )
 
-        # #region agent log
+        # Auto-subscribe user to required document events (idempotent).
         try:
-            # Check user subscriptions and auto-subscribe if needed
             from mayan.apps.events.models import EventSubscription, StoredEventType
             user_subscriptions = EventSubscription.objects.filter(user=request.user)
             doc_event_types = StoredEventType.objects.filter(name__startswith='documents.')
             subscribed_doc_events = user_subscriptions.filter(stored_event_type__in=doc_event_types)
-            
-            # Auto-subscribe user to required document events (idempotent).
-            # IMPORTANT: do not only run when there are 0 subscriptions; existing users
-            # may miss lifecycle events and would never see "удалён/восстановлен".
             document_event_types = [
                 'documents.document_file_created',
                 'documents.document_created',
                 'documents.document_edited',
                 'documents.document_version_created',
-                # Lifecycle (trash/restore/delete) - must appear in Notification Center
                 'documents.document_trashed',
                 'documents.trashed_document_restored',
                 'documents.trashed_document_deleted',
             ]
-
             try:
                 already = set(subscribed_doc_events.values_list('stored_event_type__name', flat=True))
             except Exception:
                 already = set()
-
             missing = [name for name in document_event_types if name not in already]
             if missing:
                 for event_type_name in missing:
@@ -176,75 +149,8 @@ class HeadlessNotificationListView(APIView):
                         logger.debug('Event type %s not found, skipping auto-subscription', event_type_name)
                     except Exception as e:
                         logger.warning('Failed to auto-subscribe user %s to event %s: %s', request.user.username, event_type_name, e)
-
-                # Re-fetch subscriptions after auto-subscription
-                user_subscriptions = EventSubscription.objects.filter(user=request.user)
-                subscribed_doc_events = user_subscriptions.filter(stored_event_type__in=doc_event_types)
-            
-            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'F',
-                    'location': 'headless_api/views/notification_views.py:88',
-                    'message': 'API: checking user subscriptions',
-                    'data': {'user_id': request.user.id, 'total_subscriptions': user_subscriptions.count(), 'document_event_subscriptions': subscribed_doc_events.count(), 'subscribed_event_names': list(subscribed_doc_events.values_list('stored_event_type__name', flat=True))},
-                    'timestamp': int(time_module.time() * 1000)
-                }) + '\n')
-        except Exception as e:
-            # Log exception for debugging
-            try:
-                with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json_module.dumps({
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'F',
-                        'location': 'headless_api/views/notification_views.py:88',
-                        'message': 'API: exception checking subscriptions',
-                        'data': {'error': str(e)},
-                        'timestamp': int(time_module.time() * 1000)
-                    }) + '\n')
-            except Exception:
-                pass
-        # #endregion
-
-        # #region agent log
-        try:
-            # Check all notifications in DB for this user
-            all_notifications = EventNotification.objects.filter(user=request.user)
-            notifications_with_title = all_notifications.exclude(title__isnull=True) if hasattr(EventNotification, 'title') else all_notifications.none()
-            notifications_with_state = all_notifications.exclude(state__isnull=True) if hasattr(EventNotification, 'state') else all_notifications.none()
-            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'D',
-                    'location': 'headless_api/views/notification_views.py:134',
-                    'message': 'API: checking all notifications in DB',
-                    'data': {
-                        'user_id': request.user.id,
-                        'total_notifications_count': all_notifications.count(),
-                        'notifications_with_title_count': notifications_with_title.count() if hasattr(EventNotification, 'title') else 0,
-                        'notifications_with_state_count': notifications_with_state.count() if hasattr(EventNotification, 'state') else 0,
-                        'recent_notification_ids': list(all_notifications[:5].values_list('id', flat=True))
-                    },
-                    'timestamp': int(time_module.time() * 1000)
-                }) + '\n')
-        except Exception as e:
-            try:
-                with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json_module.dumps({
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'D',
-                        'location': 'headless_api/views/notification_views.py:134',
-                        'message': 'API: exception checking notifications',
-                        'data': {'error': str(e)},
-                        'timestamp': int(time_module.time() * 1000)
-                    }) + '\n')
-            except Exception:
-                pass
-        # #endregion
+        except Exception:
+            pass
 
         # Return all notifications - fallback for legacy notifications is in serializer.
         # HOTFIX: filter out corrupted rows where action is NULL; serializers may otherwise crash.
@@ -265,29 +171,6 @@ class HeadlessNotificationListView(APIView):
                     queryset = queryset.filter(state__in=['CREATED', 'SENT'])
                 else:
                     queryset = queryset.filter(state=state)
-            # #region agent log
-            # Log queryset state after filtering
-            try:
-                with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json_module.dumps({
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'D',
-                        'location': 'headless_api/views/notification_views.py:220',
-                        'message': 'API: queryset after state filtering',
-                        'data': {
-                            'user_id': request.user.id,
-                            'state_param': state,
-                            'queryset_count': queryset.count(),
-                            'has_state_attr': hasattr(EventNotification, 'state'),
-                            'queryset_ids': list(queryset[:10].values_list('id', flat=True)),
-                            'queryset_states': list(queryset[:10].values_list('state', flat=True)) if hasattr(EventNotification, 'state') else []
-                        },
-                        'timestamp': int(time_module.time() * 1000)
-                    }) + '\n')
-            except Exception:
-                pass
-            # #endregion
             if event_type:
                 queryset = queryset.filter(event_type=event_type)
         else:
@@ -330,44 +213,8 @@ class HeadlessNotificationListView(APIView):
 
         paginator = HeadlessNotificationsPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
-        # #region agent log
-        import json as json_module
-        import time as time_module
-        try:
-            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'D',
-                    'location': 'headless_api/views/notification_views.py:120',
-                    'message': 'API: queryset before pagination',
-                    'data': {'user_id': request.user.id, 'queryset_count': queryset.count(), 'state_filter': state, 'has_state_attr': hasattr(EventNotification, 'state')},
-                    'timestamp': int(time_module.time() * 1000)
-                }) + '\n')
-        except Exception:
-            pass
-        # #endregion
-
         serializer = NotificationListSerializer(page, many=True, context={'request': request})
         response = paginator.get_paginated_response(serializer.data)
-        # #region agent log
-        import json as json_module
-        import time as time_module
-        try:
-            with open('c:\\DAM\\Prime-EDMS\\.cursor\\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'D',
-                    'location': 'headless_api/views/notification_views.py:123',
-                    'message': 'API: response data',
-                    'data': {'user_id': request.user.id, 'results_count': len(response.data.get('results', [])), 'total_count': response.data.get('count', 0), 'first_result_id': response.data.get('results', [{}])[0].get('id') if response.data.get('results') else None},
-                    'timestamp': int(time_module.time() * 1000)
-                }) + '\n')
-        except Exception:
-            pass
-        # #endregion
-
         counters = _get_unread_counters(user=request.user)
         response.data['unread_count'] = counters['unread_count']
         response.data['has_urgent'] = counters['has_urgent']

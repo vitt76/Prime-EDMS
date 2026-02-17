@@ -224,7 +224,6 @@ class DocumentsApp(MayanAppConfig):
 
     def ready(self):
         super().ready()
-        print("🔍 Documents app ready() method called")
 
         Document = self.get_model(model_name='Document')
         DocumentFile = self.get_model(model_name='DocumentFile')

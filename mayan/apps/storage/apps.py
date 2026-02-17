@@ -90,6 +90,5 @@ class StorageApp(MayanAppConfig):
                 links=(link_storage_settings,),
                 position=25
             )
-            print('📋 Storage settings link added to System menu!')
-        except Exception as e:
-            print(f'⚠️ Storage settings menu registration failed: {e}')
+        except Exception:
+            pass

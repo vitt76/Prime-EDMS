@@ -150,11 +150,6 @@ class DAMWidget(forms.widgets.Widget):
             # value might contain document_id
             document_id = str(value) if value else ''
 
-        # HARDCODED TEST: Force document_id to 39 for testing
-        document_id = '39'
-
-        print(f"DAMWidget render debug: name={name}, value={value}, attrs={attrs}, final document_id={document_id}")
-
         # Try to get AI analysis data safely
         analysis_data = self._get_analysis_data(document_id)
 

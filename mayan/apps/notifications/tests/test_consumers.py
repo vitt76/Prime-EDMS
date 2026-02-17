@@ -131,3 +131,20 @@ class NotificationConsumerOrganizationTest(TestCase):
         )
         connected, _ = await communicator.connect()
         self.assertFalse(connected)
+
+    @async_to_sync
+    async def test_connect_rejects_invalid_token_immediately(self):
+        """Connect with invalid token -> connection closed immediately without subscribing."""
+        if not self.org:
+            self.skipTest('Organization not available')
+
+        application = self._get_application()
+        communicator = WebsocketCommunicator(
+            application,
+            'ws/notifications/?token=invalid-token-xyz&organization_id={}'.format(self.org.pk),
+        )
+        connected, _ = await communicator.connect()
+        self.assertFalse(
+            connected,
+            msg='Connection must be rejected when token is invalid; must not subscribe to group'
+        )

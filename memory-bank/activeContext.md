@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
-**Последнее обновление:** 2026-02-13  
-**Текущий фокус:** Multi-Tenancy Part 3 завершён; Legal + SEO для Public Frontend реализованы; аудит 152-ФЗ выполнен
+**Последнее обновление:** 2026-02-17  
+**Текущий фокус:** Sprint 5 (High-Performance Frontend — Immersive Grid & Search) — ✅ COMPLETED; следующий — дальнейшая полировка фронта или Backend/Security итерации
 
 ---
 
@@ -52,7 +52,7 @@
 ### Активная разработка (Текущий фокус)
 
 #### 1. Multi-Tenancy Integration Part 3 (Новый ТЗ)
-**Статус:** Sprint 1 (DAM), Sprint 2 (Analytics) и Sprint 3 (Distribution + Notifications) завершены; Sprint 4 — следующий  
+**Статус:** Sprint 1–3 ✅ COMPLETED & DEPLOYED; Sprint 4 (Security/Performance) завершён 2026-02-11; текущий фокус — Sprint 4 (следующая итерация): Security Polish & Backend Hardening  
 **ТЗ:** `docs/transformation-2025/АНАЛИЗ КОНТЕКСТА И ОБНОВЛЕННОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ.md` (Part 3)  
 **GAPS Report:** `tmp/GAPS_REPORT_PART3.md`
 
@@ -109,12 +109,13 @@
 - Tests: test_middleware (track_asset_event_async.delay с organization_id), test_api (dashboard isolation), test_reports (sync run + API), test_tenant_isolation (AssetEvent, dashboard, report isolation).
 - Code review: date_range читается из parameters['date_range']; optional 0011 orphan hardening documented.
 
-**Sprint 3 Part 3 (Distribution + Notifications) — ЗАВЕРШЁН 2026-02-11:**
+**Sprint 3 Part 3 (Distribution + Notifications) — ✅ ЗАВЕРШЁН И РАЗВЁРНУТ (2026-02-11, верификация 2026-02-17):**
 - ✅ ShareLink: TenantAwareMixin в модели, миграции distribution 0012 (AddField org nullable), 0013 (populate из rendition→document + сироты → default org), 0014 (NOT NULL + индексы org, org+created).
 - ✅ Pre_save binding: _connect_sharelink_tenant_binding_signal() в organizations/apps.py (lazy import ShareLink); приоритет: явное → контекст → document по rendition → default org.
 - ✅ Views/signals: портал и get_object_or_404(ShareLink, token=...) переведены на ShareLink.objects_unfiltered; в сигналах очистки (file delete, document trash/delete) — objects_unfiltered; при создании ShareLink передаётся organization=request.organization при наличии.
 - ✅ Notifications WebSocket: в consumers.py при connect() читается organization_id из query string; при отсутствии или при отказе проверки членства (UserOrganizationRole) соединение закрывается с кодом 4003; group_name = notifications_{organization_id}_{user_id}.
 - ✅ send_websocket_notification: хелпер get_organization_id_for_notification (action.target/action_object Document → organization_id, иначе default org пользователя); group_send в группу notifications_{org_id}_{user_id}.
+- ✅ **AI Analysis Event Integration:** при завершении AI-анализа (dam/tasks.py) вызывается event_dam_ai_analysis_completed.commit(actor=document, target=document); подписчики получают EventNotification → send_notification_async → send_websocket_notification в org-scoped группу. Тип события зарегистрирован в dam/events.py и dam_taxonomy ('dam.ai_analysis_completed': 'ai').
 - ✅ Тесты: distribution/tests/test_tenant_isolation.py (изоляция по контексту, API с X-Organization-Id, публичный доступ по токену); notifications test_tasks (org-scoped group), test_consumers (connect без org / чужая org → 4003, с valid org → accepted).
 
 **Sprint 4 Part 3 (Security Audit + Performance Tuning) — ЗАВЕРШЁН 2026-02-11:**
@@ -123,7 +124,19 @@
 - ✅ Load testing: сценарии в `tests/load/locustfile.py` (AnalyticsUser: dashboard, top-metrics, document list optimized; DocumentListUser); отчёт `docs/transformation-2025/SPRINT4_LOAD_TEST_REPORT.md`.
 - ✅ DoD: Security 0 High/Critical (по отчёту); Performance тесты и NFR — см. отчёты; Memory Bank обновлён.
 
-**Следующий фокус:** Part 3 завершён; дальнейшие приоритеты — по roadmap (Immersive Grid, Search, Analytics).
+**Sprint 5 (High-Performance Frontend — Immersive Grid & Search) — ЗАВЕРШЁН 2026-02-17:**  
+- **Phase 1:** Установлен `@tanstack/vue-virtual`; создан `ImmersiveGrid.vue` с виртуализацией по строкам (useVirtualizer), расчёт колонок по ширине (useElementSize), скелетоны при подгрузке, infinite scroll (sentinel), кнопка «Наверх», Shift+Click и индексный drag-select. В `GalleryView.vue` порог 80: при < 80 активов — `AssetGrid`, при 80+ — `ImmersiveGrid`; старый кастомный виртуальный скролл (scrollTop/visibleAssets/totalHeight) удалён.  
+- **Phase 2:** В `useDamSearchFilters` добавлена история поиска: localStorage `dam_search_history` (до 10 записей), `getSearchHistory()`, `applySearchFromHistory()`, запись в историю в `submitSearchNow()`. В Header при фокусе на поиске показывается блок «Недавние запросы». Фильтр «Ориентация» (portrait/landscape/square) добавлен в FiltersPanel, DamFiltersState, URL sync и assetStore (бэкенд пока не поддерживает width/height — UI готов).  
+- **Phase 3:** Создан `AssetThumbnail.vue` (lazy load, плейсхолдер, ошибка); в AssetCard блок превью заменён на AssetThumbnail.  
+- **Phase 4:** Создан `AssetContextMenu.vue` (правый клик: Открыть, Скачать, Поделиться, Редактировать метаданные, Удалить). В AssetCard добавлен `@contextmenu.prevent` и эмит `contextmenu`; AssetGrid и ImmersiveGrid пробрасывают `asset-contextmenu`; в GalleryView — единое контекстное меню и обработчики (в т.ч. переход на `/dam/assets/:id/edit` для редактирования метаданных). Drag-select и Shift+Click в ImmersiveGrid реализованы при создании компонента.
+
+**Следующий фокус:** Part 3 (Sprint 1–4) и Sprint 5 (Frontend) завершены; следующий этап — **Sprint 4 (итерация 2): Security Polish & Final Backend Hardening** (см. предложенный объём ниже) или дальнейшая полировка фронта (тесты, accessibility, ориентация на бэкенде при появлении полей width/height).
+
+**Sprint 4 (следующая итерация) — предложенный объём:**
+1. **Security Audit:** Проверка edge cases TenantResolverMiddleware (публичные API без org, exempt paths, подмена X-Organization-Id).
+2. **Performance Tuning:** Индексы для notification/event таблиц при необходимости; ревью тяжёлых запросов.
+3. **Cleanup:** Удаление временных миграционных скриптов и отладочного кода (например debug.log в events/notifications).
+4. **Documentation:** Актуализация/генерация OpenAPI (drf-spectacular) для tenant-aware endpoints (X-Organization-Id, share_links, notifications).
 
 #### 2. Multi-tenancy Infrastructure (Завершено)
 **Статус:** Sprint 1-4 + Hotfix + Tech Debt + Sprint 4.2 + Sprint 4.3 + Sprint 4.4 + Sprint 4.5 (Gallery Preview Recovery) завершены  

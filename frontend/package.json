@@ -24,6 +24,7 @@
   "dependencies": {
     "@headlessui/vue": "^1.7.16",
     "@heroicons/vue": "^2.1.1",
+    "@tanstack/vue-virtual": "^3.13.18",
     "@vueuse/core": "^10.7.2",
     "@vueuse/router": "^10.7.2",
     "axios": "^1.6.5",

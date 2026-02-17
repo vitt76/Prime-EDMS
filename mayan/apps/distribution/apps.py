@@ -18,7 +18,6 @@ class DistributionApp(MayanAppConfig):
 
     def ready(self):
         super().ready()
-        print('📦 Distribution module loaded successfully!')
 
         # Ensure settings and storages are registered
         from . import settings as distribution_settings  # noqa: F401
@@ -33,19 +32,13 @@ class DistributionApp(MayanAppConfig):
         app_name = 'mayan.apps.distribution'
         if app_name not in settings.INSTALLED_APPS:
             settings.INSTALLED_APPS.append(app_name)
-            print(f'✅ Added {app_name} to INSTALLED_APPS via ready()')
 
         # Регистрация меню и ссылок
-        print('🔗 Starting distribution menu registration...')
         try:
-            # Load queue definitions
             from . import queues  # noqa: F401
             self._register_menu_links()
-            print('✅ Distribution menu links registered successfully!')
-        except Exception as e:
-            print(f'❌ CRITICAL: Failed to register menu links: {e}')
-            import traceback
-            traceback.print_exc()
+        except Exception:
+            pass
 
         # URLs will be automatically discovered by REST API app via api_urls variable
 
@@ -90,6 +83,4 @@ class DistributionApp(MayanAppConfig):
             sources=(DocumentFile,),
             position=10
         )
-
-        print('✅ Distribution menu links registered successfully!')
 
