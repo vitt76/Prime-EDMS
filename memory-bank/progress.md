@@ -374,7 +374,7 @@
 ### Backend Modules
 - **Core Mayan EDMS**: ✅ 100% (базовый функционал)
 - **DAM Module**: ✅ 90% (работает, кроме Claude/Gemini)
-- **Analytics Module**: ✅ 85% (основные дашборды работают, roadmap в процессе)
+- **Analytics Module**: ✅ 92% (Transformation завершён; дашборды, geography, отчёты, download API; опционально: search-to-find trend endpoint)
 - **Distribution Module**: ✅ 95% (полностью функционален)
 - **Headless API**: ✅ 90% (основные endpoints работают, некоторые gaps)
 - **Marketing CMS**: ✅ 100% (новый модуль полностью реализован)
@@ -386,7 +386,7 @@
 - **DAM Gallery**: ✅ 98% (IntersectionObserver lazy rendering, infinite scroll)
 - **Search & Filters**: ✅ 95% (расширенные фильтры + owner + URL persistence)
 - **Asset Management**: ✅ 90% (CRUD работает, оптимизации в процессе)
-- **Analytics Dashboards**: ✅ 90% (дашборды работают, real-time улучшения в процессе)
+- **Analytics Dashboards**: ✅ 95% (дашборды, MetricCard/LineChart/GeoMap, AdoptionTable, RetentionCohort, Churn, ReportGenerateModal; единый дашборд + geography API + report download)
 - **Public Frontend**: ✅ 100% (полностью реализован, SSR improvements добавлены)
 
 ### Infrastructure
@@ -434,6 +434,7 @@
 - **Gallery preview regression fix (2026-02-10):** устранён кейс с placeholder `DOCUMENT` в SPA (`/dam`): исправлены latest-file prefetch и thumbnail/preview fallback в optimized API, фронтенд `AssetCard` переведён на auth blob-loading для защищённых `/api/v4/.../image`.
 - **Docker:** organizations и tags добавлены в Dockerfile.app и docker-compose volumes.
 - **distribution 0001:** Зависимость от documents 0081 для корректного разрешения DocumentFile.
+- **Analytics Frontend Visualization (2026-02-17):** Реализован план Phase 1–3: MetricCard, LineChart, GeoMap, unified dashboard в store, AdoptionTable с adoption_rate_percent, RetentionCohort, Churn на UserActivityPage, ReportGenerateModal с poll и скачиванием; backend geography (GET .../dashboard/geography/) и report download (GET .../reports/{id}/download/). Code review Analytics Transformation: PASS (документ docs/ANALYTICS_TRANSFORMATION_CODE_REVIEW.md).
 - **Sprint 1 Part 3 деплой (2026-02-11):** Бэкап БД (backup_pre_dam_tenant.sql), применение миграций dam 0007–0009 (AddField → populate → NOT NULL+index), перезапуск app и app_websocket; smoke test: DocumentAIAnalysis без organization = 0. В контейнере Django-команды запускать через `/opt/mayan-edms/bin/mayan-edms.py`.
 - **Deployment Hotfixes (2026-02-13):** analytics: Permission import (`permissions.classes`), EmailClickWebhookView/AnalyticsEventsExportView/AnalyticsHealthCheckView (stubs для rest_api/urls); distribution: индекс `idx_dist_sl_org_created` (≤30 символов, Django E034). Backend 8080, Frontend 5173, Public 3000 — работают.
 - **Legal / Cookie Consent (2026-02-13):** mayan.apps.legal с UserConsentLog и POST /api/v4/public/legal/consent/; docs/legal (privacy-policy-ru.md, user-agreement-ru.md) для ООО «Мэддам», только Yandex.Metrika; public-frontend: CookieConsentModal в default layout, useApi.submitConsent(), страницы Privacy/Terms с контентом из API/server routes, ymId вместо gaId.

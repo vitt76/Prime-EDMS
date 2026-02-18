@@ -7,10 +7,19 @@ import type {
   AssetReuseMetrics,
   MostDownloadedAssetRow,
   StorageTrendsResponse,
+  UnifiedDashboardResponse,
   UserAdoptionHeatmapResponse,
 } from '@/stores/analyticsStore'
 
 class AnalyticsService {
+  async getUnifiedDashboard(): Promise<UnifiedDashboardResponse> {
+    return apiService.get<UnifiedDashboardResponse>(
+      '/api/v4/headless/analytics/dashboard/',
+      undefined,
+      false
+    )
+  }
+
   async getAssetBankTopMetrics(): Promise<AssetBankTopMetrics> {
     return apiService.get<AssetBankTopMetrics>(
       '/api/v4/headless/analytics/dashboard/assets/top-metrics/',
@@ -151,6 +160,15 @@ class AnalyticsService {
     )
   }
 
+  /** Organization-level event counts by country (AssetEvent.metadata.country). */
+  async getDashboardGeography(params?: { days?: number }): Promise<{ results: Array<{ country_code: string; event_count: number }> }> {
+    return apiService.get<{ results: Array<{ country_code: string; event_count: number }> }>(
+      '/api/v4/headless/analytics/dashboard/geography/',
+      params ? ({ params } as any) : undefined,
+      false
+    )
+  }
+
   async getAssetBankAlerts(params?: { limit?: number }): Promise<any[]> {
     const data = await apiService.get<{ results: any[] }>(
       '/api/v4/headless/analytics/dashboard/assets/alerts/',
@@ -234,6 +252,39 @@ class AnalyticsService {
       params ? ({ params } as any) : undefined,
       false
     )
+  }
+
+  async postReportGenerate(body: {
+    report_type?: string
+    date_range?: { from?: string; to?: string; date_from?: string; date_to?: string }
+    export_format?: string
+  }): Promise<{ task_id: number; status: string }> {
+    return apiService.post<{ task_id: number; status: string }>(
+      '/api/v4/headless/analytics/reports/generate/',
+      body
+    )
+  }
+
+  async getReportStatus(taskId: number): Promise<{
+    task_id: number
+    status: string
+    file_path?: string | null
+    created_at?: string
+    completed_at?: string | null
+  }> {
+    return apiService.get<any>(
+      `/api/v4/headless/analytics/reports/${taskId}/`,
+      undefined,
+      false
+    )
+  }
+
+  getReportDownloadUrl(taskId: number): string {
+    return `/api/v4/headless/analytics/reports/${taskId}/download/`
+  }
+
+  async downloadReportBlob(taskId: number): Promise<Blob> {
+    return apiService.getBlob(this.getReportDownloadUrl(taskId))
   }
 }
 

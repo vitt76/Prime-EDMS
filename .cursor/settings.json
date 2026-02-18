@@ -1,0 +1,25 @@
+{
+  "plugins": {
+    "cursor-team-kit": {
+      "enabled": true
+    },
+    "compound-engineering": {
+      "enabled": true
+    },
+    "prisma": {
+      "enabled": true
+    },
+    "databricks-skills": {
+      "enabled": true
+    },
+    "functions": {
+      "enabled": true
+    },
+    "context7-plugin": {
+      "enabled": true
+    },
+    "superpowers": {
+      "enabled": true
+    }
+  }
+}

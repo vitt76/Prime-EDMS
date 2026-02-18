@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db.models import Avg, Count, Q, Sum
+from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import TruncDate, TruncHour, TruncMonth
 from django.http import HttpResponse
 from django.utils import timezone
@@ -90,6 +91,43 @@ from mayan.apps.analytics.realtime import notify_analytics_refresh
         tags=['analytics'],
     ),
 )
+class DashboardGeographyViewSet(viewsets.ViewSet):
+    """GET /api/v4/headless/analytics/dashboard/geography/ — event counts by country (AssetEvent.metadata.country)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    def list(self, request):
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_asset_bank,), user=request.user
+        )
+        organization = getattr(request, 'organization', None)
+        if not organization:
+            return Response(
+                {'detail': 'Organization context required (e.g. X-Organization-Id).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        days = int(request.query_params.get('days') or 30)
+        date_from = timezone.now() - timedelta(days=days)
+        try:
+            rows = (
+                AssetEvent.objects.filter(
+                    organization_id=organization.pk,
+                    timestamp__gte=date_from,
+                )
+                .exclude(metadata={})
+                .annotate(country=KeyTextTransform('country', 'metadata'))
+                .values('country')
+                .annotate(event_count=Count('id'))
+                .exclude(country__isnull=True)
+                .exclude(country='')
+                .order_by('-event_count')[:50]
+            )
+            results = [{'country_code': r.get('country') or '', 'event_count': r.get('event_count') or 0} for r in rows]
+        except Exception:
+            results = []
+        return Response(data={'results': results}, status=status.HTTP_200_OK)
+
+
 class AssetBankViewSet(viewsets.ViewSet):
     """Headless API: Asset Bank dashboard (Phase 1 / Level 1)."""
 

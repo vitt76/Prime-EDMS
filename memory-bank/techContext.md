@@ -86,6 +86,8 @@
 
 **Ключевые компоненты галереи (Sprint 5):** ImmersiveGrid (виртуализация по строкам), AssetThumbnail (lazy load + плейсхолдер), AssetContextMenu (правый клик), история поиска в localStorage (dam_search_history), фильтр ориентации в URL.
 
+**Аналитика (Frontend Visualization):** MetricCard, LineChart (Chart.js), GeoMap (барчарт по странам), AdoptionTable (feature_adoption из единого дашборда), RetentionCohort, Churn (unifiedDashboard.churn_count). ReportGenerateModal: POST .../reports/generate/, poll .../reports/{id}/, скачивание через getBlob(.../reports/{id}/download/). Store: unifiedDashboard, dashboardGeography, reportTaskId/reportTaskStatus; API: GET .../analytics/dashboard/, GET .../dashboard/geography/, GET .../reports/{id}/download/.
+
 **Порт:** 5173 (development)
 
 #### Public Frontend (Nuxt 3 SSR)

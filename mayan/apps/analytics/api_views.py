@@ -1,8 +1,10 @@
 """API views for analytics (tenant-scoped dashboard and report generation)."""
 
+import os
 from datetime import timedelta
 
 from django.db.models import Avg, Count
+from django.http import Http404, HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -100,6 +102,26 @@ class AnalyticsDashboardViewSet(viewsets.ViewSet):
                 'adoption_rate_percent': round(rate, 2),
             })
 
+        churn_count = 0
+        churn_period_days = 30
+        try:
+            from django.apps import apps as django_apps
+            events_org = AssetEvent.objects.filter(organization=org, user_id__isnull=False)
+            active_user_ids = set(
+                events_org.filter(timestamp__gte=thirty_days_ago)
+                .values_list('user_id', flat=True)
+                .distinct()
+            )
+            UserOrganizationRole = django_apps.get_model('organizations', 'UserOrganizationRole')
+            org_member_ids = set(
+                UserOrganizationRole.objects.filter(organization=org)
+                .values_list('user_id', flat=True)
+                .distinct()
+            )
+            churn_count = len(org_member_ids - active_user_ids)
+        except Exception:
+            pass
+
         data = {
             'organization': str(org.pk),
             'organization_name': org.name,
@@ -110,6 +132,8 @@ class AnalyticsDashboardViewSet(viewsets.ViewSet):
             'ai_usage': ai_usage,
             'avg_search_to_find_seconds': avg_search_to_find_seconds,
             'feature_adoption': feature_adoption,
+            'churn_count': churn_count,
+            'churn_period_days': churn_period_days,
         }
         set_dashboard_cached(org.pk, data)
         serializer = DashboardMetricsSerializer(data)
@@ -177,6 +201,43 @@ class AnalyticsReportGenerateViewSet(viewsets.ViewSet):
             'created_at': task.created_at,
             'completed_at': task.completed_at,
         })
+
+    def download(self, request, pk=None):
+        """GET /api/v4/headless/analytics/reports/{id}/download/ — serve report file."""
+        Permission.check_user_permissions(
+            permissions=(permission_analytics_view_asset_bank,), user=request.user
+        )
+        organization = getattr(request, 'organization', None)
+        if not organization:
+            return Response(
+                {'detail': 'Organization context required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            task = AnalyticsReportTask.objects.get(pk=pk, organization=organization)
+        except AnalyticsReportTask.DoesNotExist:
+            raise Http404('Report not found')
+        if task.status != AnalyticsReportTask.STATUS_COMPLETED or not task.file_path:
+            return Response(
+                {'detail': 'Report is not ready for download.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        path = task.file_path
+        if not os.path.isabs(path):
+            from django.conf import settings
+            media_root = getattr(settings, 'MEDIA_ROOT', '') or ''
+            path = os.path.join(media_root, path)
+        if not os.path.isfile(path):
+            return Response(
+                {'detail': 'Report file not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        filename = os.path.basename(path) or f'report-{task.pk}.json'
+        with open(path, 'rb') as fh:
+            content = fh.read()
+        response = HttpResponse(content, content_type='application/json')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 class EmailClickWebhookView(APIView):

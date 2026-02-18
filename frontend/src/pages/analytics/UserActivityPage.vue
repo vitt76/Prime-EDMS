@@ -39,67 +39,15 @@
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <Card padding="lg">
-          <div class="flex items-center justify-between gap-4 mb-4">
-            <h3 class="text-base font-semibold text-neutral-900">Когортный анализ</h3>
-            <div class="text-xs text-neutral-500">удержание по неделям</div>
-          </div>
+        <RetentionCohort :cohorts="cohorts" />
+        <AdoptionTable :rows="adoptionRows" />
+      </div>
 
-          <div v-if="cohorts.length === 0" class="text-sm text-neutral-500">Нет данных</div>
-          <div v-else class="overflow-auto border border-neutral-200 rounded-lg">
-            <table class="min-w-full text-sm">
-              <thead class="bg-neutral-50">
-                <tr class="text-left">
-                  <th class="px-3 py-2 font-semibold text-neutral-700">Cohort week</th>
-                  <th class="px-3 py-2 font-semibold text-neutral-700">Size</th>
-                  <th
-                    v-for="w in retentionWeeks"
-                    :key="w"
-                    class="px-3 py-2 font-semibold text-neutral-700"
-                  >
-                    W{{ w }}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in cohorts" :key="row.cohort_week_start" class="border-t border-neutral-200">
-                  <td class="px-3 py-2">{{ row.cohort_week_start }}</td>
-                  <td class="px-3 py-2">{{ row.cohort_size }}</td>
-                  <td v-for="cell in row.retention" :key="cell.week_index" class="px-3 py-2">
-                    {{ cell.retention_rate.toFixed(0) }}%
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        <Card padding="lg">
-          <div class="flex items-center justify-between gap-4 mb-4">
-            <h3 class="text-base font-semibold text-neutral-900">Использование функций</h3>
-            <div class="text-xs text-neutral-500">события использования</div>
-          </div>
-
-          <div v-if="featureRows.length === 0" class="text-sm text-neutral-500">Нет данных</div>
-          <div v-else class="overflow-auto border border-neutral-200 rounded-lg">
-            <table class="min-w-full text-sm">
-              <thead class="bg-neutral-50">
-                <tr class="text-left">
-                  <th class="px-3 py-2 font-semibold text-neutral-700">Feature</th>
-                  <th class="px-3 py-2 font-semibold text-neutral-700">Events</th>
-                  <th class="px-3 py-2 font-semibold text-neutral-700">Unique users</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in featureRows" :key="row.feature_name" class="border-t border-neutral-200">
-                  <td class="px-3 py-2">{{ row.feature_name }}</td>
-                  <td class="px-3 py-2">{{ row.total }}</td>
-                  <td class="px-3 py-2">{{ row.unique_users }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </Card>
+      <div class="mt-6">
+        <MetricCard
+          label="Churn за период (пользователи без событий)"
+          :value="churnDisplay"
+        />
       </div>
   </div>
 </template>
@@ -107,7 +55,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
+import AdoptionTable from '@/components/Analytics/AdoptionTable.vue'
 import Card from '@/components/Common/Card.vue'
+import MetricCard from '@/components/Analytics/MetricCard.vue'
+import RetentionCohort from '@/components/Analytics/RetentionCohort.vue'
 import { useAnalyticsStore } from '@/stores/analyticsStore'
 
 const analyticsStore = useAnalyticsStore()
@@ -120,12 +71,15 @@ let bucketChart: import('chart.js').Chart | null = null
 const dauSeries = computed(() => analyticsStore.userLoginPatterns?.dau_series || [])
 const buckets = computed(() => analyticsStore.userLoginPatterns?.frequency_buckets || null)
 const cohorts = computed(() => analyticsStore.userCohorts?.cohorts || [])
-const retentionWeeks = computed(() => {
-  const first = cohorts.value?.[0]
-  const len = first?.retention?.length || 0
-  return Array.from({ length: len }, (_, i) => i)
+const adoptionRows = computed(
+  () => analyticsStore.unifiedDashboard?.feature_adoption ?? []
+)
+const churnDisplay = computed(() => {
+  const d = analyticsStore.unifiedDashboard
+  if (!d) return null
+  const period = d.churn_period_days ?? 30
+  return `${d.churn_count ?? 0} за ${period} дн.`
 })
-const featureRows = computed(() => analyticsStore.featureAdoption?.results || [])
 
 async function renderCharts(): Promise<void> {
   const Chart = (await import('chart.js/auto')).default
@@ -163,9 +117,12 @@ async function renderCharts(): Promise<void> {
 }
 
 async function refresh(): Promise<void> {
-  await analyticsStore.fetchUserLoginPatterns({ days: 30 })
-  await analyticsStore.fetchUserCohorts({ cohort_weeks: 8, retention_weeks: 8 })
-  await analyticsStore.fetchFeatureAdoption({ days: 30 })
+  await Promise.all([
+    analyticsStore.fetchUserLoginPatterns({ days: 30 }),
+    analyticsStore.fetchUserCohorts({ cohort_weeks: 8, retention_weeks: 8 }),
+    analyticsStore.fetchFeatureAdoption({ days: 30 }),
+    analyticsStore.fetchUnifiedDashboard(),
+  ])
   await nextTick()
   await renderCharts()
 }

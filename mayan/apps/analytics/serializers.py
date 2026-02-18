@@ -28,3 +28,5 @@ class DashboardMetricsSerializer(serializers.Serializer):
         child=serializers.DictField(),
         read_only=True
     )
+    churn_count = serializers.IntegerField(read_only=True)
+    churn_period_days = serializers.IntegerField(read_only=True)

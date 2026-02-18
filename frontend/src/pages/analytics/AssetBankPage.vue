@@ -1,5 +1,14 @@
 <template>
   <div class="container mx-auto px-4 py-6">
+      <div class="flex justify-end mb-4">
+        <button
+          type="button"
+          class="px-4 py-2 text-sm rounded-md border border-neutral-300 hover:bg-neutral-50"
+          @click="showReportModal = true"
+        >
+          Сформировать отчёт
+        </button>
+      </div>
 
       <FilterBar
         class="mb-6"
@@ -47,6 +56,13 @@
       </div>
 
       <div class="mt-6">
+        <GeoMap
+          :rows="analyticsStore.dashboardGeography"
+          :days="30"
+        />
+      </div>
+
+      <div class="mt-6">
         <UserAdoptionHeatMap
           :heatmap-data="analyticsStore.userAdoptionHeatmap?.heatmap_data || []"
           :departments="analyticsStore.userAdoptionHeatmap?.departments || []"
@@ -65,6 +81,11 @@
     :document-label="selectedAsset?.document__label ?? null"
     @close="assetDetailModalOpen = false"
   />
+
+  <ReportGenerateModal
+    :is-open="showReportModal"
+    @close="showReportModal = false"
+  />
 </template>
 
 <script setup lang="ts">
@@ -75,9 +96,11 @@ import AssetDetailModal from '@/components/Analytics/AssetDetailModal.vue'
 import AssetReuseMetricsChart from '@/components/Analytics/AssetReuseMetricsChart.vue'
 import AlertsList from '@/components/Analytics/AlertsList.vue'
 import FilterBar from '@/components/Analytics/FilterBar.vue'
+import GeoMap from '@/components/Analytics/GeoMap.vue'
 import MostDownloadedAssetsTable from '@/components/Analytics/MostDownloadedAssetsTable.vue'
 import StorageTrendsChart from '@/components/Analytics/StorageTrendsChart.vue'
 import TopMetricsCard from '@/components/Analytics/TopMetricsCard.vue'
+import ReportGenerateModal from '@/components/Analytics/ReportGenerateModal.vue'
 import UserAdoptionHeatMap from '@/components/Analytics/UserAdoptionHeatMap.vue'
 import { useAnalyticsStore } from '@/stores/analyticsStore'
 import type { MostDownloadedAssetRow } from '@/stores/analyticsStore'
@@ -85,10 +108,14 @@ import type { MostDownloadedAssetRow } from '@/stores/analyticsStore'
 const analyticsStore = useAnalyticsStore()
 const selectedAsset = ref<MostDownloadedAssetRow | null>(null)
 const assetDetailModalOpen = ref(false)
+const showReportModal = ref(false)
 let ws: WebSocket | null = null
 
 async function refreshAll(): Promise<void> {
-  await analyticsStore.fetchAssetBankAll()
+  await Promise.all([
+    analyticsStore.fetchAssetBankAll(),
+    analyticsStore.fetchDashboardGeography({ days: 30 }),
+  ])
 }
 
 async function handleApplyFilters(payload: {

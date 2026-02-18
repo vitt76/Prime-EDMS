@@ -435,6 +435,14 @@ class ApiService {
   }
 
   /**
+   * GET request returning response as Blob (e.g. file download).
+   */
+  async getBlob(url: string): Promise<Blob> {
+    const response = await this.client.get(url, { responseType: 'blob' })
+    return response.data as Blob
+  }
+
+  /**
    * DELETE request with a JSON body.
    *
    * Axios DELETE does not accept a body parameter directly;

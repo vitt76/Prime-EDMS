@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
 **Последнее обновление:** 2026-02-17  
-**Текущий фокус:** Sprint 5 (High-Performance Frontend — Immersive Grid & Search) — ✅ COMPLETED; следующий — дальнейшая полировка фронта или Backend/Security итерации
+**Текущий фокус:** Analytics Transformation и Frontend Visualization завершены; следующий — полировка фронта, тесты или Sprint 4 (итерация 2): Security Polish & Backend Hardening
 
 ---
 
@@ -137,6 +137,11 @@
 - **Geo:** IP в AssetEvent.metadata при создании события; get_geo_from_ip в utils; задача enrich_event_geo_data (batch или event_id); обогащение metadata полями country, city.
 - **Retention:** В generate_analytics_report добавлена секция user_activity: dau (по дням), mau, churn_count (члены org без событий 30 дней), churn_period_days.
 - Миграции: analytics 0014–0020, organizations 0006. Единый дашборд GET /api/v4/headless/analytics/dashboard/ возвращает в т.ч. avg_search_to_find_seconds и feature_adoption.
+
+#### Analytics Frontend Visualization & Reporting — ✅ COMPLETED 2026-02-17
+- **Phase 1:** MetricCard.vue, LineChart.vue (Chart.js), GeoMap.vue (барчарт по странам); analyticsStore: unifiedDashboard, dashboardGeography, fetchUnifiedDashboard(), fetchDashboardGeography(); analyticsService: getUnifiedDashboard(), getDashboardGeography(). Backend: GET .../analytics/dashboard/geography/ (DashboardGeographyViewSet, агрегация по AssetEvent.metadata.country).
+- **Phase 2:** AdoptionTable.vue (feature_name, users_count, adoption_rate_percent из unifiedDashboard.feature_adoption); RetentionCohort.vue (вынесена когортная таблица); UserActivityPage: Churn блок (MetricCard, данные из unifiedDashboard.churn_count/churn_period_days). Единый дашборд расширен полями churn_count, churn_period_days.
+- **Phase 3:** ReportGenerateModal.vue (форма период/тип/формат, POST generate → poll status → Download); analyticsStore: reportTaskId, reportTaskStatus, createReport(), pollReportStatus(), resetReportState(); analyticsService: postReportGenerate(), getReportStatus(), downloadReportBlob(); apiService.getBlob(). Backend: GET .../analytics/reports/{id}/download/ (отдача файла с проверкой прав и организации). Кнопка «Сформировать отчёт» на AssetBankPage.
 
 **Следующий фокус:** Part 3 (Sprint 1–4) и Sprint 5 (Frontend) завершены; Analytics Transformation завершён (2026-02-17). Следующий этап — **Sprint 4 (итерация 2): Security Polish & Final Backend Hardening** (см. предложенный объём ниже) или дальнейшая полировка фронта (тесты, accessibility, ориентация на бэкенде при появлении полей width/height).
 

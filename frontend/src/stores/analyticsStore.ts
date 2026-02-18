@@ -154,6 +154,27 @@ export interface RoiSummaryResponse {
   roi_percent: number | null
 }
 
+/** Unified dashboard (GET /api/v4/headless/analytics/dashboard/) — Analytics Transformation. */
+export interface UnifiedDashboardFeatureAdoptionItem {
+  feature_name: string
+  users_count: number
+  adoption_rate_percent: number
+}
+
+export interface UnifiedDashboardResponse {
+  organization: string
+  organization_name: string
+  total_documents: number
+  storage_used_gb: number
+  active_users_30d: number
+  top_documents: Array<{ document_id: number; view_count: number }>
+  ai_usage: { count_this_month: number; token_usage?: number | null }
+  avg_search_to_find_seconds: number | null
+  feature_adoption: UnifiedDashboardFeatureAdoptionItem[]
+  churn_count: number
+  churn_period_days: number
+}
+
 export const useAnalyticsStore = defineStore('analytics', () => {
   // Asset Bank state
   const assetBankTopMetrics = ref<AssetBankTopMetrics | null>(null)
@@ -187,6 +208,14 @@ export const useAnalyticsStore = defineStore('analytics', () => {
   const userLoginPatterns = ref<any | null>(null)
   const userCohorts = ref<any | null>(null)
   const featureAdoption = ref<any | null>(null)
+
+  // Unified dashboard (Analytics Transformation)
+  const unifiedDashboard = ref<UnifiedDashboardResponse | null>(null)
+  const dashboardGeography = ref<Array<{ country_code: string; event_count: number }>>([])
+
+  // Report generation (Phase 3)
+  const reportTaskId = ref<number | null>(null)
+  const reportTaskStatus = ref<string | null>(null)
 
   // Approval analytics state (Release 2)
   const approvalSummary = ref<any | null>(null)
@@ -368,6 +397,55 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     } finally {
       isLoading.value = false
     }
+  }
+
+  async function fetchUnifiedDashboard(): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      unifiedDashboard.value = await analyticsService.getUnifiedDashboard()
+      lastUpdated.value = new Date()
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось загрузить дашборд'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function fetchDashboardGeography(params?: { days?: number }): Promise<void> {
+    try {
+      const data = await analyticsService.getDashboardGeography(params)
+      dashboardGeography.value = data?.results ?? []
+    } catch {
+      dashboardGeography.value = []
+    }
+  }
+
+  async function createReport(payload: {
+    report_type?: string
+    date_range?: { from?: string; to?: string; date_from?: string; date_to?: string }
+    export_format?: string
+  }): Promise<number | null> {
+    try {
+      const res = await analyticsService.postReportGenerate(payload)
+      reportTaskId.value = res.task_id
+      reportTaskStatus.value = res.status ?? 'processing'
+      return res.task_id
+    } catch (e: any) {
+      error.value = e?.message || 'Не удалось запустить формирование отчёта'
+      return null
+    }
+  }
+
+  async function pollReportStatus(taskId: number): Promise<{ status: string }> {
+    const res = await analyticsService.getReportStatus(taskId)
+    reportTaskStatus.value = res.status
+    return { status: res.status }
+  }
+
+  function resetReportState(): void {
+    reportTaskId.value = null
+    reportTaskStatus.value = null
   }
 
   async function fetchDistributionDashboard(params?: { days?: number }): Promise<void> {
@@ -590,6 +668,10 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     userLoginPatterns,
     userCohorts,
     featureAdoption,
+    unifiedDashboard,
+    dashboardGeography,
+    reportTaskId,
+    reportTaskStatus,
     approvalSummary,
     approvalTimeseries,
     approvalRecommendations,
@@ -615,6 +697,11 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     fetchUserLoginPatterns,
     fetchUserCohorts,
     fetchFeatureAdoption,
+    fetchUnifiedDashboard,
+    fetchDashboardGeography,
+    createReport,
+    pollReportStatus,
+    resetReportState,
     fetchApprovalSummary,
     fetchApprovalTimeseries,
     fetchApprovalRecommendations,

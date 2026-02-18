@@ -31,6 +31,7 @@ from .views.notification_views import (
 from .views.analytics_views import (
     AssetBankViewSet, CampaignPerformanceViewSet, SearchAnalyticsViewSet,
     ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet,
+    DashboardGeographyViewSet,
     DistributionAnalyticsViewSet, ContentIntelligenceViewSet
 )
 from mayan.apps.analytics.api_views import (
@@ -169,6 +170,16 @@ api_urls = [
         regex=r'^analytics/reports/(?P<pk>\d+)/$',
         view=AnalyticsReportGenerateViewSet.as_view({'get': 'retrieve'}),
         name='api-analytics-reports-detail'
+    ),
+    url(
+        regex=r'^analytics/reports/(?P<pk>\d+)/download/$',
+        view=AnalyticsReportGenerateViewSet.as_view({'get': 'download'}),
+        name='api-analytics-reports-download'
+    ),
+    url(
+        regex=r'^analytics/dashboard/geography/$',
+        view=DashboardGeographyViewSet.as_view({'get': 'list'}),
+        name='api-analytics-dashboard-geography'
     ),
     # Analytics (Asset Bank, Phase 1)
     url(
