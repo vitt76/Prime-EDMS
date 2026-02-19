@@ -6,3 +6,4 @@ common:
     - mayan.apps.dam.apps.DAMApp
     - mayan.apps.marketing_cms
     - mayan.apps.legal
+    - mayan.apps.saved_searches.apps.SavedSearchesAppConfig

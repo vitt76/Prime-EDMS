@@ -44,6 +44,11 @@
 - **drf-spectacular**: 0.27.2 (OpenAPI документация)
 - **django-cors-headers**: 3.10.0 (CORS поддержка)
 
+#### Phase 5 (Sprint 1 Backend) — Search & History APIs
+- **Orientation:** GET `/api/v4/documents/optimized/?orientation=portrait|landscape|square` — аннотации по последнему DocumentFile (latest_file_width, latest_file_height), фильтр по соотношению сторон; DocumentFile имеет nullable поля width, height (миграция 0087).
+- **Recently Viewed:** GET `/api/v4/headless/documents/recently-viewed/?limit=20&days=30` — документы по AssetEvent (event_type view/download) для текущего user и organization, порядок по последнему просмотру, ACL, тот же сериализатор что и список; требует заголовок X-Organization-Id.
+- **Saved Searches:** GET/POST `/api/v4/headless/saved-searches/`, GET/PATCH/DELETE `/api/v4/headless/saved-searches/<id>/`, GET `/api/v4/headless/saved-searches/<id>/run/` — tenant-aware CRUD; run применяет сохранённые query и filters через логику OptimizedAPIDocumentListView и возвращает results в том же формате. Лимит 20 сохранённых поисков на пользователя.
+
 #### AI и обработка медиа
 - **yandexgptlite**: (YandexGPT интеграция)
 - **gigachat**: (GigaChat интеграция)

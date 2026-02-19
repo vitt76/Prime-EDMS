@@ -13,6 +13,12 @@ from .views.config_views import HeadlessDocumentTypeConfigView
 from .views.activity_views import DashboardActivityView, HeadlessActivityFeedView
 from .views.favorites_views import HeadlessFavoriteListView, HeadlessFavoriteToggleView
 from .views.my_uploads_views import HeadlessMyUploadsView
+from .views.recently_viewed_views import RecentlyViewedDocumentListView
+from .views.saved_searches_views import (
+    SavedSearchListCreateView,
+    SavedSearchDetailView,
+    SavedSearchRunView,
+)
 from .views.profile_views import HeadlessProfileView
 from .views.version_views import HeadlessEditView, HeadlessVersionActivateView
 from .views.conversion_views import HeadlessDocumentConvertView
@@ -99,6 +105,26 @@ api_urls = [
         regex=r'^documents/my_uploads/$',
         view=HeadlessMyUploadsView.as_view(),
         name='api-my-uploads'
+    ),
+    url(
+        regex=r'^documents/recently-viewed/$',
+        view=RecentlyViewedDocumentListView.as_view(),
+        name='api-documents-recently-viewed'
+    ),
+    url(
+        regex=r'^saved-searches/$',
+        view=SavedSearchListCreateView.as_view(),
+        name='api-saved-searches-list'
+    ),
+    url(
+        regex=r'^saved-searches/(?P<pk>\d+)/$',
+        view=SavedSearchDetailView.as_view(),
+        name='api-saved-searches-detail'
+    ),
+    url(
+        regex=r'^saved-searches/(?P<pk>\d+)/run/$',
+        view=SavedSearchRunView.as_view(),
+        name='api-saved-searches-run'
     ),
     url(
         regex=r'^documents/(?P<document_id>\d+)/versions/new_from_edit/$',

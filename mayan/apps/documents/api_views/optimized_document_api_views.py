@@ -12,7 +12,7 @@ import time
 import uuid
 from datetime import timedelta
 
-from django.db.models import Prefetch, OuterRef, Q, Subquery
+from django.db.models import F, Prefetch, OuterRef, Q, Subquery
 from django.apps import apps as django_apps
 from django.utils import timezone
 
@@ -90,7 +90,13 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
         latest_file_size_subquery = DocumentFile.objects.filter(
             document=OuterRef('pk')
         ).order_by('-timestamp').values('size')[:1]
-        
+        latest_file_width_subquery = DocumentFile.objects.filter(
+            document=OuterRef('pk')
+        ).order_by('-timestamp').values('width')[:1]
+        latest_file_height_subquery = DocumentFile.objects.filter(
+            document=OuterRef('pk')
+        ).order_by('-timestamp').values('height')[:1]
+
         # Subquery to get active version ID for each document
         active_version_subquery = DocumentVersion.objects.filter(
             document=OuterRef('pk'),
@@ -102,6 +108,8 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
             latest_file_id=Subquery(latest_file_subquery),
             latest_file_mimetype=Subquery(latest_file_mimetype_subquery),
             latest_file_size=Subquery(latest_file_size_subquery),
+            latest_file_width=Subquery(latest_file_width_subquery),
+            latest_file_height=Subquery(latest_file_height_subquery),
             active_version_id=Subquery(active_version_subquery)
         ).select_related(
             'document_type'  # ForeignKey - single JOIN
@@ -210,7 +218,31 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
             for p in prefixes:
                 q_or |= Q(latest_file_mimetype__startswith=p)
             queryset = queryset.filter(q_or)
-        
+
+        # Orientation filter (Phase 5.1): portrait | landscape | square
+        # Requires DocumentFile width/height; filter only documents with set dimensions.
+        orientation = (self.request.query_params.get('orientation') or '').strip().lower()
+        if orientation == 'portrait':
+            queryset = queryset.filter(
+                latest_file_width__isnull=False,
+                latest_file_height__isnull=False,
+                latest_file_height__gt=F('latest_file_width')
+            )
+        elif orientation == 'landscape':
+            queryset = queryset.filter(
+                latest_file_width__isnull=False,
+                latest_file_height__isnull=False,
+                latest_file_width__gt=F('latest_file_height')
+            )
+        elif orientation == 'square':
+            # Tolerance ±2px
+            queryset = queryset.filter(
+                latest_file_width__isnull=False,
+                latest_file_height__isnull=False,
+                latest_file_width__gte=F('latest_file_height') - 2,
+                latest_file_width__lte=F('latest_file_height') + 2
+            )
+
         # Apply ordering
         ordering = self.request.query_params.get('ordering', '-datetime_created')
         allowed_orderings = [

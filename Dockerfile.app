@@ -55,10 +55,15 @@ COPY mayan/apps/documents/models/document_file_models.py /opt/mayan-edms/lib/pyt
 COPY mayan/apps/documents/migrations/0081_documentfile_filename_index.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/migrations/0081_documentfile_filename_index.py
 COPY mayan/apps/documents/migrations/0082_document_description_gin_index.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/migrations/0082_document_description_gin_index.py
 COPY mayan/apps/documents/migrations/0083_document_composite_indexes.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/migrations/0083_document_composite_indexes.py
+COPY mayan/apps/documents/migrations/0084_document_fulltext_search.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/migrations/0084_document_fulltext_search.py
+COPY mayan/apps/documents/migrations/0085_add_organization.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/migrations/0085_add_organization.py
+COPY mayan/apps/documents/migrations/0086_make_organization_required.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/migrations/0086_make_organization_required.py
+COPY mayan/apps/documents/migrations/0087_add_documentfile_width_height.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/documents/migrations/0087_add_documentfile_width_height.py
 COPY mayan/apps/document_indexing/queues.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/document_indexing/queues.py
 COPY mayan/apps/dynamic_search /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dynamic_search
 COPY mayan/apps/dam /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dam
 COPY mayan/apps/headless_api /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
+COPY mayan/apps/saved_searches /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/saved_searches
 COPY mayan/apps/autoadmin /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/autoadmin
 COPY mayan/apps/storage /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/storage
 COPY mayan/apps/smart_settings/classes.py /opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/smart_settings/classes.py

@@ -17,6 +17,12 @@ from mayan.apps.headless_api.views.favorites_views import (
 )
 from mayan.apps.headless_api.views.password_views import HeadlessPasswordChangeView
 from mayan.apps.headless_api.views.my_uploads_views import HeadlessMyUploadsView
+from mayan.apps.headless_api.views.recently_viewed_views import RecentlyViewedDocumentListView
+from mayan.apps.headless_api.views.saved_searches_views import (
+    SavedSearchListCreateView,
+    SavedSearchDetailView,
+    SavedSearchRunView,
+)
 from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
 from mayan.apps.headless_api.views.version_views import (
     HeadlessEditView, HeadlessVersionActivateView
@@ -350,6 +356,26 @@ api_version_urls = [
         regex=r'^headless/documents/my_uploads/$',
         view=HeadlessMyUploadsView.as_view(),
         name='headless-my-uploads'
+    ),
+    url(
+        regex=r'^headless/documents/recently-viewed/$',
+        view=RecentlyViewedDocumentListView.as_view(),
+        name='headless-documents-recently-viewed'
+    ),
+    url(
+        regex=r'^headless/saved-searches/$',
+        view=SavedSearchListCreateView.as_view(),
+        name='headless-saved-searches-list'
+    ),
+    url(
+        regex=r'^headless/saved-searches/(?P<pk>\d+)/$',
+        view=SavedSearchDetailView.as_view(),
+        name='headless-saved-searches-detail'
+    ),
+    url(
+        regex=r'^headless/saved-searches/(?P<pk>\d+)/run/$',
+        view=SavedSearchRunView.as_view(),
+        name='headless-saved-searches-run'
     ),
     url(
         regex=r'^headless/ping/$',

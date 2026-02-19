@@ -639,13 +639,23 @@
 - ✅ Sprint 3: ShareLink, Notifications WebSocket org-scoped
 - ✅ Sprint 4: Security Audit + Performance Tuning
 
+### Phase 5 (Sprint 1 Backend Tech Debt) — ✅ COMPLETED & VERIFIED (2026-02-19)
+
+**Реализовано и пройдена QA-проверка:**
+- **3.1 Ориентация:** Поля `DocumentFile.width`/`height` (nullable), миграция 0087; в optimized list — Subquery-аннотации `latest_file_width`/`latest_file_height`, фильтр `orientation=portrait|landscape|square` (square с допуском ±2px).
+- **3.2 Недавно просмотренные:** Endpoint `GET /api/v4/headless/documents/recently-viewed/` на базе AssetEvent (event_type view/download), фильтр по `request.user` и `request.organization`, prefetch как в optimized list, лимит 50, параметры `limit` и `days`.
+- **3.3 Saved Searches:** Модель `SavedSearch` (app `saved_searches`): user, organization, name, query, filters (JSON), created_at; CRUD `GET/POST .../saved-searches/`, `GET/PATCH/DELETE .../saved-searches/<id>/`; `GET .../saved-searches/<id>/run/` возвращает список документов (тот же сериализатор и логика, что optimized list). Лимит 20 сохранённых поисков на пользователя.
+- **Верификация:** Миграции 0087 и saved_searches/0001 проверены (width/height nullable); скрипт `python manage.py verify_phase5` создаёт тестовые данные и проверяет все три API.
+
+**Следующий шаг по Спринту 1:** опционально — фронт: подгрузка списка saved searches из API, кнопка «Сохранить поиск»; блок «Недавно просмотренные» в галерее.
+
 ### Immediate (Следующие 1-2 недели) — по дорожной карте Доработка 2026
 
-1. **Спринт 1 — Поиск и обнаружение (старт):**
-   - 3.1 Ориентация на бэкенде: width/height или флаг, API `orientation=portrait|landscape|square`, фронт уже готов.
-   - 3.2 «Недавно просмотренные»: endpoint по AssetEvent (org, user, view/preview/download), блок в галерее.
-   - 3.3 Saved Searches: модель SavedSearch (tenant-aware), API CRUD и run, UI «Сохранить поиск» / «Мои сохранённые поиски».
-   - Чек-листы и критерии приёмки: `docs/transformation-2025/Доработка_2026.md`, раздел 3.
+1. **Спринт 1 — Поиск и обнаружение (бэкенд выполнен, см. Phase 5 выше):**
+   - ✅ 3.1 Ориентация на бэкенде — реализовано (DocumentFile width/height, фильтр в optimized list).
+   - ✅ 3.2 «Недавно просмотренные» — endpoint `/api/v4/headless/documents/recently-viewed/`.
+   - ✅ 3.3 Saved Searches — модель и CRUD + run API.
+   - Остаётся (по желанию): UI «Сохранить поиск», блок «Недавно просмотренные» во фронте.
 
 2. **Опционально (параллельно или после Спринта 1):**
    - Спринт 2: избранное (tenant isolation в API + UI), хоткеи в галерее/превью.

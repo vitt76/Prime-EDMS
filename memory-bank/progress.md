@@ -121,7 +121,8 @@
 
 #### 8. Headless API
 - ✅ REST API v4 endpoints для фронтенда
-- ✅ Оптимизированные document API views
+- ✅ Оптимизированные document API views (в т.ч. `orientation=portrait|landscape|square`, DocumentFile width/height)
+- ✅ **Phase 5 Sprint 1 Backend:** GET `/api/v4/headless/documents/recently-viewed/` (по AssetEvent); CRUD и run `/api/v4/headless/saved-searches/`; миграции documents 0087 (width/height), saved_searches 0001; верификация: `python manage.py verify_phase5`
 - ✅ Analytics API endpoints
 - ✅ Notifications API endpoints
 - ✅ Token-based аутентификация
@@ -192,7 +193,7 @@
 
 | Фаза | Спринт | Тема | Статус | Оценка |
 |------|--------|------|--------|--------|
-| A | **1** | Поиск и обнаружение (ориентация, недавно просмотренные, saved searches) | 🔲 Запланирован | 2–3 нед |
+| A | **1** | Поиск и обнаружение (ориентация, недавно просмотренные, saved searches) | ✅ Бэкенд завершён (Phase 5, QA 2026-02-19) | 2–3 нед |
 | A | **2** | Продуктивность и UX (избранное + tenant, хоткеи) | 🔲 Запланирован | 1–2 нед |
 | B | **3** | Контент: дедупликация, пресеты рендишенов, водяные знаки | 🔲 Запланирован | 3–4 нед |
 | B | **4** | Совместная работа: коллекции, комментарии, сравнение версий | 🔲 Запланирован | 3–4 нед |

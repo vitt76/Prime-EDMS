@@ -117,7 +117,7 @@ services:
       MAYAN_WORKER_D_MAX_TASKS_PER_CHILD: "10"
       COMMAND_WORKER_D: "%(ENV_MAYAN_PYTHON_BIN_DIR)scelery -A mayan worker -c %(ENV_MAYAN_WORKER_D_CONCURRENCY)s --hostname=mayan-edms-worker_d.%%h --loglevel=INFO -Ofair --queues=ai_analysis --max-memory-per-child %(ENV_MAYAN_WORKER_D_MAX_MEMORY_PER_CHILD)s --max-tasks-per-child %(ENV_MAYAN_WORKER_D_MAX_TASKS_PER_CHILD)s --without-gossip --without-heartbeat"
       # Force add our extensions via environment
-      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor', 'mayan.apps.dam.apps.DAMApp', 'mayan.apps.marketing_cms', 'mayan.apps.legal']"
+      MAYAN_COMMON_EXTRA_APPS: "['mayan.apps.converter_pipeline_extension', 'mayan.apps.distribution', 'mayan.apps.image_editor', 'mayan.apps.dam.apps.DAMApp', 'mayan.apps.marketing_cms', 'mayan.apps.legal', 'mayan.apps.saved_searches.apps.SavedSearchesAppConfig']"
       # Устанавливаем PYTHONPATH для гарантированной загрузки расширения
       PYTHONPATH: /opt/mayan-edms/lib/python3.9/site-packages
       # AI Provider configurations
@@ -154,6 +154,7 @@ services:
       - ./mayan/apps/organizations:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/organizations
       - ./mayan/apps/analytics:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/analytics
       - ./mayan/apps/headless_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
+      - ./mayan/apps/saved_searches:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/saved_searches
       - ./mayan/apps/autoadmin:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/autoadmin
       - ./mayan/apps/cabinets:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/cabinets
       - ./mayan/apps/tags:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/tags
@@ -217,6 +218,7 @@ services:
       - ./mayan/apps/organizations:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/organizations
       - ./mayan/apps/analytics:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/analytics
       - ./mayan/apps/headless_api:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/headless_api
+      - ./mayan/apps/saved_searches:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/saved_searches
       - ./mayan/apps/autoadmin:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/autoadmin
       - ./mayan/apps/cabinets:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/cabinets
       - ./mayan/apps/dynamic_search:/opt/mayan-edms/lib/python3.9/site-packages/mayan/apps/dynamic_search

@@ -119,6 +119,16 @@ class DocumentFile(
             'The size of the file in bytes.'
         ), null=True, verbose_name=_('Size')
     )
+    width = models.PositiveIntegerField(
+        blank=True, editable=False, help_text=_(
+            'Image/page width in pixels (first page). Used for orientation filter.'
+        ), null=True, verbose_name=_('Width')
+    )
+    height = models.PositiveIntegerField(
+        blank=True, editable=False, help_text=_(
+            'Image/page height in pixels (first page). Used for orientation filter.'
+        ), null=True, verbose_name=_('Height')
+    )
 
     class Meta:
         ordering = ('timestamp',)
