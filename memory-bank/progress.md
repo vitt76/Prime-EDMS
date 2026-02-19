@@ -1,7 +1,7 @@
 # Progress: Prime-EDMS
 
 **Последнее обновление:** 2026-02-17  
-**Источник:** Sprint 5 (High-Performance Frontend — Immersive Grid & Search) завершён; Memory Bank обновлён.
+**Источник:** Sprint 5 завершён; принята дорожная карта «Доработка 2026» (`docs/transformation-2025/Доработка_2026.md`); Memory Bank приведён в соответствие с планом спринтов.
 
 ---
 
@@ -181,10 +181,29 @@
 
 ---
 
+## 📋 Доработка 2026 — Запланированные спринты (Roadmap)
+
+**Документ:** `docs/transformation-2025/Доработка_2026.md`  
+**Цель:** Соответствие мировым DAM-системам; закрытие gaps (поиск, UX, контент, коллаборация, безопасность, операции).
+
+| Фаза | Спринт | Тема | Статус | Оценка |
+|------|--------|------|--------|--------|
+| A | **1** | Поиск и обнаружение (ориентация, недавно просмотренные, saved searches) | 🔲 Запланирован | 2–3 нед |
+| A | **2** | Продуктивность и UX (избранное + tenant, хоткеи) | 🔲 Запланирован | 1–2 нед |
+| B | **3** | Контент: дедупликация, пресеты рендишенов, водяные знаки | 🔲 Запланирован | 3–4 нед |
+| B | **4** | Совместная работа: коллекции, комментарии, сравнение версий | 🔲 Запланирован | 3–4 нед |
+| C | **5** | Безопасность и compliance (field-level права, right to be forgotten) | 🔲 Запланирован | 2–3 нед |
+| C | **6** | Операции (мониторинг, алерты, лимиты файлов, приоритеты очередей) | 🔲 Запланирован | 2 нед |
+| D | **7** | Крупные направления (семантический поиск, видео, ingest, lifecycle, n8n, a11y) | 🔲 По выбору | по фиче |
+
+**Следующий к выполнению:** Спринт 1 (Поиск и обнаружение). После каждого спринта — регрессионные тесты, обновление Memory Bank, отчёт в `docs/transformation-2025/SPRINT_DORABOTKA_2026_N.md`.
+
+---
+
 ## 🚧 In Progress (В процессе разработки)
 
-### 1. Multi-tenancy Architecture (Tenant Isolation) — Базовая инфраструктура завершена
-**Статус:** Sprint 1-4 завершены. Part 3 интеграция планируется  
+### 1. Multi-tenancy Architecture (Tenant Isolation) — Базовая инфраструктура и Part 3 завершены
+**Статус:** Sprint 1-4 и Part 3 (Sprint 1–4) завершены. Следующий опциональный этап — Sprint 4 итерация 2 (Security Polish, OpenAPI).  
 **Документы:** 
 - `docs/transformation-2025/TZ_Django_Tenant_Isolation.md` (Part 2 — завершено)
 - `docs/transformation-2025/АНАЛИЗ КОНТЕКСТА И ОБНОВЛЕННОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ.md` (Part 3 — планируется)
@@ -373,7 +392,7 @@
 
 ### Backend Modules
 - **Core Mayan EDMS**: ✅ 100% (базовый функционал)
-- **DAM Module**: ✅ 90% (работает, кроме Claude/Gemini)
+- **DAM Module**: ✅ 95% (все AI-провайдеры реализованы, включая Claude/Gemini; стабильны YandexGPT, GigaChat)
 - **Analytics Module**: ✅ 92% (Transformation завершён; дашборды, geography, отчёты, download API; опционально: search-to-find trend endpoint)
 - **Distribution Module**: ✅ 95% (полностью функционален)
 - **Headless API**: ✅ 90% (основные endpoints работают, некоторые gaps)
@@ -401,22 +420,22 @@
 ## 🎯 Приоритеты разработки
 
 ### Высокий приоритет
-1. **Multi-tenancy Implementation** (Sprint 1-4 ЗАВЕРШЕНЫ)
-   - ✅ Organizations модуль полностью реализован
-   - ✅ TenantAwareManager и Middleware
-   - ✅ Миграция существующих данных
-   - ✅ Performance оптимизация (indexes, Redis caching, N+1 fix)
-   - ✅ Security hardening (UUID validation, audit logging)
-   - ✅ Frontend integration (org switching, settings page, type safety)
-2. Завершение Immersive Grid оптимизаций
-3. Реализация Change Password API endpoint
-4. Завершение YouTube Analytics интеграции
-5. Оптимизация производительности для больших коллекций
+1. **Доработка 2026 — Спринт 1 (Поиск и обнаружение)** — следующий запланированный спринт
+   - Ориентация на бэкенде (width/height или флаг) + поиск по фильтру в API
+   - «Недавно просмотренные» на основе AssetEvent (endpoint + UI)
+   - Saved Searches (модель SavedSearch tenant-aware, API, UI, опционально уведомления)
+   - Детали и чек-листы: `docs/transformation-2025/Доработка_2026.md`
+2. **Multi-tenancy Implementation** (Sprint 1-4 ЗАВЕРШЕНЫ)
+   - ✅ Organizations модуль полностью реализован; Part 3 (DAM, Analytics, Distribution, Notifications) завершён
+3. Доработка 2026 — Спринт 2 (избранное + tenant isolation, хоткеи) — после Спринта 1 или параллельно
+4. Завершение YouTube Analytics интеграции (опционально)
+5. Оптимизация производительности для больших коллекций (продолжение)
 
 ### Средний приоритет
-1. Реализация Claude и Gemini AI провайдеров
-2. User Activity Feed API
-3. Расширенные фильтры поиска
+1. Доработка 2026 — Спринты 3–4 (контент, коллаборация) после Фазы A
+2. Claude и Gemini AI провайдеры (реализованы; стабилизация при необходимости)
+3. User Activity Feed API (реализован)
+4. Расширенные фильтры поиска (частично закрыто Спринтом 1 — ориентация, saved searches)
 
 ### Низкий приоритет
 1. Analytics Transformation Phase 3 (AI/ML, real-time)
@@ -443,4 +462,6 @@
 - Большинство core функций полностью работают и используются в production
 - Активная разработка сосредоточена на UI/UX улучшениях и оптимизации производительности
 - Новые модули (Marketing CMS, Public Frontend) полностью реализованы и готовы к использованию
-- Некоторые AI провайдеры требуют доработки, но основные (YandexGPT, GigaChat) работают стабильно
+- Claude и Gemini провайдеры реализованы (dam/ai_providers); основные (YandexGPT, GigaChat) работают стабильно.
+- **Document Review (2026-02-17):** проведён обзор Memory Bank; activeContext, progress, techContext синхронизированы с текущим состоянием (Part 3 завершён, Immersive Grid/Sprint 5 завершён, DAM % обновлён).
+- **Доработка 2026 (2026-02-17):** принята дорожная карта `docs/transformation-2025/Доработка_2026.md`. Цель — соответствие мировым DAM-системам. Запланированы 7 спринтов в 4 фазах (A: 1–2, B: 3–4, C: 5–6, D: 7 по выбору). Следующий спринт — Спринт 1 (Поиск и обнаружение). Memory Bank обновлён под план: activeContext — раздел «Доработка 2026», progress — таблица спринтов и приоритеты.

@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
 **Последнее обновление:** 2026-02-17  
-**Текущий фокус:** Analytics Transformation и Frontend Visualization завершены; следующий — полировка фронта, тесты или Sprint 4 (итерация 2): Security Polish & Backend Hardening
+**Текущий фокус:** Принята дорожная карта «Доработка 2026» для соответствия мировым DAM-системам. Следующий запланированный спринт — **Спринт 1 (Поиск и обнаружение)**. Опционально параллельно или после Фазы A — Sprint 4 итерация 2 (Security Polish) по старому ТЗ.
 
 ---
 
@@ -46,6 +46,38 @@
 - Константа API и `useApi` composable: метод `submitConsent()` для вызова `POST /api/v4/public/legal/consent/`.
 
 **Паттерны:** Новый Django app в `mayan/apps/legal`, REST API без tenant; фронт — только Yandex.Metrika, без Google.
+
+---
+
+### Доработка 2026 — Стратегическая дорожная карта (принята)
+
+**Документ:** `docs/transformation-2025/Доработка_2026.md`
+
+**Цель:** Закрыть основные «дыры» Prime-EDMS по сравнению с современной DAM; довести продукт до требований мировых DAM-систем при постепенных изменениях и тестировании.
+
+**Принципы:** Группировка по связанным системам; для каждой функции — продуктовое описание, критерии приёмки и чек-лист готовности; все новые tenant-scoped сущности — TenantAwareMixin, FK organization; после каждого спринта — обновление Memory Bank и краткий отчёт в `docs/transformation-2025/` (например, `SPRINT_DORABOTKA_2026_1.md`).
+
+**Планируемые фазы и спринты:**
+
+| Фаза | Спринты | Тема | Оценка |
+|------|---------|------|--------|
+| **A** | Спринт 1 → Спринт 2 | Быстрые победы: поиск/обнаружение, продуктивность и UX | 3–5 нед |
+| **B** | Спринт 3 → Спринт 4 | Контент (дедупликация, рендишены, водяные знаки); совместная работа (коллекции, комментарии, сравнение версий) | 6–8 нед |
+| **C** | Спринт 5 → Спринт 6 | Безопасность и compliance; операции (мониторинг, лимиты, очереди) | 4–5 нед |
+| **D** | Спринт 7 (по выбору) | Крупные направления: семантический поиск, видеомодуль, ingest pipeline, lifecycle, n8n/коннекторы, a11y | по приоритету продукта |
+
+**Содержание спринтов (кратко):**
+- **Спринт 1 — Поиск и обнаружение:** ориентация на бэкенде (width/height + фильтр API), «Недавно просмотренные» (AssetEvent), Saved Searches (модель + API + UI, опционально уведомления).
+- **Спринт 2 — Продуктивность и UX:** избранное (tenant isolation в API + UI в галерее), клавиатурные сокращения в галерее и превью.
+- **Спринт 3 — Контент:** дедупликация по хешу + UI «возможные дубликаты», пресеты рендишенов под каналы, водяные знаки на превью/экспорт.
+- **Спринт 4 — Совместная работа:** коллекции/альбомы с шарингом, комментарии к активам, сравнение версий (side-by-side).
+- **Спринт 5 — Безопасность и compliance:** field-level права на метаданные, процесс «Right to be forgotten».
+- **Спринт 6 — Операции:** мониторинг и алерты, лимиты на размер/тип файла, приоритеты очередей.
+- **Спринт 7:** семантический поиск, видеомодуль, ingest pipeline, lifecycle, n8n/коннекторы, a11y (каждое направление — отдельное решение по объёму).
+
+**Следующий шаг:** Старт **Спринта 1 (Поиск и обнаружение)**. Задачи: 3.1 Ориентация на бэкенде и поиск по фильтру; 3.2 «Недавно просмотренные»; 3.3 Saved Searches. Детальные критерии приёмки и чек-листы — в документе Доработка_2026.md.
+
+**Зависимости:** Спринты 1 и 2 можно вести параллельно; Спринт 4 логически после 1 (saved searches в контексте коллекций). Спринты 5 и 6 независимы от 1–4.
 
 ---
 
@@ -142,6 +174,8 @@
 - **Phase 1:** MetricCard.vue, LineChart.vue (Chart.js), GeoMap.vue (барчарт по странам); analyticsStore: unifiedDashboard, dashboardGeography, fetchUnifiedDashboard(), fetchDashboardGeography(); analyticsService: getUnifiedDashboard(), getDashboardGeography(). Backend: GET .../analytics/dashboard/geography/ (DashboardGeographyViewSet, агрегация по AssetEvent.metadata.country).
 - **Phase 2:** AdoptionTable.vue (feature_name, users_count, adoption_rate_percent из unifiedDashboard.feature_adoption); RetentionCohort.vue (вынесена когортная таблица); UserActivityPage: Churn блок (MetricCard, данные из unifiedDashboard.churn_count/churn_period_days). Единый дашборд расширен полями churn_count, churn_period_days.
 - **Phase 3:** ReportGenerateModal.vue (форма период/тип/формат, POST generate → poll status → Download); analyticsStore: reportTaskId, reportTaskStatus, createReport(), pollReportStatus(), resetReportState(); analyticsService: postReportGenerate(), getReportStatus(), downloadReportBlob(); apiService.getBlob(). Backend: GET .../analytics/reports/{id}/download/ (отдача файла с проверкой прав и организации). Кнопка «Сформировать отчёт» на AssetBankPage.
+
+**Document Review (2026-02-17):** Проведён обзор Memory Bank. Итоги: productContext и systemPatterns актуальны; в activeContext исправлены устаревшие Next Steps (Part 3 отмечен завершённым), блок Immersive Grid переведён в статус «ЗАВЕРШЕНО». progress.md и techContext синхронизированы с текущим состоянием (Part 3, DAM %, Claude/Gemini). Нарушений systemPatterns не выявлено.
 
 **Следующий фокус:** Part 3 (Sprint 1–4) и Sprint 5 (Frontend) завершены; Analytics Transformation завершён (2026-02-17). Следующий этап — **Sprint 4 (итерация 2): Security Polish & Final Backend Hardening** (см. предложенный объём ниже) или дальнейшая полировка фронта (тесты, accessibility, ориентация на бэкенде при появлении полей width/height).
 
@@ -347,25 +381,14 @@
 - ✅ Улучшена обработка ошибок
 
 #### 4. Immersive Grid Implementation
-**Статус:** Активно разрабатывается  
+**Статус:** ✅ ЗАВЕРШЕНО (Sprint 5, 2026-02-17)  
 **Коммиты:** `55168e0166`, `9a35372d90`, `c2a4a28596`
 
-**Что делается:**
-- Реализация "премиального" дизайна в стиле Pinterest/Google Photos/Figma
-- Улучшение AssetCard компонента:
-  - Убраны границы и тени в покое
-  - Metadata overlay появляется только на hover
-  - Google Photos style checkbox selection
-  - Quick actions в правом нижнем углу при hover
-- Создание AssetGrid компонента для оптимизированного рендеринга
-- Density control (compact/comfortable layouts)
-- Context-aware GalleryHeaderActions вместо GridToolbar
-
-**Архитектурные решения:**
-- Использование Teleport для header actions (лучшая композиция компонентов)
-- Persistence UI preferences через uiStore (density, layout, sort)
-- Lazy loading для share links (загрузка только при открытии модала)
-- Предотвращение N+1 queries (использование данных из list endpoint)
+**Реализовано:**
+- Премиальный дизайн в стиле Pinterest/Google Photos/Figma; AssetCard без границ/теней в покое, metadata overlay на hover, Google Photos style selection, quick actions на hover
+- AssetGrid и ImmersiveGrid (@tanstack/vue-virtual при 80+ активах), виртуализация по строкам, infinite scroll, Shift+Click и drag-select
+- Density control, GalleryHeaderActions, Teleport для header actions
+- Persistence UI (uiStore), lazy loading share links, предотвращение N+1
 
 **Документация:** `docs/transformation-2025/IMMERSIVE_GRID_IMPLEMENTATION.md`
 
@@ -588,66 +611,23 @@
 
 ## 📋 Next Steps (Ближайшие шаги)
 
-### Immediate (Sprint 1: DAM Module Integration)
-1. **DocumentAIAnalysis Tenant-Aware:**
-   - Добавить TenantAwareMixin к DocumentAIAnalysis модели
-   - Миграция для добавления organization FK
-   - Обновить Celery tasks для передачи organization_id
-   - Тесты для изоляции AI анализов по тенантам
-   - Story Points: 8-13 (US-DAM-002)
+### Part 3 Tenant Integration — ЗАВЕРШЕНО (Sprint 1–4)
+- ✅ Sprint 1: DocumentAIAnalysis tenant-aware
+- ✅ Sprint 2: AssetEvent, Dashboard API, Reports tenant-aware
+- ✅ Sprint 3: ShareLink, Notifications WebSocket org-scoped
+- ✅ Sprint 4: Security Audit + Performance Tuning
 
-2. **DocumentFile и DocumentVersion проверка:**
-   - Проверить наличие organization FK
-   - При необходимости добавить TenantAwareMixin
+### Immediate (Следующие 1-2 недели) — по дорожной карте Доработка 2026
 
-### Short-term (Sprint 2: Analytics Module Integration)
-1. **AssetEvent Tenant-Aware:**
-   - Добавить TenantAwareMixin к AssetEvent модели
-   - Миграция для добавления organization FK
-   - Обновить middleware для автоматической регистрации событий
-   - Story Points: 8 (US-ANALYTICS-001)
+1. **Спринт 1 — Поиск и обнаружение (старт):**
+   - 3.1 Ориентация на бэкенде: width/height или флаг, API `orientation=portrait|landscape|square`, фронт уже готов.
+   - 3.2 «Недавно просмотренные»: endpoint по AssetEvent (org, user, view/preview/download), блок в галерее.
+   - 3.3 Saved Searches: модель SavedSearch (tenant-aware), API CRUD и run, UI «Сохранить поиск» / «Мои сохранённые поиски».
+   - Чек-листы и критерии приёмки: `docs/transformation-2025/Доработка_2026.md`, раздел 3.
 
-2. **Analytics Dashboard API:**
-   - Фильтрация всех queryset'ов по request.organization
-   - Обновление агрегаций для tenant-aware метрик
-   - Story Points: 13 (US-ANALYTICS-002)
-
-### Medium-term (Sprint 3: Distribution + Notifications)
-1. **ShareLink Tenant-Aware:**
-   - Добавить TenantAwareMixin к ShareLink модели
-   - Обновить публичный API для проверки organization
-   - Story Points: 8 (US-DISTRIBUTION-001)
-
-2. **Notifications WebSocket:**
-   - Валидация Organization в WebSocket consumer
-   - Tenant-aware уведомления
-   - Story Points: 13 (US-NOTIFICATIONS-001)
-
-### Long-term (Sprint 4: Security + Performance)
-1. **Security Audit:**
-   - Penetration testing для cross-tenant access
-   - Audit logging всех операций с Organization
-
-2. **Performance Optimization:**
-   - Кеширование метрик по Organization
-   - Query optimization для tenant-aware запросов
-
-### Previous Immediate (Следующие 1-2 недели)
-
-1. **Завершение Immersive Grid:**
-   - Оптимизация для больших списков (>100 активов)
-   - Виртуальный скроллинг для очень больших коллекций
-   - Финальная полировка UI/UX
-
-2. **Search Improvements:**
-   - Расширенные фильтры (дата, размер, владелец)
-   - Search history persistence
-   - Улучшение faceted search
-
-3. **Performance:**
-   - Оптимизация изображений (lazy loading, responsive)
-   - CDN интеграция для статики
-   - Database query optimization
+2. **Опционально (параллельно или после Спринта 1):**
+   - Спринт 2: избранное (tenant isolation в API + UI), хоткеи в галерее/превью.
+   - Sprint 4 итерация 2 (Security Polish, OpenAPI) по старому ТЗ Part 3.
 
 ### Short-term (Следующие 1-2 месяца)
 

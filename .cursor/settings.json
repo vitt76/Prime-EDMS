@@ -20,6 +20,12 @@
     },
     "superpowers": {
       "enabled": true
+    },
+    "parallel": {
+      "enabled": true
+    },
+    "browserstack": {
+      "enabled": true
     }
   }
 }

@@ -422,22 +422,11 @@ public-frontend/
 - Фаза 3: AlterField NOT NULL + AddIndex — операции в documents/0086, tags/0011, cabinets/0008; org 0004 — sync point
 - Причина: Django AddField/AlterField не принимают app_label; cross-app операции должны быть в app-владельце модели
 
-**Part 3 Integration (Планируется — из ТЗ Part 3):**
-- 🚧 **Sprint 1 (Неделя 1-2):** DAM модуль
-  - DocumentAIAnalysis → TenantAwareMixin
-  - Миграция для organization FK
-  - Обновление Celery tasks
-  - Story Points: 8-13 (US-DAM-002)
-- 🚧 **Sprint 2 (Неделя 3-4):** Analytics модуль
-  - AssetEvent → TenantAwareMixin
-  - Analytics Dashboard API с фильтрацией по Organization
-  - Story Points: 21 (US-ANALYTICS-001 + US-ANALYTICS-002)
-- ✅ **Sprint 3 (Неделя 5-6):** Distribution + Notifications — **ЗАВЕРШЁН 2026-02-11**
-  - ShareLink → TenantAwareMixin, миграции 0012–0014, pre_save binding, objects_unfiltered в портале/сигналах
-  - Notifications WebSocket: organization_id в query, проверка членства, group notifications_{org_id}_{user_id}
-- 🚧 **Sprint 4 (Неделя 7):** Security + Performance
-  - Security audit (penetration testing)
-  - Performance optimization (caching, query optimization)
+**Part 3 Integration (ЗАВЕРШЕНО — 2026-02-11):**
+- ✅ **Sprint 1 (Неделя 1-2):** DAM модуль — DocumentAIAnalysis → TenantAwareMixin, миграции dam 0007–0009, API/tasks/signals, pre-save binding
+- ✅ **Sprint 2 (Неделя 3-4):** Analytics модуль — AssetEvent → TenantAwareMixin, middleware, Dashboard API (tenant-scoped), Reports, geography
+- ✅ **Sprint 3 (Неделя 5-6):** Distribution + Notifications — ShareLink tenant-aware, Notifications WebSocket org-scoped (organization_id в query, group notifications_{org_id}_{user_id})
+- ✅ **Sprint 4 (Неделя 7):** Security Audit + Performance Tuning — отчёты, cross-tenant тесты, кэш dashboard, load testing
 
 **Tenant-aware модели (реализовано):**
 - ✅ Document (имеет organization FK, миграции documents/0085, 0086)
