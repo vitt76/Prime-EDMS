@@ -30,6 +30,9 @@ from .views.auth_views import HeadlessAuthMeView
 from .views.dashboard_stats_views import HeadlessDashboardStatsView
 from .views.task_status_views import HeadlessTaskStatusView
 from .views.admin_logs_views import HeadlessAdminLogsView
+from .views.audit_log_views import (
+    AuditLogListView, AuditLogExportView, DocumentActivityListView
+)
 from .views.notification_views import (
     HeadlessNotificationDetailView,
     HeadlessNotificationListView,
@@ -91,6 +94,16 @@ api_urls = [
         name='api-admin-logs'
     ),
     url(
+        regex=r'^audit-logs/$',
+        view=AuditLogListView.as_view(),
+        name='api-audit-logs-list'
+    ),
+    url(
+        regex=r'^audit-logs/export/$',
+        view=AuditLogExportView.as_view(),
+        name='api-audit-logs-export'
+    ),
+    url(
         regex=r'^dashboard/activity/$',
         view=DashboardActivityView.as_view(),
         name='api-dashboard-activity'
@@ -149,6 +162,11 @@ api_urls = [
         regex=r'^documents/(?P<document_id>\d+)/versions/(?P<version_id>\d+)/revert/$',
         view=HeadlessVersionRevertView.as_view(),
         name='api-document-version-revert'
+    ),
+    url(
+        regex=r'^documents/(?P<document_id>\d+)/activity/$',
+        view=DocumentActivityListView.as_view(),
+        name='api-document-activity'
     ),
     url(
         regex=r'^documents/(?P<document_id>\d+)/potential-duplicates/$',

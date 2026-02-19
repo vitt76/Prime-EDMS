@@ -646,7 +646,7 @@
             </div>
 
           <!-- Other File Types (icon fallback) -->
-          <div v-else-if="activeTab !== 'metadata' && activeTab !== 'comments' && activeTab !== 'usage' && activeTab !== 'duplicates'" class="flex-1 flex items-start justify-center px-4 pb-6">
+          <div v-else-if="activeTab !== 'metadata' && activeTab !== 'comments' && activeTab !== 'usage' && activeTab !== 'duplicates' && activeTab !== 'activity'" class="flex-1 flex items-start justify-center px-4 pb-6">
             <div class="w-full max-w-xl sticky top-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/60 shadow-sm p-5 flex flex-col gap-3">
               <div class="flex items-center gap-3">
                 <div class="w-12 h-12 rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-200">
@@ -925,6 +925,40 @@
                 </ul>
               </section>
             </div>
+
+            <!-- Activity Tab (Sprint 5.2.4) -->
+            <div v-if="activeTab === 'activity'" class="p-5 space-y-4">
+              <p class="text-sm text-neutral-500 dark:text-neutral-400">История действий по документу: просмотры, скачивания, шаринг.</p>
+              <div v-if="activityLoading" class="flex justify-center py-8">
+                <svg class="w-8 h-8 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+              </div>
+              <div v-else-if="activityEvents.length === 0" class="text-sm text-neutral-500 dark:text-neutral-400 py-4">
+                Нет записей активности.
+              </div>
+              <div v-else class="overflow-x-auto">
+                <table class="min-w-full text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden">
+                  <thead class="bg-neutral-50 dark:bg-neutral-800">
+                    <tr>
+                      <th class="px-3 py-2 text-left font-medium text-neutral-700 dark:text-neutral-300">Дата</th>
+                      <th class="px-3 py-2 text-left font-medium text-neutral-700 dark:text-neutral-300">Пользователь</th>
+                      <th class="px-3 py-2 text-left font-medium text-neutral-700 dark:text-neutral-300">Действие</th>
+                      <th class="px-3 py-2 text-left font-medium text-neutral-700 dark:text-neutral-300">IP</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-neutral-200 dark:divide-neutral-700">
+                    <tr v-for="ev in activityEvents" :key="ev.id" class="bg-white dark:bg-neutral-900">
+                      <td class="px-3 py-2 text-neutral-600 dark:text-neutral-400">{{ ev.timestamp ? formatRelativeTime(ev.timestamp) : '—' }}</td>
+                      <td class="px-3 py-2 text-neutral-700 dark:text-neutral-300">{{ ev.username || '—' }}</td>
+                      <td class="px-3 py-2 text-neutral-700 dark:text-neutral-300">{{ activityEventTypeLabel(ev.event_type) }}</td>
+                      <td class="px-3 py-2 text-neutral-500 dark:text-neutral-400 text-xs">{{ ev.metadata?.ip_address || '—' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </aside>
       </div>
@@ -993,7 +1027,7 @@ const isLoading = ref(true)
 const error = ref<string | null>(null)
 const asset = ref<Asset | null>(null)
 const extendedAsset = ref<ExtendedAsset | null>(null)
-const activeTab = ref<'info' | 'metadata' | 'versions' | 'duplicates' | 'comments' | 'usage'>('info')
+const activeTab = ref<'info' | 'metadata' | 'versions' | 'duplicates' | 'comments' | 'usage' | 'activity'>('info')
 const zoom = ref(1)
 const rotation = ref(0)
 const newComment = ref('')
@@ -1031,6 +1065,8 @@ const newVersionFileInput = ref<HTMLInputElement | null>(null)
 // Potential duplicates (same checksum in org)
 const potentialDuplicates = ref<any[]>([])
 const potentialDuplicatesLoading = ref(false)
+const activityEvents = ref<Array<{ id: number; timestamp: string; username: string | null; event_type: string; metadata: Record<string, string> }>>([])
+const activityLoading = ref(false)
 
 const selectedDocumentFile = computed(() => {
   const files = documentFiles.value || []
@@ -1058,6 +1094,7 @@ const tabs = [
   { id: 'duplicates', label: 'Дубликаты' },
   { id: 'comments', label: 'Коммент.' },
   { id: 'usage', label: 'Стат.' },
+  { id: 'activity', label: 'Активность' },
 ] as const
 
 // Computed
@@ -2623,6 +2660,36 @@ async function loadPotentialDuplicates() {
   }
 }
 
+async function loadDocumentActivity() {
+  if (!asset.value?.id) return
+  const documentId = Number(asset.value.id)
+  if (!Number.isFinite(documentId) || documentId <= 0) return
+  activityLoading.value = true
+  activityEvents.value = []
+  try {
+    const res: any = await apiService.get(`/api/v4/headless/documents/${documentId}/activity/`)
+    activityEvents.value = res?.results ?? []
+  } catch (err: any) {
+    console.error('[AssetDetail] Failed to load document activity', err)
+    activityEvents.value = []
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+function activityEventTypeLabel(eventType: string): string {
+  const labels: Record<string, string> = {
+    download: 'Скачивание',
+    view: 'Просмотр',
+    share: 'Шаринг',
+    collection_share: 'Шаринг коллекции',
+    upload: 'Загрузка',
+    deliver: 'Доставка',
+    email_click: 'Переход по ссылке',
+  }
+  return labels[eventType] || eventType
+}
+
 // Load comments from API
 async function loadComments() {
   if (!asset.value?.id) return
@@ -2895,6 +2962,9 @@ watch(() => activeTab.value, (tab) => {
   }
   if (tab === 'duplicates' && asset.value?.id) {
     loadPotentialDuplicates()
+  }
+  if (tab === 'activity' && asset.value?.id) {
+    loadDocumentActivity()
   }
 })
 

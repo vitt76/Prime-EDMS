@@ -61,7 +61,8 @@ def track_asset_event_async(
         if not org_id:
             logger.warning('track_asset_event_async: missing organization_id')
             return
-        if not document_id:
+        is_collection_share = (event_type == AssetEvent.EVENT_TYPE_COLLECTION_SHARE)
+        if not document_id and not is_collection_share:
             logger.warning('track_asset_event_async: missing document_id')
             return
         try:
@@ -69,19 +70,21 @@ def track_asset_event_async(
         except (Organization.DoesNotExist, ValueError, TypeError):
             logger.warning('track_asset_event_async: organization_id=%s not found', org_id)
             return
-        document = Document.objects.filter(pk=document_id).first()
-        if not document:
-            logger.warning('track_asset_event_async: document_id=%s not found', document_id)
-            return
-        org_from_doc = getattr(document, 'organization_id', None)
-        if org_from_doc is not None and org_from_doc != organization.pk:
-            logger.warning(
-                'track_asset_event_async: document %s does not belong to org %s',
-                document_id, org_id
-            )
-            return
+        document = None
+        if document_id:
+            document = Document.objects.filter(pk=document_id).first()
+            if not document:
+                logger.warning('track_asset_event_async: document_id=%s not found', document_id)
+                return
+            org_from_doc = getattr(document, 'organization_id', None)
+            if org_from_doc is not None and org_from_doc != organization.pk:
+                logger.warning(
+                    'track_asset_event_async: document %s does not belong to org %s',
+                    document_id, org_id
+                )
+                return
 
-        if event_type == AssetEvent.EVENT_TYPE_DOWNLOAD and bandwidth_bytes is None:
+        if document and event_type == AssetEvent.EVENT_TYPE_DOWNLOAD and bandwidth_bytes is None:
             try:
                 latest_file = document.files.order_by('-timestamp').first()
                 if latest_file and getattr(latest_file, 'size', None) is not None:
@@ -92,6 +95,8 @@ def track_asset_event_async(
         meta = (metadata or {}).copy()
         if ip_address:
             meta['ip_address'] = ip_address[:45]
+        if user_agent:
+            meta['user_agent'] = (user_agent or '')[:500]
 
         parsed_session_uuid = None
         if search_session_id:
@@ -102,7 +107,7 @@ def track_asset_event_async(
 
         event = AssetEvent.objects.create(
             organization_id=organization.pk,
-            document_id=document_id,
+            document_id=document_id if document_id else None,
             user_id=user_id,
             event_type=event_type,
             channel='api',
@@ -113,7 +118,7 @@ def track_asset_event_async(
             bandwidth_bytes=bandwidth_bytes,
         )
 
-        if event_type == AssetEvent.EVENT_TYPE_DOWNLOAD and user_id:
+        if document and event_type == AssetEvent.EVENT_TYPE_DOWNLOAD and user_id:
             user = None
             try:
                 User = django_apps.get_model(settings.AUTH_USER_MODEL)

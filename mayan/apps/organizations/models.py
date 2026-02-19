@@ -792,6 +792,11 @@ class OrganizationWatermarkSettings(models.Model):
         verbose_name=_('Enabled'),
         help_text=_('Apply watermark to preview and Share Link exports')
     )
+    apply_on_download = models.BooleanField(
+        default=False,
+        verbose_name=_('Apply on download'),
+        help_text=_('When enabled, serve watermarked rendition for document downloads (Sprint 5.1)')
+    )
     text = models.CharField(
         max_length=255,
         blank=True,

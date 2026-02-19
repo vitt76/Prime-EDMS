@@ -82,6 +82,11 @@ queue_documents.add_task_type(
     dotted_path='mayan.apps.documents.tasks.task_index_instance_document_add_safe',
     label=_('Safe hierarchy indexing fallback')
 )
+queue_documents.add_task_type(
+    dotted_path='mayan.apps.distribution.tasks.apply_watermark_task',
+    label=_('Apply watermark (Sprint 5.1)'),
+    name='apply_watermark_task'
+)
 
 queue_documents_periodic.add_task_type(
     dotted_path='mayan.apps.documents.tasks.task_document_type_document_trash_periods_check',

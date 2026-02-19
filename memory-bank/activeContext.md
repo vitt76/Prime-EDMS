@@ -75,7 +75,7 @@
 - **Спринт 6 — Операции:** мониторинг и алерты, лимиты на размер/тип файла, приоритеты очередей.
 - **Спринт 7:** семантический поиск, видеомодуль, ingest pipeline, lifecycle, n8n/коннекторы, a11y (каждое направление — отдельное решение по объёму).
 
-**Следующий шаг:** **Спринт 3 (Контент)** и **Спринт 4 (Совместная работа)** завершены. **Спринт 4** — ✅ **COMPLETED & VERIFIED** (2026-02-19): коллекции на Cabinets, публичный шаринг CabinetShare, комментарии с tenant isolation и owner-only edit/delete, сравнение версий (UI). Security audit: PASS; верификация: `python manage.py verify_sprint4`. Далее — **Спринт 2 (Продуктивность и UX)** или **Спринт 5 (Безопасность и compliance)**. Детальные критерии — в Доработка_2026.md.
+**Следующий шаг:** **Спринт 5 (Security & Compliance)** — ✅ **COMPLETED** (2026-02-19): Watermarking (водяной знак при скачивании, WatermarkedRendition, apply_watermark_task), Audit Log (user_agent в AssetEvent, CabinetShare → AssetEvent, GET audit-logs + export CSV/JSON, вкладка «Активность» по документу), Secure Download (отдача watermarked при apply_on_download). Миграции применены в Docker (organizations 0008, distribution 0015–0017, analytics 0021). Далее — **Спринт 2 (Продуктивность и UX)** или **Спринт 6 (Операции)**. Детальные критерии — в Доработка_2026.md.
 
 **Зависимости:** Спринты 1 и 2 можно вести параллельно; Спринт 4 логически после 1 (saved searches в контексте коллекций). Спринты 5 и 6 независимы от 1–4.
 
@@ -108,6 +108,23 @@
 **Security audit:** PASS. Отчёт: `docs/transformation-2025/SECURITY_AUDIT_SPRINT4.md`. Верификация: `python manage.py verify_sprint4` (анонимный доступ к шару, истёкшая ссылка 403, удаление чужого комментария 403).
 
 **Готовность к Спринту 5:** Security & Compliance — да, с точки зрения Collaboration функции проверены и задокументированы.
+
+---
+
+### Спринт 5 (Security & Compliance) — Доработка 2026 — ЗАВЕРШЁН (2026-02-19)
+
+**План:** `sprint_5_security_compliance_6b78103a.plan.md` (Watermarking, Audit Log, Secure Downloads).
+
+**Реализовано:**
+- **5.1 Watermarking:** Вынесена общая логика в `headless_api/watermark_utils.py` (apply_watermark, organization_watermark_to_editor_state); редактор изображений в медиатеке переиспользует её; OrganizationWatermarkSettings.apply_on_download; модель WatermarkedRendition (distribution); Celery task apply_watermark_task (очередь documents, зарегистрирована в documents/queues.py).
+- **5.2 Audit Log:** user_agent в AssetEvent.metadata (analytics/tasks); AssetEvent.document nullable + EVENT_TYPE_COLLECTION_SHARE; при создании CabinetShare вызывается track_asset_event_async(..., event_type=COLLECTION_SHARE); GET /api/v4/headless/audit-logs/ и .../audit-logs/export/?format=csv|json (staff или группа audit_viewer); GET /api/v4/headless/documents/{id}/activity/; вкладка «Активность» в AssetDetailPage.
+- **5.3 Secure Download:** В APIDocumentFileDownloadView при apply_on_download отдаётся WatermarkedRendition (если готов) или ставится задача и отдаётся оригинал; при watermarked отключён S3 redirect (direct=1).
+
+**Миграции (применены 2026-02-19 в Docker):** organizations 0008 (apply_on_download), distribution 0015 (atomic=False для обхода pending trigger events), 0016, 0017 (WatermarkedRendition), analytics 0021 (AssetEvent.document nullable), cabinets 0009.
+
+**Исправления при применении миграций:** (1) Задача apply_watermark_task зарегистрирована в documents/queues.py (task_manager). (2) APICabinetShareView: generics.DestroyAPIView → generics.RetrieveDestroyAPIView (в Mayan нет отдельного DestroyAPIView). (3) distribution/migrations/0015: добавлен atomic = False из-за ошибки PostgreSQL «pending trigger events».
+
+**Верификация:** API /api/v4/ отвечает 200 после миграций; регрессия редактора изображений (водяной знак в медиатеке) — проверить вручную.
 
 ---
 

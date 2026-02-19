@@ -63,6 +63,12 @@
 - **Авторизованные эндпоинты:** POST `/api/v4/cabinets/<id>/shares/` (создание ссылки, body: expires_at, password); GET `/api/v4/cabinets/<id>/shares/` (список); DELETE `/api/v4/cabinets/<id>/shares/<uuid>/` (отзыв, проверка прав на cabinet через ACL).
 - **Комментарии:** API документов `documents/<id>/comments/` — tenant isolation (document в текущей организации); редактирование/удаление только автор комментария (`comment.user_id == request.user.pk`).
 
+#### Спринт 5 Security & Compliance (Доработка 2026)
+- **Watermarking:** headless_api/watermark_utils.py — общая логика apply_watermark и organization_watermark_to_editor_state; редактор изображений в медиатеке и задача apply_watermark_task используют её. OrganizationWatermarkSettings.apply_on_download; модель WatermarkedRendition (distribution, миграция 0017); задача apply_watermark_task в очереди `documents`, регистрация в documents/queues.py (обязательно для task_manager).
+- **Audit Log:** AssetEvent.metadata хранит user_agent (до 500 символов); AssetEvent.document nullable, event_type collection_share; при создании CabinetShare вызывается track_asset_event_async. GET /api/v4/headless/audit-logs/ (фильтры, пагинация), GET .../audit-logs/export/?format=csv|json; GET .../documents/{id}/activity/ (вкладка «Активность» в AssetDetailPage). Доступ: staff/superuser или группа audit_viewer.
+- **Secure Download:** APIDocumentFileDownloadView при apply_on_download отдаёт WatermarkedRendition или ставит apply_watermark_task и отдаёт оригинал; при watermarked S3 redirect (direct=1) не используется.
+- **Миграции в Docker:** `docker compose exec app /opt/mayan-edms/bin/mayan-edms.py migrate --noinput`. distribution 0015 использует atomic=False (обход PostgreSQL «pending trigger events»). cabinets: APICabinetShareView наследует generics.RetrieveDestroyAPIView (в Mayan нет DestroyAPIView).
+
 #### AI и обработка медиа
 - **yandexgptlite**: (YandexGPT интеграция)
 - **gigachat**: (GigaChat интеграция)

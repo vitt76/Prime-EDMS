@@ -103,6 +103,12 @@
 - ✅ **Сравнение версий:** UI — VersionCompareModal, выбор двух версий, превью side-by-side во вкладке «Версии» (AssetDetailPage).
 - ✅ **Верификация:** `python manage.py verify_sprint4`; security audit: `docs/transformation-2025/SECURITY_AUDIT_SPRINT4.md`.
 
+#### Security & Compliance — Спринт 5 Доработка 2026
+- ✅ **Watermarking:** headless_api/watermark_utils.py (общая логика с редактором изображений); OrganizationWatermarkSettings.apply_on_download; WatermarkedRendition (distribution); Celery apply_watermark_task (очередь documents, регистрация в documents/queues.py).
+- ✅ **Audit Log:** user_agent в AssetEvent.metadata; AssetEvent.document nullable, EVENT_TYPE_COLLECTION_SHARE; логирование создания CabinetShare; GET /api/v4/headless/audit-logs/ и audit-logs/export/?format=csv|json; GET documents/{id}/activity/; вкладка «Активность» в AssetDetailPage.
+- ✅ **Secure Download:** В document file download при apply_on_download отдаётся WatermarkedRendition или ставится задача и отдаётся оригинал.
+- ✅ **Миграции применены (Docker):** organizations 0008, distribution 0015 (atomic=False), 0016, 0017, analytics 0021, cabinets 0009.
+
 #### 6. Permissions & Access Control
 - ✅ Система ролей (Roles → Groups → Users)
 - ✅ Access Control Lists (ACL) для объектов
@@ -207,11 +213,11 @@
 | A | **2** | Продуктивность и UX (избранное + tenant, хоткеи) | 🔲 Запланирован | 1–2 нед |
 | B | **3** | Контент: дедупликация, пресеты рендишенов, водяные знаки | ✅ Завершён (2026-02-19) | 3–4 нед |
 | B | **4** | Совместная работа: коллекции, комментарии, сравнение версий | ✅ Завершён и верифицирован (2026-02-19) | 3–4 нед |
-| C | **5** | Безопасность и compliance (field-level права, right to be forgotten) | 🔲 Запланирован | 2–3 нед |
+| C | **5** | Безопасность и compliance (Watermarking, Audit Log, Secure Download) | ✅ Завершён (2026-02-19), миграции применены | 2–3 нед |
 | C | **6** | Операции (мониторинг, алерты, лимиты файлов, приоритеты очередей) | 🔲 Запланирован | 2 нед |
 | D | **7** | Крупные направления (семантический поиск, видео, ingest, lifecycle, n8n, a11y) | 🔲 По выбору | по фиче |
 
-**Следующий к выполнению:** Спринт 2 (Продуктивность и UX) или Спринт 5 (Безопасность и compliance). Спринт 4 завершён; верификация: `python manage.py verify_sprint4`, security audit: `docs/transformation-2025/SECURITY_AUDIT_SPRINT4.md`. После каждого спринта — регрессионные тесты, обновление Memory Bank, отчёт в `docs/transformation-2025/SPRINT_DORABOTKA_2026_N.md`.
+**Следующий к выполнению:** Спринт 2 (Продуктивность и UX) или Спринт 6 (Операции). Спринт 5 завершён (2026-02-19): миграции применены в Docker; apply_watermark_task зарегистрирована в documents/queues.py; API audit-logs и document activity работают. После каждого спринта — регрессионные тесты, обновление Memory Bank, отчёт в `docs/transformation-2025/SPRINT_DORABOTKA_2026_N.md`.
 
 ---
 

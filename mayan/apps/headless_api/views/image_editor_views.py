@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.converter.models import Asset
@@ -171,120 +171,14 @@ def _apply_filters(image: Image.Image, state: Dict[str, Any]) -> Image.Image:
     return image
 
 
-def _watermark_position_to_xy(
-    position: str,
-    base_size: Tuple[int, int],
-    wm_size: Tuple[int, int],
-    offset_x: int,
-    offset_y: int
-) -> Tuple[int, int]:
-    base_w, base_h = base_size
-    wm_w, wm_h = wm_size
-    pos = (position or 'bottom-right').lower()
-
-    # 9-grid positions from frontend store
-    mapping = {
-        'top-left': (0, 0),
-        'top-center': ((base_w - wm_w) // 2, 0),
-        'top-right': (base_w - wm_w, 0),
-        'middle-left': (0, (base_h - wm_h) // 2),
-        'middle-center': ((base_w - wm_w) // 2, (base_h - wm_h) // 2),
-        'middle-right': (base_w - wm_w, (base_h - wm_h) // 2),
-        'bottom-left': (0, base_h - wm_h),
-        'bottom-center': ((base_w - wm_w) // 2, base_h - wm_h),
-        'bottom-right': (base_w - wm_w, base_h - wm_h),
-    }
-    x, y = mapping.get(pos, mapping['bottom-right'])
-    x += offset_x
-    y += offset_y
-    return max(0, min(x, base_w - wm_w)), max(0, min(y, base_h - wm_h))
-
-
-def _apply_watermark(image: Image.Image, state: Dict[str, Any]) -> Image.Image:
-    watermark = state.get('watermark') or {}
-    if not watermark.get('enabled'):
-        return image
-
-    opacity = _coerce_float(watermark.get('opacity'), 50.0)
-    opacity = max(0.0, min(opacity, 100.0)) / 100.0
-    position = watermark.get('position') or 'bottom-right'
-    offset_x = _coerce_int(watermark.get('offsetX'), 0)
-    offset_y = _coerce_int(watermark.get('offsetY'), 0)
-    scale_pct = _coerce_float(watermark.get('scale'), 100.0)
-    scale_pct = max(10.0, min(scale_pct, 400.0)) / 100.0
-
-    base = image.convert('RGBA')
-    overlay = Image.new('RGBA', base.size, (0, 0, 0, 0))
-
-    wm_type = (watermark.get('type') or 'text').lower()
-    if wm_type == 'image':
-        asset_id = watermark.get('assetId') or watermark.get('asset_id')
-        if not asset_id:
-            return image
-        asset = Asset.objects.filter(category='watermark', pk=asset_id).first()
-        if not asset:
-            return image
-        wm = asset.get_image()  # RGBA
-
-        wm_w = max(1, int(wm.width * scale_pct))
-        wm_h = max(1, int(wm.height * scale_pct))
-        wm = wm.resize((wm_w, wm_h), resample=Image.Resampling.LANCZOS)
-
-        # Apply opacity
-        if opacity < 1.0:
-            alpha = wm.getchannel('A')
-            alpha = alpha.point(lambda a: int(a * opacity))
-            wm.putalpha(alpha)
-
-        x, y = _watermark_position_to_xy(
-            position=position, base_size=base.size, wm_size=wm.size,
-            offset_x=offset_x, offset_y=offset_y
-        )
-        overlay.alpha_composite(wm, dest=(x, y))
-    else:
-        text = watermark.get('text') or ''
-        if not text:
-            return image
-        font_size = _coerce_int(watermark.get('fontSize'), 24)
-        font_size = max(8, min(font_size, 256))
-        color = watermark.get('color') or '#ffffff'
-
-        try:
-            font = ImageFont.truetype('arial.ttf', font_size)
-        except Exception:
-            font = ImageFont.load_default()
-
-        draw = ImageDraw.Draw(overlay)
-        # Estimate text bbox
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_w = bbox[2] - bbox[0]
-        text_h = bbox[3] - bbox[1]
-        x, y = _watermark_position_to_xy(
-            position=position, base_size=base.size, wm_size=(text_w, text_h),
-            offset_x=offset_x, offset_y=offset_y
-        )
-
-        # Convert hex color + opacity
-        try:
-            r = int(color.lstrip('#')[0:2], 16)
-            g = int(color.lstrip('#')[2:4], 16)
-            b = int(color.lstrip('#')[4:6], 16)
-        except Exception:
-            r, g, b = 255, 255, 255
-        a = int(255 * opacity)
-        draw.text((x, y), text, font=font, fill=(r, g, b, a))
-
-    result = Image.alpha_composite(base, overlay)
-    return result
-
-
 def _render_image(document_file: DocumentFile, state: Dict[str, Any]) -> Image.Image:
+    from mayan.apps.headless_api.watermark_utils import apply_watermark
     image = _load_document_file_image(document_file=document_file)
     image = _apply_transformations(image=image, state=state)
     image = _apply_crop(image=image, state=state)
     image = _apply_resize(image=image, state=state)
     image = _apply_filters(image=image, state=state)
-    image = _apply_watermark(image=image, state=state)
+    image = apply_watermark(image=image, state=state)
     return image
 
 

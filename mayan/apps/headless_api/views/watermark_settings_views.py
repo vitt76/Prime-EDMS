@@ -36,6 +36,7 @@ class OrganizationWatermarkSettingsView(APIView):
         return Response({
             'id': ws.id,
             'enabled': ws.enabled,
+            'apply_on_download': getattr(ws, 'apply_on_download', False),
             'text': ws.text or '',
             'logo_url': ws.logo_url or '',
             'position': ws.position,
@@ -55,18 +56,23 @@ class OrganizationWatermarkSettingsView(APIView):
             organization=organization,
             defaults={'enabled': False, 'text': '', 'position': 'bottom_right', 'opacity': 0.5}
         )
-        allowed = {'enabled', 'text', 'logo_url', 'position', 'opacity', 'font_size'}
+        allowed = {'enabled', 'apply_on_download', 'text', 'logo_url', 'position', 'opacity', 'font_size'}
         for key in allowed:
-            if key in request.data:
-                setattr(ws, key, request.data[key])
-        if 'opacity' in request.data:
-            val = request.data['opacity']
-            if isinstance(val, (int, float)):
-                ws.opacity = max(0.0, min(1.0, float(val)))
+            if key not in request.data:
+                continue
+            val = request.data[key]
+            if key == 'apply_on_download':
+                ws.apply_on_download = bool(val)
+            elif key == 'opacity':
+                if isinstance(val, (int, float)):
+                    ws.opacity = max(0.0, min(1.0, float(val)))
+            else:
+                setattr(ws, key, val)
         ws.save()
         return Response({
             'id': ws.id,
             'enabled': ws.enabled,
+            'apply_on_download': getattr(ws, 'apply_on_download', False),
             'text': ws.text or '',
             'logo_url': ws.logo_url or '',
             'position': ws.position,

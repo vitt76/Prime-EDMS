@@ -14,6 +14,7 @@ class AssetEvent(TenantAwareMixin, models.Model):
     EVENT_TYPE_DOWNLOAD = 'download'
     EVENT_TYPE_VIEW = 'view'
     EVENT_TYPE_SHARE = 'share'
+    EVENT_TYPE_COLLECTION_SHARE = 'collection_share'
     EVENT_TYPE_UPLOAD = 'upload'
     EVENT_TYPE_DELIVER = 'deliver'
     EVENT_TYPE_EMAIL_CLICK = 'email_click'
@@ -22,6 +23,7 @@ class AssetEvent(TenantAwareMixin, models.Model):
         (EVENT_TYPE_DOWNLOAD, _('Download')),
         (EVENT_TYPE_VIEW, _('View')),
         (EVENT_TYPE_SHARE, _('Share')),
+        (EVENT_TYPE_COLLECTION_SHARE, _('Collection share')),
         (EVENT_TYPE_UPLOAD, _('Upload')),
         (EVENT_TYPE_DELIVER, _('Deliver')),
         (EVENT_TYPE_EMAIL_CLICK, _('Email click')),
@@ -40,7 +42,10 @@ class AssetEvent(TenantAwareMixin, models.Model):
         to='documents.Document',
         on_delete=models.CASCADE,
         related_name='analytics_events',
-        verbose_name=_('Document')
+        verbose_name=_('Document'),
+        null=True,
+        blank=True,
+        help_text=_('Optional; null for non-document events (e.g. collection_share)')
     )
     event_type = models.CharField(
         max_length=50, choices=EVENT_TYPE_CHOICES, db_index=True,

@@ -72,6 +72,7 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False  # Avoid "pending trigger events" on PostgreSQL when adding FK+index
 
     dependencies = [
         ('organizations', '0001_initial'),

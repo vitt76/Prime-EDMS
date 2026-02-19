@@ -329,3 +329,76 @@ def _apply_watermark(*, image, watermark):
     draw.text(position, text, font=font, fill=font_color)
     combined = Image.alpha_composite(drawable, overlay)
     return combined.convert(image.mode) if image.mode != 'RGBA' else combined
+
+
+@app.task(bind=True, ignore_result=True, queue='documents')
+def apply_watermark_task(document_file_id, organization_id, **kwargs):
+    """
+    Sprint 5.1: Generate WatermarkedRendition for a document file using organization watermark settings.
+    Uses shared watermark logic from headless_api.watermark_utils (same as image editor).
+    """
+    from mayan.apps.organizations.models import Organization
+    from mayan.apps.headless_api.watermark_utils import (
+        apply_watermark,
+        organization_watermark_to_editor_state,
+        load_image_from_document_file,
+    )
+    from .models import WatermarkedRendition
+
+    try:
+        document_file = DocumentFile.objects.filter(pk=document_file_id).select_related('document').first()
+        if not document_file:
+            logger.warning('apply_watermark_task: document_file_id=%s not found', document_file_id)
+            return
+        organization = Organization.objects.filter(pk=organization_id).first()
+        if not organization:
+            logger.warning('apply_watermark_task: organization_id=%s not found', organization_id)
+            return
+        from mayan.apps.organizations.models import OrganizationWatermarkSettings
+        ws = OrganizationWatermarkSettings.objects.filter(organization=organization).first()
+        if not ws or not ws.enabled or not (ws.text or '').strip():
+            logger.debug('apply_watermark_task: no watermark settings or disabled for org %s', organization_id)
+            rendition, _ = WatermarkedRendition.objects.get_or_create(
+                document_file_id=document_file_id,
+                organization_id=organization_id,
+                defaults={'status': 'failed', 'error_message': 'Watermark not enabled or no text'}
+            )
+            rendition.status = 'failed'
+            rendition.error_message = 'Watermark not enabled or no text'
+            rendition.save(update_fields=['status', 'error_message', 'modified'])
+            return
+
+        rendition, created = WatermarkedRendition.objects.get_or_create(
+            document_file_id=document_file_id,
+            organization_id=organization_id,
+            defaults={'status': 'pending'}
+        )
+        rendition.status = 'processing'
+        rendition.save(update_fields=['status', 'modified'])
+
+        state = {'watermark': organization_watermark_to_editor_state(ws)}
+        image = load_image_from_document_file(document_file)
+        image = apply_watermark(image, state)
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+        buffer = BytesIO()
+        image.save(buffer, format='JPEG', quality=85, optimize=True)
+        buffer.seek(0)
+        filename = 'watermarked_df_{}_org_{}.jpg'.format(document_file_id, organization_id)
+        rendition.file.save(filename, ContentFile(buffer.getvalue()), save=False)
+        rendition.status = 'completed'
+        rendition.error_message = ''
+        rendition.save(update_fields=['status', 'file', 'error_message', 'modified'])
+        logger.info('apply_watermark_task: completed for document_file_id=%s org_id=%s', document_file_id, organization_id)
+    except Exception as exc:
+        logger.exception('apply_watermark_task failed: document_file_id=%s org_id=%s: %s', document_file_id, organization_id, exc)
+        try:
+            rendition = WatermarkedRendition.objects.get(
+                document_file_id=document_file_id,
+                organization_id=organization_id
+            )
+            rendition.status = 'failed'
+            rendition.error_message = str(exc)[:500]
+            rendition.save(update_fields=['status', 'error_message', 'modified'])
+        except Exception:
+            pass

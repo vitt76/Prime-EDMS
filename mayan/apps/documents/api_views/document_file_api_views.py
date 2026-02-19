@@ -97,15 +97,49 @@ class APIDocumentFileDownloadView(
 ):
     """
     get: Download a document file.
+    Sprint 5.3: If organization has apply_on_download, serve WatermarkedRendition when ready.
     """
     lookup_url_kwarg = 'document_file_id'
     mayan_object_permissions = {
         'GET': (permission_document_file_download,),
     }
 
+    def _should_serve_watermarked(self):
+        """True if current organization has apply_on_download and we can use watermarked rendition."""
+        org = getattr(self.request, 'organization', None)
+        if not org:
+            return False
+        try:
+            from mayan.apps.organizations.models import OrganizationWatermarkSettings
+            settings = OrganizationWatermarkSettings.objects.filter(organization=org).first()
+            return bool(settings and getattr(settings, 'apply_on_download', False))
+        except Exception:
+            return False
+
     def get_download_file_object(self):
         instance = self.get_object()
         instance._event_actor = self.request.user
+        if not self._should_serve_watermarked():
+            return instance.get_download_file_object()
+        org = getattr(self.request, 'organization', None)
+        if not org:
+            return instance.get_download_file_object()
+        try:
+            from mayan.apps.distribution.models import WatermarkedRendition
+            from mayan.apps.distribution.tasks import apply_watermark_task
+            rendition, _ = WatermarkedRendition.objects.get_or_create(
+                document_file=instance,
+                organization=org,
+                defaults={'status': 'pending'}
+            )
+            if rendition.status == 'completed' and rendition.file:
+                return rendition.file.open('rb')
+            apply_watermark_task.delay(instance.pk, org.pk)
+        except Exception:
+            logger.warning(
+                'Watermarked download fallback to original for document_file_id=%s: %s',
+                instance.pk, __import__('traceback').format_exc()
+            )
         return instance.get_download_file_object()
 
     def get_download_filename(self):
@@ -147,20 +181,18 @@ class APIDocumentFileDownloadView(
             return HttpResponseRedirect(redirect_to=storage_url)
 
     def retrieve(self, request, *args, **kwargs):
+        # When apply_on_download (watermarked), always stream from Django (rendition or original).
+        if self._should_serve_watermarked():
+            return self.render_to_response()
         # Optional optimization for S3-backed storages: return a presigned URL
         # and let the storage backend serve the file (including Range support).
-        #
-        # NOTE: Default behavior remains proxying the file via Django to preserve
-        # same-origin downloads for SPA/XHR callers (CORS constraints).
         direct = request.query_params.get('direct')
         if direct in ('1', 'true', 'True'):
             try:
                 instance = self.get_object()
                 return self._serve_s3_file_with_range(document_file=instance)
             except Exception:
-                # Fall back to Django streaming download.
                 pass
-
         return self.render_to_response()
 
 

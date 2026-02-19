@@ -286,6 +286,27 @@ class APICabinetShareListView(
         if password:
             share.set_password(password)
         share.save()
+        # Sprint 5.2: Audit log collection_share event (no document)
+        try:
+            from mayan.apps.analytics.models import AssetEvent
+            from mayan.apps.analytics.tasks import track_asset_event_async
+            ip_address = (request.META.get('REMOTE_ADDR') or '')[:45]
+            user_agent = (request.META.get('HTTP_USER_AGENT') or '')[:500]
+            track_asset_event_async.delay(
+                organization_id=str(organization.pk),
+                user_id=request.user.pk if request.user.is_authenticated else None,
+                document_id=None,
+                event_type=AssetEvent.EVENT_TYPE_COLLECTION_SHARE,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                metadata={
+                    'cabinet_id': share.cabinet_id,
+                    'share_uuid': str(share.uuid),
+                    'cabinet_label': getattr(share.cabinet, 'label', ''),
+                },
+            )
+        except Exception:
+            pass
         output_serializer = CabinetShareSerializer(
             share, context=self.get_serializer_context()
         )
@@ -295,7 +316,7 @@ class APICabinetShareListView(
         )
 
 
-class APICabinetShareView(generics.DestroyAPIView):
+class APICabinetShareView(generics.RetrieveDestroyAPIView):
     """
     delete: Revoke a cabinet share link.
     """
