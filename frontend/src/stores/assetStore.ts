@@ -51,6 +51,7 @@ interface AssetFilters {
   sizeMin?: number
   sizeMax?: number
   orientation?: 'portrait' | 'landscape' | 'square'
+  owner?: number
   search?: string
 }
 
@@ -103,9 +104,10 @@ export const useAssetStore = defineStore(
     const folderFilterId = ref<string | null>(null)
     const folderFilterType = ref<FolderSource | null>(null)
     
-    // Facets for filtering UI
+    // Facets for filtering UI (from API when available, else derived from current page)
     const availableTags = ref<string[]>([])
     const typeCounts = ref<Record<string, number>>({})
+    const tagCounts = ref<Record<string, number>>({})
     const statusCounts = ref<Record<string, number>>({})
     
     // Debug mode
@@ -227,7 +229,17 @@ export const useAssetStore = defineStore(
       if (filters.value.dateTo) {
         queryParams.set('datetime_created__lte', filters.value.dateTo)
       }
-      
+
+      // Orientation (backend support: width/height or orientation field; param ready for API)
+      if (filters.value.orientation) {
+        queryParams.set('orientation', filters.value.orientation)
+      }
+
+      // Owner / uploaded by (Mayan: files__user_id or equivalent when supported)
+      if (typeof filters.value.owner === 'number') {
+        queryParams.set('files__user_id', String(filters.value.owner))
+      }
+
       return queryParams
     }
     
@@ -331,7 +343,15 @@ export const useAssetStore = defineStore(
           currentPage.value = params.page
         }
 
-        // Extract unique tags for filter UI
+        // Facets from API (when backend returns them); else keep/derive from results
+        const raw = response.data as { facets?: { type?: Record<string, number>; tags?: Record<string, number>; status?: Record<string, number> } }
+        if (raw.facets) {
+          if (raw.facets.type) typeCounts.value = { ...raw.facets.type }
+          if (raw.facets.tags) tagCounts.value = { ...raw.facets.tags }
+          if (raw.facets.status) statusCounts.value = { ...raw.facets.status }
+        }
+
+        // Extract unique tags for filter UI (when no facets from API)
         const allTags = new Set<string>()
         adapted.results.forEach(asset => {
           asset.tags?.forEach(tag => allTags.add(tag))
@@ -988,6 +1008,7 @@ export const useAssetStore = defineStore(
       searchQuery,
       availableTags,
       typeCounts,
+      tagCounts,
       statusCounts,
       folderFilterId,
       folderFilterType,

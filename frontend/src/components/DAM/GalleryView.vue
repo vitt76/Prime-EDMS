@@ -127,7 +127,7 @@
 
       <!-- Assets Grid (regular for small lists, threshold 80) -->
       <div
-        v-if="assetStore.assets.length < 80"
+        v-if="!isVirtual"
         class="p-6"
         role="grid"
         aria-label="Галерея активов"
@@ -407,6 +407,9 @@ const gridDensity = computed(() => damSearch.state.density)
 const gridLayout = computed(() => damSearch.state.layout)
 const gridSort = computed(() => damSearch.state.sort)
 
+/** Use virtualized ImmersiveGrid for 80+ assets; standard AssetGrid otherwise. */
+const isVirtual = computed(() => assetStore.assets.length >= 80)
+
 // Filters drawer
 const isFiltersOpen = ref(false)
 
@@ -443,10 +446,10 @@ const activeFiltersCount = computed(() => {
 })
 
 const filtersFacets = computed<Facets>(() => {
-  const tagsRecord: Record<string, number> = {}
-  for (const tag of assetStore.availableTags) {
-    tagsRecord[tag] = 1
-  }
+  const tagsRecord: Record<string, number> =
+    Object.keys(assetStore.tagCounts).length > 0
+      ? { ...assetStore.tagCounts }
+      : Object.fromEntries(assetStore.availableTags.map((tag) => [tag, 1]))
   return {
     type: assetStore.typeCounts,
     tags: tagsRecord

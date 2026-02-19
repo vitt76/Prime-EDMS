@@ -7,6 +7,7 @@
           Расширенный поиск
         </h1>
         <SearchBar
+          history-source="dam"
           :placeholder="'Введите запрос для поиска...'"
           @search="handleSearch"
           @result-selected="handleResultSelected"

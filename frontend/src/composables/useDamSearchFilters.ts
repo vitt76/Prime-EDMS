@@ -30,10 +30,10 @@ export interface DamSearchState {
   filters: DamFiltersState
 }
 
-const DAM_SEARCH_HISTORY_KEY = 'dam_search_history'
-const DAM_SEARCH_HISTORY_MAX = 10
+export const DAM_SEARCH_HISTORY_KEY = 'dam_search_history'
+export const DAM_SEARCH_HISTORY_MAX = 10
 
-function getDamSearchHistory(): string[] {
+export function getDamSearchHistory(): string[] {
   try {
     const raw = localStorage.getItem(DAM_SEARCH_HISTORY_KEY)
     if (!raw) return []
@@ -44,7 +44,7 @@ function getDamSearchHistory(): string[] {
   }
 }
 
-function pushDamSearchHistory(query: string): void {
+export function pushDamSearchHistory(query: string): void {
   const trimmed = query.trim()
   if (!trimmed) return
   let list = getDamSearchHistory()
@@ -62,6 +62,17 @@ let _state: DamSearchState | null = null
 let _initialized = false
 let _isUpdatingRoute = false
 let _routeWatchRegistered = false
+let _lastRouteQueryJson = ''
+
+/** Serialize query object with sorted keys for stable comparison (order-independent). */
+function _serializeQueryStable(query: Record<string, unknown>): string {
+  const keys = Object.keys(query).sort()
+  const obj: Record<string, unknown> = {}
+  for (const k of keys) {
+    obj[k] = query[k]
+  }
+  return JSON.stringify(obj)
+}
 
 function _parseCsv(value: unknown): string[] {
   if (!value) return []
@@ -290,7 +301,7 @@ export function useDamSearchFilters() {
     assetStore.fetchAssets()
   }
 
-  // Back/forward support
+  // Back/forward support: restore full state from URL; skip duplicate fetch when query unchanged
   if (!_routeWatchRegistered) {
     _routeWatchRegistered = true
     watch(
@@ -299,6 +310,11 @@ export function useDamSearchFilters() {
         if (_isUpdatingRoute) {
           return
         }
+        const queryJson = _serializeQueryStable(route.query as Record<string, unknown>)
+        if (queryJson === _lastRouteQueryJson) {
+          return
+        }
+        _lastRouteQueryJson = queryJson
         readFromUrl()
         applyToStoreParams()
         assetStore.fetchAssets()

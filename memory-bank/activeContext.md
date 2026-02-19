@@ -162,6 +162,16 @@
 - **Phase 3:** Создан `AssetThumbnail.vue` (lazy load, плейсхолдер, ошибка); в AssetCard блок превью заменён на AssetThumbnail.  
 - **Phase 4:** Создан `AssetContextMenu.vue` (правый клик: Открыть, Скачать, Поделиться, Редактировать метаданные, Удалить). В AssetCard добавлен `@contextmenu.prevent` и эмит `contextmenu`; AssetGrid и ImmersiveGrid пробрасывают `asset-contextmenu`; в GalleryView — единое контекстное меню и обработчики (в т.ч. переход на `/dam/assets/:id/edit` для редактирования метаданных). Drag-select и Shift+Click в ImmersiveGrid реализованы при создании компонента.
 
+**Phase 1: Search & Discovery — ✅ COMPLETED & VERIFIED (2026-02-19):**
+- **Code Review:** useDamSearchFilters — стабильное сравнение query через _serializeQueryStable (сортировка ключей), лимит истории 10 строго соблюдается; assetStore — фасеты при fetch заменяются (не мержатся), что корректно; AssetContextMenu — onUnmounted снимает keydown listener.
+- **Vitest:** setup исправлен (vitest-axe/extend-expect); тесты AssetContextMenu переведены на поиск телемортированного контента в document.body (getTeleportedMenu/Overlay/Buttons).
+- **Тесты:** 13/13 passed — useDamSearchFilters.spec.ts (7), AssetContextMenu.spec.ts (6). Готовность к Phase 2 (Immersive Grid polish) подтверждена.
+
+**Phase 2: Immersive Grid — ✅ COMPLETED & VERIFIED:**
+- **Hybrid Strategy:** Standard grid (< 80 активов) → AssetGrid; Virtual grid (≥ 80) → ImmersiveGrid. В GalleryView вычисляемое свойство `isVirtual = computed(() => assetStore.assets.length >= 80)`; в шаблоне `v-if="!isVirtual"` / `v-else`. Переключение реактивно при изменении длины списка; при смене режима состояние скролла сбрасывается (приемлемо).
+- **ImmersiveGrid:** Ресайз обрабатывается через `useElementSize(gridContainerRef)` → пересчёт колонок; виртуальные строки с `:key="String(row.key)"` (стабильный ключ по индексу строки). Контейнерный скролл, sentinel для load-more, скелетоны при подгрузке.
+- **Store:** append в loadMore оставлен через spread; оптимизация для 10k+ отложена (см. techContext).
+
 #### Analytics Transformation (Backlog) — ✅ COMPLETED 2026-02-17
 - **Search-to-Find Time:** SearchSession tenant-aware (FK organization), AssetEvent.search_session_id; middleware передаёт X-Search-Session-Id; при download — обновление SearchSession или link_download_to_latest_search_session; дашборд: avg_search_to_find_seconds.
 - **CDN Cost:** Plan.cdn_cost_per_gb; при download в track_asset_event_async подставляется размер файла в bandwidth_bytes; модель OrganizationBandwidthDaily; задача calculate_organization_bandwidth_daily (агрегация по org, стоимость из Plan или ANALYTICS_CDN_COST_PER_GB).

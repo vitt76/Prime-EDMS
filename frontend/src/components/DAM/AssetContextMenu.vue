@@ -59,6 +59,7 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
 import type { Asset } from '@/types/api'
 
 interface Props {
@@ -107,4 +108,18 @@ function onDelete() {
 function onClose() {
   emit('close')
 }
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    onClose()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', onKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown)
+})
 </script>

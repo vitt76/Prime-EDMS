@@ -1,13 +1,8 @@
-import { expect, afterEach, beforeEach } from 'vitest'
-import { cleanup } from '@testing-library/vue'
 import '@testing-library/jest-dom/vitest'
-import { toHaveNoViolations } from 'vitest-axe'
+import 'vitest-axe/extend-expect'
 import * as axe from 'axe-core'
 
-// Extend Vitest matchers with axe
-expect.extend(toHaveNoViolations)
-
-// Make axe available globally for tests
+// Make axe available globally for tests that use it
 if (typeof window !== 'undefined') {
   ;(window as any).axe = axe
 }

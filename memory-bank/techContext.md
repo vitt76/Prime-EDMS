@@ -84,7 +84,7 @@
 - **Tailwind CSS**: (utility-first CSS фреймворк)
 - **Chart.js**: 4.5.1 (графики и визуализация)
 
-**Ключевые компоненты галереи (Sprint 5):** ImmersiveGrid (виртуализация по строкам), AssetThumbnail (lazy load + плейсхолдер), AssetContextMenu (правый клик), история поиска в localStorage (dam_search_history), фильтр ориентации в URL.
+**Ключевые компоненты галереи (Sprint 5):** ImmersiveGrid (виртуализация по строкам), AssetThumbnail (lazy load + плейсхолдер), AssetContextMenu (правый клик, Teleport to body), история поиска в localStorage (dam_search_history), фильтр ориентации в URL. **Виртуализация:** стек @tanstack/vue-virtual; построчная виртуализация (rowCount = ceil(assets/columns)), колонки по useElementSize(container), контейнерный скролл, estimateSize по rowHeight (compact/comfortable), overscan 3. **Фасеты в assetStore:** при каждом fetch активов из API поля typeCounts, tagCounts, statusCounts берутся из ответа (response.facets) и полностью заменяют предыдущие значения (replace, не merge) — корректно для пагинации и смены фильтров. **Техдолг / оптимизация:** loadMore использует spread (`assets.value = [...assets.value, ...results]`); для сценариев 10k+ при профилировании рассмотреть append через slice + push для снижения аллокаций.
 
 **Аналитика (Frontend Visualization):** MetricCard, LineChart (Chart.js), GeoMap (барчарт по странам), AdoptionTable (feature_adoption из единого дашборда), RetentionCohort, Churn (unifiedDashboard.churn_count). ReportGenerateModal: POST .../reports/generate/, poll .../reports/{id}/, скачивание через getBlob(.../reports/{id}/download/). Store: unifiedDashboard, dashboardGeography, reportTaskId/reportTaskStatus; API: GET .../analytics/dashboard/, GET .../dashboard/geography/, GET .../reports/{id}/download/.
 

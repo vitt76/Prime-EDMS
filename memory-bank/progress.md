@@ -114,6 +114,8 @@
 - ✅ Loading states и skeletons
 - ✅ Восстановлен рендер превью в SPA-галерее для защищённых API thumbnail URL (blob/object URL через auth)
 - ✅ **AssetContextMenu (Sprint 5):** контекстное меню по правому клику (Открыть, Скачать, Поделиться, Редактировать метаданные, Удалить)
+- ✅ **Phase 1 Search & Discovery — верификация (2026-02-19):** Code review (useDamSearchFilters stable query, history limit 10; assetStore facets replace; AssetContextMenu cleanup); vitest.setup fix (vitest-axe); unit tests 13/13 (useDamSearchFilters 7, AssetContextMenu 6, с учётом Teleport в body)
+- ✅ **Phase 2 Immersive Grid — верификация:** Гибридная стратегия (AssetGrid < 80, ImmersiveGrid ≥ 80), isVirtual в GalleryView; ImmersiveGrid с useElementSize и стабильными ключами строк; зависимость @tanstack/vue-virtual проверена; готовность к Phase 3 (Smart Metadata)
 
 #### 8. Headless API
 - ✅ REST API v4 endpoints для фронтенда

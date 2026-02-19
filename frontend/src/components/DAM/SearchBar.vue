@@ -105,14 +105,14 @@
 
         <!-- Recent Searches (when input is focused but empty) -->
         <div
-          v-else-if="isFocused && !debouncedQuery && searchStore.recentSearches.length > 0"
+          v-else-if="isFocused && !debouncedQuery && recentList.length > 0"
           class="p-2"
         >
           <div class="px-3 py-2 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
             Недавние поиски
           </div>
           <button
-            v-for="(recentQuery, index) in searchStore.recentSearches"
+            v-for="(recentQuery, index) in recentList"
             :key="index"
             :class="[
               'w-full text-left px-3 py-2 text-sm rounded-md transition-colors min-h-[44px]',
@@ -145,6 +145,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSearchStore } from '@/stores/searchStore'
+import { useDamSearchFilters } from '@/composables/useDamSearchFilters'
 import { useDebounce } from '@/composables/useDebounce'
 import { onClickOutside } from '@vueuse/core'
 import SearchResults from './SearchResults.vue'
@@ -152,11 +153,14 @@ import SearchResults from './SearchResults.vue'
 interface Props {
   placeholder?: string
   autofocus?: boolean
+  /** When 'dam', recent list and submit use useDamSearchFilters (localStorage history); when 'searchStore' use searchStore (default). */
+  historySource?: 'dam' | 'searchStore'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   placeholder: 'Поиск... (Ctrl+K)',
-  autofocus: false
+  autofocus: false,
+  historySource: 'searchStore'
 })
 
 const emit = defineEmits<{
@@ -166,6 +170,7 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const searchStore = useSearchStore()
+const damSearch = useDamSearchFilters()
 
 const searchContainer = ref<HTMLElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
@@ -179,17 +184,27 @@ const searchId = ref(`search-${Math.random().toString(36).substring(2, 9)}`)
 // Debounce search query (300ms)
 const debouncedQuery = useDebounce(localQuery, 300)
 
-// Show results when there's a query and input is focused
+// Recent list: from DAM localStorage when historySource is 'dam', else from searchStore
+const recentList = computed(() =>
+  props.historySource === 'dam' ? damSearch.getSearchHistory() : searchStore.recentSearches
+)
+
+// Show results when there's a query and input is focused. In DAM mode only show dropdown for recent list (no instant results).
 const showResults = computed(() => {
-  return (
-    isFocused.value &&
-    (debouncedQuery.value.length >= 2 || searchStore.recentSearches.length > 0) &&
-    !searchStore.error
-  )
+  if (!isFocused.value || searchStore.error) return false
+  if (props.historySource === 'dam') {
+    return recentList.value.length > 0 && !debouncedQuery.value
+  }
+  return debouncedQuery.value.length >= 2 || recentList.value.length > 0
 })
 
-// Watch debounced query and perform search
+// When DAM mode: sync query to composable (gallery updates). When searchStore: perform instant search.
 watch(debouncedQuery, async (newQuery) => {
+  if (props.historySource === 'dam') {
+    damSearch.setSearch(newQuery || '')
+    if (newQuery) emit('search', newQuery)
+    return
+  }
   if (newQuery && newQuery.length >= 2) {
     await searchStore.performSearch(newQuery, 8) // Limit to 8 for instant results
     emit('search', newQuery)
@@ -215,8 +230,7 @@ function handleInput() {
 
 function handleFocus() {
   isFocused.value = true
-  // Load recent searches if needed
-  if (!debouncedQuery.value) {
+  if (!debouncedQuery.value && props.historySource === 'searchStore') {
     searchStore.loadRecentSearches()
   }
 }
@@ -263,8 +277,15 @@ function handleEnter() {
   if (selectedIndex.value >= 0 && selectedIndex.value < searchStore.results.length) {
     handleResultSelect(searchStore.results[selectedIndex.value].id)
   } else if (debouncedQuery.value) {
-    // Navigate to full search page
-    handleViewAll()
+    if (props.historySource === 'dam') {
+      damSearch.setSearch(localQuery.value)
+      damSearch.submitSearchNow()
+      router.push({ path: '/dam', query: { ...router.currentRoute.value.query, q: localQuery.value } })
+    } else {
+      handleViewAll()
+    }
+    isFocused.value = false
+    searchInput.value?.blur()
   }
 }
 
@@ -278,18 +299,26 @@ function handleResultSelect(assetId: number) {
 }
 
 function handleViewAll() {
-  if (debouncedQuery.value) {
+  if (!debouncedQuery.value) return
+  if (props.historySource === 'dam') {
+    damSearch.setSearch(localQuery.value)
+    damSearch.submitSearchNow()
+    router.push({ path: '/dam', query: { ...router.currentRoute.value.query, q: localQuery.value } })
+  } else {
     router.push({
       path: '/dam/search',
       query: { q: debouncedQuery.value }
     })
-    isFocused.value = false
-    searchInput.value?.blur()
   }
+  isFocused.value = false
+  searchInput.value?.blur()
 }
 
 function selectRecentSearch(query: string) {
   localQuery.value = query
+  if (props.historySource === 'dam') {
+    damSearch.applySearchFromHistory(query)
+  }
   searchInput.value?.focus()
 }
 
