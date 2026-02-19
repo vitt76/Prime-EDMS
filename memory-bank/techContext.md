@@ -55,6 +55,14 @@
 - **Renditions:** RenditionPreset.organization (FK, null=global); список пресетов и выбор при Share Link фильтруются по request.organization. Publication.organization задаётся при создании Share Link. Дефолтные пресеты (миграция distribution 0015): Instagram 1:1 1080, VK 1200, Печать A4 300 dpi.
 - **Watermarks:** OrganizationWatermarkSettings (organizations, OneToOne Organization): enabled, text, logo_url, position, opacity, font_size; to_watermark_dict() для distribution. GET/PATCH `/api/v4/headless/organization/watermark/`. В generate_rendition_task применяется после пресета, если у publication есть organization с включённым watermark.
 
+#### Спринт 4 Collaboration (Доработка 2026) — Public Share API и модель безопасности
+- **Public Share API:** GET `/api/v4/public/shares/<uuid>/` — доступ без авторизации (`AllowAny`). Возвращает метаданные коллекции (label, uuid) и список документов (id, label, thumbnail_url). Опционально: query-параметр `password=` для защищённых ссылок.
+- **Модель безопасности (UUID + пароль):**
+  - **Истечение:** при `expires_at < now` ответ 403 с `expired: true`.
+  - **Пароль:** при установленном `password_hash` доступ разрешён только если передан корректный `password` в query; иначе 403 с `requires_password: true`. Брутфорс-защита (rate limit, lockout) не реализована.
+- **Авторизованные эндпоинты:** POST `/api/v4/cabinets/<id>/shares/` (создание ссылки, body: expires_at, password); GET `/api/v4/cabinets/<id>/shares/` (список); DELETE `/api/v4/cabinets/<id>/shares/<uuid>/` (отзыв, проверка прав на cabinet через ACL).
+- **Комментарии:** API документов `documents/<id>/comments/` — tenant isolation (document в текущей организации); редактирование/удаление только автор комментария (`comment.user_id == request.user.pk`).
+
 #### AI и обработка медиа
 - **yandexgptlite**: (YandexGPT интеграция)
 - **gigachat**: (GigaChat интеграция)

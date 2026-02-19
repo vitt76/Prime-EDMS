@@ -1,3 +1,6 @@
+import uuid as uuid_module
+from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.db import connection, models, transaction
 from django.urls import reverse
@@ -25,6 +28,7 @@ class Cabinet(ExtraDataModelMixin, MPTTModel):
     can store an unlimited number of documents using an M2M field. Only
     the top level container is can have an ACL. All child container's
     access is delegated to their corresponding root container.
+    Tenant-scoped via organization FK (Phase 3 organizations integration).
     """
     parent = TreeForeignKey(
         blank=True, db_index=True, null=True, on_delete=models.CASCADE,
@@ -33,6 +37,11 @@ class Cabinet(ExtraDataModelMixin, MPTTModel):
     label = models.CharField(
         help_text=_('A short text used to identify the cabinet.'),
         max_length=128, verbose_name=_('Label')
+    )
+    organization = models.ForeignKey(
+        help_text=_('Organization this cabinet belongs to'),
+        on_delete=models.CASCADE, related_name='cabinets',
+        to='organizations.Organization', verbose_name=_('Organization')
     )
     documents = models.ManyToManyField(
         blank=True, related_name='cabinets', to=Document,
@@ -43,9 +52,8 @@ class Cabinet(ExtraDataModelMixin, MPTTModel):
         order_insertion_by = ('label',)
 
     class Meta:
-        # unique_together doesn't work if there is a FK
-        # https://code.djangoproject.com/ticket/1751
-        unique_together = ('parent', 'label')
+        # unique_together: per-organization uniqueness of (parent, label)
+        unique_together = ('organization', 'parent', 'label')
         verbose_name = _('Cabinet')
         verbose_name_plural = _('Cabinets')
 
@@ -132,21 +140,29 @@ class Cabinet(ExtraDataModelMixin, MPTTModel):
 
     def validate_unique(self, exclude=None):
         """
-        Explicit validation of uniqueness of parent+label as the provided
-        unique_together check in Meta is not working for all 100% cases
+        Explicit validation of uniqueness of organization+parent+label as the
+        provided unique_together check in Meta is not working for all 100% cases
         when there is a FK in the unique_together tuple
         https://code.djangoproject.com/ticket/1751
         """
         with transaction.atomic():
             if connection.vendor == 'oracle':
-                queryset = Cabinet.objects.filter(parent=self.parent, label=self.label)
+                queryset = Cabinet.objects.filter(
+                    organization=self.organization,
+                    parent=self.parent,
+                    label=self.label
+                )
             else:
-                queryset = Cabinet.objects.select_for_update().filter(parent=self.parent, label=self.label)
+                queryset = Cabinet.objects.select_for_update().filter(
+                    organization=self.organization,
+                    parent=self.parent,
+                    label=self.label
+                )
 
             if queryset.exists():
                 params = {
                     'model_name': _('Cabinet'),
-                    'field_labels': _('Parent and Label')
+                    'field_labels': _('Organization, Parent and Label')
                 }
                 raise ValidationError(
                     {
@@ -184,3 +200,81 @@ class DocumentCabinet(Cabinet):
         proxy = True
         verbose_name = _('Document cabinet')
         verbose_name_plural = _('Document cabinets')
+
+
+class CabinetShare(models.Model):
+    """
+    Public share link for a cabinet (collection). Allows read-only access
+    to the cabinet's documents via a unique UUID, with optional expiry
+    and password. Tenant-scoped via organization.
+    """
+    uuid = models.UUIDField(
+        default=uuid_module.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+        help_text=_('Unique public link identifier')
+    )
+    cabinet = models.ForeignKey(
+        Cabinet,
+        on_delete=models.CASCADE,
+        related_name='shares',
+        help_text=_('Cabinet (collection) this share exposes')
+    )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='cabinet_shares',
+        help_text=_('Organization (tenant) this share belongs to')
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_('When this share link expires')
+    )
+    password_hash = models.CharField(
+        max_length=128,
+        null=True,
+        blank=True,
+        help_text=_('Hashed password for link protection')
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_cabinet_shares',
+        help_text=_('User who created this share')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Cabinet share')
+        verbose_name_plural = _('Cabinet shares')
+        indexes = [
+            models.Index(
+                fields=['organization', '-created_at'],
+                name='idx_cabinet_share_org_created',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.cabinet.label} → {self.uuid}"
+
+    def set_password(self, raw_password):
+        if raw_password:
+            self.password_hash = make_password(raw_password)
+        else:
+            self.password_hash = None
+
+    def check_password(self, raw_password):
+        if not self.password_hash:
+            return True
+        return check_password(raw_password, self.password_hash)
+
+    def is_expired(self):
+        if not self.expires_at:
+            return False
+        from django.utils.timezone import now
+        return now() >= self.expires_at

@@ -8,7 +8,7 @@ from mayan.apps.documents.models import Document
 from mayan.apps.rest_api import serializers
 from mayan.apps.rest_api.relations import FilteredPrimaryKeyRelatedField
 
-from .models import Cabinet
+from .models import Cabinet, CabinetShare
 from .permissions import (
     permission_cabinet_add_document, permission_cabinet_create,
     permission_cabinet_delete, permission_cabinet_edit,
@@ -17,6 +17,14 @@ from .permissions import (
 
 
 class CabinetSerializer(serializers.ModelSerializer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        if request and getattr(request, 'organization', None):
+            self.fields['parent'].queryset = Cabinet.objects.filter(
+                organization=request.organization
+            )
+
     children = RecursiveField(
         help_text=_('List of children cabinets.'), many=True, read_only=True
     )
@@ -54,9 +62,9 @@ class CabinetSerializer(serializers.ModelSerializer):
     parent_url = serializers.SerializerMethodField(read_only=True)
 
     # This is here because parent is optional in the model but the serializer
-    # sets it as required.
+    # sets it as required. Queryset is restricted by organization in __init__.
     parent = serializers.PrimaryKeyRelatedField(
-        allow_null=True, queryset=Cabinet.objects.all(), required=False
+        allow_null=True, queryset=Cabinet.objects.none(), required=False
     )
 
     # DEPRECATION: Version 5.0, remove 'parent' fields from GET request as
@@ -71,7 +79,7 @@ class CabinetSerializer(serializers.ModelSerializer):
         }
         fields = (
             'children', 'documents_url', 'document_count', 'full_path', 'id',
-            'label', 'parent_id', 'parent', 'parent_url', 'url',
+            'label', 'organization', 'parent_id', 'parent', 'parent_url', 'url',
             'can_add_children', 'can_delete', 'can_edit', 'created_at',
             'updated_at'
         )
@@ -79,7 +87,7 @@ class CabinetSerializer(serializers.ModelSerializer):
         read_only_fields = (
             'can_add_children', 'can_delete', 'can_edit', 'children',
             'created_at', 'document_count', 'documents_url', 'full_path', 'id',
-            'parent_id', 'parent_url', 'updated_at', 'url'
+            'organization', 'parent_id', 'parent_url', 'updated_at', 'url'
         )
 
     def get_full_path(self, obj):
@@ -184,3 +192,33 @@ class CabinetDocumentBulkRemoveSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError(_('Document list cannot be empty.'))
         return value
+
+
+class CabinetShareSerializer(serializers.ModelSerializer):
+    """Serializer for CabinetShare (create/list)."""
+    share_url = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = CabinetShare
+        fields = (
+            'id', 'uuid', 'cabinet', 'organization', 'expires_at',
+            'created_by', 'created_at', 'share_url'
+        )
+        read_only_fields = ('uuid', 'organization', 'created_by', 'created_at', 'share_url')
+
+    def get_share_url(self, obj):
+        request = self.context.get('request')
+        if not request:
+            return ''
+        from django.urls import reverse
+        path = reverse(
+            'rest_api:public-cabinet-share-detail',
+            kwargs={'uuid': str(obj.uuid)}
+        )
+        return request.build_absolute_uri(path)
+
+
+class CabinetShareCreateSerializer(serializers.Serializer):
+    """Payload for creating a cabinet share."""
+    expires_at = serializers.DateTimeField(required=False, allow_null=True)
+    password = serializers.CharField(required=False, allow_blank=True, write_only=True)

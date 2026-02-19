@@ -29,6 +29,7 @@ class OrganizationsApp(MayanAppConfig):
         self._connect_ai_analysis_tenant_binding_signal()
         self._connect_assetevent_tenant_binding_signal()
         self._connect_sharelink_tenant_binding_signal()
+        self._connect_cabinet_tenant_binding_signal()
 
         # Connect quota enforcement signal
         self._connect_quota_signals()
@@ -258,6 +259,47 @@ class OrganizationsApp(MayanAppConfig):
         except Exception as exc:
             logger.warning(
                 'Could not connect ShareLink tenant binding signal: %s', exc
+            )
+
+    def _connect_cabinet_tenant_binding_signal(self):
+        """
+        Connect pre_save signal to auto-bind organization for Cabinet.
+
+        Cabinet.organization is NOT NULL at DB level. API create may not pass
+        organization; inject from tenant context before insert.
+        """
+        try:
+            from django.db.models.signals import pre_save
+
+            from mayan.apps.cabinets.models import Cabinet
+
+            from .literals import DEFAULT_ORGANIZATION_SLUG
+            from .managers import get_current_organization
+            from .models import Organization
+
+            def _bind_cabinet_organization(sender, instance, **kwargs):
+                if getattr(instance, 'organization_id', None):
+                    return
+
+                organization = get_current_organization()
+                if organization is None:
+                    organization = Organization.objects.filter(
+                        slug=DEFAULT_ORGANIZATION_SLUG
+                    ).first()
+
+                if organization is not None:
+                    instance.organization = organization
+
+            pre_save.connect(
+                _bind_cabinet_organization,
+                sender=Cabinet,
+                dispatch_uid='organizations_bind_cabinet_organization',
+                weak=False
+            )
+            logger.debug('Connected Cabinet tenant binding signal')
+        except Exception as exc:
+            logger.warning(
+                'Could not connect Cabinet tenant binding signal: %s', exc
             )
 
     def _connect_cache_invalidation_signals(self):

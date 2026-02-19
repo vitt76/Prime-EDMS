@@ -532,12 +532,21 @@
             <div v-if="activeTab === 'versions'" class="p-5">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">История версий</h3>
-                <button
-                  class="text-sm text-primary-600 dark:text-primary-400 hover:underline"
-                  @click="handleUploadNewVersion"
-                >
-                  + Новая версия
-                </button>
+                <div class="flex items-center gap-3">
+                  <button
+                    v-if="versions.length >= 2"
+                    class="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                    @click="showVersionCompareModal = true"
+                  >
+                    Сравнить версии
+                  </button>
+                  <button
+                    class="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                    @click="handleUploadNewVersion"
+                  >
+                    + Новая версия
+                  </button>
+                </div>
               </div>
               
               <div v-if="!versions.length" class="text-sm text-neutral-500 dark:text-neutral-400">
@@ -929,6 +938,14 @@
         @save-version="handleSaveAsVersion"
         @save-copy="handleSaveAsCopy"
       />
+
+      <!-- Version compare (side-by-side) -->
+      <VersionCompareModal
+        v-if="showVersionCompareModal && versions.length >= 2"
+        :versions="versions"
+        :fetch-preview-as-blob-url="fetchVersionPreviewAsBlobUrl"
+        @close="showVersionCompareModal = false"
+      />
     </div>
   </div>
 </template>
@@ -960,6 +977,7 @@ import MetadataEditor from '@/components/asset/MetadataEditor.vue'
 import WorkflowWidget from '@/components/asset/WorkflowWidget.vue'
 import AIInsightsWidget from '@/components/asset/AIInsightsWidget.vue'
 import MediaEditorModal from '@/components/asset/MediaEditorModal.vue'
+import VersionCompareModal from '@/components/DAM/VersionCompareModal.vue'
 import type { Asset, Comment, Version, ExtendedAsset, UsageStats } from '@/types/api'
 import type { AIAnalysis } from '@/mocks/ai'
 import type { WorkflowState } from '@/mocks/workflows'
@@ -980,6 +998,7 @@ const zoom = ref(1)
 const rotation = ref(0)
 const newComment = ref('')
 const showMediaEditor = ref(false)
+const showVersionCompareModal = ref(false)
 
 // Rename file (document label) state
 const isRenamingFile = ref(false)
@@ -1434,6 +1453,21 @@ function _toRelativeApiPath(url: string): string {
   }
 }
 
+/** Fetch a version preview image URL as blob object URL (for compare modal). */
+async function fetchVersionPreviewAsBlobUrl(imageUrl: string): Promise<string | null> {
+  try {
+    const relative = _toRelativeApiPath(imageUrl)
+    const blob = await apiService.get<Blob>(
+      relative,
+      { responseType: 'blob' } as any,
+      false
+    )
+    return window.URL.createObjectURL(blob)
+  } catch {
+    return null
+  }
+}
+
 async function handleSelectDocumentFile(file: any): Promise<void> {
   if (!file) return
   selectedDocumentFileId.value = file.id
@@ -1461,15 +1495,13 @@ async function handleSelectDocumentFile(file: any): Promise<void> {
   // fetch the image as blob via apiService to include auth headers and
   // avoid <img> 401s. If this fails, fallback to direct URL.
   try {
-    const relative = _toRelativeApiPath(imageUrl)
-    const blob = await apiService.get<Blob>(
-      relative,
-      { responseType: 'blob' } as any,
-      false
-    )
-    const objectUrl = window.URL.createObjectURL(blob)
-    previewOverrideObjectUrl.value = objectUrl
-    previewOverride.value = objectUrl
+    const blobUrl = await fetchVersionPreviewAsBlobUrl(imageUrl)
+    if (blobUrl) {
+      previewOverrideObjectUrl.value = blobUrl
+      previewOverride.value = blobUrl
+    } else {
+      previewOverride.value = _toRelativeApiPath(imageUrl)
+    }
   } catch (e) {
     previewOverride.value = _toRelativeApiPath(imageUrl)
   }

@@ -352,6 +352,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/shared/:uuid',
+    name: 'shared-collection',
+    component: () => import('@/pages/SharedCollectionPage.vue'),
+    meta: { requiresAuth: false, title: 'Публичная коллекция' }
+  },
+  {
     path: '/forbidden',
     name: 'forbidden',
     component: () => import('../pages/ForbiddenPage.vue'),

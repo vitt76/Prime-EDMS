@@ -64,6 +64,22 @@
           <span class="hidden sm:inline">Поделиться</span>
         </button>
 
+        <!-- Add to Collection -->
+        <button
+          class="flex items-center gap-2 px-4 py-2.5 rounded-xl
+                 bg-neutral-800 hover:bg-neutral-700 
+                 text-white text-sm font-medium
+                 transition-all duration-200 hover:scale-105"
+          @click="$emit('add-to-collection')"
+          title="Добавить в коллекцию"
+          aria-label="Добавить в коллекцию"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+          <span class="hidden sm:inline">В коллекцию</span>
+        </button>
+
         <!-- Tag with AI -->
         <button
           class="flex items-center gap-2 px-4 py-2.5 rounded-xl
@@ -123,6 +139,7 @@ defineEmits<{
   download: []
   share: []
   'ai-tag': []
+  'add-to-collection': []
   delete: []
   clear: []
 }>()

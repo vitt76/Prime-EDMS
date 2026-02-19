@@ -41,6 +41,49 @@ class CabinetService {
     return mapCabinetTreeToFolders(result.data || [])
   }
 
+  /** Get a single cabinet by ID (for collection detail). */
+  async getCabinet(cabinetId: number, useCache = false): Promise<CabinetDTO> {
+    const operation = () =>
+      apiService.get<CabinetDTO>(`${CABINET_BASE}/${cabinetId}/`, undefined, useCache)
+    const result = await withRetry(operation)
+    if (!result.success) throw result.error
+    return result.data!
+  }
+
+  /** Get flat list of cabinets (for list views). */
+  async getCabinetList(useCache = false): Promise<CabinetDTO[]> {
+    const operation = () =>
+      apiService.get<CabinetDTO[] | { results: CabinetDTO[] }>(
+        `${CABINET_BASE}/`,
+        undefined,
+        useCache
+      )
+    const result = await withRetry(operation)
+    if (!result.success) throw result.error
+    const data = result.data!
+    const list = Array.isArray(data) ? data : (data as { results: CabinetDTO[] }).results || []
+    return list
+  }
+
+  /** Get documents in a cabinet (paginated). */
+  async getCabinetDocuments(
+    cabinetId: number,
+    params?: { page?: number; page_size?: number }
+  ): Promise<{ results: unknown[]; count: number }> {
+    const operation = () =>
+      apiService.get<{ results: unknown[]; count: number }>(
+        `${CABINET_BASE}/${cabinetId}/documents/`,
+        { params }
+      )
+    const result = await withRetry(operation)
+    if (!result.success) throw result.error
+    const data = result.data!
+    return {
+      results: data.results || (Array.isArray(data) ? data : []),
+      count: (data as { count?: number }).count ?? (data.results?.length ?? 0)
+    }
+  }
+
   async createCabinet(payload: CreateCabinetPayload): Promise<FolderNode> {
     const operation = () =>
       apiService.post<CabinetDTO>(`${CABINET_BASE}/`, payload)

@@ -96,6 +96,13 @@
 - ✅ Отслеживание прогресса согласования
 - ✅ ApprovalWorkflowEvent для аналитики workflow
 
+#### Collaboration — Спринт 4 Доработка 2026
+- ✅ **Коллекции (Cabinets):** Cabinet.organization, фильтрация API по организации; фронт Collections на `/api/v4/cabinets/`; «Добавить в коллекцию» в галерее (AddToCollectionModal, bulk-add); «Мои коллекции» (дерево, CRUD).
+- ✅ **Публичный шаринг:** Модель CabinetShare (uuid, cabinet, organization, expires_at, password_hash); API создания/списка/отзыва (`cabinets/<id>/shares/`); публичный GET `/api/v4/public/shares/<uuid>/` (AllowAny; 403 при истечении или неверном пароле); фронт: ShareCollectionModal, страница `/shared/:uuid` (SharedCollectionPage.vue).
+- ✅ **Комментарии:** Tenant isolation в document_comments API; только автор может редактировать/удалять (check_comment_owner в perform_update/perform_destroy).
+- ✅ **Сравнение версий:** UI — VersionCompareModal, выбор двух версий, превью side-by-side во вкладке «Версии» (AssetDetailPage).
+- ✅ **Верификация:** `python manage.py verify_sprint4`; security audit: `docs/transformation-2025/SECURITY_AUDIT_SPRINT4.md`.
+
 #### 6. Permissions & Access Control
 - ✅ Система ролей (Roles → Groups → Users)
 - ✅ Access Control Lists (ACL) для объектов
@@ -199,12 +206,12 @@
 | A | **1** | Поиск и обнаружение (ориентация, недавно просмотренные, saved searches) | ✅ Бэкенд завершён (Phase 5, QA 2026-02-19) | 2–3 нед |
 | A | **2** | Продуктивность и UX (избранное + tenant, хоткеи) | 🔲 Запланирован | 1–2 нед |
 | B | **3** | Контент: дедупликация, пресеты рендишенов, водяные знаки | ✅ Завершён (2026-02-19) | 3–4 нед |
-| B | **4** | Совместная работа: коллекции, комментарии, сравнение версий | 🔲 Запланирован | 3–4 нед |
+| B | **4** | Совместная работа: коллекции, комментарии, сравнение версий | ✅ Завершён и верифицирован (2026-02-19) | 3–4 нед |
 | C | **5** | Безопасность и compliance (field-level права, right to be forgotten) | 🔲 Запланирован | 2–3 нед |
 | C | **6** | Операции (мониторинг, алерты, лимиты файлов, приоритеты очередей) | 🔲 Запланирован | 2 нед |
 | D | **7** | Крупные направления (семантический поиск, видео, ingest, lifecycle, n8n, a11y) | 🔲 По выбору | по фиче |
 
-**Следующий к выполнению:** Спринт 2 (Продуктивность и UX) или Спринт 4 (Совместная работа). После каждого спринта — регрессионные тесты, обновление Memory Bank, отчёт в `docs/transformation-2025/SPRINT_DORABOTKA_2026_N.md`.
+**Следующий к выполнению:** Спринт 2 (Продуктивность и UX) или Спринт 5 (Безопасность и compliance). Спринт 4 завершён; верификация: `python manage.py verify_sprint4`, security audit: `docs/transformation-2025/SECURITY_AUDIT_SPRINT4.md`. После каждого спринта — регрессионные тесты, обновление Memory Bank, отчёт в `docs/transformation-2025/SPRINT_DORABOTKA_2026_N.md`.
 
 ---
 

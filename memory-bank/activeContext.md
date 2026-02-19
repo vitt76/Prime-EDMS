@@ -75,7 +75,7 @@
 - **Спринт 6 — Операции:** мониторинг и алерты, лимиты на размер/тип файла, приоритеты очередей.
 - **Спринт 7:** семантический поиск, видеомодуль, ingest pipeline, lifecycle, n8n/коннекторы, a11y (каждое направление — отдельное решение по объёму).
 
-**Следующий шаг:** **Спринт 3 (Контент)** завершён 2026-02-19. Далее — **Спринт 2 (Продуктивность и UX)** или **Спринт 4 (Совместная работа)** по приоритету. Детальные критерии — в Доработка_2026.md.
+**Следующий шаг:** **Спринт 3 (Контент)** и **Спринт 4 (Совместная работа)** завершены. **Спринт 4** — ✅ **COMPLETED & VERIFIED** (2026-02-19): коллекции на Cabinets, публичный шаринг CabinetShare, комментарии с tenant isolation и owner-only edit/delete, сравнение версий (UI). Security audit: PASS; верификация: `python manage.py verify_sprint4`. Далее — **Спринт 2 (Продуктивность и UX)** или **Спринт 5 (Безопасность и compliance)**. Детальные критерии — в Доработка_2026.md.
 
 **Зависимости:** Спринты 1 и 2 можно вести параллельно; Спринт 4 логически после 1 (saved searches в контексте коллекций). Спринты 5 и 6 независимы от 1–4.
 
@@ -92,6 +92,22 @@
 - **3.3 Renditions:** RenditionPreset — поле `organization` (tenant-aware), фильтр в list/detail и при создании Share Link; миграция 0015 — три пресета по умолчанию (Instagram 1:1 1080, VK 1200, Печать A4 300 dpi); сериализатор и создание пресета с подстановкой `request.organization`. **Водяные знаки:** модель `OrganizationWatermarkSettings` (organizations), миграция 0007; `Publication.organization` (distribution 0016), установка при создании Share Link; применение в `generate_rendition_task` при экспорте по Share Link; API **GET/PATCH** `/api/v4/headless/organization/watermark/`. Тесты: `test_watermark_settings_views.py`, `test_rendition_preset_tenant.py`.
 
 **Ключевые файлы:** headless_api/views/version_views.py, potential_duplicates_views.py, watermark_settings_views.py; distribution/views/preset_views.py, share_link_views.py, tasks.py; distribution/models.py (RenditionPreset.organization, Publication.organization); organizations/models.py (OrganizationWatermarkSettings); frontend AssetDetailPage.vue (вкладки Версии, Дубликаты).
+
+---
+
+### Спринт 4 (Совместная работа) — Доработка 2026 — ЗАВЕРШЁН И ПРОВЕРЕН (2026-02-19)
+
+**План:** `collaboration_sprint_4_audit_a76f2fe3.plan.md` (Collections, Public Sharing, Comments, Version Compare).
+
+**Реализовано и верифицировано:**
+- **4.1 Коллекции (Cabinets):** Модель Cabinet с полем `organization`, фильтрация API по `request.organization`; фронт Collections на `/api/v4/cabinets/`; «Добавить в коллекцию» в галерее (bulk); «Мои коллекции» (дерево/список).
+- **4.2 Публичный шаринг:** Модель `CabinetShare` (uuid, cabinet, organization, expires_at, password_hash, created_by); API создания/списка/отзыва для авторизованных; **публичный GET** `/api/v4/public/shares/<uuid>/` (AllowAny; блокировка при истечении срока или неверном/отсутствующем пароле — 403); фронт: кнопка «Поделиться», ShareCollectionModal, страница `/shared/:uuid` (SharedCollectionPage.vue).
+- **4.3 Комментарии:** Tenant isolation в API (document в текущей организации); **только автор** может редактировать/удалять комментарий (`check_comment_owner`, perform_update/perform_destroy).
+- **4.4 Сравнение версий:** UI — модалка выбора двух версий, превью side-by-side (VersionCompareModal, AssetDetailPage).
+
+**Security audit:** PASS. Отчёт: `docs/transformation-2025/SECURITY_AUDIT_SPRINT4.md`. Верификация: `python manage.py verify_sprint4` (анонимный доступ к шару, истёкшая ссылка 403, удаление чужого комментария 403).
+
+**Готовность к Спринту 5:** Security & Compliance — да, с точки зрения Collaboration функции проверены и задокументированы.
 
 ---
 

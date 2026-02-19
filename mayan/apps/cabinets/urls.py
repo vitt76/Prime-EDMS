@@ -3,8 +3,9 @@ from django.conf.urls import url
 from .api_views import (
     APICabinetDocumentAddView, APICabinetDocumentBulkAddView,
     APICabinetDocumentBulkRemoveView, APICabinetDocumentListView,
-    APICabinetDocumentRemoveView, APICabinetListView, APICabinetTreeView,
-    APICabinetView, APIDocumentCabinetListView
+    APICabinetDocumentRemoveView, APICabinetListView, APICabinetShareListView,
+    APICabinetShareView, APICabinetTreeView, APICabinetView,
+    APIDocumentCabinetListView, PublicCabinetShareDetailView
 )
 from .views import (
     DocumentCabinetAddView, DocumentCabinetListView,
@@ -109,5 +110,20 @@ api_urls = [
         regex=r'^documents/(?P<document_id>[0-9]+)/cabinets/$',
         name='document-cabinet-list',
         view=APIDocumentCabinetListView.as_view()
+    ),
+    url(
+        regex=r'^cabinets/(?P<cabinet_id>[0-9]+)/shares/$',
+        name='cabinet-share-list',
+        view=APICabinetShareListView.as_view()
+    ),
+    url(
+        regex=r'^cabinets/(?P<cabinet_id>[0-9]+)/shares/(?P<uuid>[0-9a-f-]+)/$',
+        name='cabinet-share-detail',
+        view=APICabinetShareView.as_view()
+    ),
+    url(
+        regex=r'^public/shares/(?P<uuid>[0-9a-f-]+)/$',
+        name='public-cabinet-share-detail',
+        view=PublicCabinetShareDetailView.as_view()
     )
 ]

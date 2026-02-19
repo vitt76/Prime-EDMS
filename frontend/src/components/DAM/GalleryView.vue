@@ -343,11 +343,20 @@
       @error="(msg) => showToast(msg, 'error')"
     />
 
+    <!-- Add to Collection Modal -->
+    <AddToCollectionModal
+      v-if="showAddToCollectionModal"
+      :selected-ids="Array.from(assetStore.selectedAssets)"
+      @close="showAddToCollectionModal = false"
+      @done="onAddToCollectionDone"
+    />
+
     <!-- Floating Bulk Actions Bar (New Glassmorphism Version) -->
     <BulkActionsBar
       @share="handleBulkShare"
       @download="handleBulkDownload"
       @ai-tag="handleBulkAiTag"
+      @add-to-collection="showAddToCollectionModal = true"
       @delete="handleBulkDelete"
       @clear="handleClearSelection"
     />
@@ -449,6 +458,7 @@ import AssetGrid from './AssetGrid.vue'
 import ImmersiveGrid from './ImmersiveGrid.vue'
 const AssetContextMenu = defineAsyncComponent(() => import('./AssetContextMenu.vue'))
 import BulkActionsBar from './BulkActionsBar.vue'
+import AddToCollectionModal from './AddToCollectionModal.vue'
 import BulkTagModal from './BulkTagModal.vue'
 import BulkMoveModal from './BulkMoveModal.vue'
 import BulkDeleteModal from './BulkDeleteModal.vue'
@@ -556,6 +566,11 @@ function onMetadataSaved() {
   assetStore.fetchAssets()
   metadataPanelOpen.value = false
   metadataPanelAsset.value = null
+}
+
+function onAddToCollectionDone() {
+  showToast('Активы добавлены в коллекцию', 'success')
+  assetStore.clearSelection()
 }
 
 function handleAssetDeleteFromContext(asset: Asset) {
@@ -773,6 +788,7 @@ function handleRetry() {
 }
 
 // Bulk Operations
+const showAddToCollectionModal = ref(false)
 const showBulkTagModal = ref(false)
 const showBulkMoveModal = ref(false)
 const showBulkDeleteModal = ref(false)

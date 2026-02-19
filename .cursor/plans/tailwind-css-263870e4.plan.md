@@ -29,7 +29,7 @@ isProject: false
 - Выявить недостающие переменные:
   - `--color-surface`, `--color-border`, `--color-bg-1`
   - `--color-text`, `--color-text-secondary`, `--color-background`
-  - `--font-size-*` (xs, sm, base, lg, xl, 2xl, 3xl)
+  - `--font-size-`* (xs, sm, base, lg, xl, 2xl, 3xl)
   - `--radius-*` (sm, base, md, lg)
   - `--shadow-*` (sm, md, lg)
 
@@ -52,7 +52,8 @@ isProject: false
 ### 2.1 Обновление `frontend/tailwind.config.js`
 
 - Заменить хардкодные цвета на ссылки на CSS-переменные:
-  ```js
+
+```js
   colors: {
     primary: {
       0: 'var(--color-primary-0)',
@@ -60,14 +61,21 @@ isProject: false
       // ...
     }
   }
-  ```
+  
+
+```
+
 - Заменить fontSize на переменные:
-  ```js
+
+```js
   fontSize: {
     xs: ['var(--font-size-xs)', { lineHeight: '1.5' }],
     // ...
   }
-  ```
+  
+
+```
+
 - Заменить borderRadius на переменные
 - Заменить boxShadow на переменные
 - Сохранить spacing, transitionDuration, transitionTimingFunction как есть (они не используются в CSS-переменных)
