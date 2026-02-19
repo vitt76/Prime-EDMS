@@ -16,6 +16,7 @@ from mayan.apps.rest_api import generics
 
 from ..models import Publication, PublicationItem, GeneratedRendition, ShareLink, RenditionPreset
 from ..serializers.publication_serializers import ShareLinkSerializer
+from .preset_views import _preset_queryset_for_request
 
 logger = logging.getLogger(name=__name__)
 
@@ -72,18 +73,17 @@ def create_share_link_simple(request):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Get or create a preset
+        # Get or create a preset (tenant-scoped: global + current org)
+        preset_qs = _preset_queryset_for_request(request)
         if preset_id:
-            try:
-                preset = RenditionPreset.objects.get(pk=preset_id)
-            except RenditionPreset.DoesNotExist:
+            preset = preset_qs.filter(pk=preset_id).first()
+            if not preset:
                 return Response(
                     {'detail': f'Preset {preset_id} not found'},
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
-            # Use first available preset
-            preset = RenditionPreset.objects.first()
+            preset = preset_qs.first()
             if not preset:
                 return Response(
                     {'detail': 'No rendition presets available. Please create a preset first.'},
@@ -133,7 +133,8 @@ def create_share_link_simple(request):
                     publication = Publication.objects.create(
                         owner=request.user,
                         title=title,
-                        access_policy='public'
+                        access_policy='public',
+                        organization=getattr(request, 'organization', None),
                     )
                     logger.info(f'Created new publication {publication.id} for share link creation')
                 elif existing_items.exists():

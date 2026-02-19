@@ -1,7 +1,7 @@
 # Active Context: Prime-EDMS
 
-**Последнее обновление:** 2026-02-17  
-**Текущий фокус:** Принята дорожная карта «Доработка 2026» для соответствия мировым DAM-системам. Следующий запланированный спринт — **Спринт 1 (Поиск и обнаружение)**. Опционально параллельно или после Фазы A — Sprint 4 итерация 2 (Security Polish) по старому ТЗ.
+**Последнее обновление:** 2026-02-19  
+**Текущий фокус:** Доработка 2026 — **Спринт 3 (Контент)** завершён. Реализованы Versioning (API revert/activate, UI), Deduplication (potential-duplicates API + UI), Renditions (tenant-aware пресеты, дефолтные пресеты, водяные знаки на уровне организации). Следующий по плану — **Спринт 2 (Продуктивность и UX)** или **Спринт 4 (Совместная работа)**.
 
 ---
 
@@ -75,9 +75,23 @@
 - **Спринт 6 — Операции:** мониторинг и алерты, лимиты на размер/тип файла, приоритеты очередей.
 - **Спринт 7:** семантический поиск, видеомодуль, ingest pipeline, lifecycle, n8n/коннекторы, a11y (каждое направление — отдельное решение по объёму).
 
-**Следующий шаг:** Старт **Спринта 1 (Поиск и обнаружение)**. Задачи: 3.1 Ориентация на бэкенде и поиск по фильтру; 3.2 «Недавно просмотренные»; 3.3 Saved Searches. Детальные критерии приёмки и чек-листы — в документе Доработка_2026.md.
+**Следующий шаг:** **Спринт 3 (Контент)** завершён 2026-02-19. Далее — **Спринт 2 (Продуктивность и UX)** или **Спринт 4 (Совместная работа)** по приоритету. Детальные критерии — в Доработка_2026.md.
 
 **Зависимости:** Спринты 1 и 2 можно вести параллельно; Спринт 4 логически после 1 (saved searches в контексте коллекций). Спринты 5 и 6 независимы от 1–4.
+
+---
+
+### Спринт 3 (Контент) — Доработка 2026 — ЗАВЕРШЁН (2026-02-19)
+
+**План:** `sprint_3_content_audit_plan_52eb5e7c.plan.md` (Versioning, Deduplication, Renditions).
+
+**Реализовано:**
+
+- **3.1 Versioning:** Документация API (Upload = POST `documents/{id}/files/`, Revert = POST `headless/.../versions/activate/` с `version_id`/`file_id`); алиас **POST** `headless/documents/{id}/versions/{version_id}/revert/`; фильтрация по tenant в version_views; UI в AssetDetailPage — вкладка «Версии», кнопка «Сделать текущей», загрузка новой версии; тесты (HeadlessVersionActivateTestCase, HeadlessVersionRevertTestCase).
+- **3.2 Deduplication:** Endpoint **GET** `/api/v4/headless/documents/<id>/potential-duplicates/` (по checksum последнего файла, tenant + ACL, лимит 20); стратегия «мягкое предупреждение» через этот endpoint (без блокировки загрузки); UI — вкладка «Дубликаты» в карточке актива, список с превью и ссылками; тесты `test_potential_duplicates_views.py`.
+- **3.3 Renditions:** RenditionPreset — поле `organization` (tenant-aware), фильтр в list/detail и при создании Share Link; миграция 0015 — три пресета по умолчанию (Instagram 1:1 1080, VK 1200, Печать A4 300 dpi); сериализатор и создание пресета с подстановкой `request.organization`. **Водяные знаки:** модель `OrganizationWatermarkSettings` (organizations), миграция 0007; `Publication.organization` (distribution 0016), установка при создании Share Link; применение в `generate_rendition_task` при экспорте по Share Link; API **GET/PATCH** `/api/v4/headless/organization/watermark/`. Тесты: `test_watermark_settings_views.py`, `test_rendition_preset_tenant.py`.
+
+**Ключевые файлы:** headless_api/views/version_views.py, potential_duplicates_views.py, watermark_settings_views.py; distribution/views/preset_views.py, share_link_views.py, tasks.py; distribution/models.py (RenditionPreset.organization, Publication.organization); organizations/models.py (OrganizationWatermarkSettings); frontend AssetDetailPage.vue (вкладки Версии, Дубликаты).
 
 ---
 

@@ -25,7 +25,10 @@ from mayan.apps.headless_api.views.saved_searches_views import (
 )
 from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
 from mayan.apps.headless_api.views.version_views import (
-    HeadlessEditView, HeadlessVersionActivateView
+    HeadlessEditView, HeadlessVersionActivateView, HeadlessVersionRevertView
+)
+from mayan.apps.headless_api.views.potential_duplicates_views import (
+    PotentialDuplicatesView
 )
 from mayan.apps.headless_api.views.conversion_views import HeadlessDocumentConvertView
 from mayan.apps.headless_api.views.dashboard_stats_views import HeadlessDashboardStatsView
@@ -396,6 +399,16 @@ api_version_urls = [
         regex=r'^headless/documents/(?P<document_id>\d+)/versions/activate/$',
         view=HeadlessVersionActivateView.as_view(),
         name='headless-document-version-activate'
+    ),
+    url(
+        regex=r'^headless/documents/(?P<document_id>\d+)/versions/(?P<version_id>\d+)/revert/$',
+        view=HeadlessVersionRevertView.as_view(),
+        name='headless-document-version-revert'
+    ),
+    url(
+        regex=r'^headless/documents/(?P<document_id>\d+)/potential-duplicates/$',
+        view=PotentialDuplicatesView.as_view(),
+        name='headless-document-potential-duplicates'
     ),
     url(
         regex=r'^headless/documents/(?P<document_id>\d+)/convert/$',

@@ -765,3 +765,89 @@ class DomainSettings(models.Model):
             domain=self.custom_domain,
             status=verified
         )
+
+
+class OrganizationWatermarkSettings(models.Model):
+    """
+    Watermark settings for an organization (Sprint 3.3).
+
+    When enabled, watermark is applied to preview and Share Link exports.
+    """
+    POSITION_CHOICES = [
+        ('top_left', _('Top left')),
+        ('top_right', _('Top right')),
+        ('bottom_left', _('Bottom left')),
+        ('bottom_right', _('Bottom right')),
+        ('center', _('Center')),
+    ]
+
+    organization = models.OneToOneField(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='watermark_settings',
+        verbose_name=_('Organization')
+    )
+    enabled = models.BooleanField(
+        default=False,
+        verbose_name=_('Enabled'),
+        help_text=_('Apply watermark to preview and Share Link exports')
+    )
+    text = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_('Text'),
+        help_text=_('Watermark text (e.g. Confidential)')
+    )
+    logo_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name=_('Logo URL'),
+        help_text=_('Optional logo image URL for watermark')
+    )
+    position = models.CharField(
+        max_length=32,
+        choices=POSITION_CHOICES,
+        default='bottom_right',
+        verbose_name=_('Position')
+    )
+    opacity = models.FloatField(
+        default=0.5,
+        verbose_name=_('Opacity'),
+        help_text=_('Opacity 0.0–1.0')
+    )
+    font_size = models.IntegerField(
+        null=True,
+        blank=True,
+        default=24,
+        verbose_name=_('Font size')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'organizations_watermark_settings'
+        verbose_name = _('Organization watermark settings')
+        verbose_name_plural = _('Organization watermark settings')
+
+    def __str__(self):
+        return _('Watermark for {org}').format(org=self.organization.name)
+
+    def to_watermark_dict(self):
+        """Return dict compatible with distribution _apply_watermark (text, position, opacity, font_size)."""
+        if not self.enabled or not self.text:
+            return {}
+        # Position as (x, y) from top-left; bottom_right etc. can be resolved in caller with image size
+        pos_map = {
+            'top_left': (10, 10),
+            'top_right': (10, 10),   # caller may override with image width
+            'bottom_left': (10, 10),
+            'bottom_right': (10, 10),
+            'center': (10, 10),
+        }
+        xy = pos_map.get(self.position, (10, 10))
+        return {
+            'text': self.text,
+            'position': xy,
+            'font_size': self.font_size or 24,
+            'font_color': (255, 255, 255, int(255 * self.opacity)),
+        }

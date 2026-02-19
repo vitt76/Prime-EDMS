@@ -35,6 +35,14 @@
 
     <!-- Asset Content -->
   <div v-else-if="asset" class="asset-detail-page flex flex-col h-screen">
+      <!-- Hidden input for "Upload new version" -->
+      <input
+        ref="newVersionFileInput"
+        type="file"
+        class="hidden"
+        accept="*/*"
+        @change="handleNewVersionFileSelected"
+      />
       <!-- Top Bar -->
       <header class="flex items-center justify-between px-6 py-4 bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
         <div class="flex items-center gap-4">
@@ -560,20 +568,76 @@
                         </p>
                       </div>
                     </div>
-                    <button
-                      v-if="!version.is_current"
-                      class="text-xs text-error-600 dark:text-error-400 hover:underline"
-                      @click.stop="handleDeleteVersion(version)"
-                    >
-                      Удалить
-                    </button>
+                    <div v-if="!version.is_current" class="flex items-center gap-2">
+                      <button
+                        class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                        @click.stop="handleRevertToVersion(version)"
+                      >
+                        Сделать текущей
+                      </button>
+                      <button
+                        class="text-xs text-error-600 dark:text-error-400 hover:underline"
+                        @click.stop="handleDeleteVersion(version)"
+                      >
+                        Удалить
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
+            <!-- Duplicates Tab -->
+            <div v-if="activeTab === 'duplicates'" class="p-5">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">Возможные дубликаты</h3>
+                <button
+                  v-if="potentialDuplicatesLoading === false"
+                  class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                  @click="loadPotentialDuplicates"
+                >
+                  Обновить
+                </button>
+              </div>
+              <div v-if="potentialDuplicatesLoading" class="text-sm text-neutral-500 dark:text-neutral-400">
+                Загрузка...
+              </div>
+              <div v-else-if="!potentialDuplicates.length" class="text-sm text-neutral-500 dark:text-neutral-400">
+                Дубликатов не найдено.
+              </div>
+              <div v-else class="space-y-3">
+                <div
+                  v-for="dup in potentialDuplicates"
+                  :key="dup.id"
+                  class="flex items-center gap-3 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+                >
+                  <router-link
+                    :to="`/dam/assets/${dup.id}`"
+                    class="flex items-center gap-3 min-w-0 flex-1"
+                  >
+                    <img
+                      v-if="dup.thumbnail_url"
+                      :src="dup.thumbnail_url"
+                      :alt="dup.label"
+                      class="w-12 h-12 rounded-lg object-cover shrink-0 bg-neutral-200 dark:bg-neutral-600"
+                    />
+                    <div v-else class="w-12 h-12 rounded-lg bg-neutral-200 dark:bg-neutral-600 flex items-center justify-center text-xs text-neutral-500 shrink-0">
+                      —
+                    </div>
+                    <span class="text-sm font-medium text-neutral-900 dark:text-white truncate">{{ dup.label }}</span>
+                  </router-link>
+                  <router-link
+                    :to="`/dam/assets/${dup.id}`"
+                    class="text-xs text-primary-600 dark:text-primary-400 hover:underline shrink-0"
+                  >
+                    Открыть
+                  </router-link>
+                </div>
+              </div>
+            </div>
+
           <!-- Other File Types (icon fallback) -->
-          <div v-else-if="activeTab !== 'metadata' && activeTab !== 'comments' && activeTab !== 'usage'" class="flex-1 flex items-start justify-center px-4 pb-6">
+          <div v-else-if="activeTab !== 'metadata' && activeTab !== 'comments' && activeTab !== 'usage' && activeTab !== 'duplicates'" class="flex-1 flex items-start justify-center px-4 pb-6">
             <div class="w-full max-w-xl sticky top-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/60 shadow-sm p-5 flex flex-col gap-3">
               <div class="flex items-center gap-3">
                 <div class="w-12 h-12 rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-200">
@@ -911,7 +975,7 @@ const isLoading = ref(true)
 const error = ref<string | null>(null)
 const asset = ref<Asset | null>(null)
 const extendedAsset = ref<ExtendedAsset | null>(null)
-const activeTab = ref<'info' | 'metadata' | 'versions' | 'comments' | 'usage'>('info')
+const activeTab = ref<'info' | 'metadata' | 'versions' | 'duplicates' | 'comments' | 'usage'>('info')
 const zoom = ref(1)
 const rotation = ref(0)
 const newComment = ref('')
@@ -945,6 +1009,10 @@ const documentFiles = ref<any[]>([])
 const selectedDocumentFileId = ref<number | null>(null)
 const newVersionFileInput = ref<HTMLInputElement | null>(null)
 
+// Potential duplicates (same checksum in org)
+const potentialDuplicates = ref<any[]>([])
+const potentialDuplicatesLoading = ref(false)
+
 const selectedDocumentFile = computed(() => {
   const files = documentFiles.value || []
   if (!files.length) return null
@@ -968,6 +1036,7 @@ const tabs = [
   { id: 'info', label: 'Инфо' },
   { id: 'metadata', label: 'Метаданные' },
   { id: 'versions', label: 'Версии' },
+  { id: 'duplicates', label: 'Дубликаты' },
   { id: 'comments', label: 'Коммент.' },
   { id: 'usage', label: 'Стат.' },
 ] as const
@@ -2362,48 +2431,51 @@ async function handleNewVersionFileSelected(event: Event): Promise<void> {
   }
 }
 
-// Deprecated in favor of deletion; kept to avoid breaking other flows if any.
-async function handleRevertVersion(version: Version) {
+/** Revert to this version (make it current). Uses activate API with file_id. */
+async function handleRevertToVersion(version: Version) {
   if (!asset.value?.id || !version?.id) return
+
+  const documentId = Number(asset.value.id)
+  if (!Number.isFinite(documentId)) return
 
   try {
     notificationStore.addNotification({
       type: 'info',
-      title: 'Откат версии',
-      message: `Откатываемся к версии ${version.filename}...`
+      title: 'Смена версии',
+      message: `Переключаемся на версию ${version.filename}...`
     })
 
-    await apiService.post(`/api/v4/documents/${asset.value.id}/versions/${version.id}/revert/`)
+    await apiService.post(
+      `/api/v4/headless/documents/${documentId}/versions/activate/`,
+      { file_id: version.id }
+    )
 
-    // Перезагружаем детали актива, версии и preview
-    await loadAsset()
-    await loadDocumentFiles()
-    if (selectedDocumentFileId.value) {
-      const selected = documentFiles.value.find((f: any) => f.id === selectedDocumentFileId.value)
-      if (selected?.preview_url || selected?.image_url) {
-        await handleSelectDocumentFile(selected)
-      }
-    } else {
-      // Обновляем preview с текущим файлом
-      const latestFile = documentFiles.value[0]
-      if (latestFile) {
-        await handleSelectDocumentFile(latestFile)
-      }
-    }
+    activeVersionFileId.value = version.id
+    selectedDocumentFileId.value = version.id
+    const file = documentFiles.value?.find((f: any) => f.id === version.id)
+    if (file) await handleSelectDocumentFile(file)
 
-  notificationStore.addNotification({
-    type: 'success',
-    title: 'Версия восстановлена',
+    notificationStore.addNotification({
+      type: 'success',
+      title: 'Версия активирована',
       message: `Текущая версия: ${version.filename}`
     })
-  } catch (err) {
-    console.error('[AssetDetail] Failed to revert version', err)
+  } catch (err: any) {
+    console.error('[AssetDetail] Failed to activate version', err)
+    const message = err?.response?.data?.error || err?.response?.data?.detail || err?.message || 'Не удалось переключить версию'
     notificationStore.addNotification({
       type: 'error',
-      title: 'Откат версии',
-      message: 'Не удалось выполнить откат'
+      title: 'Ошибка',
+      message
     })
   }
+}
+
+/** @deprecated Use handleRevertToVersion. Kept for compatibility. */
+async function handleRevertVersion(version: Version) {
+  await handleRevertToVersion(version)
+  await loadAsset()
+  await loadDocumentFiles()
 }
 
 async function handleDeleteVersion(version: Version) {
@@ -2496,6 +2568,26 @@ async function handleDeleteVersion(version: Version) {
       title: 'Удаление версии',
       message: 'Не удалось удалить версию'
     })
+  }
+}
+
+// Load potential duplicates (same checksum in org)
+async function loadPotentialDuplicates() {
+  if (!asset.value?.id) return
+  const documentId = Number(asset.value.id)
+  if (!Number.isFinite(documentId) || documentId <= 0) return
+  potentialDuplicatesLoading.value = true
+  potentialDuplicates.value = []
+  try {
+    const res: any = await apiService.get(
+      `/api/v4/headless/documents/${documentId}/potential-duplicates/`
+    )
+    potentialDuplicates.value = res?.results ?? []
+  } catch (err: any) {
+    console.error('[AssetDetail] Failed to load potential duplicates', err)
+    potentialDuplicates.value = []
+  } finally {
+    potentialDuplicatesLoading.value = false
   }
 }
 
@@ -2768,6 +2860,9 @@ watch(() => route.params.id, () => {
 watch(() => activeTab.value, (tab) => {
   if (tab === 'comments' && asset.value?.id) {
     loadComments()
+  }
+  if (tab === 'duplicates' && asset.value?.id) {
+    loadPotentialDuplicates()
   }
 })
 

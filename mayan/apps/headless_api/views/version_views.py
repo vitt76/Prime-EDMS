@@ -28,23 +28,30 @@ class HeadlessEditView(APIView):
     """
     Create a new document version from an edited image (non-destructive).
 
-    POST /api/v4/headless/documents/{id}/versions/new_from_edit/
+    **Upload new version (from editor):** POST /api/v4/headless/documents/{id}/versions/new_from_edit/
     """
 
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
+    def _get_document_queryset(self, request):
+        queryset = Document.valid.all()
+        organization = getattr(request, 'organization', None)
+        if organization is not None and hasattr(Document, 'organization'):
+            queryset = queryset.filter(organization=organization)
+        return AccessControlList.objects.restrict_queryset(
+            permission=permission_document_version_create,
+            queryset=queryset,
+            user=request.user
+        )
+
     def post(self, request, document_id: int):
         """
         Create a new document version from an edited image (asynchronous).
-        
+
         Returns 202 Accepted with task_id for polling status.
         """
-        queryset = AccessControlList.objects.restrict_queryset(
-            permission=permission_document_version_create,
-            queryset=Document.valid.all(),
-            user=request.user
-        )
+        queryset = self._get_document_queryset(request)
         document = get_object_or_404(queryset, pk=document_id)
 
         uploaded_file = request.FILES.get('file')
@@ -114,22 +121,28 @@ class HeadlessEditView(APIView):
 
 class HeadlessVersionActivateView(APIView):
     """
-    Explicitly activate a document version from SPA by document + file or version ID.
+    Activate a document version (use as current). Use this for "Revert to version X".
 
-    POST /api/v4/headless/documents/{id}/versions/activate/
-    Body: { "file_id": <document_file_id> } or { "version_id": <version_id> }
+    **Revert to version X:** POST /api/v4/headless/documents/{id}/versions/activate/
+    Body: { "version_id": <version_id> } or { "file_id": <document_file_id> }
     """
 
     authentication_classes = [SessionAuthentication, TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, document_id: int):
-        # Restrict by ACL and version create permission (same as HeadlessEditView)
-        queryset = AccessControlList.objects.restrict_queryset(
+    def _get_document_queryset(self, request):
+        queryset = Document.valid.all()
+        organization = getattr(request, 'organization', None)
+        if organization is not None and hasattr(Document, 'organization'):
+            queryset = queryset.filter(organization=organization)
+        return AccessControlList.objects.restrict_queryset(
             permission=permission_document_version_create,
-            queryset=Document.valid.all(),
+            queryset=queryset,
             user=request.user
         )
+
+    def post(self, request, document_id: int):
+        queryset = self._get_document_queryset(request)
         document = get_object_or_404(queryset, pk=document_id)
 
         version_id = request.data.get('version_id')
@@ -191,6 +204,49 @@ class HeadlessVersionActivateView(APIView):
         # Activate selected version; this will deactivate others internally.
         version.active_set(save=True)
 
+        serializer = HeadlessDocumentVersionSerializer(
+            version, context={'request': request}
+        )
+        return Response(
+            {
+                'success': True,
+                'document_id': document.pk,
+                'version_id': version.pk,
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class HeadlessVersionRevertView(APIView):
+    """
+    Revert document to a specific version (alias for activate with version_id in URL).
+
+    **Revert to version X:** POST /api/v4/headless/documents/{id}/versions/{version_id}/revert/
+    """
+
+    authentication_classes = [SessionAuthentication, TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, document_id: int, version_id: int):
+        queryset = Document.valid.all()
+        organization = getattr(request, 'organization', None)
+        if organization is not None and hasattr(Document, 'organization'):
+            queryset = queryset.filter(organization=organization)
+        queryset = AccessControlList.objects.restrict_queryset(
+            permission=permission_document_version_create,
+            queryset=queryset,
+            user=request.user
+        )
+        document = get_object_or_404(queryset, pk=document_id)
+        try:
+            version = document.versions.get(pk=version_id)
+        except DocumentVersion.DoesNotExist:
+            return Response(
+                {'error': 'version_not_found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        version.active_set(save=True)
         serializer = HeadlessDocumentVersionSerializer(
             version, context={'request': request}
         )

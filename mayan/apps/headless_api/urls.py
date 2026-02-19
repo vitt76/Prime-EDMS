@@ -20,7 +20,11 @@ from .views.saved_searches_views import (
     SavedSearchRunView,
 )
 from .views.profile_views import HeadlessProfileView
-from .views.version_views import HeadlessEditView, HeadlessVersionActivateView
+from .views.version_views import (
+    HeadlessEditView, HeadlessVersionActivateView, HeadlessVersionRevertView
+)
+from .views.potential_duplicates_views import PotentialDuplicatesView
+from .views.watermark_settings_views import OrganizationWatermarkSettingsView
 from .views.conversion_views import HeadlessDocumentConvertView
 from .views.auth_views import HeadlessAuthMeView
 from .views.dashboard_stats_views import HeadlessDashboardStatsView
@@ -70,6 +74,11 @@ api_urls = [
         regex=r'^config/document_types/(?P<document_type_id>\d+)/$',
         view=HeadlessDocumentTypeConfigView.as_view(),
         name='api-config-document-type-detail'
+    ),
+    url(
+        regex=r'^organization/watermark/$',
+        view=OrganizationWatermarkSettingsView.as_view(),
+        name='api-organization-watermark'
     ),
     url(
         regex=r'^activity/feed/$',
@@ -135,6 +144,16 @@ api_urls = [
         regex=r'^documents/(?P<document_id>\d+)/versions/activate/$',
         view=HeadlessVersionActivateView.as_view(),
         name='api-document-version-activate'
+    ),
+    url(
+        regex=r'^documents/(?P<document_id>\d+)/versions/(?P<version_id>\d+)/revert/$',
+        view=HeadlessVersionRevertView.as_view(),
+        name='api-document-version-revert'
+    ),
+    url(
+        regex=r'^documents/(?P<document_id>\d+)/potential-duplicates/$',
+        view=PotentialDuplicatesView.as_view(),
+        name='api-document-potential-duplicates'
     ),
     url(
         regex=r'^documents/(?P<document_id>\d+)/convert/$',

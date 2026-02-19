@@ -49,6 +49,12 @@
 - **Recently Viewed:** GET `/api/v4/headless/documents/recently-viewed/?limit=20&days=30` — документы по AssetEvent (event_type view/download) для текущего user и organization, порядок по последнему просмотру, ACL, тот же сериализатор что и список; требует заголовок X-Organization-Id.
 - **Saved Searches:** GET/POST `/api/v4/headless/saved-searches/`, GET/PATCH/DELETE `/api/v4/headless/saved-searches/<id>/`, GET `/api/v4/headless/saved-searches/<id>/run/` — tenant-aware CRUD; run применяет сохранённые query и filters через логику OptimizedAPIDocumentListView и возвращает results в том же формате. Лимит 20 сохранённых поисков на пользователя.
 
+#### Спринт 3 Content (Доработка 2026) — Versioning, Deduplication, Renditions
+- **Versioning:** POST `/api/v4/headless/documents/<id>/versions/activate/` (body: `version_id` или `file_id`); алиас POST `.../versions/<version_id>/revert/`. Загрузка новой версии: POST `/api/v4/documents/<id>/files/`. Tenant-фильтрация в version_views.
+- **Potential Duplicates:** GET `/api/v4/headless/documents/<id>/potential-duplicates/` — документы той же организации с тем же checksum (file_latest), ACL, лимит 20. Требует request.organization.
+- **Renditions:** RenditionPreset.organization (FK, null=global); список пресетов и выбор при Share Link фильтруются по request.organization. Publication.organization задаётся при создании Share Link. Дефолтные пресеты (миграция distribution 0015): Instagram 1:1 1080, VK 1200, Печать A4 300 dpi.
+- **Watermarks:** OrganizationWatermarkSettings (organizations, OneToOne Organization): enabled, text, logo_url, position, opacity, font_size; to_watermark_dict() для distribution. GET/PATCH `/api/v4/headless/organization/watermark/`. В generate_rendition_task применяется после пресета, если у publication есть organization с включённым watermark.
+
 #### AI и обработка медиа
 - **yandexgptlite**: (YandexGPT интеграция)
 - **gigachat**: (GigaChat интеграция)

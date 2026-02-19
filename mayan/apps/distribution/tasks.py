@@ -37,8 +37,22 @@ def generate_rendition_task(self, generated_rendition_id):
         preset = rendition.preset
         document_file = publication_item.document_file
 
+        # Org-level watermark (Sprint 3.3)
+        org_watermark = {}
+        try:
+            pub = publication_item.publication
+            if getattr(pub, 'organization_id', None):
+                from mayan.apps.organizations.models import OrganizationWatermarkSettings
+                ws = OrganizationWatermarkSettings.objects.filter(
+                    organization_id=pub.organization_id
+                ).first()
+                if ws:
+                    org_watermark = ws.to_watermark_dict()
+        except Exception as e:
+            logger.debug('Org watermark not applied: %s', e)
+
         # Генерируем файл с помощью converter_pipeline_extension
-        converted_file = _convert_file_with_preset(document_file, preset)
+        converted_file = _convert_file_with_preset(document_file, preset, org_watermark=org_watermark)
 
         if converted_file:
             # Сохраняем файл через Django FileField
@@ -70,9 +84,10 @@ def generate_rendition_task(self, generated_rendition_id):
             pass
 
 
-def _convert_file_with_preset(document_file, preset):
+def _convert_file_with_preset(document_file, preset, org_watermark=None):
     """
     Конвертирует файл с использованием заданного пресета.
+    org_watermark: optional dict from OrganizationWatermarkSettings.to_watermark_dict().
     Возвращает BytesIO с конвертированным файлом или None при ошибке.
     """
     try:
@@ -200,9 +215,12 @@ def _convert_file_with_preset(document_file, preset):
                     for filter_name in preset.filters:
                         image = _apply_image_filter(image=image, filter_name=filter_name)
 
-                # Водяной знак
+                # Водяной знак (пресет)
                 if preset.watermark and image.mode in ('RGB', 'RGBA'):
                     image = _apply_watermark(image=image, watermark=preset.watermark)
+                # Водяной знак организации (Sprint 3.3)
+                if org_watermark and image.mode in ('RGB', 'RGBA'):
+                    image = _apply_watermark(image=image, watermark=org_watermark)
 
                 # Создаем выходной буфер
                 output_buffer = BytesIO()

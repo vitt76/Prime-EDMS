@@ -187,6 +187,14 @@ class RenditionPreset(models.Model):
         on_delete=models.CASCADE,
         help_text=_('Associated recipient for this preset')
     )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='rendition_presets',
+        help_text=_('Organization (tenant). Null = global preset visible to all.')
+    )
     name = models.CharField(
         max_length=255,
         unique=True,
@@ -245,6 +253,14 @@ class Publication(models.Model):
         on_delete=models.CASCADE,
         related_name='publications',
         help_text=_('Owner of this publication')
+    )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='publications',
+        help_text=_('Organization (tenant) for watermark and isolation')
     )
     title = models.CharField(
         max_length=255,

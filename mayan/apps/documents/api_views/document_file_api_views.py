@@ -31,7 +31,7 @@ class APIDocumentFileListView(
 ):
     """
     get: Return a list of the selected document's files.
-    post: Create a new document file.
+    post: Upload a new version (create a new document file). Accepts file_new, optional comment, filename, action.
     """
     ordering_fields = ('comment', 'encoding', 'id', 'mime_type')
     serializer_class = DocumentFileSerializer

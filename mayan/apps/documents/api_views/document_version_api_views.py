@@ -79,7 +79,7 @@ class APIDocumentVersionListView(
     ParentObjectDocumentAPIViewMixin, generics.ListCreateAPIView
 ):
     """
-    get: Return a list of the selected document's versions.
+    get: Return a list of the selected document's versions (full version history).
     post: Create a new document version.
     """
     ordering_fields = ('active', 'comment', 'id')

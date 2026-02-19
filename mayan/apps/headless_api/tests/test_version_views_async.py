@@ -1,5 +1,5 @@
 """
-Integration tests for HeadlessEditView with asynchronous processing.
+Integration tests for HeadlessEditView, HeadlessVersionActivateView, HeadlessVersionRevertView.
 """
 from io import BytesIO
 
@@ -8,11 +8,14 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
+from mayan.apps.documents.document_file_actions import DocumentFileActionUseNewPages
+from mayan.apps.documents.permissions import permission_document_version_create
 from mayan.apps.documents.tests.base import GenericDocumentViewTestCase
+from mayan.apps.documents.tests.mixins.document_file_mixins import DocumentFileTestMixin
 from mayan.apps.storage.models import SharedUploadedFile
 
 
-class HeadlessEditViewAsyncTestCase(GenericDocumentViewTestCase):
+class HeadlessEditViewAsyncTestCase(DocumentFileTestMixin, GenericDocumentViewTestCase):
     """Integration tests for HeadlessEditView asynchronous processing."""
 
     def setUp(self):
@@ -30,7 +33,7 @@ class HeadlessEditViewAsyncTestCase(GenericDocumentViewTestCase):
         )
 
         response = self.client.post(
-            f'/api/v4/headless/documents/{self.test_document.pk}/versions/new_from_edit/',
+            f'/api/v4/headless/documents/{self._test_document.pk}/versions/new_from_edit/',
             {'file': test_file, 'format': 'jpeg'},
             format='multipart'
         )
@@ -50,7 +53,7 @@ class HeadlessEditViewAsyncTestCase(GenericDocumentViewTestCase):
         )
 
         response = self.client.post(
-            f'/api/v4/headless/documents/{self.test_document.pk}/versions/new_from_edit/',
+            f'/api/v4/headless/documents/{self._test_document.pk}/versions/new_from_edit/',
             {'file': large_file},
             format='multipart'
         )
@@ -72,7 +75,7 @@ class HeadlessEditViewAsyncTestCase(GenericDocumentViewTestCase):
         initial_count = SharedUploadedFile.objects.count()
 
         response = self.client.post(
-            f'/api/v4/headless/documents/{self.test_document.pk}/versions/new_from_edit/',
+            f'/api/v4/headless/documents/{self._test_document.pk}/versions/new_from_edit/',
             {'file': test_file},
             format='multipart'
         )
@@ -84,7 +87,7 @@ class HeadlessEditViewAsyncTestCase(GenericDocumentViewTestCase):
     def test_post_requires_file(self):
         """Test that POST returns 400 if file is missing."""
         response = self.client.post(
-            f'/api/v4/headless/documents/{self.test_document.pk}/versions/new_from_edit/',
+            f'/api/v4/headless/documents/{self._test_document.pk}/versions/new_from_edit/',
             {},
             format='multipart'
         )
@@ -102,11 +105,103 @@ class HeadlessEditViewAsyncTestCase(GenericDocumentViewTestCase):
         )
 
         response = self.client.post(
-            f'/api/v4/headless/documents/{self.test_document.pk}/versions/new_from_edit/',
+            f'/api/v4/headless/documents/{self._test_document.pk}/versions/new_from_edit/',
             {'file': test_file, 'format': 'jpeg'},
             format='multipart'
         )
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         self.assertIn('task_id', response.data)
+
+
+class HeadlessVersionActivateTestCase(DocumentFileTestMixin, GenericDocumentViewTestCase):
+    """Integration tests for HeadlessVersionActivateView (revert / make current)."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.client.force_authenticate(user=self._test_case_user)
+        self.grant_access(
+            obj=self._test_document,
+            permission=permission_document_version_create
+        )
+
+    def test_activate_with_version_id_returns_200(self):
+        """POST activate with version_id activates that version."""
+        doc = self._test_document
+        version = doc.version_active
+        self.assertIsNotNone(version)
+
+        response = self.client.post(
+            f'/api/v4/headless/documents/{doc.pk}/versions/activate/',
+            {'version_id': version.pk},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.assertEqual(response.data.get('version_id'), version.pk)
+        self.assertIn('data', response.data)
+
+    def test_activate_with_file_id_returns_200(self):
+        """POST activate with file_id activates the version that corresponds to that file."""
+        doc = self._test_document
+        latest_file = doc.file_latest
+        self.assertIsNotNone(latest_file)
+
+        response = self.client.post(
+            f'/api/v4/headless/documents/{doc.pk}/versions/activate/',
+            {'file_id': latest_file.pk},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.assertIn('data', response.data)
+
+    def test_activate_requires_version_or_file_id(self):
+        """POST activate without version_id or file_id returns 400."""
+        response = self.client.post(
+            f'/api/v4/headless/documents/{self._test_document.pk}/versions/activate/',
+            {},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+
+
+class HeadlessVersionRevertTestCase(DocumentFileTestMixin, GenericDocumentViewTestCase):
+    """Integration tests for HeadlessVersionRevertView (revert by version_id in URL)."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.client.force_authenticate(user=self._test_case_user)
+        self.grant_access(
+            obj=self._test_document,
+            permission=permission_document_version_create
+        )
+
+    def test_revert_returns_200(self):
+        """POST .../versions/{version_id}/revert/ activates that version."""
+        doc = self._test_document
+        version = doc.version_active
+        self.assertIsNotNone(version)
+
+        response = self.client.post(
+            f'/api/v4/headless/documents/{doc.pk}/versions/{version.pk}/revert/',
+            {},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data.get('success'))
+        self.assertEqual(response.data.get('version_id'), version.pk)
+
+    def test_revert_unknown_version_returns_404(self):
+        """POST revert with non-existent version_id returns 404."""
+        response = self.client.post(
+            f'/api/v4/headless/documents/{self._test_document.pk}/versions/999999/revert/',
+            {},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('error', response.data)
 

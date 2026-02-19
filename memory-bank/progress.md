@@ -1,7 +1,7 @@
 # Progress: Prime-EDMS
 
-**Последнее обновление:** 2026-02-17  
-**Источник:** Sprint 5 завершён; принята дорожная карта «Доработка 2026» (`docs/transformation-2025/Доработка_2026.md`); Memory Bank приведён в соответствие с планом спринтов.
+**Последнее обновление:** 2026-02-19  
+**Источник:** Спринт 3 (Контент) Доработка 2026 завершён; Memory Bank обновлён по результатам реализации Versioning, Deduplication, Renditions.
 
 ---
 
@@ -12,6 +12,8 @@
 #### 1. Document Management
 - ✅ Загрузка документов через API и UI
 - ✅ Версионирование документов (DocumentFile/DocumentVersion)
+- ✅ **Спринт 3 Доработка 2026 — Versioning:** API revert/activate (POST headless/documents/{id}/versions/activate/ с version_id/file_id), алиас POST .../versions/{id}/revert/; tenant-фильтрация в version_views; UI в AssetDetailPage — вкладка «Версии», «Сделать текущей», загрузка новой версии; тесты HeadlessVersionActivateTestCase, HeadlessVersionRevertTestCase.
+- ✅ **Спринт 3 Доработка 2026 — Deduplication:** GET headless/documents/<id>/potential-duplicates/ (по checksum, tenant + ACL, лимит 20); UI — вкладка «Дубликаты» в карточке актива; тесты test_potential_duplicates_views.py.
 - ✅ Управление типами документов
 - ✅ Полнотекстовый поиск с поддержкой JSON-полей (GIN индексы)
 - ✅ Массовые операции (bulk operations): удаление, перемещение, тегирование
@@ -81,6 +83,7 @@
 - ✅ Рендишены (Renditions) - преобразованные версии файлов
 - ✅ Share Links - защищенные ссылки с паролями, лимитами, сроками
 - ✅ **ShareLink tenant-aware (Sprint 3 Part 3):** TenantAwareMixin, миграции 0012–0014, pre_save binding, портал/сигналы с objects_unfiltered, тесты изоляции (distribution/tests/test_tenant_isolation.py). Hotfix 2026-02-13: индекс idx_dist_sl_org_created (≤30 символов).
+- ✅ **Спринт 3 Доработка 2026 — Renditions:** RenditionPreset.organization (tenant-aware), фильтр в list/detail и при Share Link; миграция 0015 с тремя пресетами по умолчанию (Instagram 1:1 1080, VK 1200, Печать A4 300 dpi); Publication.organization (0016), установка при создании Share Link; водяные знаки организации — OrganizationWatermarkSettings (organizations 0007), применение в generate_rendition_task; API GET/PATCH headless/organization/watermark/; тесты test_rendition_preset_tenant.py, test_watermark_settings_views.py.
 - ✅ Recipient Lists - списки получателей
 - ✅ Distribution Campaigns - маркетинговые кампании
 - ✅ Access Log - логирование доступа
@@ -195,13 +198,13 @@
 |------|--------|------|--------|--------|
 | A | **1** | Поиск и обнаружение (ориентация, недавно просмотренные, saved searches) | ✅ Бэкенд завершён (Phase 5, QA 2026-02-19) | 2–3 нед |
 | A | **2** | Продуктивность и UX (избранное + tenant, хоткеи) | 🔲 Запланирован | 1–2 нед |
-| B | **3** | Контент: дедупликация, пресеты рендишенов, водяные знаки | 🔲 Запланирован | 3–4 нед |
+| B | **3** | Контент: дедупликация, пресеты рендишенов, водяные знаки | ✅ Завершён (2026-02-19) | 3–4 нед |
 | B | **4** | Совместная работа: коллекции, комментарии, сравнение версий | 🔲 Запланирован | 3–4 нед |
 | C | **5** | Безопасность и compliance (field-level права, right to be forgotten) | 🔲 Запланирован | 2–3 нед |
 | C | **6** | Операции (мониторинг, алерты, лимиты файлов, приоритеты очередей) | 🔲 Запланирован | 2 нед |
 | D | **7** | Крупные направления (семантический поиск, видео, ingest, lifecycle, n8n, a11y) | 🔲 По выбору | по фиче |
 
-**Следующий к выполнению:** Спринт 1 (Поиск и обнаружение). После каждого спринта — регрессионные тесты, обновление Memory Bank, отчёт в `docs/transformation-2025/SPRINT_DORABOTKA_2026_N.md`.
+**Следующий к выполнению:** Спринт 2 (Продуктивность и UX) или Спринт 4 (Совместная работа). После каждого спринта — регрессионные тесты, обновление Memory Bank, отчёт в `docs/transformation-2025/SPRINT_DORABOTKA_2026_N.md`.
 
 ---
 
