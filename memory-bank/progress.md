@@ -116,6 +116,8 @@
 - ✅ **AssetContextMenu (Sprint 5):** контекстное меню по правому клику (Открыть, Скачать, Поделиться, Редактировать метаданные, Удалить)
 - ✅ **Phase 1 Search & Discovery — верификация (2026-02-19):** Code review (useDamSearchFilters stable query, history limit 10; assetStore facets replace; AssetContextMenu cleanup); vitest.setup fix (vitest-axe); unit tests 13/13 (useDamSearchFilters 7, AssetContextMenu 6, с учётом Teleport в body)
 - ✅ **Phase 2 Immersive Grid — верификация:** Гибридная стратегия (AssetGrid < 80, ImmersiveGrid ≥ 80), isVirtual в GalleryView; ImmersiveGrid с useElementSize и стабильными ключами строк; зависимость @tanstack/vue-virtual проверена; готовность к Phase 3 (Smart Metadata)
+- ✅ **Phase 3 Smart Metadata & AI — верификация (2026-02-19):** Кнопка «Тегировать с AI» (bulk + контекстное меню), toast 4 с, реальные API (analyze/bulk-analyze) без моков; MetadataPanel (slide-over, Magic с polling до 5 попыток по 2 с, маппинг описания из seo.description), сохранение label/description через assetService.updateAsset; QA-аудит пройден, исправлен баг маппинга
+- ✅ **Phase 4 Optimization & Polish (2026-02-19):** AssetCardSkeleton (compact/comfortable) в GalleryView и ImmersiveGrid; empty state «Ничего не найдено» при активных фильтрах + «Сбросить фильтры»; lazy load MetadataPanel и AssetContextMenu (defineAsyncComponent); emit error в MetadataPanel → toast в GalleryView; focus trap и aria-label в MetadataPanel и BulkActionsBar
 
 #### 8. Headless API
 - ✅ REST API v4 endpoints для фронтенда

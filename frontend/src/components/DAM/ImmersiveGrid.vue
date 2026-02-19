@@ -71,10 +71,7 @@
               v-else-if="row.index * columns + (colIdx - 1) < assets.length || (hasMore && isLoadingMore)"
               class="immersive-grid-cell"
             >
-              <div
-                class="asset-grid-skeleton rounded-lg bg-neutral-200 dark:bg-neutral-700 animate-pulse w-full h-full min-h-[120px]"
-                :class="density === 'compact' ? 'min-h-[120px]' : 'min-h-[180px]'"
-              />
+              <AssetCardSkeleton :density="density" />
             </div>
           </template>
         </div>
@@ -138,6 +135,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useElementSize } from '@vueuse/core'
 import AssetCard from './AssetCard.vue'
+import AssetCardSkeleton from './AssetCardSkeleton.vue'
 import type { Asset } from '@/types/api'
 import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'

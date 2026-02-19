@@ -39,6 +39,14 @@
       >
         <span>Редактировать метаданные</span>
       </button>
+      <button
+        type="button"
+        class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+        role="menuitem"
+        @click="onAiTag"
+      >
+        <span>Тегировать с AI</span>
+      </button>
       <div class="border-t border-gray-200 dark:border-gray-700 my-1" />
       <button
         type="button"
@@ -77,6 +85,7 @@ const emit = defineEmits<{
   download: [asset: Asset]
   share: [asset: Asset]
   'edit-metadata': [asset: Asset]
+  'ai-tag': [asset: Asset]
   delete: [asset: Asset]
 }>()
 
@@ -97,6 +106,11 @@ function onShare() {
 
 function onEditMetadata() {
   if (props.asset) emit('edit-metadata', props.asset)
+  emit('close')
+}
+
+function onAiTag() {
+  if (props.asset) emit('ai-tag', props.asset)
   emit('close')
 }
 

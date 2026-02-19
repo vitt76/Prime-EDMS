@@ -3,20 +3,11 @@
     <!-- Loading State - Skeleton Grid -->
     <div v-if="assetStore.isLoading && assetStore.assets.length === 0" class="p-6">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-        <div
+        <AssetCardSkeleton
           v-for="i in 12"
           :key="i"
-          class="bg-white rounded-xl border border-neutral-200 overflow-hidden animate-pulse"
-        >
-          <div class="aspect-video bg-neutral-200" />
-          <div class="p-3 space-y-2">
-            <div class="h-4 bg-neutral-200 rounded w-3/4" />
-            <div class="flex justify-between">
-              <div class="h-3 bg-neutral-200 rounded w-16" />
-              <div class="h-3 bg-neutral-200 rounded w-20" />
-            </div>
-          </div>
-        </div>
+          :density="gridDensity"
+        />
       </div>
     </div>
 
@@ -56,7 +47,46 @@
       </div>
     </div>
 
-    <!-- Empty State -->
+    <!-- Empty State: filters active — nothing found -->
+    <div
+      v-else-if="assetStore.assets.length === 0 && !assetStore.isLoading && activeFiltersCount > 0"
+      class="flex items-center justify-center min-h-[60vh] p-8"
+    >
+      <div class="max-w-md text-center">
+        <div class="mx-auto w-24 h-24 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-6">
+          <svg
+            class="w-12 h-12 text-neutral-400 dark:text-neutral-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+        <h3 class="text-xl font-semibold text-neutral-800 dark:text-neutral-200 mb-2">
+          Ничего не найдено
+        </h3>
+        <p class="text-neutral-500 dark:text-neutral-400 mb-6">
+          По выбранным фильтрам активов нет. Попробуйте изменить условия поиска.
+        </p>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-medium rounded-xl
+                 hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
+                 transition-all"
+          @click="handleFiltersReset"
+        >
+          Сбросить фильтры
+        </button>
+      </div>
+    </div>
+
+    <!-- Empty State: library empty (no filters) -->
     <div
       v-else-if="assetStore.assets.length === 0 && !assetStore.isLoading"
       class="flex items-center justify-center min-h-[60vh] p-8"
@@ -295,6 +325,7 @@
       @download="handleAssetDownload"
       @share="handleAssetShare"
       @edit-metadata="handleAssetEditMetadata"
+      @ai-tag="handleSingleAiTag"
       @delete="handleAssetDeleteFromContext"
     />
     <ShareModal
@@ -304,13 +335,48 @@
       @success="handleShareSuccess"
     />
 
+    <MetadataPanel
+      :open="metadataPanelOpen"
+      :asset="metadataPanelAsset"
+      @close="metadataPanelOpen = false; metadataPanelAsset = null"
+      @saved="onMetadataSaved"
+      @error="(msg) => showToast(msg, 'error')"
+    />
+
     <!-- Floating Bulk Actions Bar (New Glassmorphism Version) -->
     <BulkActionsBar
       @share="handleBulkShare"
       @download="handleBulkDownload"
+      @ai-tag="handleBulkAiTag"
       @delete="handleBulkDelete"
       @clear="handleClearSelection"
     />
+
+    <!-- Toast (AI and other feedback) -->
+    <Transition
+      enter-active-class="transition ease-out duration-200"
+      enter-from-class="opacity-0 translate-y-2"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition ease-in duration-150"
+      leave-from-class="opacity-100 translate-y-0"
+      leave-to-class="opacity-0 translate-y-2"
+    >
+      <div
+        v-if="toast.show"
+        class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[1100] px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 min-w-[280px] max-w-[90vw]"
+        :class="toast.type === 'error' ? 'bg-red-600 text-white' : toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-white'"
+        role="status"
+        aria-live="polite"
+      >
+        <svg v-if="toast.type === 'success'" class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+        <svg v-else-if="toast.type === 'error'" class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span class="text-sm font-medium">{{ toast.message }}</span>
+      </div>
+    </Transition>
 
     <!-- Filters Drawer -->
     <Transition
@@ -370,22 +436,25 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, ref, computed } from 'vue'
+import { onMounted, onUnmounted, watch, ref, computed, reactive, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiService } from '@/services/apiService'
+import { aiAnalysisService } from '@/services/aiAnalysisService'
 import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
 import { useDamSearchFilters } from '@/composables/useDamSearchFilters'
 import AssetCard from './AssetCard.vue'
+import AssetCardSkeleton from './AssetCardSkeleton.vue'
 import AssetGrid from './AssetGrid.vue'
 import ImmersiveGrid from './ImmersiveGrid.vue'
-import AssetContextMenu from './AssetContextMenu.vue'
+const AssetContextMenu = defineAsyncComponent(() => import('./AssetContextMenu.vue'))
 import BulkActionsBar from './BulkActionsBar.vue'
 import BulkTagModal from './BulkTagModal.vue'
 import BulkMoveModal from './BulkMoveModal.vue'
 import BulkDeleteModal from './BulkDeleteModal.vue'
 import BulkDownloadModal from './BulkDownloadModal.vue'
 import ShareModal from './ShareModal.vue'
+const MetadataPanel = defineAsyncComponent(() => import('./MetadataPanel.vue'))
 import Pagination from '@/components/Common/Pagination.vue'
 import GalleryHeaderActions from './GalleryHeaderActions.vue'
 import FiltersPanel from './FiltersPanel.vue'
@@ -419,6 +488,10 @@ const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 const contextMenuAsset = ref<Asset | null>(null)
 
+// Metadata panel (slide-over)
+const metadataPanelOpen = ref(false)
+const metadataPanelAsset = ref<Asset | null>(null)
+
 function handleAssetContextMenu(asset: Asset, event: MouseEvent) {
   contextMenuAsset.value = asset
   contextMenuX.value = event.clientX
@@ -431,9 +504,58 @@ function closeContextMenu() {
   contextMenuAsset.value = null
 }
 
+// Toast for AI and other feedback
+const toast = reactive<{ show: boolean; message: string; type: 'info' | 'success' | 'error' }>({
+  show: false,
+  message: '',
+  type: 'info'
+})
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+function showToast(message: string, type: 'info' | 'success' | 'error' = 'info') {
+  toast.message = message
+  toast.type = type
+  toast.show = true
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    toast.show = false
+    toastTimer = null
+  }, 4000)
+}
+
+async function handleBulkAiTag() {
+  const ids = selectedAssetIds.value
+  if (ids.length === 0) return
+  try {
+    await aiAnalysisService.runBulkAIAnalysis(ids)
+    showToast(
+      `AI анализирует ${ids.length} активов. Результаты появятся через несколько минут.`,
+      'info'
+    )
+  } catch (err: any) {
+    const msg = err?.response?.data?.detail || err?.message || 'Ошибка запуска AI-анализа'
+    showToast(String(msg), 'error')
+  }
+}
+
+function handleSingleAiTag(asset: Asset) {
+  aiAnalysisService.runAIAnalysis(asset.id).then(() => {
+    showToast('Анализ запущен', 'success')
+  }).catch((err: any) => {
+    const msg = err?.response?.data?.detail || err?.message || 'Ошибка запуска анализа'
+    showToast(String(msg), 'error')
+  })
+}
+
 function handleAssetEditMetadata(asset: Asset) {
   closeContextMenu()
-  router.push(`/dam/assets/${asset.id}/edit`)
+  metadataPanelAsset.value = asset
+  metadataPanelOpen.value = true
+}
+
+function onMetadataSaved() {
+  assetStore.fetchAssets()
+  metadataPanelOpen.value = false
+  metadataPanelAsset.value = null
 }
 
 function handleAssetDeleteFromContext(asset: Asset) {

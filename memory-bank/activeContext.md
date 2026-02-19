@@ -172,6 +172,18 @@
 - **ImmersiveGrid:** Ресайз обрабатывается через `useElementSize(gridContainerRef)` → пересчёт колонок; виртуальные строки с `:key="String(row.key)"` (стабильный ключ по индексу строки). Контейнерный скролл, sentinel для load-more, скелетоны при подгрузке.
 - **Store:** append в loadMore оставлен через spread; оптимизация для 10k+ отложена (см. techContext).
 
+**Phase 3: Smart Metadata & AI — ✅ COMPLETED & VERIFIED (QA audit 2026-02-19):**
+- **Bulk/Single AI:** Кнопка «Тегировать с AI» в BulkActionsBar и пункт в AssetContextMenu; вызовы реальных API (POST /api/v4/ai-analysis/analyze/, bulk-analyze/), без моков; ошибки пробрасываются в UI, toast 4 с.
+- **MetadataPanel:** Slide-over справа (название, описание, теги UI); кнопка «Magic» — запуск AI-анализа и polling getAIAnalysis (до 5 попыток, 2 с); описание берётся из `analysis.seo.description` (исправление маппинга по результатам аудита). Сохранение через assetService.updateAsset (label, description), без оптимистичного обновления.
+- **Верификация:** Аудит кода (aiAnalysisService — реальные запросы, rethrow; MetadataPanel — polling и отключение кнопки при загрузке); исправлен критический баг маппинга description. Готовность к Phase 4 (Optimization & Polish).
+
+**Phase 4: Optimization & Polish — ✅ COMPLETED (2026-02-19):**
+- **AssetCardSkeleton:** Новый компонент с density (compact/comfortable); единый скелетон при первой загрузке в GalleryView (сетка из 12 карточек) и при load more в ImmersiveGrid.
+- **Empty state при фильтрах:** Разделение пустого состояния: «Библиотека пуста» (без фильтров) и «Ничего не найдено» при активных фильтрах с кнопкой «Сбросить фильтры» (handleFiltersReset + closeFilters).
+- **Code splitting:** MetadataPanel и AssetContextMenu загружаются асинхронно (defineAsyncComponent) при первом открытии панели/меню; основной chunk уменьшен.
+- **Error UX:** В MetadataPanel при ошибках save() и runMagic() — emit('error', message); в GalleryView @error → showToast(msg, 'error'). Нет alert(); ошибки в toast или inline.
+- **A11y:** Focus trap в MetadataPanel (useFocusTrap на aside, activate/deactivate при open/close, Escape закрывает); aria-label на кнопке «Magic» и на кнопке «Тегировать с AI» в BulkActionsBar.
+
 #### Analytics Transformation (Backlog) — ✅ COMPLETED 2026-02-17
 - **Search-to-Find Time:** SearchSession tenant-aware (FK organization), AssetEvent.search_session_id; middleware передаёт X-Search-Session-Id; при download — обновление SearchSession или link_download_to_latest_search_session; дашборд: avg_search_to_find_seconds.
 - **CDN Cost:** Plan.cdn_cost_per_gb; при download в track_asset_event_async подставляется размер файла в bandwidth_bytes; модель OrganizationBandwidthDaily; задача calculate_organization_bandwidth_daily (агрегация по org, стоимость из Plan или ANALYTICS_CDN_COST_PER_GB).

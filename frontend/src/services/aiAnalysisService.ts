@@ -66,6 +66,30 @@ class AIAnalysisService {
   }
 
   /**
+   * Run bulk AI analysis for multiple documents
+   * @param assetIds - Document IDs
+   * @param options - Optional ai_service (openai|claude|azure|local)
+   */
+  async runBulkAIAnalysis(
+    assetIds: number[],
+    options?: { ai_service?: string }
+  ): Promise<{ bulk_analysis_id: string; status: string; document_count?: number }> {
+    const response = await apiService.post<{
+      bulk_analysis_id: string
+      status: string
+      document_count?: number
+    }>('/api/v4/ai-analysis/bulk-analyze/', {
+      document_ids: assetIds,
+      ...(options?.ai_service && { ai_service: options.ai_service })
+    })
+    return {
+      bulk_analysis_id: response?.bulk_analysis_id ?? '',
+      status: response?.status ?? 'pending',
+      document_count: response?.document_count
+    }
+  }
+
+  /**
    * Run OCR extraction for a document
    * @param assetId - Document ID
    */
