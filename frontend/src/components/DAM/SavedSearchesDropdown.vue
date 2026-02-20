@@ -2,18 +2,18 @@
   <div class="relative" ref="containerRef">
     <button
       type="button"
-      class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+      class="flex items-center gap-1 px-2 py-1.5 h-8 bg-transparent border-0 rounded-r-full hover:bg-gray-100 dark:hover:bg-gray-700 text-neutral-600 dark:text-neutral-400 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-0"
+      title="Сохранённые поиски"
       :aria-expanded="isOpen"
       aria-haspopup="listbox"
       aria-label="Сохранённые поиски"
       @click="toggle"
     >
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
       </svg>
-      <span>Сохранённые поиски</span>
       <svg
-        class="w-4 h-4 transition-transform"
+        class="w-4 h-4 shrink-0 transition-transform"
         :class="isOpen && 'rotate-180'"
         fill="none"
         stroke="currentColor"

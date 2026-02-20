@@ -61,16 +61,18 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
         <span class="hidden lg:inline font-semibold">MADDAM</span>
       </router-link>
 
-      <!-- Global Omnibox Search -->
-      <div class="flex-1 max-w-xl relative">
+      <!-- Global Omnibox Search (pill: search + saved searches) -->
+      <div class="flex-1 min-w-0 relative">
         <div
-          class="flex items-center h-10 bg-gray-100 hover:bg-gray-50 focus-within:bg-white 
-                 rounded-xl px-3 border border-transparent focus-within:border-indigo-500 
-                 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all duration-200"
+          class="flex items-center h-10 max-w-[480px] md:max-w-[560px] w-full
+                 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
+                 rounded-full shadow-sm px-4 overflow-hidden
+                 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500
+                 transition-all duration-200"
         >
           <!-- Search Icon -->
           <svg
-            class="w-4 h-4 text-gray-400 flex-shrink-0"
+            class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -89,21 +91,24 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
             v-model="searchQuery"
             type="text"
             placeholder="Поиск по названию, тегам, метаданным…"
-            class="flex-1 h-full bg-transparent border-none outline-none px-3 
-                   text-sm text-gray-900 placeholder-gray-400"
+            class="flex-1 min-w-0 h-full bg-transparent border-none outline-none px-3
+                   text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
             @keydown.enter="handleSearch"
             @focus="onSearchFocus"
             @blur="isSearchFocused = false"
           />
 
-          <!-- Page-specific actions aligned with search (Teleport target) -->
-          <div id="header-search-actions" class="flex items-center gap-1" />
+          <!-- Divider before saved searches -->
+          <span class="border-r border-gray-200 dark:border-gray-600 h-5 my-auto shrink-0" aria-hidden="true" />
+
+          <!-- Page-specific actions (Teleport target: SavedSearchesDropdown) -->
+          <div id="header-search-actions" class="flex items-center pr-1" />
 
           <!-- Keyboard Shortcut Badge -->
           <kbd
             v-if="!isSearchFocused && !searchQuery"
-            class="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium 
-                   text-gray-400 bg-gray-200/60 rounded-md"
+            class="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium
+                   text-gray-400 dark:text-gray-500 bg-gray-200/60 dark:bg-gray-600/60 rounded-md"
           >
             <span class="text-[10px]">⌘</span>K
           </kbd>
@@ -112,10 +117,10 @@ l-36 -63 -82 133 c-46 72 -145 233 -221 357 -76 124 -163 266 -195 315 -31 50
           <button
             v-if="searchQuery"
             type="button"
-            class="p-1 rounded-md hover:bg-gray-200 transition-colors"
+            class="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             @click="clearSearch"
           >
-            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
