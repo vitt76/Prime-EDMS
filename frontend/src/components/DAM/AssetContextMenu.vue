@@ -47,6 +47,15 @@
       >
         <span>Тегировать с AI</span>
       </button>
+      <button
+        type="button"
+        class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+        role="menuitem"
+        :aria-label="isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'"
+        @click="onFavorite"
+      >
+        <span>{{ isFavorite ? 'Убрать из избранного' : 'Добавить в избранное' }}</span>
+      </button>
       <div class="border-t border-gray-200 dark:border-gray-700 my-1" />
       <button
         type="button"
@@ -67,8 +76,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import type { Asset } from '@/types/api'
+import { useFavoritesStore } from '@/stores/favoritesStore'
 
 interface Props {
   open: boolean
@@ -78,6 +88,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const favoritesStore = useFavoritesStore()
+
+const isFavorite = computed(() => props.asset ? favoritesStore.isFavorite(props.asset.id) : false)
 
 const emit = defineEmits<{
   close: []
@@ -86,6 +99,7 @@ const emit = defineEmits<{
   share: [asset: Asset]
   'edit-metadata': [asset: Asset]
   'ai-tag': [asset: Asset]
+  favorite: [asset: Asset]
   delete: [asset: Asset]
 }>()
 
@@ -111,6 +125,11 @@ function onEditMetadata() {
 
 function onAiTag() {
   if (props.asset) emit('ai-tag', props.asset)
+  emit('close')
+}
+
+function onFavorite() {
+  if (props.asset) emit('favorite', props.asset)
   emit('close')
 }
 

@@ -1,7 +1,7 @@
 # Progress: Prime-EDMS
 
-**Последнее обновление:** 2026-02-19  
-**Источник:** Спринт 3 (Контент) Доработка 2026 завершён; Memory Bank обновлён по результатам реализации Versioning, Deduplication, Renditions.
+**Последнее обновление:** 2026-02-20  
+**Источник:** Спринт 1 (Discovery UX) Доработка 2026 завершён; аудит и верификация выполнены; Memory Bank обновлён.
 
 ---
 
@@ -134,11 +134,14 @@
 - ✅ **Phase 2 Immersive Grid — верификация:** Гибридная стратегия (AssetGrid < 80, ImmersiveGrid ≥ 80), isVirtual в GalleryView; ImmersiveGrid с useElementSize и стабильными ключами строк; зависимость @tanstack/vue-virtual проверена; готовность к Phase 3 (Smart Metadata)
 - ✅ **Phase 3 Smart Metadata & AI — верификация (2026-02-19):** Кнопка «Тегировать с AI» (bulk + контекстное меню), toast 4 с, реальные API (analyze/bulk-analyze) без моков; MetadataPanel (slide-over, Magic с polling до 5 попыток по 2 с, маппинг описания из seo.description), сохранение label/description через assetService.updateAsset; QA-аудит пройден, исправлен баг маппинга
 - ✅ **Phase 4 Optimization & Polish (2026-02-19):** AssetCardSkeleton (compact/comfortable) в GalleryView и ImmersiveGrid; empty state «Ничего не найдено» при активных фильтрах + «Сбросить фильтры»; lazy load MetadataPanel и AssetContextMenu (defineAsyncComponent); emit error в MetadataPanel → toast в GalleryView; focus trap и aria-label в MetadataPanel и BulkActionsBar
+- ✅ **Sprint 2 Productivity & UX (2026-02-20):** Фильтр «Только избранное» (useDamSearchFilters.favoritesOnly, FiltersPanel, URL sync, assetStore favorites_only); избранное в AssetContextMenu и на AssetCard (favoritesStore); useGalleryHotkeys (F, Space, Delete, Esc, Ctrl+A, Shift+?); AssetPreviewModal по Space и по клику; HotkeysCheatSheetModal; Delete → BulkDeleteModal; Vitest useGalleryHotkeys.spec.ts (9 тестов)
 
 #### 8. Headless API
 - ✅ REST API v4 endpoints для фронтенда
-- ✅ Оптимизированные document API views (в т.ч. `orientation=portrait|landscape|square`, DocumentFile width/height)
+- ✅ Оптимизированные document API views (в т.ч. `orientation=portrait|landscape|square`, DocumentFile width/height; **Sprint 2:** `favorites_only=true` — только избранные документы пользователя с учётом org)
 - ✅ **Phase 5 Sprint 1 Backend:** GET `/api/v4/headless/documents/recently-viewed/` (по AssetEvent); CRUD и run `/api/v4/headless/saved-searches/`; миграции documents 0087 (width/height), saved_searches 0001; верификация: `python manage.py verify_phase5`
+- ✅ **Sprint 1 Discovery UX (2026-02-20):** UI «Недавно просмотренные» (RecentlyViewedBlock на /dam, recentlyViewedService); UI Saved Searches (dropdown, SaveSearchModal, RenameSavedSearchModal, run → applySavedSearch в галерее); ориентация проверена; Vitest (recentlyViewedService, savedSearchesService, savedSearchFilters); backend тесты tenant изоляции (test_saved_searches_recently_viewed_tenant)
+- ✅ **Sprint 2 Productivity & UX (2026-02-20):** Headless favorites — GET/POST требуют X-Organization-Id (400 без него); GET list и POST toggle фильтруются по document.organization; тесты test_favorites_tenant.py; optimized list favorites_only; тесты test_optimized_document_list_favorites.py
 - ✅ Analytics API endpoints
 - ✅ Notifications API endpoints
 - ✅ Token-based аутентификация
@@ -209,27 +212,35 @@
 
 | Фаза | Спринт | Тема | Статус | Оценка |
 |------|--------|------|--------|--------|
-| A | **1** | Поиск и обнаружение (ориентация, недавно просмотренные, saved searches) | ✅ Бэкенд завершён (Phase 5, QA 2026-02-19) | 2–3 нед |
-| A | **2** | Продуктивность и UX (избранное + tenant, хоткеи) | 🔲 Запланирован | 1–2 нед |
+| A | **1** | Поиск и обнаружение (ориентация, недавно просмотренные, saved searches) | ✅ ЗАВЕРШЁН ПОЛНОСТЬЮ (2026-02-20) | 2–3 нед |
+| A | **2** | Продуктивность и UX (избранное + tenant, хоткеи) | ✅ ЗАВЕРШЁН (2026-02-20) | 1–2 нед |
 | B | **3** | Контент: дедупликация, пресеты рендишенов, водяные знаки | ✅ Завершён (2026-02-19) | 3–4 нед |
 | B | **4** | Совместная работа: коллекции, комментарии, сравнение версий | ✅ Завершён и верифицирован (2026-02-19) | 3–4 нед |
 | C | **5** | Безопасность и compliance (Watermarking, Audit Log, Secure Download) | ✅ Завершён (2026-02-19), миграции применены | 2–3 нед |
 | C | **6** | Операции (мониторинг, алерты, лимиты файлов, приоритеты очередей) | 🔲 Запланирован | 2 нед |
 | D | **7** | Крупные направления (семантический поиск, видео, ingest, lifecycle, n8n, a11y) | 🔲 По выбору | по фиче |
 
-**Следующий к выполнению:** Спринт 2 (Продуктивность и UX) или Спринт 6 (Операции). Спринт 5 завершён (2026-02-19): миграции применены в Docker; apply_watermark_task зарегистрирована в documents/queues.py; API audit-logs и document activity работают. После каждого спринта — регрессионные тесты, обновление Memory Bank, отчёт в `docs/transformation-2025/SPRINT_DORABOTKA_2026_N.md`.
+**Следующий к выполнению:** Спринт 6 (Операции) или Спринт 7 (по выбору). Спринт 2 (Продуктивность и UX) завершён 2026-02-20: tenant-изоляция headless favorites, параметр favorites_only в optimized list, фильтр и хоткеи в галерее, Vitest и backend тесты. После каждого спринта — регрессионные тесты, обновление Memory Bank, отчёт в `docs/transformation-2025/SPRINT_DORABOTKA_2026_N.md`.
 
 ---
 
 ## 🚧 In Progress (В процессе разработки)
 
-### 1. Multi-tenancy Architecture (Tenant Isolation) — Базовая инфраструктура и Part 3 завершены
-**Статус:** Sprint 1-4 и Part 3 (Sprint 1–4) завершены. Следующий опциональный этап — Sprint 4 итерация 2 (Security Polish, OpenAPI).  
+### 1. Multi-tenancy Architecture (Tenant Isolation) — Part 3 реализован
+**Статус:** Sprint 1-4 и Part 3 (Sprint 1–4) завершены. Аудит кода (2026-02-05): Document, DocumentAIAnalysis, AssetEvent, ShareLink — tenant-aware.  
 **Документы:** 
 - `docs/transformation-2025/TZ_Django_Tenant_Isolation.md` (Part 2 — завершено)
-- `docs/transformation-2025/АНАЛИЗ КОНТЕКСТА И ОБНОВЛЕННОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ.md` (Part 3 — планируется)
-- `tmp/GAPS_REPORT_PART3.md` (GAPS отчет)  
+- `docs/transformation-2025/АНАЛИЗ КОНТЕКСТА И ОБНОВЛЕННОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ.md` (Part 3 — реализовано в коде)
+- `tmp/GAPS_REPORT_PART3_UPDATED.md` (актуальный GAPS отчёт)  
 **Коммит:** `7f41e418fe`
+
+**Roadmap ТЗ Part 3 (все спринты выполнены):**
+| Спринт | Тема | Статус |
+|--------|------|--------|
+| **Sprint 1** | Core Infra & DAM (Weeks 1-2): Organization, Document.organization, DocumentAIAnalysis tenant-aware | ✅ Done |
+| **Sprint 2** | Analytics & Reports (Weeks 3-4): AssetEvent.organization, Dashboard API по org, отчёты | ✅ Done |
+| **Sprint 3** | Distribution & Notifications (Weeks 5-6): ShareLink tenant-aware, публичный доступ по token | ✅ Done |
+| **Sprint 4** | Security & Polish (Week 7): Security hardening, audit, индексы | ✅ Done |
 
 **Sprint 1 (ЗАВЕРШЁН):**
 - ✅ Базовый модуль `mayan.apps.organizations` создан
@@ -424,7 +435,8 @@
 
 ### Frontend Components
 - **DAM Gallery**: ✅ 98% (IntersectionObserver lazy rendering, infinite scroll)
-- **Search & Filters**: ✅ 95% (расширенные фильтры + owner + URL persistence)
+- **Sprint 1 Discovery UX (2026-02-20):** SavedSearchesDropdown (в шапке галереи, Teleport), SaveSearchModal, RenameSavedSearchModal; RecentlyViewedBlock (на /dam, скелетон/empty/error); ориентация передаётся в optimized API; applySavedSearch в useDamSearchFilters; RecentPage на headless recently-viewed API.
+- **Search & Filters**: ✅ 98% (расширенные фильтры + owner + URL persistence; **Sprint 1 Discovery UX:** ориентация wiring к API, Saved Searches UI — SavedSearchesDropdown, SaveSearchModal, RenameSavedSearchModal; Recently Viewed — RecentlyViewedBlock, /dam/recent на headless API)
 - **Asset Management**: ✅ 90% (CRUD работает, оптимизации в процессе)
 - **Analytics Dashboards**: ✅ 95% (дашборды, MetricCard/LineChart/GeoMap, AdoptionTable, RetentionCohort, Churn, ReportGenerateModal; единый дашборд + geography API + report download)
 - **Public Frontend**: ✅ 100% (полностью реализован, SSR improvements добавлены)
@@ -441,22 +453,19 @@
 ## 🎯 Приоритеты разработки
 
 ### Высокий приоритет
-1. **Доработка 2026 — Спринт 1 (Поиск и обнаружение)** — следующий запланированный спринт
-   - Ориентация на бэкенде (width/height или флаг) + поиск по фильтру в API
-   - «Недавно просмотренные» на основе AssetEvent (endpoint + UI)
-   - Saved Searches (модель SavedSearch tenant-aware, API, UI, опционально уведомления)
-   - Детали и чек-листы: `docs/transformation-2025/Доработка_2026.md`
-2. **Multi-tenancy Implementation** (Sprint 1-4 ЗАВЕРШЕНЫ)
+1. **Доработка 2026 — Спринт 2 (Продуктивность и UX)** — ✅ ЗАВЕРШЁН (2026-02-20): избранное с tenant-изоляцией в API, фильтр «Только избранное», хоткеи в галерее (F, Space, Delete, Esc, Ctrl+A, ?), превью по Space, шорткат-хелпер
+2. **Доработка 2026 — Спринт 6 (Операции)** или Спринт 7 — следующий по плану; детали: `docs/transformation-2025/Доработка_2026.md`
+3. **Multi-tenancy Implementation** (Sprint 1-4 ЗАВЕРШЕНЫ)
    - ✅ Organizations модуль полностью реализован; Part 3 (DAM, Analytics, Distribution, Notifications) завершён
-3. Доработка 2026 — Спринт 2 (избранное + tenant isolation, хоткеи) — после Спринта 1 или параллельно
+3. Доработка 2026 — Спринт 2 — завершён (2026-02-20)
 4. Завершение YouTube Analytics интеграции (опционально)
 5. Оптимизация производительности для больших коллекций (продолжение)
 
 ### Средний приоритет
-1. Доработка 2026 — Спринты 3–4 (контент, коллаборация) после Фазы A
+1. Доработка 2026 — Спринты 3–4 (контент, коллаборация) уже завершены
 2. Claude и Gemini AI провайдеры (реализованы; стабилизация при необходимости)
 3. User Activity Feed API (реализован)
-4. Расширенные фильтры поиска (частично закрыто Спринтом 1 — ориентация, saved searches)
+4. Стабилизация полного набора Vitest (многие падения не связаны со Sprint 1: ErrorBoundary, authStore, IntersectionObserver и др.)
 
 ### Низкий приоритет
 1. Analytics Transformation Phase 3 (AI/ML, real-time)

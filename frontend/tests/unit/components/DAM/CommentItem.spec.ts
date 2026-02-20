@@ -145,7 +145,7 @@ describe('CommentItem', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.emitted('edit')).toBeTruthy()
-    expect(wrapper.emitted('edit')?.[0][0]).toBe(mockComment)
+    expect(wrapper.emitted('edit')?.[0][0]).toStrictEqual(mockComment)
     expect(wrapper.emitted('edit')?.[0][1]).toBe('Updated comment')
   })
 
@@ -166,7 +166,7 @@ describe('CommentItem', () => {
     if (replyButton) {
       await replyButton.trigger('click')
       expect(wrapper.emitted('reply')).toBeTruthy()
-      expect(wrapper.emitted('reply')?.[0][0]).toBe(mockComment)
+      expect(wrapper.emitted('reply')?.[0][0]).toStrictEqual(mockComment)
     }
   })
 
@@ -189,7 +189,7 @@ describe('CommentItem', () => {
     if (deleteButton) {
       await deleteButton.trigger('click')
       expect(wrapper.emitted('delete')).toBeTruthy()
-      expect(wrapper.emitted('delete')?.[0][0]).toBe(mockComment)
+      expect(wrapper.emitted('delete')?.[0][0]).toStrictEqual(mockComment)
     }
   })
 

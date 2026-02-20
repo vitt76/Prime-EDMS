@@ -145,6 +145,13 @@
         />
       </Teleport>
       <Teleport to="#header-search-actions">
+        <SavedSearchesDropdown
+          ref="savedSearchesDropdownRef"
+          @save-current="openSaveSearchModal"
+          @run="handleSavedSearchRun"
+          @edit="openRenameSavedSearchModal"
+          @delete="handleSavedSearchDelete"
+        />
         <GalleryHeaderActions
           variant="filter"
           :density="gridDensity"
@@ -154,6 +161,11 @@
           @toggle-filters="openFilters"
         />
       </Teleport>
+
+      <!-- Recently Viewed (Sprint 1 Discovery UX) -->
+      <div class="px-6 pt-4 pb-2">
+        <RecentlyViewedBlock :limit="12" />
+      </div>
 
       <!-- Assets Grid (regular for small lists, threshold 80) -->
       <div
@@ -326,6 +338,7 @@
       @share="handleAssetShare"
       @edit-metadata="handleAssetEditMetadata"
       @ai-tag="handleSingleAiTag"
+      @favorite="handleAssetFavoriteFromContext"
       @delete="handleAssetDeleteFromContext"
     />
     <ShareModal
@@ -349,6 +362,48 @@
       :selected-ids="Array.from(assetStore.selectedAssets)"
       @close="showAddToCollectionModal = false"
       @done="onAddToCollectionDone"
+    />
+
+    <!-- Save Search Modal (Sprint 1 Discovery UX) -->
+    <SaveSearchModal
+      :is-open="showSaveSearchModal"
+      :backend-error="saveSearchBackendError"
+      @close="closeSaveSearchModal"
+      @save="handleSaveSearch"
+    />
+
+    <!-- Rename Saved Search Modal -->
+    <RenameSavedSearchModal
+      :is-open="showRenameSavedSearchModal"
+      :item="renameSavedSearchItem"
+      @close="closeRenameSavedSearchModal"
+      @save="handleRenameSavedSearch"
+    />
+
+    <!-- Confirm Delete Saved Search -->
+    <ConfirmModal
+      :is-open="showDeleteSavedSearchConfirm"
+      title="Удалить сохранённый поиск?"
+      message="Это действие нельзя отменить."
+      confirm-text="Удалить"
+      confirm-variant="danger"
+      @close="showDeleteSavedSearchConfirm = false"
+      @confirm="confirmDeleteSavedSearch"
+    />
+
+    <!-- Hotkeys cheat sheet (Sprint 2) -->
+    <HotkeysCheatSheetModal
+      :is-open="showHotkeysCheatSheetModal"
+      @close="showHotkeysCheatSheetModal = false"
+    />
+
+    <!-- Quick preview modal (Space) -->
+    <AssetPreviewModal
+      :is-open="showPreviewModal"
+      :assets="assetStore.assets"
+      :start-index="previewStartIndex"
+      @update:is-open="closePreviewModal"
+      @close="closePreviewModal(false)"
     />
 
     <!-- Floating Bulk Actions Bar (New Glassmorphism Version) -->
@@ -451,6 +506,7 @@ import { apiService } from '@/services/apiService'
 import { aiAnalysisService } from '@/services/aiAnalysisService'
 import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useDamSearchFilters } from '@/composables/useDamSearchFilters'
 import AssetCard from './AssetCard.vue'
 import AssetCardSkeleton from './AssetCardSkeleton.vue'
@@ -464,10 +520,21 @@ import BulkMoveModal from './BulkMoveModal.vue'
 import BulkDeleteModal from './BulkDeleteModal.vue'
 import BulkDownloadModal from './BulkDownloadModal.vue'
 import ShareModal from './ShareModal.vue'
+import SaveSearchModal from './SaveSearchModal.vue'
+import RenameSavedSearchModal from './RenameSavedSearchModal.vue'
+import ConfirmModal from '@/components/Common/ConfirmModal.vue'
+import SavedSearchesDropdown from './SavedSearchesDropdown.vue'
 const MetadataPanel = defineAsyncComponent(() => import('./MetadataPanel.vue'))
+const AssetPreviewModal = defineAsyncComponent(() => import('@/components/modals/AssetPreviewModal.vue'))
 import Pagination from '@/components/Common/Pagination.vue'
 import GalleryHeaderActions from './GalleryHeaderActions.vue'
+import RecentlyViewedBlock from './RecentlyViewedBlock.vue'
 import FiltersPanel from './FiltersPanel.vue'
+import HotkeysCheatSheetModal from './HotkeysCheatSheetModal.vue'
+import { useGalleryHotkeys } from '@/composables/useGalleryHotkeys'
+import { createSavedSearch, updateSavedSearch, deleteSavedSearch } from '@/services/savedSearchesService'
+import { buildSavedSearchFilters } from '@/utils/savedSearchFilters'
+import type { SavedSearch } from '@/services/savedSearchesService'
 import type { Asset } from '@/types/api'
 import type { Facets, SearchFilters } from '@/types/api'
 
@@ -481,6 +548,7 @@ const router = useRouter()
 const assetStore = useAssetStore()
 const distributionStore = useDistributionStore()
 const damSearch = useDamSearchFilters()
+const favoritesStore = useFavoritesStore()
 
 const gridDensity = computed(() => damSearch.state.density)
 const gridLayout = computed(() => damSearch.state.layout)
@@ -573,6 +641,16 @@ function onAddToCollectionDone() {
   assetStore.clearSelection()
 }
 
+async function handleAssetFavoriteFromContext(asset: Asset) {
+  closeContextMenu()
+  try {
+    const favorited = await favoritesStore.toggleFavorite(asset.id, asset)
+    showToast(favorited ? 'Добавлено в избранное' : 'Убрано из избранного', favorited ? 'success' : 'info')
+  } catch {
+    showToast('Не удалось изменить избранное', 'error')
+  }
+}
+
 function handleAssetDeleteFromContext(asset: Asset) {
   closeContextMenu()
   handleAssetDelete(asset)
@@ -605,7 +683,8 @@ const filtersModel = computed<SearchFilters>({
       typeof damSearch.state.filters.sizeMin === 'number' || typeof damSearch.state.filters.sizeMax === 'number'
         ? { min: damSearch.state.filters.sizeMin, max: damSearch.state.filters.sizeMax }
         : undefined,
-    orientation: damSearch.state.filters.orientation
+    orientation: damSearch.state.filters.orientation,
+    favoritesOnly: damSearch.state.filters.favoritesOnly
   }),
   set: (value) => {
     // Convert SearchFilters -> composable state
@@ -616,6 +695,7 @@ const filtersModel = computed<SearchFilters>({
     damSearch.state.filters.sizeMin = value.size?.min
     damSearch.state.filters.sizeMax = value.size?.max
     damSearch.state.filters.orientation = value.orientation
+    damSearch.state.filters.favoritesOnly = value.favoritesOnly ?? false
     // Trigger debounced sync+fetch (without changing q)
     damSearch.scheduleFetch()
   }
@@ -700,8 +780,15 @@ function handleAssetOpen(asset: Asset) {
 }
 
 function handleAssetPreview(asset: Asset) {
-  // TODO: Open preview modal
-  console.log('Preview asset:', asset.id)
+  const idx = assetStore.assets.findIndex(a => a.id === asset.id)
+  previewStartIndexOverride.value = idx >= 0 ? idx : 0
+  showPreviewModal.value = true
+}
+
+/** Close preview modal and clear override (called from template to avoid ref unwrap). */
+function closePreviewModal(v: boolean) {
+  showPreviewModal.value = v
+  if (!v) previewStartIndexOverride.value = null
 }
 
 async function handleAssetDownload(asset: Asset) {
@@ -795,10 +882,75 @@ const showBulkDeleteModal = ref(false)
 const showBulkDownloadModal = ref(false)
 const showBulkShareModal = ref(false)
 
+// Saved Searches (Sprint 1 Discovery UX)
+const savedSearchesDropdownRef = ref<InstanceType<typeof SavedSearchesDropdown> | null>(null)
+const showSaveSearchModal = ref(false)
+const saveSearchBackendError = ref<string | null>(null)
+const showRenameSavedSearchModal = ref(false)
+const renameSavedSearchItem = ref<SavedSearch | null>(null)
+const showDeleteSavedSearchConfirm = ref(false)
+const deleteSavedSearchId = ref<number | null>(null)
+
+// Sprint 2: Hotkeys cheat sheet and preview modals
+const showHotkeysCheatSheetModal = ref(false)
+const showPreviewModal = ref(false)
+/** When set, preview modal uses this index instead of selection (e.g. opened from card click). */
+const previewStartIndexOverride = ref<number | null>(null)
+
 const selectedAssetIds = computed(() => Array.from(assetStore.selectedAssets))
 const selectedAssetsList = computed(() => 
   assetStore.assets.filter(asset => assetStore.selectedAssets.has(asset.id))
 )
+
+/** Index of asset to show in preview modal (from selection or from card click). */
+const previewStartIndex = computed(() => {
+  if (previewStartIndexOverride.value != null) {
+    const v = previewStartIndexOverride.value
+    return Math.max(0, Math.min(v, assetStore.assets.length - 1))
+  }
+  const firstId = selectedAssetIds.value[0]
+  if (firstId == null) return 0
+  const idx = assetStore.assets.findIndex(a => a.id === firstId)
+  return idx >= 0 ? idx : 0
+})
+
+// Sprint 2: Gallery hotkeys (F, Space, Delete, Esc, Ctrl+A, ?)
+useGalleryHotkeys({
+  getSelectedCount: () => assetStore.selectedAssets.size,
+  onFavorite: async () => {
+    const list = selectedAssetsList.value
+    if (list.length === 0) return
+    try {
+      for (const asset of list) {
+        await favoritesStore.toggleFavorite(asset.id, asset)
+      }
+      const count = list.length
+      showToast(count === 1 ? 'Избранное обновлено' : `Обновлено избранное для ${count} активов`, 'success')
+    } catch {
+      showToast('Не удалось обновить избранное', 'error')
+    }
+  },
+  onPreview: () => {
+    if (selectedAssetsList.value.length > 0) {
+      showPreviewModal.value = true
+    }
+  },
+  onDelete: () => {
+    if (assetStore.selectedAssets.size > 0) {
+      showBulkDeleteModal.value = true
+    }
+  },
+  onClearSelection: () => assetStore.clearSelection(),
+  onSelectAll: () => assetStore.selectAll(),
+  onOpenCheatSheet: () => { showHotkeysCheatSheetModal.value = true },
+  isPreviewOpen: () => showPreviewModal.value,
+  isCheatSheetOpen: () => showHotkeysCheatSheetModal.value,
+  onClosePreview: () => {
+    showPreviewModal.value = false
+    previewStartIndexOverride.value = null
+  },
+  onCloseCheatSheet: () => { showHotkeysCheatSheetModal.value = false }
+})
 
 function handleBulkTag() {
   showBulkTagModal.value = true
@@ -838,6 +990,86 @@ function handleShareSuccess() {
 
 function handleClearSelection() {
   assetStore.clearSelection()
+}
+
+// Saved Searches handlers (Sprint 1 Discovery UX)
+function openSaveSearchModal() {
+  saveSearchBackendError.value = null
+  showSaveSearchModal.value = true
+}
+
+function closeSaveSearchModal() {
+  showSaveSearchModal.value = false
+  saveSearchBackendError.value = null
+  savedSearchesDropdownRef.value?.refresh()
+}
+
+function handleSaveSearch(name: string) {
+  const filters = buildSavedSearchFilters(damSearch.state.filters)
+  createSavedSearch({
+    name,
+    query: damSearch.state.q,
+    filters
+  })
+    .then(() => {
+      closeSaveSearchModal()
+      showToast('Поиск сохранён', 'success')
+    })
+    .catch((e: unknown) => {
+      const data = e && typeof e === 'object' && e !== null && 'response' in e ? (e as { response?: { data?: unknown } }).response?.data : null
+      const msg = data && typeof data === 'object' && data !== null && 'name' in data && Array.isArray((data as { name?: unknown }).name)
+        ? (data as { name: string[] }).name[0]
+        : data && typeof data === 'object' && 'detail' in data
+          ? String((data as { detail: unknown }).detail)
+          : 'Не удалось сохранить поиск'
+      saveSearchBackendError.value = msg
+    })
+}
+
+function handleSavedSearchRun(item: SavedSearch) {
+  damSearch.applySavedSearch(item.query || '', item.filters || {})
+}
+
+function openRenameSavedSearchModal(item: SavedSearch) {
+  renameSavedSearchItem.value = item
+  showRenameSavedSearchModal.value = true
+}
+
+function closeRenameSavedSearchModal() {
+  showRenameSavedSearchModal.value = false
+  renameSavedSearchItem.value = null
+  savedSearchesDropdownRef.value?.refresh()
+}
+
+function handleRenameSavedSearch(id: number, name: string) {
+  updateSavedSearch(id, { name })
+    .then(() => {
+      closeRenameSavedSearchModal()
+      showToast('Поиск переименован', 'success')
+    })
+    .catch(() => {
+      showToast('Не удалось переименовать', 'error')
+    })
+}
+
+function handleSavedSearchDelete(id: number) {
+  deleteSavedSearchId.value = id
+  showDeleteSavedSearchConfirm.value = true
+}
+
+function confirmDeleteSavedSearch() {
+  const id = deleteSavedSearchId.value
+  showDeleteSavedSearchConfirm.value = false
+  deleteSavedSearchId.value = null
+  if (id == null) return
+  deleteSavedSearch(id)
+    .then(() => {
+      savedSearchesDropdownRef.value?.refresh()
+      showToast('Сохранённый поиск удалён', 'success')
+    })
+    .catch(() => {
+      showToast('Не удалось удалить', 'error')
+    })
 }
 
 function handleBulkOperationSuccess() {

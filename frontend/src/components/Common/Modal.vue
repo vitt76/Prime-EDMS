@@ -54,8 +54,8 @@
                 </button>
               </div>
 
-              <!-- Body -->
-              <div class="px-6 py-4">
+              <!-- Body: scrollable when content exceeds max-h -->
+              <div class="px-6 py-4 min-h-0 overflow-y-auto flex-1">
                 <slot />
               </div>
 

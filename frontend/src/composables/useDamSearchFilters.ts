@@ -9,6 +9,7 @@ type Layout = 'grid' | 'masonry'
 type Sort = 'date' | 'name' | 'size'
 
 import type { OrientationFilter } from '@/types/api'
+import { parseSavedSearchFilters } from '@/utils/savedSearchFilters'
 
 export interface DamFiltersState {
   type: string[]
@@ -20,6 +21,8 @@ export interface DamFiltersState {
   sizeMax?: number
   owner?: number
   orientation?: OrientationFilter
+  /** Sprint 2: filter gallery to favorited documents only */
+  favoritesOnly?: boolean
 }
 
 export interface DamSearchState {
@@ -118,7 +121,8 @@ export function useDamSearchFilters() {
         sizeMin: undefined,
         sizeMax: undefined,
         owner: undefined,
-        orientation: undefined
+        orientation: undefined,
+        favoritesOnly: false
       }
     })
   }
@@ -134,6 +138,7 @@ export function useDamSearchFilters() {
     if (typeof state.filters.sizeMin === 'number' || typeof state.filters.sizeMax === 'number') count++
     if (typeof state.filters.owner === 'number') count++
     if (state.filters.orientation) count++
+    if (state.filters.favoritesOnly) count++
     return count
   })
 
@@ -155,6 +160,8 @@ export function useDamSearchFilters() {
     state.filters.owner = route.query.owner ? Number(route.query.owner) : undefined
     const or = route.query.orientation as OrientationFilter | undefined
     state.filters.orientation = or === 'portrait' || or === 'landscape' || or === 'square' ? or : undefined
+    const fav = route.query.favorites_only
+    state.filters.favoritesOnly = fav === 'true' || fav === '1'
   }
 
   function writeToUrl(): void {
@@ -175,7 +182,8 @@ export function useDamSearchFilters() {
           sizeMin: typeof state.filters.sizeMin === 'number' ? String(state.filters.sizeMin) : undefined,
           sizeMax: typeof state.filters.sizeMax === 'number' ? String(state.filters.sizeMax) : undefined,
           owner: typeof state.filters.owner === 'number' ? String(state.filters.owner) : undefined,
-          orientation: state.filters.orientation || undefined
+          orientation: state.filters.orientation || undefined,
+          favorites_only: state.filters.favoritesOnly ? 'true' : undefined
         }
       })
       .finally(() => {
@@ -199,7 +207,8 @@ export function useDamSearchFilters() {
       sizeMin: state.filters.sizeMin,
       sizeMax: state.filters.sizeMax,
       owner: state.filters.owner,
-      orientation: state.filters.orientation
+      orientation: state.filters.orientation,
+      favoritesOnly: state.filters.favoritesOnly
     })
 
     uiStore.setDamGalleryDensity(state.density)
@@ -290,6 +299,7 @@ export function useDamSearchFilters() {
     state.filters.sizeMax = undefined
     state.filters.owner = undefined
     state.filters.orientation = undefined
+    state.filters.favoritesOnly = false
     scheduleFetch()
   }
 
@@ -322,6 +332,23 @@ export function useDamSearchFilters() {
     )
   }
 
+  /** Apply a saved search (query + filters) and fetch. Sprint 1 Discovery UX. */
+  function applySavedSearch(query: string, filters: Record<string, unknown>): void {
+    state.q = query || ''
+    const parsed = parseSavedSearchFilters(filters)
+    state.filters.type = parsed.type ?? []
+    state.filters.tags = parsed.tags ?? []
+    state.filters.status = parsed.status ?? []
+    state.filters.dateFrom = parsed.dateFrom
+    state.filters.dateTo = parsed.dateTo
+    state.filters.sizeMin = parsed.sizeMin
+    state.filters.sizeMax = parsed.sizeMax
+    state.filters.owner = parsed.owner
+    state.filters.orientation = parsed.orientation
+    ensureDamRoute()
+    fetchNow()
+  }
+
   return {
     state,
     q: computed({
@@ -338,7 +365,8 @@ export function useDamSearchFilters() {
     toggleFilter,
     resetFilters,
     scheduleFetch,
-    fetchNow
+    fetchNow,
+    applySavedSearch
   }
 }
 

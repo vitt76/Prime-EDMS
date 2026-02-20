@@ -57,6 +57,13 @@ class HeadlessFavoriteListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        organization = getattr(request, 'organization', None)
+        if not organization:
+            return Response(
+                {'detail': 'Organization context required (X-Organization-Id or tenant).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             # Base favorites for user (ordered)
             favorites_qs = FavoriteDocument.objects.filter(
@@ -67,6 +74,10 @@ class HeadlessFavoriteListView(APIView):
 
             # Apply ACLs to documents
             documents_qs = Document.valid.filter(pk__in=favorite_doc_ids)
+
+            # Tenant isolation: only documents of the current organization
+            if hasattr(Document, 'organization_id'):
+                documents_qs = documents_qs.filter(organization_id=organization.pk)
             documents_qs = AccessControlList.objects.restrict_queryset(
                 permission=permission_document_view,
                 queryset=documents_qs,
@@ -137,12 +148,26 @@ class HeadlessFavoriteToggleView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, document_id):
+        organization = getattr(request, 'organization', None)
+        if not organization:
+            return Response(
+                {'detail': 'Organization context required (X-Organization-Id or tenant).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             document = Document.valid.get(pk=document_id)
         except Document.DoesNotExist:
             return Response(
                 {'error': 'Document not found'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Tenant isolation: document must belong to current organization
+        if hasattr(document, 'organization_id') and document.organization_id != organization.pk:
+            return Response(
+                {'error': 'access_denied', 'detail': 'Document is not in the current organization.'},
+                status=status.HTTP_403_FORBIDDEN
             )
 
         # Skip ACL for superusers

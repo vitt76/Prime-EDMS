@@ -54,24 +54,18 @@
 // @ts-nocheck
 /**
  * RecentPage.vue
- * 
- * Displays assets sorted by lastAccessedAt with time-based grouping:
- * - Today
- * - Yesterday
- * - This Week
- * - Earlier
- * 
- * Backend Alignment (Mayan EDMS):
- * - documents.models.RecentDocument model
- * - Tracks document access per user
- * - mayan/apps/documents/models/recent_document_models.py
+ *
+ * Displays documents recently viewed or downloaded by the current user
+ * in the current organization (Sprint 1 Discovery UX).
+ * API: GET /api/v4/headless/documents/recently-viewed/ (AssetEvent-based).
  */
 
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CollectionBrowser from '@/components/collections/CollectionBrowser.vue'
 import { apiService } from '@/services/apiService'
-import type { ExtendedAsset } from '@/types/api'
+import { getRecentlyViewed } from '@/services/recentlyViewedService'
+import type { ExtendedAsset, Asset } from '@/types/api'
 import { useNotificationStore } from '@/stores/notificationStore'
 
 // ============================================================================
@@ -85,30 +79,21 @@ const notificationStore = useNotificationStore()
 // STATE
 // ============================================================================
 
-const today = ref<ExtendedAsset[]>([])
-const yesterday = ref<ExtendedAsset[]>([])
-const thisWeek = ref<ExtendedAsset[]>([])
-const earlier = ref<ExtendedAsset[]>([])
+const assets = ref<Asset[]>([])
 const isLoading = ref(false)
 
 // ============================================================================
 // COMPUTED
 // ============================================================================
 
-const allAssets = computed(() => [
-  ...today.value,
-  ...yesterday.value,
-  ...thisWeek.value,
-  ...earlier.value,
-])
+const allAssets = computed<ExtendedAsset[]>(() =>
+  assets.value.map((a) => ({ ...a, isFavorite: (a as ExtendedAsset).isFavorite ?? false }))
+)
 
-const totalCount = computed(() => allAssets.value.length)
+const totalCount = computed(() => assets.value.length)
 
 const groupedAssets = computed(() => [
-  { label: 'Сегодня', assets: today.value },
-  { label: 'Вчера', assets: yesterday.value },
-  { label: 'На этой неделе', assets: thisWeek.value },
-  { label: 'Ранее', assets: earlier.value },
+  { label: 'Недавно просмотренные', assets: allAssets.value },
 ])
 
 // ============================================================================
@@ -117,14 +102,9 @@ const groupedAssets = computed(() => [
 
 async function fetchRecent() {
   isLoading.value = true
-  
   try {
-    const response = await apiService.get<any>('/api/v4/documents/accessed/', {
-      params: { page_size: 50 }
-    })
-
-    const items = (response.results || []).map(mapRecentItem)
-    groupByDate(items)
+    const res = await getRecentlyViewed({ limit: 50, days: 30 })
+    assets.value = res.results
   } finally {
     isLoading.value = false
   }
@@ -143,9 +123,14 @@ async function handleToggleFavorite(asset: ExtendedAsset) {
       await apiService.post(`/api/v4/documents/${asset.id}/add_to_favorites/`, {})
       asset.isFavorite = true
     }
-
-    updateAssetInGroups(asset)
-
+    const idx = assets.value.findIndex((a) => a.id === asset.id)
+    if (idx !== -1) {
+      assets.value = [
+        ...assets.value.slice(0, idx),
+        { ...assets.value[idx], isFavorite: asset.isFavorite } as Asset,
+        ...assets.value.slice(idx + 1),
+      ]
+    }
     notificationStore.addNotification({
       type: 'success',
       title: asset.isFavorite ? 'Добавлено в избранное' : 'Убрано из избранного',
@@ -192,74 +177,5 @@ function handleShare(asset: ExtendedAsset) {
 onMounted(() => {
   fetchRecent()
 })
-
-function mapRecentItem(item: any): ExtendedAsset {
-  const doc = item.document || {}
-  const file = doc.file_latest || {}
-  
-  // Используем version_active_file_id, если он доступен (файл активной версии)
-  // Иначе используем file_latest_id из file_latest объекта
-  const activeFileId = doc.version_active_file_id || file?.id || doc.file_latest_id
-  
-  return {
-    id: doc.id,
-    label: doc.label,
-    description: doc.description || '',
-    size: file?.size || 0,
-    mime_type: file?.mimetype || '',
-    filename: file?.filename || doc.label,
-    // Используем version_active_file_id для правильного отображения активной версии
-    version_active_file_id: doc.version_active_file_id,
-    version_active_id: doc.version_active_id,
-    file_latest_id: file?.id || doc.file_latest_id,
-    // Для превью и download используем готовые URL из бэкенда
-    // resolveAssetImageUrl будет использовать version_active_file_id для правильного превью
-    // Не формируем URL вручную, чтобы избежать 404 ошибок
-    preview_url: doc.preview_url || doc.thumbnail_url,
-    download_url: file?.download_url, // Используем готовый URL от бэкенда
-    thumbnail_url: doc.thumbnail_url,
-    date_added: doc.datetime_created,
-    lastAccessedAt: item.datetime_accessed || doc.datetime_created,
-    isFavorite: false
-  } as ExtendedAsset
-}
-
-function groupByDate(items: ExtendedAsset[]) {
-  const now = new Date()
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const startOfYesterday = new Date(startOfToday)
-  startOfYesterday.setDate(startOfToday.getDate() - 1)
-  const startOfWeek = new Date(startOfToday)
-  startOfWeek.setDate(startOfToday.getDate() - 7)
-
-  today.value = []
-  yesterday.value = []
-  thisWeek.value = []
-  earlier.value = []
-
-  items.forEach((asset) => {
-    const ts = asset.lastAccessedAt ? new Date(asset.lastAccessedAt) : new Date()
-    if (ts >= startOfToday) {
-      today.value.push(asset)
-    } else if (ts >= startOfYesterday) {
-      yesterday.value.push(asset)
-    } else if (ts >= startOfWeek) {
-      thisWeek.value.push(asset)
-    } else {
-      earlier.value.push(asset)
-    }
-  })
-}
-
-function updateAssetInGroups(updated: ExtendedAsset) {
-  const replace = (group: ExtendedAsset[]) => {
-    const idx = group.findIndex(a => a.id === updated.id)
-    if (idx !== -1) group[idx] = { ...group[idx], isFavorite: updated.isFavorite }
-  }
-  replace(today.value)
-  replace(yesterday.value)
-  replace(thisWeek.value)
-  replace(earlier.value)
-}
 </script>
 

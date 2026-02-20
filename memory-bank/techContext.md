@@ -49,6 +49,16 @@
 - **Recently Viewed:** GET `/api/v4/headless/documents/recently-viewed/?limit=20&days=30` — документы по AssetEvent (event_type view/download) для текущего user и organization, порядок по последнему просмотру, ACL, тот же сериализатор что и список; требует заголовок X-Organization-Id.
 - **Saved Searches:** GET/POST `/api/v4/headless/saved-searches/`, GET/PATCH/DELETE `/api/v4/headless/saved-searches/<id>/`, GET `/api/v4/headless/saved-searches/<id>/run/` — tenant-aware CRUD; run применяет сохранённые query и filters через логику OptimizedAPIDocumentListView и возвращает results в том же формате. Лимит 20 сохранённых поисков на пользователя.
 
+#### Sprint 1 Discovery UX — Frontend (2026-02-20)
+- **Saved Searches UI:** Сервис `savedSearchesService.ts` (list, create, update, delete, run); все вызовы через `apiService` (X-Organization-Id из localStorage). Компоненты: SavedSearchesDropdown (кнопка в шапке через Teleport в `#header-search-actions`, список с Run/Edit/Delete, «Сохранить текущий поиск»), SaveSearchModal (имя, валидация, backendError для лимита 20), RenameSavedSearchModal. При Run вызывается `useDamSearchFilters.applySavedSearch(query, filters)` — парсинг через `parseSavedSearchFilters`, установка state и `fetchNow()`; URL синхронизируется, reload консистентен. Утилита `savedSearchFilters.ts`: buildSavedSearchFilters (frontend → backend keys), parseSavedSearchFilters (обратно).
+- **Recently Viewed UI:** Сервис `recentlyViewedService.ts` — GET recently-viewed с limit/days, адаптация через mayanAdapter. Компонент RecentlyViewedBlock (горизонтальная полоса карточек, скелетон 6 ячеек, empty «Пока нет недавно просмотренных», error inline); размещён в GalleryView над сеткой; «Показать все» → `/dam/recent`. RecentPage переведён на getRecentlyViewed (limit 50, days 30), данные через CollectionBrowser. TTL/refresh: один запрос при монтировании блока, без избыточного refetch при фокусе.
+- **Orientation wiring:** FiltersPanel уже отдаёт orientation в v-model; useDamSearchFilters держит state.filters.orientation; assetStore.buildQueryParams добавляет `orientation` в queryParams для GET optimized. URL sync через route.query.orientation при инициализации и при сбросе фильтров (case 'orientation' в FiltersPanel). Кэширование: без изменений — существующая логика assetStore.
+
+#### Sprint 2 Productivity & UX — Backend и Frontend (2026-02-20)
+- **Headless Favorites:** GET `/api/v4/headless/favorites/` и POST `/api/v4/headless/favorites/<document_id>/` требуют заголовок X-Organization-Id (400 без него). GET возвращает только документы с document.organization_id == request.organization; POST toggle — 403, если документ принадлежит другой организации. Реализация: `headless_api/views/favorites_views.py` (HeadlessFavoriteListView, HeadlessFavoriteToggleView).
+- **Optimized list favorites_only:** В `documents/api_views/optimized_document_api_views.py` при query-параметре `favorites_only=true` список ограничивается документами из FavoriteDocument для текущего пользователя; при наличии request.organization — только документы этой организации.
+- **Frontend:** Фильтр «Только избранное» — useDamSearchFilters.state.filters.favoritesOnly, URL-ключ `favorites_only`, assetStore.buildQueryParams; чекбокс в FiltersPanel. Избранное на карточке (AssetCard + favoritesStore) и в AssetContextMenu. Composable `useGalleryHotkeys`: один keydown-слушатель на document, игнор при фокусе в input/textarea/contenteditable; F — toggle избранного для выбранных, Space — AssetPreviewModal, Delete/Backspace — BulkDeleteModal, Esc — закрытие модалок или снятие выделения, Ctrl+A — выделить все, Shift+? — HotkeysCheatSheetModal. AssetPreviewModal и HotkeysCheatSheetModal подключены в GalleryView.
+
 #### Спринт 3 Content (Доработка 2026) — Versioning, Deduplication, Renditions
 - **Versioning:** POST `/api/v4/headless/documents/<id>/versions/activate/` (body: `version_id` или `file_id`); алиас POST `.../versions/<version_id>/revert/`. Загрузка новой версии: POST `/api/v4/documents/<id>/files/`. Tenant-фильтрация в version_views.
 - **Potential Duplicates:** GET `/api/v4/headless/documents/<id>/potential-duplicates/` — документы той же организации с тем же checksum (file_latest), ACL, лимит 20. Требует request.organization.
@@ -385,6 +395,10 @@ public-frontend/
 ### Подход: Shared Database + Shared Schema
 
 **Архитектура:** Одна PostgreSQL база данных, одна схема, изоляция через ForeignKey на Organization.
+
+**Критический компонент:** `TenantResolverMiddleware` — определяет текущую Organization для каждого запроса (Domain → Subdomain → X-Organization-Id → Token → Standalone) и выставляет `request.organization` и ContextVar для TenantAwareManager.
+
+**Связь данных (Data Model):** Organization → Document (1:N). У Document обязательный FK `organization`; у DocumentAIAnalysis, AssetEvent, ShareLink — FK на Organization (tenant-aware). Доступ к документам и аналитике только в рамках текущей организации.
 
 **Компоненты:**
 

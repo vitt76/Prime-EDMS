@@ -9,6 +9,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './tests/setup/vitest.setup.ts',
     include: ['tests/unit/**/*.spec.ts', 'src/**/*.spec.ts'],
+    bail: 0,
+    reporters: ['verbose'],
     exclude: [
       'node_modules/',
       'tests/e2e/**', // Исключаем E2E тесты (они для Playwright)

@@ -154,6 +154,7 @@ export interface SearchFilters {
   owner?: number // User ID of the uploader/owner
   status?: string[] // Workflow status filter
   orientation?: OrientationFilter // Requires backend support (width/height)
+  favoritesOnly?: boolean // Sprint 2: only favorited documents
   custom_metadata?: Record<string, unknown>
 }
 

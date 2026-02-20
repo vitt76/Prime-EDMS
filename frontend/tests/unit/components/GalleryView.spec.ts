@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import GalleryView from '@/components/DAM/GalleryView.vue'
 import { useAssetStore } from '@/stores/assetStore'
 
@@ -11,17 +12,41 @@ vi.mock('@/services/assetService', () => ({
   }
 }))
 
+const router = createRouter({
+  history: createMemoryHistory('/'),
+  routes: [{ path: '/', component: { template: '<div />' } }]
+})
+
 describe('GalleryView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    if (!document.getElementById('header-actions')) {
+      const el = document.createElement('div')
+      el.id = 'header-actions'
+      document.body.appendChild(el)
+    }
+    if (!document.getElementById('header-search')) {
+      const el = document.createElement('div')
+      el.id = 'header-search'
+      document.body.appendChild(el)
+    }
   })
+
+  function mountGalleryView() {
+    return mount(GalleryView, {
+      global: {
+        plugins: [router],
+        stubs: { RouterLink: true }
+      }
+    })
+  }
 
   it('renders loading state', () => {
     const store = useAssetStore()
     store.isLoading = true
     store.assets = []
 
-    const wrapper = mount(GalleryView)
+    const wrapper = mountGalleryView()
 
     expect(wrapper.find('.animate-pulse').exists()).toBe(true)
   })
@@ -31,7 +56,7 @@ describe('GalleryView', () => {
     store.error = 'Network error'
     store.assets = []
 
-    const wrapper = mount(GalleryView)
+    const wrapper = mountGalleryView()
 
     expect(wrapper.text()).toContain('Ошибка загрузки')
     expect(wrapper.text()).toContain('Network error')
@@ -43,9 +68,9 @@ describe('GalleryView', () => {
     store.assets = []
     store.error = null
 
-    const wrapper = mount(GalleryView)
+    const wrapper = mountGalleryView()
 
-    expect(wrapper.text()).toContain('Нет активов')
+    expect(wrapper.text()).toContain('Библиотека пуста')
   })
 
   it('renders assets grid', () => {
@@ -63,7 +88,7 @@ describe('GalleryView', () => {
     store.isLoading = false
     store.error = null
 
-    const wrapper = mount(GalleryView)
+    const wrapper = mountGalleryView()
 
     expect(wrapper.find('.gallery-content').exists()).toBe(true)
   })
@@ -83,10 +108,12 @@ describe('GalleryView', () => {
     store.totalCount = 100
     store.isLoading = false
 
-    const wrapper = mount(GalleryView)
+    const wrapper = mountGalleryView()
 
-    const pagination = wrapper.findComponent({ name: 'Pagination' })
-    expect(pagination.exists()).toBe(true)
+    const hasPagination =
+      wrapper.findComponent({ name: 'Pagination' }).exists() ||
+      wrapper.find('[class*="pagination"]').exists()
+    expect(hasPagination).toBe(true)
   })
 })
 

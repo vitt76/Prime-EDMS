@@ -3,30 +3,40 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import AdminPage from '@/pages/AdminPage.vue'
-import { useAuthStore } from '@/stores/authStore'
 
-// Mock router
-const mockRouter = {
-  push: vi.fn(),
-  go: vi.fn()
-}
+// Hoist so vi.mock can reference them
+const { mockRouter, defaultRoute, mockUseRoute } = vi.hoisted(() => {
+  const def = { path: '/admin/users', params: {} as Record<string, string>, query: {} as Record<string, string> }
+  return {
+    mockRouter: { push: vi.fn(), go: vi.fn() },
+    defaultRoute: def,
+    mockUseRoute: vi.fn(() => def)
+  }
+})
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual('vue-router')
   return {
     ...actual,
     useRouter: () => mockRouter,
-    useRoute: () => ({
-      path: '/admin/users',
-      params: {},
-      query: {}
-    })
+    useRoute: mockUseRoute
   }
 })
 
+// AdminPage.vue calls authStore.hasPermission.value('admin.access') — store must expose hasPermission as { value: fn }
+const mockHasPermissionValue = vi.fn(() => true)
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: vi.fn(() => ({
+    isAuthenticated: true,
+    permissions: ['admin.access'],
+    hasPermission: { value: mockHasPermissionValue },
+    user: { id: '1', email: 'admin@test.com' }
+  }))
+}))
+
 describe('AdminPage', () => {
-  let pinia: any
-  let router: any
+  let pinia: ReturnType<typeof createPinia>
+  let router: ReturnType<typeof createRouter>
   let wrapper: ReturnType<typeof mount>
 
   beforeEach(() => {
@@ -41,18 +51,16 @@ describe('AdminPage', () => {
         }
       ]
     })
+    mockHasPermissionValue.mockReturnValue(true)
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+    mockUseRoute.mockImplementation(() => defaultRoute)
     wrapper?.unmount()
   })
 
   it('renders correctly', () => {
-    const authStore = useAuthStore()
-    authStore.isAuthenticated = true
-    authStore.permissions = ['admin.access']
-
     wrapper = mount(AdminPage, {
       global: {
         plugins: [pinia, router],
@@ -68,9 +76,7 @@ describe('AdminPage', () => {
   })
 
   it('redirects to forbidden if user lacks admin.access permission', async () => {
-    const authStore = useAuthStore()
-    authStore.isAuthenticated = true
-    authStore.permissions = []
+    mockHasPermissionValue.mockReturnValue(false)
 
     wrapper = mount(AdminPage, {
       global: {
@@ -89,17 +95,11 @@ describe('AdminPage', () => {
   })
 
   it('syncs current tab from route', async () => {
-    const authStore = useAuthStore()
-    authStore.isAuthenticated = true
-    authStore.permissions = ['admin.access']
-
-    const route = {
+    mockUseRoute.mockReturnValue({
       path: '/admin/schemas',
       params: {},
       query: {}
-    }
-
-    vi.mocked(require('vue-router').useRoute).mockReturnValue(route as any)
+    })
 
     wrapper = mount(AdminPage, {
       global: {
@@ -118,10 +118,6 @@ describe('AdminPage', () => {
   })
 
   it('handles tab change and navigates', async () => {
-    const authStore = useAuthStore()
-    authStore.isAuthenticated = true
-    authStore.permissions = ['admin.access']
-
     wrapper = mount(AdminPage, {
       global: {
         plugins: [pinia, router],
@@ -129,7 +125,8 @@ describe('AdminPage', () => {
           RouterView: true,
           Breadcrumbs: true,
           AdminNavigationTabs: {
-            template: '<div>AdminNavigationTabs</div>',
+            name: 'AdminNavigationTabs',
+            template: '<div data-tabs>AdminNavigationTabs</div>',
             emits: ['tab-change']
           }
         }
@@ -139,16 +136,16 @@ describe('AdminPage', () => {
     await wrapper.vm.$nextTick()
 
     const tabsComponent = wrapper.findComponent({ name: 'AdminNavigationTabs' })
-    await tabsComponent.vm.$emit('tab-change', 'workflows')
+    if (tabsComponent.exists()) {
+      await tabsComponent.vm.$emit('tab-change', 'workflows')
+    } else {
+      await wrapper.find('[data-tabs]').vm.$emit('tab-change', 'workflows')
+    }
 
     expect(mockRouter.push).toHaveBeenCalledWith('/admin/workflows')
   })
 
   it('generates correct breadcrumbs', () => {
-    const authStore = useAuthStore()
-    authStore.isAuthenticated = true
-    authStore.permissions = ['admin.access']
-
     wrapper = mount(AdminPage, {
       global: {
         plugins: [pinia, router],
@@ -170,10 +167,6 @@ describe('AdminPage', () => {
   })
 
   it('formats tab names correctly', () => {
-    const authStore = useAuthStore()
-    authStore.isAuthenticated = true
-    authStore.permissions = ['admin.access']
-
     wrapper = mount(AdminPage, {
       global: {
         plugins: [pinia, router],

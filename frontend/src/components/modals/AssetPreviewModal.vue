@@ -5,6 +5,14 @@
     size="full"
     @close="handleClose"
   >
+    <template #header>
+      <div class="flex items-center gap-3 ml-auto">
+        <Button variant="primary" size="sm" @click="openAssetPage">
+          <i class="icon icon-open-in-new" aria-hidden="true" />
+          <span>Открыть карточку актива</span>
+        </Button>
+      </div>
+    </template>
     <div class="asset-preview-modal">
       <div
         class="asset-preview-modal__viewer"
@@ -149,7 +157,7 @@
           <span>Copy share link</span>
         </Button>
         <span v-if="copyFeedback" class="asset-preview-modal__copy-feedback">{{ copyFeedback }}</span>
-        <Button variant="primary" size="md" @click="downloadAsset">
+        <Button variant="ghost" size="md" @click="downloadAsset">
           <i class="icon icon-download" aria-hidden="true" />
           <span>Download</span>
         </Button>
@@ -160,10 +168,13 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import Modal from '@/components/Common/Modal.vue'
 import Button from '@/components/Common/Button.vue'
 import { useUIStore } from '@/stores/uiStore'
 import type { Asset } from '@/types/api'
+
+const router = useRouter()
 
 interface Props {
   isOpen: boolean
@@ -330,6 +341,14 @@ function handleClose(): void {
   resetView()
   emit('update:isOpen', false)
   emit('close')
+}
+
+/** Открыть страницу актива (карточка редактирования и работы с медиафайлом). */
+function openAssetPage(): void {
+  const asset = currentAsset.value
+  if (!asset?.id) return
+  handleClose()
+  router.push(`/dam/assets/${asset.id}`)
 }
 
 function nextAsset(): void {

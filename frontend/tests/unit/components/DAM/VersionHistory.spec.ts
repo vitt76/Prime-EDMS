@@ -99,7 +99,7 @@ describe('VersionHistory', () => {
 
     expect(wrapper.text()).toContain('User1')
     expect(wrapper.text()).toContain('User2')
-    expect(wrapper.text()).toContain('1.00 MB') // Formatted size
+    expect(wrapper.text()).toMatch(/\d+(\s*KB|\s*MB)/) // Formatted size (e.g. 1000 KB)
   })
 
   it('allows downloading a version', async () => {

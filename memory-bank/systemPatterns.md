@@ -193,7 +193,7 @@ def transform_ai_tags(value):
 
 **Назначение:** Поддержка SaaS-модели (один backend, много клиентов) и Standalone-модели (один клиент на выделенном сервере).
 
-**Статус:** Базовая инфраструктура реализована (Sprint 1-4 завершены). Интеграция с модулями (Part 3) в планировании.
+**Статус:** Базовая инфраструктура и интеграция Part 3 реализованы (Sprint 1-4 + DAM, Analytics, Distribution tenant-aware).
 
 **Компоненты:**
 
@@ -233,16 +233,20 @@ class TenantAwareMixin(models.Model):
         abstract = True
 ```
 
-#### 9.4. TenantResolverMiddleware
+#### 9.4. TenantResolverMiddleware (критический компонент)
+**Порядок резолвинга (Domain → Subdomain → Token → Standalone):**
+1. Кастомный домен (dam.company.com → Organization по DomainSettings)
+2. Поддомен (org-slug.dam-brand.com → Organization по slug)
+3. Заголовок X-Organization-Id (для API-клиентов)
+4. Токен в Authorization header (organization из пользователя)
+5. Standalone mode (default Organization)
+
 ```python
 # Определение Organization по домену/токену
 class TenantResolverMiddleware:
     def process_request(self, request):
-        # 1. По кастомному домену
-        # 2. По поддомену (app.dam-brand.com → dam-brand)
-        # 3. По токену в Authorization header
-        # 4. Standalone mode (default Organization)
         request.organization = self._resolve_organization(request)
+        # + set_current_organization() для ContextVar (TenantAwareManager)
 ```
 
 **Tenant-aware модели:**

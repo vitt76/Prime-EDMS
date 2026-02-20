@@ -53,6 +53,8 @@ interface AssetFilters {
   orientation?: 'portrait' | 'landscape' | 'square'
   owner?: number
   search?: string
+  /** Sprint 2: only favorited documents */
+  favoritesOnly?: boolean
 }
 
 interface AssetSort {
@@ -139,6 +141,7 @@ export const useAssetStore = defineStore(
         filters.value.dateTo ||
         filters.value.sizeMin !== undefined ||
         filters.value.sizeMax !== undefined ||
+        filters.value.favoritesOnly ||
         searchQuery.value.trim()
       )
     })
@@ -233,6 +236,11 @@ export const useAssetStore = defineStore(
       // Orientation (backend support: width/height or orientation field; param ready for API)
       if (filters.value.orientation) {
         queryParams.set('orientation', filters.value.orientation)
+      }
+
+      // Favorites only (Sprint 2: optimized API favorites_only=true)
+      if (filters.value.favoritesOnly) {
+        queryParams.set('favorites_only', 'true')
       }
 
       // Owner / uploaded by (Mayan: files__user_id or equivalent when supported)

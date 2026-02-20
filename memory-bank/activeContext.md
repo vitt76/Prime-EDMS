@@ -1,11 +1,21 @@
 # Active Context: Prime-EDMS
 
-**Последнее обновление:** 2026-02-19  
-**Текущий фокус:** Доработка 2026 — **Спринт 3 (Контент)** завершён. Реализованы Versioning (API revert/activate, UI), Deduplication (potential-duplicates API + UI), Renditions (tenant-aware пресеты, дефолтные пресеты, водяные знаки на уровне организации). Следующий по плану — **Спринт 2 (Продуктивность и UX)** или **Спринт 4 (Совместная работа)**.
+**Последнее обновление:** 2026-02-20  
+**Текущий фокус:** Доработка 2026 — Спринт 1 (Discovery UX) завершён; следующий по плану: **Спринт 2 (Продуктивность и UX)** или **Спринт 6 (Операции)**.
 
 ---
 
 ## 🎯 Current Focus (Текущий фокус)
+
+### Принятые решения и спецификации
+
+**ТЗ Part 3: Multi-Tenancy Integration** — принято и реализовано в коде.  
+- **Стратегия:** Shared Database + Shared Schema с изоляцией по ForeignKey на Organization.  
+- **Паттерн:** TenantAwareMixin для всех tenant-aware моделей; TenantResolverMiddleware (Domain → Subdomain → Token → Standalone + X-Organization-Id) задаёт `request.organization`.  
+- **Аудит (2026-02-05):** Organizations, Document, DocumentAIAnalysis, AssetEvent, ShareLink — tenant-aware; Dashboard API и публичный share по token работают с изоляцией. Отчёт: `tmp/GAPS_REPORT_PART3_UPDATED.md`.  
+**TZ_HomePage_DAM_2026:** ТЗ главной страницы DAM предполагает API с `organization_id` (KPI, хранилище, квоты); бэкенд уже отдаёт tenant-scoped метрики через `request.organization`.
+
+---
 
 ### Недавно завершённое (2026-02-13)
 
@@ -75,7 +85,12 @@
 - **Спринт 6 — Операции:** мониторинг и алерты, лимиты на размер/тип файла, приоритеты очередей.
 - **Спринт 7:** семантический поиск, видеомодуль, ingest pipeline, lifecycle, n8n/коннекторы, a11y (каждое направление — отдельное решение по объёму).
 
-**Следующий шаг:** **Спринт 5 (Security & Compliance)** — ✅ **COMPLETED** (2026-02-19): Watermarking (водяной знак при скачивании, WatermarkedRendition, apply_watermark_task), Audit Log (user_agent в AssetEvent, CabinetShare → AssetEvent, GET audit-logs + export CSV/JSON, вкладка «Активность» по документу), Secure Download (отдача watermarked при apply_on_download). Миграции применены в Docker (organizations 0008, distribution 0015–0017, analytics 0021). Далее — **Спринт 2 (Продуктивность и UX)** или **Спринт 6 (Операции)**. Детальные критерии — в Доработка_2026.md.
+**Спринт 1 Discovery UX (Доработка 2026) — ✅ ЗАВЕРШЁН (2026-02-20):** Замыкание фронтенда на headless API: (1) **Ориентация** — проверена передача orientation в optimized API (FiltersPanel → useDamSearchFilters → assetStore). (2) **Недавно просмотренные** — сервис `recentlyViewedService`, компонент `RecentlyViewedBlock` (скелетон, empty, клик в актив), размещение на /dam; «Показать все» → /dam/recent; страница /dam/recent переведена на headless API. (3) **Saved Searches** — сервис `savedSearchesService` (list, create, patch, delete, run); модалки SaveSearchModal (имя, валидация, лимит 20) и RenameSavedSearchModal; dropdown «Сохранённые поиски» в шапке галереи (Teleport в #header-search-actions); при Run — применение query+filters через `applySavedSearch` и fetch. (4) Loading/empty/error и a11y (aria-label, role). (5) Vitest: recentlyViewedService, savedSearchesService, savedSearchFilters (build/parse). (6) Backend: тесты изоляции tenant в `headless_api/tests/test_saved_searches_recently_viewed_tenant.py`. Все вызовы headless идут с X-Organization-Id через apiService.
+
+**Спринт 2 Productivity & UX (Доработка 2026) — ✅ ЗАВЕРШЁН (2026-02-20):** (1) **Избранное (Favorites):** Backend — tenant-фильтрация в headless favorites (GET list и POST toggle требуют X-Organization-Id, 400 без него; GET возвращает только документы своей организации; POST toggle — 403 для документа другой организации). Параметр `favorites_only=true` в optimized list (фильтр по FavoriteDocument + org). (2) **Frontend:** фильтр «Только избранное» в useDamSearchFilters (favoritesOnly, URL sync), assetStore.buildQueryParams (favorites_only), чекбокс в FiltersPanel; пункт «Добавить/Убрать из избранного» в AssetContextMenu; иконка избранного на AssetCard (favoritesStore). (3) **Горячие клавиши:** composable `useGalleryHotkeys` (F — избранное, Space — превью, Delete/Backspace — корзина, Esc — снять выделение/закрыть модалки, Ctrl+A — выделить все, Shift+? — подсказка); проверка фокуса (не срабатывают в input/textarea); AssetPreviewModal по Space и по клику «Превью»; HotkeysCheatSheetModal; BulkDeleteModal по Delete. (4) **Тесты:** headless_api/tests/test_favorites_tenant.py (400 без org, 200 с org, 403 для чужой org); documents/tests/test_optimized_document_list_favorites.py (favorites_only); Vitest useGalleryHotkeys.spec.ts (9 тестов). Исправлен баг: в HeadlessFavoriteToggleView восстановлено объявление метода `def post(self, request, document_id)`.
+
+**Следующий шаг:** **Спринт 6 (Операции)** или **Спринт 7 (по выбору)** — по дорожной карте Доработка_2026.md.  
+**CARRY_OVER (Sprint 1):** Уведомления по сохранённым поискам (notification_enabled / Celery Beat); P1: pin к избранным saved searches, пресет в панели фильтров, телеметрия usage.
 
 **Зависимости:** Спринты 1 и 2 можно вести параллельно; Спринт 4 логически после 1 (saved searches в контексте коллекций). Спринты 5 и 6 независимы от 1–4.
 

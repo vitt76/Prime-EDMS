@@ -26,6 +26,7 @@ from ..models.document_models import Document
 from ..models.document_file_models import DocumentFile
 from ..models.document_version_models import DocumentVersion
 from ..models.document_type_models import DocumentType
+from ..models.favorite_document_models import FavoriteDocument
 from ..permissions import (
     permission_document_create, permission_document_properties_edit,
     permission_document_trash, permission_document_view
@@ -242,6 +243,21 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
                 latest_file_width__gte=F('latest_file_height') - 2,
                 latest_file_width__lte=F('latest_file_height') + 2
             )
+
+        # Favorites filter (Sprint 2 Productivity & UX): only documents favorited by current user
+        favorites_only = (self.request.query_params.get('favorites_only') or '').strip().lower() in ('true', '1')
+        if favorites_only:
+            favorite_doc_ids = FavoriteDocument.objects.filter(
+                user=self.request.user
+            ).values_list('document_id', flat=True)
+            if hasattr(Document, 'organization_id'):
+                org = getattr(self.request, 'organization', None)
+                if org is not None:
+                    favorite_doc_ids = Document.valid.filter(
+                        pk__in=list(favorite_doc_ids),
+                        organization_id=org.pk
+                    ).values_list('pk', flat=True)
+            queryset = queryset.filter(pk__in=list(favorite_doc_ids))
 
         # Apply ordering
         ordering = self.request.query_params.get('ordering', '-datetime_created')

@@ -107,6 +107,23 @@
       </select>
     </div>
 
+    <!-- Favorites only (Sprint 2) -->
+    <div class="mb-6">
+      <label
+        class="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-neutral-50 dark:hover:bg-neutral-50 transition-colors"
+        role="group"
+        aria-label="Только избранное"
+      >
+        <input
+          v-model="selectedFavoritesOnly"
+          type="checkbox"
+          class="w-4 h-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 min-w-[44px] min-h-[44px]"
+          aria-label="Показать только избранные"
+        />
+        <span class="text-sm font-semibold text-neutral-900 dark:text-neutral-900">Только избранное</span>
+      </label>
+    </div>
+
     <!-- Tags Filter with Autocomplete -->
     <div class="mb-6">
       <label class="block text-sm font-semibold text-neutral-900 dark:text-neutral-900 mb-3">
@@ -280,6 +297,7 @@ const sizeMin = ref<number | null>(null)
 const sizeMax = ref<number | null>(null)
 const selectedOwner = ref<number | null>(null)
 const selectedOrientation = ref<OrientationFilter | null>(null)
+const selectedFavoritesOnly = ref(false)
 const selectedTags = ref<string[]>([])
 const showCustomMetadata = ref(false)
 const customMetadataFilters = ref<Array<{ key: string; value: string }>>([])
@@ -300,6 +318,7 @@ function hydrateFromModel(filters: SearchFilters) {
   }
   selectedOwner.value = filters.owner ?? null
   selectedOrientation.value = filters.orientation ?? null
+  selectedFavoritesOnly.value = filters.favoritesOnly ?? false
   selectedTags.value = filters.tags || []
   if (filters.custom_metadata) {
     customMetadataFilters.value = Object.entries(filters.custom_metadata).map(([key, value]) => ({
@@ -343,6 +362,7 @@ const hasActiveFilters = computed(() => {
     sizeMax.value !== null ||
     selectedOwner.value !== null ||
     selectedOrientation.value !== null ||
+    selectedFavoritesOnly.value ||
     selectedTags.value.length > 0 ||
     customMetadataFilters.value.length > 0
   )
@@ -366,6 +386,9 @@ const activeFiltersSummary = computed(() => {
   if (selectedOrientation.value) {
     const labels: Record<string, string> = { landscape: 'Альбомная', portrait: 'Портретная', square: 'Квадрат' }
     summary.orientation = `Ориентация: ${labels[selectedOrientation.value] || selectedOrientation.value}`
+  }
+  if (selectedFavoritesOnly.value) {
+    summary.favoritesOnly = 'Только избранное'
   }
   if (selectedTags.value.length > 0) {
     summary.tags = `Теги: ${selectedTags.value.join(', ')}`
@@ -408,6 +431,9 @@ function clearFilter(key: string) {
     case 'orientation':
       selectedOrientation.value = null
       break
+    case 'favorites':
+      selectedFavoritesOnly.value = false
+      break
     case 'tags':
       selectedTags.value = []
       break
@@ -440,6 +466,10 @@ function emitModelUpdate() {
     filters.orientation = selectedOrientation.value
   }
 
+  if (selectedFavoritesOnly.value) {
+    filters.favoritesOnly = true
+  }
+
   if (selectedTags.value.length > 0) {
     filters.tags = selectedTags.value
   }
@@ -466,6 +496,7 @@ function handleReset() {
   sizeMax.value = null
   selectedOwner.value = null
   selectedOrientation.value = null
+  selectedFavoritesOnly.value = false
   selectedTags.value = []
   customMetadataFilters.value = []
   emitModelUpdate()
@@ -474,7 +505,7 @@ function handleReset() {
 
 // Auto-apply (reactive). Debounce happens outside (in composable).
 watch(
-  () => [selectedTypes.value, dateRange.value, sizeMin.value, sizeMax.value, selectedOwner.value, selectedOrientation.value, selectedTags.value, customMetadataFilters.value],
+  () => [selectedTypes.value, dateRange.value, sizeMin.value, sizeMax.value, selectedOwner.value, selectedOrientation.value, selectedFavoritesOnly.value, selectedTags.value, customMetadataFilters.value],
   () => {
     if (isHydrating.value) return
     emitModelUpdate()

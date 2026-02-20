@@ -1,4 +1,5 @@
 export { default as GalleryView } from './GalleryView.vue'
+export { default as RecentlyViewedBlock } from './RecentlyViewedBlock.vue'
 export { default as AssetCard } from './AssetCard.vue'
 export { default as CommentsThread } from './CommentsThread.vue'
 export { default as CommentItem } from './CommentItem.vue'
