@@ -18,7 +18,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 
 from mayan.apps.acls.models import AccessControlList
-from mayan.apps.acls.exceptions import PermissionDenied as MayanPermissionDenied
+from django.core.exceptions import PermissionDenied as MayanPermissionDenied
 from mayan.apps.cabinets.models import Cabinet, CabinetUserShare
 from mayan.apps.cabinets.permissions import permission_cabinet_edit, permission_cabinet_view
 from mayan.apps.cabinets.serializers import CabinetSerializer

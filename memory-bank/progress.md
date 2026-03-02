@@ -22,6 +22,7 @@
 ### Sprint 3: Collaboration & Tech Debt (В ПРОЦЕССЕ)
 - [x] Шаринг подборок (Cabinets): Backend (CabinetUserShare, headless API org-members, share-with-users, shared-with-me), Frontend (CabinetShareModal, Sidebar разделение).
 - [x] Tech Debt: Глобальное тестовое окружение Vitest (Pinia, Router, Canvas), исправление ~330 падающих тестов (VirtualScroller, ChartComponent, FiltersPanel, BulkTagModal).
+- [x] Исправление роутинга HomePage Phase 1: правильные query-параметры для QuickActions (status=untagged, duplicates=true) и KPIBar (локализация "Входящие").
 - [ ] Корзина (Trash): реализация перемещения и восстановления активов.
 
 ## 🟨 БЭКЛОГ (TODO / Gaps)

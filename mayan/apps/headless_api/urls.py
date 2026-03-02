@@ -28,6 +28,13 @@ from .views.watermark_settings_views import OrganizationWatermarkSettingsView
 from .views.conversion_views import HeadlessDocumentConvertView
 from .views.auth_views import HeadlessAuthMeView
 from .views.dashboard_stats_views import HeadlessDashboardStatsView
+from .views.home_stats_views import (
+    HeadlessHomeDocumentsStatsView,
+    HeadlessHomeAIStatsView,
+    HeadlessHomeInboxStatsView,
+    HeadlessHomeStorageStatsView,
+    HeadlessHomeDailyInsightsView,
+)
 from .views.task_status_views import HeadlessTaskStatusView
 from .views.admin_logs_views import HeadlessAdminLogsView
 from .views.audit_log_views import (
@@ -62,6 +69,31 @@ api_urls = [
         regex=r'^auth/me/$',
         view=HeadlessAuthMeView.as_view(),
         name='api-auth-me'
+    ),
+    url(
+        regex=r'^documents/stats/$',
+        view=HeadlessHomeDocumentsStatsView.as_view(),
+        name='api-home-documents-stats'
+    ),
+    url(
+        regex=r'^documents/ai-stats/$',
+        view=HeadlessHomeAIStatsView.as_view(),
+        name='api-home-ai-stats'
+    ),
+    url(
+        regex=r'^organization/storage-stats/$',
+        view=HeadlessHomeStorageStatsView.as_view(),
+        name='api-home-storage-stats'
+    ),
+    url(
+        regex=r'^user/daily-insights/$',
+        view=HeadlessHomeDailyInsightsView.as_view(),
+        name='api-home-daily-insights'
+    ),
+    url(
+        regex=r'^user/inbox-stats/$',
+        view=HeadlessHomeInboxStatsView.as_view(),
+        name='api-home-inbox-stats'
     ),
     url(
         regex=r'^password/change/$',

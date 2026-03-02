@@ -322,7 +322,7 @@ class CabinetUserShare(models.Model):
         indexes = [
             models.Index(
                 fields=['user', 'organization'],
-                name='idx_cabinet_user_share_user_org',
+                name='idx_cab_user_share_user_org',
             ),
         ]
 

@@ -33,6 +33,7 @@
     "@vueuse/router": "^10.7.2",
     "axios": "^1.6.5",
     "chart.js": "^4.4.1",
+    "date-fns": "^4.1.0",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "pinia": "^2.1.7",
