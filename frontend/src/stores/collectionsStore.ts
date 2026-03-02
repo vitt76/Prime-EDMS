@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { collectionsService } from '@/services/collectionsService'
+import { cabinetService } from '@/services/cabinetService'
 import { formatApiError } from '@/utils/errors'
 import { extractErrorCode } from '@/utils/errorHandling'
 import { useAuthStore } from './authStore'
@@ -487,6 +488,17 @@ export const useCollectionsStore = defineStore(
       }
     }
 
+    /** Sprint 3: Share cabinet with users in the same organization. */
+    async function shareCabinetWithUsers(
+      cabinetId: number,
+      userIds: number[]
+    ): Promise<{ shared_user_ids: number[]; errors?: Array<{ user_id: number; error: string }> }> {
+      const result = await cabinetService.shareCabinetWithUsers(cabinetId, userIds)
+      invalidateCache()
+      await fetchSpecialCollections()
+      return result
+    }
+
     // Actions - Tree node expansion
     function expandNode(nodeId: number): void {
       expandedNodes.value.add(nodeId)
@@ -622,6 +634,7 @@ export const useCollectionsStore = defineStore(
 
       // Actions - Special collections
       fetchSpecialCollections,
+      shareCabinetWithUsers,
 
       // Actions - Tree nodes
       expandNode,

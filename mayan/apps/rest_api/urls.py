@@ -23,6 +23,12 @@ from mayan.apps.headless_api.views.saved_searches_views import (
     SavedSearchDetailView,
     SavedSearchRunView,
 )
+from mayan.apps.headless_api.views.cabinet_views import (
+    HeadlessCabinetShareWithUsersView,
+    HeadlessCabinetSharedWithMeListView,
+    HeadlessCabinetDetailView,
+    HeadlessCabinetOrgMembersView,
+)
 from mayan.apps.headless_api.views.profile_views import HeadlessProfileView
 from mayan.apps.headless_api.views.version_views import (
     HeadlessEditView, HeadlessVersionActivateView, HeadlessVersionRevertView
@@ -379,6 +385,26 @@ api_version_urls = [
         regex=r'^headless/saved-searches/(?P<pk>\d+)/run/$',
         view=SavedSearchRunView.as_view(),
         name='headless-saved-searches-run'
+    ),
+    url(
+        regex=r'^headless/cabinets/org-members/$',
+        view=HeadlessCabinetOrgMembersView.as_view(),
+        name='headless-cabinets-org-members'
+    ),
+    url(
+        regex=r'^headless/cabinets/shared-with-me/$',
+        view=HeadlessCabinetSharedWithMeListView.as_view(),
+        name='headless-cabinets-shared-with-me'
+    ),
+    url(
+        regex=r'^headless/cabinets/(?P<cabinet_id>\d+)/$',
+        view=HeadlessCabinetDetailView.as_view(),
+        name='headless-cabinet-detail'
+    ),
+    url(
+        regex=r'^headless/cabinets/(?P<cabinet_id>\d+)/share-with-users/$',
+        view=HeadlessCabinetShareWithUsersView.as_view(),
+        name='headless-cabinet-share-with-users'
     ),
     url(
         regex=r'^headless/ping/$',

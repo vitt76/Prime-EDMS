@@ -14,7 +14,8 @@ describe('BulkTagModal', () => {
     wrapper = mount(BulkTagModal, {
       props: {
         isOpen: true,
-        selectedIds: mockSelectedIds
+        selectedIds: mockSelectedIds,
+        selectedCount: mockSelectedIds.length
       },
       global: {
         stubs: {

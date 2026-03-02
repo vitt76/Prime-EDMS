@@ -252,6 +252,7 @@ const handleRetry = () => {
 
 const handleKeydown = (event: KeyboardEvent) => {
   if (!scrollerRef.value) return
+  if (document.activeElement !== scrollerRef.value) return
 
   const { key } = event
   const scrollAmount = props.itemHeight * 3 // Scroll 3 items at a time

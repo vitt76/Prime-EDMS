@@ -59,15 +59,43 @@
       </ul>
     </nav>
 
-    <!-- Collections Section (Quick Links) -->
+    <!-- Подборки: Мои подборки + Доступные мне + быстрые ссылки -->
     <div v-if="isExpanded" class="mt-6 px-2">
       <div class="flex items-center justify-between px-3 mb-2">
         <h3 class="text-xs font-semibold text-neutral-500 dark:text-neutral-500 uppercase tracking-wider">
-          Коллекции
+          Подборки
         </h3>
       </div>
       <ul class="space-y-0.5">
-        <li v-for="collection in collections" :key="collection.id">
+        <li>
+          <router-link
+            :to="'/collections'"
+            :class="[
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm',
+              isActive('/collections')
+                ? 'bg-primary-50 dark:bg-primary-50 text-primary-600 dark:text-primary-600'
+                : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'
+            ]"
+          >
+            <component :is="FolderIcon" class="w-4 h-4 flex-shrink-0" />
+            <span>Мои подборки</span>
+          </router-link>
+        </li>
+        <li>
+          <router-link
+            :to="'/dam/shared'"
+            :class="[
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm',
+              isActive('/dam/shared')
+                ? 'bg-primary-50 dark:bg-primary-50 text-primary-600 dark:text-primary-600'
+                : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'
+            ]"
+          >
+            <component :is="ShareIcon" class="w-4 h-4 flex-shrink-0" />
+            <span>Доступные мне</span>
+          </router-link>
+        </li>
+        <li v-for="collection in collectionQuickLinks" :key="collection.id">
           <router-link
             :to="collection.path"
             :class="[
@@ -222,11 +250,18 @@ const TrashIcon = {
   `
 }
 
-const collections = [
+const FolderIcon = {
+  template: `
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+    </svg>
+  `
+}
+
+const collectionQuickLinks = [
   { id: 1, path: '/dam/my-uploads', label: 'Мои загрузки', icon: UploadIcon },
   { id: 2, path: '/dam/favorites', label: 'Избранное', icon: HeartIcon },
   { id: 3, path: '/dam/recent', label: 'Недавние', icon: ClockIcon },
-  { id: 4, path: '/dam/shared', label: 'Доступные мне', icon: ShareIcon },
   { id: 5, path: '/dam/trash', label: 'Корзина', icon: TrashIcon }
 ]
 

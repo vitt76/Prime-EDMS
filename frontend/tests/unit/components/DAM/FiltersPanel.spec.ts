@@ -54,14 +54,16 @@ describe('FiltersPanel', () => {
   })
 
   it('emits reset event when Reset button clicked', async () => {
+    await wrapper.setProps({ modelValue: { type: ['image'] } })
+    await wrapper.vm.$nextTick()
+
     const buttons = wrapper.findAll('button')
     const resetButton = buttons.find((btn) => btn.text().includes('Сбросить'))
-    if (resetButton) {
-      await resetButton.trigger('click')
+    expect(resetButton?.attributes('disabled')).toBeUndefined()
 
-      const resetEvents = wrapper.emitted('reset')
-      expect(resetEvents).toBeTruthy()
-    }
+    await resetButton!.trigger('click')
+    const resetEvents = wrapper.emitted('reset')
+    expect(resetEvents).toBeTruthy()
   })
 
   it('displays date range picker', () => {

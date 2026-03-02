@@ -11,7 +11,8 @@ import {
   fetchWithRetry,
   ApiError,
   createRetryableFunction,
-  useRetryableOperation
+  useRetryableOperation,
+  defaultRetryCondition
 } from '../retry'
 
 describe('Retry Utility', () => {

@@ -141,6 +141,34 @@ class CabinetService {
 
     if (!result.success) throw result.error
   }
+
+  /** Sprint 3: Share cabinet with users in the same organization. */
+  async shareCabinetWithUsers(
+    cabinetId: number,
+    userIds: number[]
+  ): Promise<{ shared_user_ids: number[]; errors?: Array<{ user_id: number; error: string }> }> {
+    const response = await apiService.post<{ shared_user_ids: number[]; errors?: Array<{ user_id: number; error: string }> }>(
+      `/api/v4/headless/cabinets/${cabinetId}/share-with-users/`,
+      { user_ids: userIds }
+    )
+    return response
+  }
+
+  /** Sprint 3: List cabinets shared with the current user. */
+  async getSharedWithMeCabinets(): Promise<CabinetDTO[]> {
+    const response = await apiService.get<CabinetDTO[]>(
+      '/api/v4/headless/cabinets/shared-with-me/'
+    )
+    return Array.isArray(response) ? response : []
+  }
+
+  /** Sprint 3: List org members for share modal (id, username, first_name, last_name). */
+  async getOrgMembers(): Promise<Array<{ id: number; username: string; first_name: string; last_name: string }>> {
+    const response = await apiService.get<Array<{ id: number; username: string; first_name: string; last_name: string }>>(
+      '/api/v4/headless/cabinets/org-members/'
+    )
+    return Array.isArray(response) ? response : []
+  }
 }
 
 export const cabinetService = new CabinetService()

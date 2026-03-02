@@ -240,10 +240,21 @@ class CollectionsService {
   }
 
   async getSpecialCollections(): Promise<SpecialCollectionsResponse> {
+    let sharedWithMe: Collection[] = []
+    try {
+      const shared = await apiService.get<CabinetDTO[]>(
+        '/api/v4/headless/cabinets/shared-with-me/'
+      )
+      sharedWithMe = Array.isArray(shared)
+        ? shared.map((c) => cabinetToCollection(c))
+        : []
+    } catch {
+      sharedWithMe = []
+    }
     return {
       favorites: [],
       recent: [],
-      shared_with_me: [],
+      shared_with_me: sharedWithMe,
       my_uploads: [],
       public_collections: []
     }

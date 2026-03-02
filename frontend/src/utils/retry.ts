@@ -35,7 +35,7 @@ export interface RetryResult<T> {
 /**
  * Default retry condition - retries on network errors and 5xx status codes
  */
-const defaultRetryCondition = (error: Error): boolean => {
+export const defaultRetryCondition = (error: Error): boolean => {
   // Network errors (fetch failures, timeouts)
   if (error.name === 'TypeError' && error.message.includes('fetch')) {
     return true

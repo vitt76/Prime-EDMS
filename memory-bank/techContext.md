@@ -65,6 +65,10 @@
 - **Renditions:** RenditionPreset.organization (FK, null=global); список пресетов и выбор при Share Link фильтруются по request.organization. Publication.organization задаётся при создании Share Link. Дефолтные пресеты (миграция distribution 0015): Instagram 1:1 1080, VK 1200, Печать A4 300 dpi.
 - **Watermarks:** OrganizationWatermarkSettings (organizations, OneToOne Organization): enabled, text, logo_url, position, opacity, font_size; to_watermark_dict() для distribution. GET/PATCH `/api/v4/headless/organization/watermark/`. В generate_rendition_task применяется после пресета, если у publication есть organization с включённым watermark.
 
+#### Спринт 3.5 Collaboration & Tech Debt (Доработка 2026)
+- **Cabinet Sharing:** Модель `CabinetUserShare` для шаринга подборки с конкретными пользователями внутри организации (Tenant-scoped). Headless API: GET `org-members`, POST `share-with-users`, GET `shared-with-me`. Учет прав комбинируется из `AccessControlList` и `CabinetUserShare`. На фронтенде добавлен `CabinetShareModal` и разделены сайдбар-ссылки "Мои подборки" / "Доступные мне".
+- **Vitest Setup:** Глобальная настройка `createPinia()` в `beforeEach`, моки `vue-router` и `HTMLCanvasElement.getContext`, заглушки для `IntersectionObserver` и `scrollTo`. Решение проблемы ~330 падающих тестов.
+
 #### Спринт 4 Collaboration (Доработка 2026) — Public Share API и модель безопасности
 - **Public Share API:** GET `/api/v4/public/shares/<uuid>/` — доступ без авторизации (`AllowAny`). Возвращает метаданные коллекции (label, uuid) и список документов (id, label, thumbnail_url). Опционально: query-параметр `password=` для защищённых ссылок.
 - **Модель безопасности (UUID + пароль):**

@@ -278,3 +278,56 @@ class CabinetShare(models.Model):
             return False
         from django.utils.timezone import now
         return now() >= self.expires_at
+
+
+class CabinetUserShare(models.Model):
+    """
+    Share a cabinet with specific users within the same organization.
+    Used for "share with user" (in-org) in addition to ACL.
+    Tenant-scoped: cabinet and user must belong to the same organization.
+    """
+    cabinet = models.ForeignKey(
+        Cabinet,
+        on_delete=models.CASCADE,
+        related_name='user_shares',
+        help_text=_('Cabinet shared with the user')
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='cabinet_user_shares',
+        help_text=_('User who has been granted access')
+    )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='cabinet_user_shares',
+        help_text=_('Organization (tenant) for isolation')
+    )
+    shared_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cabinet_shares_granted',
+        help_text=_('User who shared the cabinet')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Cabinet user share')
+        verbose_name_plural = _('Cabinet user shares')
+        unique_together = (('cabinet', 'user'),)
+        indexes = [
+            models.Index(
+                fields=['user', 'organization'],
+                name='idx_cabinet_user_share_user_org',
+            ),
+        ]
+
+    def __str__(self):
+        return _('Cabinet "%(cabinet)s" shared with %(user)s') % {
+            'cabinet': self.cabinet.label,
+            'user': self.user.get_username(),
+        }

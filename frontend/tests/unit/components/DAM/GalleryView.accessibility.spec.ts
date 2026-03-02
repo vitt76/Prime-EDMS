@@ -1,9 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render } from '@testing-library/vue'
 import { axe } from 'vitest-axe'
 import { createPinia, setActivePinia } from 'pinia'
 import GalleryView from '@/components/DAM/GalleryView.vue'
 import { useAssetStore } from '@/stores/assetStore'
+
+vi.mock('@/services/api', () => ({
+  default: {
+    get: vi.fn().mockResolvedValue({ data: { results: [] } })
+  }
+}))
 
 describe('GalleryView Accessibility', () => {
   beforeEach(() => {
@@ -12,14 +18,13 @@ describe('GalleryView Accessibility', () => {
 
   it('should have no accessibility violations with empty state', async () => {
     const { container } = render(GalleryView)
-    
+
     const results = await axe(container)
     expect(results).toHaveNoViolations()
   })
 
   it('should have proper ARIA labels for gallery grid', async () => {
     const assetStore = useAssetStore()
-    // Mock some assets
     assetStore.assets = [
       {
         id: 1,
@@ -31,20 +36,20 @@ describe('GalleryView Accessibility', () => {
     ] as any
 
     const { container } = render(GalleryView)
-    
+
     const grid = container.querySelector('[role="grid"]')
     expect(grid).toHaveAttribute('aria-label', 'Галерея активов')
-    
+
     const results = await axe(container)
     expect(results).toHaveNoViolations()
   })
 
   it('should have proper keyboard navigation support', async () => {
     const { container } = render(GalleryView)
-    
+
     const selectAllCheckbox = container.querySelector('input[type="checkbox"][aria-label*="Выбрать все"]')
     expect(selectAllCheckbox).toBeInTheDocument()
-    
+
     const results = await axe(container)
     expect(results).toHaveNoViolations()
   })
