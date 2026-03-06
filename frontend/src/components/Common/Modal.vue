@@ -34,11 +34,12 @@
               tabindex="-1"
               role="dialog"
               aria-modal="true"
-              :aria-labelledby="title ? 'modal-title' : undefined"
+              :aria-labelledby="title ? modalTitleId : undefined"
+              :aria-describedby="descriptionId"
             >
               <!-- Header -->
               <div v-if="title || $slots.header" class="flex items-center justify-between px-6 py-4 border-b border-neutral-300 dark:border-neutral-300">
-                <h3 v-if="title" id="modal-title" class="text-xl font-semibold text-neutral-900 dark:text-neutral-900">
+                <h3 v-if="title" :id="modalTitleId" class="text-xl font-semibold text-neutral-900 dark:text-neutral-900">
                   {{ title }}
                 </h3>
                 <slot name="header" />
@@ -46,7 +47,8 @@
                   v-if="closable"
                   @click="handleClose"
                   class="ml-4 text-neutral-600 hover:text-neutral-900 dark:text-neutral-600 dark:hover:text-neutral-900 transition-colors"
-                  aria-label="Close"
+                  aria-label="Закрыть диалог"
+                  data-autofocus
                 >
                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -72,12 +74,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, ref } from 'vue'
+import { computed, watch, ref, nextTick } from 'vue'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 
 interface Props {
   isOpen: boolean
   title?: string
+  descriptionId?: string
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
   closable?: boolean
   closeOnBackdrop?: boolean
@@ -96,6 +99,7 @@ const emit = defineEmits<{
 
 const modalRef = ref<HTMLElement | null>(null)
 const isActive = ref(false)
+const modalTitleId = `modal-title-${Math.random().toString(36).slice(2, 9)}`
 
 // Focus trap
 const { activate, deactivate } = useFocusTrap(modalRef, isActive)
@@ -126,12 +130,11 @@ function handleBackdropClick() {
 }
 
 // Close on Escape key and manage focus trap
-watch(() => props.isOpen, (isOpen) => {
+watch(() => props.isOpen, (isOpen, _previous, onCleanup) => {
   isActive.value = isOpen
   
   if (isOpen) {
-    // Activate focus trap
-    activate()
+    void nextTick(() => activate())
     
     // Close on Escape
     const handleEscape = (e: KeyboardEvent) => {
@@ -140,11 +143,11 @@ watch(() => props.isOpen, (isOpen) => {
       }
     }
     document.addEventListener('keydown', handleEscape)
-    
-    return () => {
+
+    onCleanup(() => {
       document.removeEventListener('keydown', handleEscape)
       deactivate()
-    }
+    })
   } else {
     deactivate()
   }

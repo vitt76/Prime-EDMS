@@ -1,15 +1,15 @@
 <template>
-  <div
+  <article
     :class="cardClasses"
-    role="button"
     tabindex="0"
-    :aria-label="`Актив: ${asset.label}`"
+    :aria-label="rootAriaLabel"
     :draggable="true"
+    data-testid="asset-card"
     @click="handleClick"
     @dblclick="handleDoubleClick"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false; isDragging = false"
-    @keydown.enter="handleClick"
+    @keydown.enter.prevent="handleClick"
     @keydown.space.prevent="handleClick"
     @dragstart="handleDragStart"
     @dragend="handleDragEnd"
@@ -176,6 +176,9 @@
                    focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
             @click.stop="toggleActionsMenu"
             aria-label="Дополнительные действия"
+            aria-haspopup="menu"
+            :aria-expanded="showActionsMenu ? 'true' : 'false'"
+            :aria-controls="actionsMenuId"
             type="button"
           >
             <svg class="w-5 h-5 text-neutral-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -278,11 +281,16 @@
             ref="actionsMenuRef"
             class="fixed bg-white shadow-2xl rounded-xl border border-neutral-200 z-[2000] overflow-hidden ring-1 ring-black/5 backdrop-blur max-h-[70vh] min-w-[200px]"
             :style="menuStyle"
+            :id="actionsMenuId"
+            role="menu"
+            aria-label="Дополнительные действия с активом"
           >
             <div class="py-1">
               <button
+                ref="firstActionRef"
                 class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-neutral-800 hover:bg-neutral-50 text-left transition-colors"
                 @click.stop="handleAddTags"
+                role="menuitem"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 12h10M7 17h6" />
@@ -292,6 +300,7 @@
               <button
                 class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-neutral-800 hover:bg-neutral-50 text-left transition-colors"
                 @click.stop="handleMove"
+                role="menuitem"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16l-4-4-5 5" />
@@ -302,6 +311,7 @@
               <button
                 class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 text-left transition-colors"
                 @click.stop="handleDelete"
+                role="menuitem"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -313,7 +323,7 @@
         </Transition>
       </Teleport>
     </div>
-  </div>
+  </article>
 </template>
 
 <script setup lang="ts">
@@ -360,7 +370,6 @@ const emit = defineEmits<{
 }>()
 
 const isHovered = ref(false)
-const imageError = ref(false)
 const thumbnailRef = ref<HTMLElement | null>(null)
 const isDragging = ref(false)
 const favoritesStore = useFavoritesStore()
@@ -370,10 +379,12 @@ const blobObjectUrl = ref<string | null>(null)
 const showActionsMenu = ref(false)
 const moreBtnRef = ref<HTMLElement | null>(null)
 const actionsMenuRef = ref<HTMLElement | null>(null)
+const firstActionRef = ref<HTMLElement | null>(null)
 const menuStyle = ref<Record<string, string>>({})
 const isDownloading = ref(false)
 const assetStore = useAssetStore()
 const isHeartPulsing = ref(false)
+const actionsMenuId = `asset-actions-${Math.random().toString(36).slice(2, 9)}`
 
 // Intersection Observer for lazy loading
 const { hasIntersected } = useIntersectionObserver(thumbnailRef, {
@@ -400,6 +411,18 @@ const allTags = computed(() => {
 })
 
 const displayTags = computed(() => allTags.value.slice(0, 2))
+const rootAriaLabel = computed(() => {
+  const parts = [
+    `Актив ${props.asset.label || props.asset.filename || props.asset.id}`,
+    props.isSelected ? 'выбран' : 'не выбран'
+  ]
+
+  if (props.asset.mime_type) {
+    parts.push(`тип ${props.asset.mime_type}`)
+  }
+
+  return parts.join(', ')
+})
 
 // Determine image object-fit based on file type
 const imageObjectFitClass = computed(() => {
@@ -466,10 +489,6 @@ const cardClasses = computed(() => {
 
 const isFavorite = computed(() => favoritesStore.isFavorite(props.asset.id))
 
-function handleImageError() {
-  imageError.value = true
-}
-
 function isProtectedApiUrl(url?: string | null): boolean {
   if (!url) return false
   return url.includes('/api/v4/')
@@ -485,7 +504,6 @@ function revokeBlobUrl(): void {
 async function loadProtectedThumbnail(): Promise<void> {
   if (!shouldLoadImage.value || props.isLoading) return
 
-  imageError.value = false
   revokeBlobUrl()
   resolvedImageSrc.value = null
 
@@ -649,6 +667,7 @@ function handleShare() {
 function toggleActionsMenu() {
   if (showActionsMenu.value) {
     showActionsMenu.value = false
+    moreBtnRef.value?.focus()
     return
   }
   const btn = moreBtnRef.value
@@ -667,6 +686,9 @@ function toggleActionsMenu() {
     }
   }
   showActionsMenu.value = true
+  window.setTimeout(() => {
+    firstActionRef.value?.focus()
+  }, 0)
 }
 
 function handleAddTags() {
@@ -701,6 +723,7 @@ function handleGlobalClick(event: MouseEvent) {
 function handleGlobalEscape(event: KeyboardEvent) {
   if (event.key === 'Escape' && showActionsMenu.value) {
     showActionsMenu.value = false
+    moreBtnRef.value?.focus()
   }
 }
 

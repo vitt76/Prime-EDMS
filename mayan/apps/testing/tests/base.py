@@ -1,7 +1,17 @@
+from unittest import SkipTest
+
 from django.apps import apps
 from django.test import TestCase, TransactionTestCase, tag
 
-from django_test_migrations.contrib.unittest_case import MigratorTestCase
+try:
+    from django_test_migrations.contrib.unittest_case import MigratorTestCase
+except ImportError:  # pragma: no cover - exercised only in incomplete test images.
+    class MigratorTestCase(TransactionTestCase):
+        @classmethod
+        def setUpClass(cls):
+            raise SkipTest(
+                'django_test_migrations is not installed; migration-only tests are skipped.'
+            )
 
 from mayan.apps.acls.tests.mixins import ACLTestCaseMixin
 from mayan.apps.converter.tests.mixins import LayerTestCaseMixin

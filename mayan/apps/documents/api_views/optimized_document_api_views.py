@@ -198,6 +198,13 @@ class OptimizedAPIDocumentListView(generics.ListCreateAPIView):
             if tags:
                 queryset = queryset.filter(tags__label__in=tags).distinct()
 
+        # Processing / analysis status filter (CSV).
+        status_in = self.request.query_params.get('status__in')
+        if status_in:
+            statuses = [value.strip() for value in status_in.split(',') if value.strip()]
+            if statuses:
+                queryset = queryset.filter(ai_analysis__analysis_status__in=statuses).distinct()
+
         # Latest file size filter (bytes)
         size_gte = self.request.query_params.get('file_latest__size__gte')
         if size_gte:

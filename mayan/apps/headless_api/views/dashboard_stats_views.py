@@ -8,7 +8,6 @@ without requiring the frontend to guess filter parameters for the core REST API.
 import os
 from datetime import timedelta
 
-from django.contrib.auth import get_user_model
 from django.db.models import BigIntegerField, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -20,6 +19,7 @@ from rest_framework.views import APIView
 
 from mayan.apps.documents.models import Document
 from mayan.apps.documents.models.document_file_models import DocumentFile
+from mayan.apps.organizations.models import UserOrganizationRole
 
 
 class HeadlessDashboardStatsView(APIView):
@@ -46,13 +46,20 @@ class HeadlessDashboardStatsView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        organization = getattr(request, 'organization', None)
+        if not organization:
+            return Response(
+                {'error': 'organization_required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         now = timezone.now()
         window = timedelta(days=30)
         start_current = now - window
         start_prev = now - (window * 2)
 
         # Documents
-        documents_qs = Document.objects.all()
+        documents_qs = Document.valid.filter(organization=organization)
         documents_total = documents_qs.count()
         documents_last_30 = documents_qs.filter(datetime_created__gte=start_current).count()
         documents_prev_30 = documents_qs.filter(
@@ -71,11 +78,14 @@ class HeadlessDashboardStatsView(APIView):
             documents_growth_label = f'{sign}{documents_growth_percent:.0f}%'
 
         # Users
-        User = get_user_model()
-        users_total = User.objects.all().count()
-        users_active_total = User.objects.filter(is_active=True).count()
-        users_last_30 = User.objects.filter(date_joined__gte=start_current).count()
-        users_prev_30 = User.objects.filter(date_joined__gte=start_prev, date_joined__lt=start_current).count()
+        users_total = organization.members.count()
+        users_active_total = organization.members.filter(is_active=True).count()
+        user_roles_qs = UserOrganizationRole.objects.filter(organization=organization)
+        users_last_30 = user_roles_qs.filter(joined_at__gte=start_current).count()
+        users_prev_30 = user_roles_qs.filter(
+            joined_at__gte=start_prev,
+            joined_at__lt=start_current
+        ).count()
 
         users_growth_percent = None
         users_growth_label = '0%'
@@ -88,23 +98,28 @@ class HeadlessDashboardStatsView(APIView):
             users_growth_label = f'{sign}{users_growth_percent:.0f}%'
 
         # Storage (bytes)
-        # Use DB-stored file sizes (updated by Mayan) instead of listing S3 objects.
-        # This is fast and avoids O(N) S3 calls.
-        storage_used_bytes = DocumentFile.valid.aggregate(
+        storage_used_bytes = DocumentFile.valid.filter(
+            document__organization=organization
+        ).aggregate(
             total=Coalesce(Sum('size', output_field=BigIntegerField()), 0)
         )['total'] or 0
 
-        unknown_size_files_count = DocumentFile.valid.filter(size__isnull=True).count()
+        unknown_size_files_count = DocumentFile.valid.filter(
+            document__organization=organization,
+            size__isnull=True
+        ).count()
 
-        # Total bucket quota is not reliably discoverable via S3 API; allow config via env.
-        # If unset or invalid, return 0 (frontend will show "—" for percent).
         storage_total_bytes = 0
-        raw_total = os.environ.get('MADDAM_STORAGE_TOTAL_BYTES', '')
-        try:
-            if raw_total:
-                storage_total_bytes = int(raw_total)
-        except Exception:
-            storage_total_bytes = 0
+        limit_gb = getattr(organization, 'storage_limit_gb', None)
+        if limit_gb:
+            storage_total_bytes = int(limit_gb * 1024 * 1024 * 1024)
+        else:
+            raw_total = os.environ.get('MADDAM_STORAGE_TOTAL_BYTES', '')
+            try:
+                if raw_total:
+                    storage_total_bytes = int(raw_total)
+            except Exception:
+                storage_total_bytes = 0
 
         return Response(
             {

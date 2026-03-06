@@ -9,9 +9,7 @@ from .api_views import (
 )
 from mayan.apps.permissions.urls import api_urls as permissions_api_urls
 from mayan.apps.headless_api.views.config_views import HeadlessDocumentTypeConfigView
-from mayan.apps.headless_api.views.activity_views import (
-    DashboardActivityView, HeadlessActivityFeedView
-)
+from mayan.apps.headless_api.views.activity_views import HeadlessActivityFeedView
 from mayan.apps.headless_api.views.favorites_views import (
     HeadlessFavoriteListView, HeadlessFavoriteToggleView
 )
@@ -39,9 +37,15 @@ from mayan.apps.headless_api.views.potential_duplicates_views import (
 from mayan.apps.headless_api.views.conversion_views import HeadlessDocumentConvertView
 from mayan.apps.headless_api.views.dashboard_stats_views import HeadlessDashboardStatsView
 from mayan.apps.headless_api.views.auth_views import HeadlessAuthMeView
+from mayan.apps.headless_api.views.home_stats_views import (
+    HeadlessHomeAIStatsView,
+    HeadlessHomeDailyInsightsView,
+    HeadlessHomeDocumentsStatsView,
+    HeadlessHomeInboxStatsView,
+    HeadlessHomeStorageStatsView
+)
 from mayan.apps.headless_api.views.storage_views import HeadlessS3ConfigView, HeadlessS3StatsView
 from mayan.apps.headless_api.views.users_views import HeadlessUsersDetailView, HeadlessUsersListCreateView
-from mayan.apps.headless_api.views.admin_logs_views import HeadlessAdminLogsView
 from mayan.apps.headless_api.views.analytics_views import (
     AssetBankViewSet, CampaignPerformanceViewSet, SearchAnalyticsViewSet,
     ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet,
@@ -123,14 +127,29 @@ api_version_urls = [
         name='headless-activity-feed'
     ),
     url(
-        regex=r'^headless/admin/logs/$',
-        view=HeadlessAdminLogsView.as_view(),
-        name='headless-admin-logs'
+        regex=r'^headless/documents/stats/$',
+        view=HeadlessHomeDocumentsStatsView.as_view(),
+        name='headless-home-documents-stats'
     ),
     url(
-        regex=r'^headless/dashboard/activity/$',
-        view=DashboardActivityView.as_view(),
-        name='headless-dashboard-activity'
+        regex=r'^headless/documents/ai-stats/$',
+        view=HeadlessHomeAIStatsView.as_view(),
+        name='headless-home-ai-stats'
+    ),
+    url(
+        regex=r'^headless/user/inbox-stats/$',
+        view=HeadlessHomeInboxStatsView.as_view(),
+        name='headless-home-inbox-stats'
+    ),
+    url(
+        regex=r'^headless/organization/storage-stats/$',
+        view=HeadlessHomeStorageStatsView.as_view(),
+        name='headless-home-storage-stats'
+    ),
+    url(
+        regex=r'^headless/user/daily-insights/$',
+        view=HeadlessHomeDailyInsightsView.as_view(),
+        name='headless-home-daily-insights'
     ),
     url(
         regex=r'^headless/dashboard/stats/$',

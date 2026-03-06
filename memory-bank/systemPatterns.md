@@ -544,6 +544,38 @@ mayan/apps/dam/tests/
 - убирает массовые падения из-за jsdom/browser API gaps;
 - делает recovery тестового контура повторяемым.
 
+### 14. Headless Route Exposure Pattern
+
+**Назначение:** не допускать расхождения между существующими headless view и реально доступными live API маршрутами.
+
+**Паттерн:**
+- наличие view в `mayan/apps/headless_api/views/` и даже регистрация в `mayan/apps/headless_api/urls.py` не гарантирует, что SPA увидит endpoint;
+- все критичные SPA endpoints должны быть дополнительно проверены в live `mayan/apps/rest_api/urls.py`, если именно этот router обслуживает `/api/v4/headless/...` в Docker runtime;
+- для новых Home/Analytics endpoints acceptance criteria должны включать live HTTP smoke-check (`404` недопустим; ожидается хотя бы `401/403` без корректной авторизации/tenant context).
+
+**Почему это важно:**
+
+- frontend может быть "правильным", но падать из-за backend route exposure gap;
+- такие ошибки маскируются под "BFF недоступен", хотя фактически missing route находится внутри Django router wiring.
+
+### 15. Split WebSocket Endpoint Pattern
+
+**Назначение:** корректно настраивать frontend WebSocket clients в окружении, где API и ASGI/WebSocket обслуживаются разными портами/процессами.
+
+**Паттерн:**
+
+- нельзя слепо вычислять WebSocket URL из `VITE_API_URL` или `window.location.host`, если notifications/analytics WebSocket живет на отдельном Daphne сервисе;
+- frontend должен использовать явную конфигурацию `VITE_WS_URL` для production/dev split;
+- для текущего Docker dev topology:
+  - REST API: `http://localhost:8080`
+  - WebSocket ASGI: `ws://localhost:8001`
+- все hooks/services (`useWebSocket`, `websocketService`, analytics realtime clients) должны следовать одной общей константе и одной operational contract.
+
+**Почему это важно:**
+
+- иначе возникают ложные runtime ошибки подключения при полностью рабочем backend;
+- несогласованность между Gunicorn и Daphne портами особенно болезненна для notification center и analytics realtime flows.
+
 ## Миграции и версионирование
 
 ### Database Migrations

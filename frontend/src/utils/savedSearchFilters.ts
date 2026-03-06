@@ -29,11 +29,15 @@ export function buildSavedSearchFilters(filters: DamFiltersState): Record<string
   if (filters.tags?.length) {
     out['tags__label__in'] = filters.tags.join(',')
   }
+  if (filters.status?.length) {
+    out['status__in'] = filters.status.join(',')
+  }
   if (filters.dateFrom) out['datetime_created__gte'] = filters.dateFrom
   if (filters.dateTo) out['datetime_created__lte'] = filters.dateTo
   if (typeof filters.sizeMin === 'number') out['file_latest__size__gte'] = filters.sizeMin
   if (typeof filters.sizeMax === 'number') out['file_latest__size__lte'] = filters.sizeMax
   if (filters.orientation) out['orientation'] = filters.orientation
+  if (filters.favoritesOnly) out['favorites_only'] = 'true'
   if (typeof filters.owner === 'number') out['files__user_id'] = filters.owner
   return out
 }
@@ -53,6 +57,9 @@ export function parseSavedSearchFilters(
   if (typeof backend['tags__label__in'] === 'string') {
     f.tags = backend['tags__label__in'].split(',').map((s) => s.trim()).filter(Boolean)
   }
+  if (typeof backend['status__in'] === 'string') {
+    f.status = backend['status__in'].split(',').map((s) => s.trim()).filter(Boolean)
+  }
   if (Array.isArray(backend.document_type__label)) {
     f.type = backend.document_type__label.map(String)
   }
@@ -70,6 +77,11 @@ export function parseSavedSearchFilters(
       if (m.startsWith('application/')) return 'document'
       return m
     })
+  }
+  if (typeof backend['favorites_only'] === 'string') {
+    f.favoritesOnly = ['true', '1'].includes(backend['favorites_only'])
+  } else if (typeof backend['favorites_only'] === 'boolean') {
+    f.favoritesOnly = backend['favorites_only']
   }
   return f
 }

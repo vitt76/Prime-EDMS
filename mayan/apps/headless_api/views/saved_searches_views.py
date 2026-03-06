@@ -87,7 +87,6 @@ class SavedSearchDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_object(self, request, pk):
-        from mayan.apps.saved_searches.models import SavedSearch
         qs = _get_saved_search_queryset(request)
         return qs.filter(pk=pk).first()
 
@@ -128,7 +127,6 @@ class SavedSearchRunView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        from mayan.apps.saved_searches.models import SavedSearch
         organization = getattr(request, 'organization', None)
         if not organization:
             return Response(
@@ -144,6 +142,7 @@ class SavedSearchRunView(APIView):
             pass
         req = RequestAdapter()
         req.user = request.user
+        req.organization = organization
         req.query_params = _build_query_params_from_saved_search(saved)
 
         view = OptimizedAPIDocumentListView()
@@ -161,6 +160,7 @@ class SavedSearchRunView(APIView):
 
         page_size = min(int(request.query_params.get('page_size', 50) or 50), 100)
         page_size = max(1, page_size)
+        total_count = queryset.count()
         documents = list(queryset[:page_size])
         serializer = OptimizedDocumentListSerializer(
             documents,
@@ -169,5 +169,5 @@ class SavedSearchRunView(APIView):
         )
         return Response({
             'results': serializer.data,
-            'count': len(serializer.data),
+            'count': total_count,
         })

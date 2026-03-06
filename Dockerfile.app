@@ -1,5 +1,7 @@
 FROM mayanedms/mayanedms:s4.3
 
+COPY requirements /tmp/requirements
+
 # Установка системных зависимостей и Python-библиотек,
 # необходимых для кастомных приложений.
 RUN apt-get update && \
@@ -29,6 +31,7 @@ RUN apt-get update && \
         reportlab \
         "pydantic<2.0" \
         "typing-extensions<4.6" \
+        -r /tmp/requirements/testing-base.txt \
         yandexgptlite && \
     rm -rf /var/lib/apt/lists/*
 

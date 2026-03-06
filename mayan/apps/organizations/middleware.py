@@ -223,13 +223,13 @@ class TenantResolverMiddleware:
             from .models import Organization, UserOrganizationRole
 
             organization = Organization.objects.filter(
-                pk=org_id, is_active=True
+                pk=org_id
             ).first()
 
             if organization is None:
                 logger.warning(
-                    'X-Organization-Id header references non-existent or '
-                    'inactive organization: %s', org_id
+                    'X-Organization-Id header references non-existent '
+                    'organization: %s', org_id
                 )
                 return None
 
@@ -301,8 +301,7 @@ class TenantResolverMiddleware:
             from .models import Organization
 
             return Organization.objects.get(
-                slug=subdomain,
-                is_active=True
+                slug=subdomain
             )
         except Organization.DoesNotExist:
             return None

@@ -1,148 +1,195 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { ref, nextTick } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
+import { mount } from '@vue/test-utils'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 
 describe('useFocusTrap', () => {
-  let container: HTMLElement
-  let button1: HTMLButtonElement
-  let button2: HTMLButtonElement
-  let input: HTMLInputElement
+  async function flushFocus() {
+    await nextTick()
+    await nextTick()
+  }
+
+  function mountHarness(options?: { active?: boolean; autofocus?: boolean }) {
+    const Harness = defineComponent({
+      props: {
+        active: {
+          type: Boolean,
+          default: true
+        },
+        autofocus: {
+          type: Boolean,
+          default: false
+        }
+      },
+      setup(props, { expose }) {
+        const containerRef = ref<HTMLElement | null>(null)
+        const activeRef = ref(props.active)
+        const { activate, deactivate } = useFocusTrap(containerRef, activeRef)
+
+        expose({ activate, deactivate, activeRef })
+
+        return () =>
+          h('div', { ref: containerRef }, [
+            h('button', 'Button 1'),
+            h('input', { type: 'text', ...(props.autofocus ? { 'data-autofocus': '' } : {}) }),
+            h('button', 'Button 2')
+          ])
+      }
+    })
+
+    return mount(Harness, {
+      props: {
+        active: options?.active ?? true,
+        autofocus: options?.autofocus ?? false
+      },
+      attachTo: document.body
+    })
+  }
 
   beforeEach(() => {
-    container = document.createElement('div')
-    button1 = document.createElement('button')
-    button1.textContent = 'Button 1'
-    button2 = document.createElement('button')
-    button2.textContent = 'Button 2'
-    input = document.createElement('input')
-    input.type = 'text'
-
-    container.appendChild(button1)
-    container.appendChild(input)
-    container.appendChild(button2)
-    document.body.appendChild(container)
+    document.body.innerHTML = ''
   })
 
   afterEach(() => {
-    document.body.removeChild(container)
+    document.body.innerHTML = ''
   })
 
   it('traps focus within container when active', async () => {
-    const targetRef = ref<HTMLElement | null>(container)
-    const isActive = ref(true)
-
-    useFocusTrap(targetRef, isActive)
-
-    await nextTick()
+    const wrapper = mountHarness()
+    await flushFocus()
 
     // Focus should be on first element
+    const button1 = wrapper.findAll('button')[0]?.element
     expect(document.activeElement).toBe(button1)
   })
 
   it('cycles focus from last to first element on Tab', async () => {
-    const targetRef = ref<HTMLElement | null>(container)
-    const isActive = ref(true)
-
-    useFocusTrap(targetRef, isActive)
-
-    await nextTick()
+    const wrapper = mountHarness()
+    await flushFocus()
+    const buttons = wrapper.findAll('button')
+    const button1 = buttons[0]?.element as HTMLButtonElement
+    const button2 = buttons[1]?.element as HTMLButtonElement
 
     // Focus last element
     button2.focus()
     expect(document.activeElement).toBe(button2)
 
     // Press Tab
-    const tabEvent = new KeyboardEvent('keydown', {
+    document.dispatchEvent(new KeyboardEvent('keydown', {
       key: 'Tab',
       bubbles: true
-    })
-    button2.dispatchEvent(tabEvent)
+    }))
 
     // Should cycle to first element
-    await nextTick()
+    await flushFocus()
     expect(document.activeElement).toBe(button1)
   })
 
   it('cycles focus from first to last element on Shift+Tab', async () => {
-    const targetRef = ref<HTMLElement | null>(container)
-    const isActive = ref(true)
-
-    useFocusTrap(targetRef, isActive)
-
-    await nextTick()
+    const wrapper = mountHarness()
+    await flushFocus()
+    const buttons = wrapper.findAll('button')
+    const button1 = buttons[0]?.element as HTMLButtonElement
+    const button2 = buttons[1]?.element as HTMLButtonElement
 
     // Focus first element
     button1.focus()
     expect(document.activeElement).toBe(button1)
 
     // Press Shift+Tab
-    const shiftTabEvent = new KeyboardEvent('keydown', {
+    document.dispatchEvent(new KeyboardEvent('keydown', {
       key: 'Tab',
       shiftKey: true,
       bubbles: true
-    })
-    button1.dispatchEvent(shiftTabEvent)
+    }))
 
     // Should cycle to last element
-    await nextTick()
+    await flushFocus()
     expect(document.activeElement).toBe(button2)
   })
 
   it('does not trap focus when inactive', async () => {
-    const targetRef = ref<HTMLElement | null>(container)
-    const isActive = ref(false)
-
-    useFocusTrap(targetRef, isActive)
-
-    await nextTick()
+    mountHarness({ active: false })
+    await flushFocus()
 
     // Focus should not be trapped
-    expect(document.activeElement).not.toBe(button1)
+    expect(document.activeElement).toBe(document.body)
   })
 
   it('updates tabbable elements when active state changes', async () => {
-    const targetRef = ref<HTMLElement | null>(container)
-    const isActive = ref(false)
-
-    const { activate } = useFocusTrap(targetRef, isActive)
-
-    await nextTick()
+    const wrapper = mountHarness({ active: false })
+    await flushFocus()
 
     // Activate trap
-    activate()
-    await nextTick()
+    ;(wrapper.vm as unknown as { activate: () => void }).activate()
+    await flushFocus()
 
+    const button1 = wrapper.findAll('button')[0]?.element
     expect(document.activeElement).toBe(button1)
   })
 
+  it('restores focus to the previously active element on deactivate', async () => {
+    const trigger = document.createElement('button')
+    trigger.textContent = 'Trigger'
+    document.body.appendChild(trigger)
+    trigger.focus()
+
+    const wrapper = mountHarness()
+    await flushFocus()
+    const button1 = wrapper.findAll('button')[0]?.element
+    expect(document.activeElement).toBe(button1)
+
+    ;(wrapper.vm as unknown as { deactivate: () => void }).deactivate()
+    expect(document.activeElement).toBe(trigger)
+
+    document.body.removeChild(trigger)
+  })
+
+  it('prefers data-autofocus elements when activating', async () => {
+    const wrapper = mountHarness({ autofocus: true })
+    await flushFocus()
+
+    const input = wrapper.find('input').element
+    expect(document.activeElement).toBe(input)
+  })
+
   it('handles empty container gracefully', async () => {
-    const emptyContainer = document.createElement('div')
-    const targetRef = ref<HTMLElement | null>(emptyContainer)
-    const isActive = ref(true)
+    const Harness = defineComponent({
+      setup() {
+        const containerRef = ref<HTMLElement | null>(null)
+        const activeRef = ref(true)
+        useFocusTrap(containerRef, activeRef)
+        return () => h('div', { ref: containerRef })
+      }
+    })
 
     // Should not throw
     expect(() => {
-      useFocusTrap(targetRef, isActive)
+      mount(Harness, { attachTo: document.body })
     }).not.toThrow()
   })
 
   it('ignores disabled elements', async () => {
-    const disabledButton = document.createElement('button')
-    disabledButton.disabled = true
-    disabledButton.textContent = 'Disabled'
-    container.appendChild(disabledButton)
+    const Harness = defineComponent({
+      setup() {
+        const containerRef = ref<HTMLElement | null>(null)
+        const activeRef = ref(true)
+        useFocusTrap(containerRef, activeRef)
+        return () =>
+          h('div', { ref: containerRef }, [
+            h('button', { disabled: true }, 'Disabled'),
+            h('button', 'Enabled')
+          ])
+      }
+    })
 
-    const targetRef = ref<HTMLElement | null>(container)
-    const isActive = ref(true)
-
-    useFocusTrap(targetRef, isActive)
-
-    await nextTick()
+    const wrapper = mount(Harness, { attachTo: document.body })
+    await flushFocus()
 
     // Disabled button should not be in tabbable elements
-    const tabbableElements = Array.from(container.querySelectorAll('button, input'))
+    const tabbableElements = Array.from(wrapper.element.querySelectorAll('button, input'))
       .filter((el) => !(el as HTMLElement).hasAttribute('disabled'))
-    
-    expect(tabbableElements).not.toContain(disabledButton)
+
+    expect(tabbableElements).toHaveLength(1)
   })
 })

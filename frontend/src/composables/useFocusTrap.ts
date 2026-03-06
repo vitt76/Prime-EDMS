@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, Ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, Ref } from 'vue'
 
 /**
  * Focus trap composable for modals and dialogs
@@ -24,7 +24,12 @@ export function useFocusTrap(elementRef: Ref<HTMLElement | null>, isActive: Ref<
     ).filter((el) => {
       // Filter out hidden elements
       const style = window.getComputedStyle(el)
-      return style.display !== 'none' && style.visibility !== 'hidden'
+      return (
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        !el.hasAttribute('disabled') &&
+        el.getAttribute('aria-hidden') !== 'true'
+      )
     })
   }
 
@@ -63,16 +68,26 @@ export function useFocusTrap(elementRef: Ref<HTMLElement | null>, isActive: Ref<
     if (!elementRef.value) return
 
     // Store current active element
-    previousActiveElement = document.activeElement as HTMLElement
+    previousActiveElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
 
-    // Focus first focusable element
-    const focusableElements = getFocusableElements()
-    if (focusableElements.length > 0 && focusableElements[0]) {
-      focusableElements[0].focus()
-    } else {
-      // If no focusable elements, focus the container
-      elementRef.value.focus()
-    }
+    void nextTick(() => {
+      if (!elementRef.value) return
+
+      const autofocusTarget = elementRef.value.querySelector<HTMLElement>('[data-autofocus]')
+      if (autofocusTarget) {
+        autofocusTarget.focus()
+      } else {
+        const focusableElements = getFocusableElements()
+        if (focusableElements.length > 0 && focusableElements[0]) {
+          focusableElements[0].focus()
+        } else {
+          // If no focusable elements, focus the container
+          elementRef.value.focus()
+        }
+      }
+    })
 
     // Add event listener
     document.addEventListener('keydown', trapFocus)
@@ -83,7 +98,11 @@ export function useFocusTrap(elementRef: Ref<HTMLElement | null>, isActive: Ref<
     document.removeEventListener('keydown', trapFocus)
 
     // Restore previous focus
-    if (previousActiveElement && previousActiveElement instanceof HTMLElement) {
+    if (
+      previousActiveElement &&
+      previousActiveElement instanceof HTMLElement &&
+      document.contains(previousActiveElement)
+    ) {
       previousActiveElement.focus()
     }
   }

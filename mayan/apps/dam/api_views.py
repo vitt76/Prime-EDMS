@@ -16,6 +16,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from mayan.apps.documents.models import Document
 from mayan.apps.documents.permissions import permission_document_view
+from mayan.apps.organizations.managers import get_current_organization
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.document_comments.models import Comment
 from mayan.apps.rest_api import generics as mayan_generics
@@ -54,21 +55,38 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
     permission_classes = (IsAuthenticated,)
     throttle_classes = (AIAnalysisThrottle,)
 
+    def _get_request_organization(self):
+        return getattr(self.request, 'organization', None) or get_current_organization()
+
+    def get_queryset(self):
+        queryset = self.queryset.order_by('-created')
+        organization = self._get_request_organization()
+
+        if organization is not None:
+            queryset = queryset.filter(organization=organization)
+        return queryset
+
     def get_document(self, document_id):
+        organization = self._get_request_organization()
+        queryset = Document.valid.all()
+
+        if organization is not None:
+            queryset = queryset.filter(organization=organization)
+
+        queryset = AccessControlList.objects.restrict_queryset(
+            permission=permission_document_view,
+            queryset=queryset,
+            user=self.request.user
+        )
+
         try:
-            document = Document.objects.get(pk=document_id)
+            document = queryset.get(pk=document_id)
         except Document.DoesNotExist:
             logger.warning(
                 'Document not found during AI analysis operation',
                 extra={'user_id': self.request.user.id, 'document_id': document_id}
             )
             raise
-
-        AccessControlList.objects.check_access(
-            obj=document,
-            permissions=(permission_document_view,),
-            user=self.request.user
-        )
 
         return document
 
@@ -106,6 +124,8 @@ class DocumentAIAnalysisViewSet(ModelViewSet):
             return str(organization_id)
 
         request_organization = getattr(self.request, 'organization', None)
+        if request_organization is None:
+            request_organization = get_current_organization()
         if request_organization is not None:
             return str(request_organization.pk)
 

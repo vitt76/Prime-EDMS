@@ -2,7 +2,7 @@
   <div ref="gridContainerRef" class="asset-grid-container">
     <div
       :class="gridClasses"
-      role="grid"
+      role="list"
       :aria-label="`Галерея активов (${density} density)`"
     >
       <template v-for="(asset, index) in visibleAssets" :key="asset.id">
@@ -11,6 +11,7 @@
           :data-asset-id="asset.id"
           :data-index="index"
           class="asset-grid-item"
+          role="listitem"
         >
           <AssetCard
             v-if="observedSet.has(asset.id)"
@@ -45,6 +46,7 @@
       v-if="hasMore"
       ref="sentinelRef"
       class="w-full h-12 flex items-center justify-center"
+      aria-live="polite"
     >
       <div
         v-if="isLoadingMore"

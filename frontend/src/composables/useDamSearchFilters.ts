@@ -345,6 +345,7 @@ export function useDamSearchFilters() {
     state.filters.sizeMax = parsed.sizeMax
     state.filters.owner = parsed.owner
     state.filters.orientation = parsed.orientation
+    state.filters.favoritesOnly = parsed.favoritesOnly ?? false
     ensureDamRoute()
     fetchNow()
   }

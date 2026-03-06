@@ -10,7 +10,7 @@ from django.http import JsonResponse
 
 from .views.password_views import HeadlessPasswordChangeView
 from .views.config_views import HeadlessDocumentTypeConfigView
-from .views.activity_views import DashboardActivityView, HeadlessActivityFeedView
+from .views.activity_views import HeadlessActivityFeedView
 from .views.favorites_views import HeadlessFavoriteListView, HeadlessFavoriteToggleView
 from .views.my_uploads_views import HeadlessMyUploadsView
 from .views.recently_viewed_views import RecentlyViewedDocumentListView
@@ -36,7 +36,6 @@ from .views.home_stats_views import (
     HeadlessHomeDailyInsightsView,
 )
 from .views.task_status_views import HeadlessTaskStatusView
-from .views.admin_logs_views import HeadlessAdminLogsView
 from .views.audit_log_views import (
     AuditLogListView, AuditLogExportView, DocumentActivityListView
 )
@@ -121,11 +120,6 @@ api_urls = [
         name='api-activity-feed'
     ),
     url(
-        regex=r'^admin/logs/$',
-        view=HeadlessAdminLogsView.as_view(),
-        name='api-admin-logs'
-    ),
-    url(
         regex=r'^audit-logs/$',
         view=AuditLogListView.as_view(),
         name='api-audit-logs-list'
@@ -134,11 +128,6 @@ api_urls = [
         regex=r'^audit-logs/export/$',
         view=AuditLogExportView.as_view(),
         name='api-audit-logs-export'
-    ),
-    url(
-        regex=r'^dashboard/activity/$',
-        view=DashboardActivityView.as_view(),
-        name='api-dashboard-activity'
     ),
     url(
         regex=r'^dashboard/stats/$',

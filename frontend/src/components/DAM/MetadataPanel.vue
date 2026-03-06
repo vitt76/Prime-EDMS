@@ -30,11 +30,12 @@
                bg-white dark:bg-neutral-900 border-l border-neutral-200 dark:border-neutral-700
                shadow-2xl overflow-y-auto flex flex-col"
         role="dialog"
-        aria-label="Метаданные"
+        aria-modal="true"
+        aria-labelledby="metadata-panel-title"
         @click.stop
       >
         <div class="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
-          <h2 class="text-lg font-semibold text-neutral-900 dark:text-white truncate pr-2">
+          <h2 id="metadata-panel-title" class="text-lg font-semibold text-neutral-900 dark:text-white truncate pr-2">
             Метаданные{{ asset?.label ? ` — ${asset.label.slice(0, 30)}${asset.label.length > 30 ? '…' : ''}` : '' }}
           </h2>
           <button
@@ -42,6 +43,7 @@
             class="p-2 rounded-lg text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
             @click="emit('close')"
             aria-label="Закрыть"
+            data-autofocus
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -174,7 +176,7 @@ const { activate: activateFocusTrap, deactivate: deactivateFocusTrap } = useFocu
 
 watch(
   () => props.open && !!props.asset,
-  (active) => {
+  (active, _previous, onCleanup) => {
     isFocusTrapActive.value = active
     if (active) {
       nextTick(() => activateFocusTrap())
@@ -182,10 +184,10 @@ watch(
         if (e.key === 'Escape') emit('close')
       }
       document.addEventListener('keydown', onEscape)
-      return () => {
+      onCleanup(() => {
         document.removeEventListener('keydown', onEscape)
         deactivateFocusTrap()
-      }
+      })
     } else {
       deactivateFocusTrap()
     }

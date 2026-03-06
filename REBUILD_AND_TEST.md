@@ -49,6 +49,20 @@ docker-compose restart app
 
 ## Запуск тестов в Docker
 
+### Backend tenant/DAM regression suite
+
+```powershell
+# Пересобрать app image, чтобы в контейнер попали backend test dependencies
+docker-compose build app
+
+# Перезапустить app контейнер на новом образе
+docker-compose up -d app
+
+# Прогнать ключевые tenant/DAM smoke suites
+docker-compose exec app /opt/mayan-edms/bin/python manage.py test mayan.apps.organizations.tests.test_middleware --settings=mayan.settings.testing --skip-migrations
+docker-compose exec app /opt/mayan-edms/bin/python manage.py test mayan.apps.dam.tests.test_tenant_isolation --settings=mayan.settings.testing --skip-migrations
+```
+
 ### Запуск unit-тестов для кеширования
 
 ```powershell

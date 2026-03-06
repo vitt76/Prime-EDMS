@@ -20,8 +20,6 @@ from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document
 from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.events.models import Action
-from mayan.apps.headless_api.serializers import ActivityFeedSerializer
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -508,97 +506,3 @@ class HeadlessActivityFeedView(APIView):
             }
         return _('%(actor)s %(verb)s') % {'actor': actor_name, 'verb': verb_ru}
 
-
-class DashboardActivityView(HeadlessActivityFeedView):
-    """
-    Lightweight activity feed for dashboard widget.
-
-    Endpoint: GET /api/v4/headless/dashboard/activity/
-    Returns last N events (default 20, max 50) in flattened format.
-    """
-
-    authentication_classes = [SessionAuthentication, TokenAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    # Class-level cache for ContentType objects
-    _document_ct = None
-
-    @classmethod
-    def _get_document_content_type(cls):
-        """
-        Get or cache Document ContentType for performance.
-        """
-        if cls._document_ct is None:
-            cls._document_ct = ContentType.objects.get_for_model(Document)
-        return cls._document_ct
-
-    def _prefetch_documents_for_actions(self, actions):
-        """
-        Batch prefetch Document objects referenced in actions to avoid N+1 queries.
-        
-        Returns a dictionary mapping document_id -> Document instance.
-        """
-        document_ids = set()
-        document_ct = self._get_document_content_type()
-
-        for action in actions:
-            if action.target_content_type == document_ct and action.target_object_id:
-                document_ids.add(action.target_object_id)
-            if action.action_object_content_type == document_ct and action.action_object_object_id:
-                document_ids.add(action.action_object_object_id)
-
-        prefetched_documents = {}
-        if document_ids:
-            # Use only() to minimize data transfer and prefetch related objects
-            documents = Document.objects.filter(pk__in=document_ids).only(
-                'id', 'label', 'uuid', 'datetime_created'
-            ).prefetch_related('files', 'versions__version_pages')
-            prefetched_documents = {doc.pk: doc for doc in documents}
-
-        return prefetched_documents
-
-    def get(self, request):
-        try:
-            organization = _get_request_organization(request)
-            if not organization:
-                return Response(
-                    {'error': _('Organization required'), 'error_code': 'ORG_REQUIRED'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            limit = min(int(request.query_params.get('limit', 20)), 50)
-            allowed_document_ids = self._get_allowed_document_ids(
-                organization=organization, user=request.user
-            )
-            queryset = self._get_organization_scoped_queryset(
-                organization=organization, allowed_document_ids=allowed_document_ids
-            )[:limit]
-
-            # Convert queryset to list for prefetching
-            actions_list = list(queryset)
-            
-            # Batch prefetch Document objects to avoid N+1 queries
-            prefetched_documents = self._prefetch_documents_for_actions(
-                actions=actions_list, organization=organization
-            )
-
-            serializer = ActivityFeedSerializer(
-                actions_list, 
-                many=True,
-                context={'prefetched_documents': prefetched_documents}
-            )
-            return Response(serializer.data)
-
-        except Exception as exc:
-            logger.error(
-                'Error retrieving dashboard activity feed for %s: %s',
-                request.user.username,
-                exc
-            )
-            return Response(
-                {
-                    'error': _('Error retrieving activity feed'),
-                    'error_code': 'INTERNAL_ERROR'
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )

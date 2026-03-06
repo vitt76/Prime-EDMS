@@ -4,7 +4,6 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from mayan.apps.acls.tests.mixins import ACLTestCaseMixin
 from mayan.apps.documents.models import Document
 from mayan.apps.documents.permissions import permission_document_view
 from mayan.apps.documents.tests.mixins.document_mixins import DocumentTestMixin
@@ -25,7 +24,7 @@ class DocumentAIAnalysisTenantIsolationTestCase(DocumentTestMixin, TestCase):
     """
 
     auto_create_test_document_type = True
-    auto_upload_test_document = True
+    auto_upload_test_document = False
 
     def setUp(self):
         super().setUp()
@@ -40,14 +39,23 @@ class DocumentAIAnalysisTenantIsolationTestCase(DocumentTestMixin, TestCase):
             email='tenant-b@example.com'
         )
 
-        self.document_a = self._test_document
-        self.document_a.organization = self.organization_a
-        self.document_a.save(update_fields=['organization'])
+        with patch(
+            'mayan.apps.dam.signals.should_trigger_analysis',
+            return_value=(False, 'disabled for tenant isolation tests')
+        ):
+            token = set_current_organization(self.organization_a)
+            try:
+                self._upload_test_document()
+                self.document_a = self._test_document
+            finally:
+                clear_current_organization(token)
 
-        self._upload_test_document(label='tenant-b-document')
-        self.document_b = self._test_document
-        self.document_b.organization = self.organization_b
-        self.document_b.save(update_fields=['organization'])
+            token = set_current_organization(self.organization_b)
+            try:
+                self._upload_test_document(label='tenant-b-document')
+                self.document_b = self._test_document
+            finally:
+                clear_current_organization(token)
 
         self.analysis_a = DocumentAIAnalysis.objects_unfiltered.create(
             document=self.document_a,
@@ -73,9 +81,19 @@ class DocumentAIAnalysisTenantIsolationTestCase(DocumentTestMixin, TestCase):
         self.assertNotIn(self.analysis_b.pk, ids)
 
     def test_ai_analysis_organization_auto_bound_from_document(self):
+        with patch(
+            'mayan.apps.dam.signals.should_trigger_analysis',
+            return_value=(False, 'disabled for tenant isolation tests')
+        ):
+            token = set_current_organization(self.organization_a)
+            try:
+                self._upload_test_document(label='tenant-a-document-extra')
+                extra_document = self._test_document
+            finally:
+                clear_current_organization(token)
+
         analysis = DocumentAIAnalysis.objects_unfiltered.create(
-            document=self.document_a,
-            analysis_status='pending'
+            document=extra_document, analysis_status='pending'
         )
         self.assertEqual(analysis.organization_id, self.organization_a.pk)
 
@@ -103,21 +121,19 @@ class DocumentAIAnalysisTenantIsolationTestCase(DocumentTestMixin, TestCase):
             clear_current_organization(token)
 
 
-class DocumentAIAnalysisTenantApiTestCase(
-    ACLTestCaseMixin, DocumentTestMixin, BaseAPITestCase
-):
+class DocumentAIAnalysisTenantApiTestCase(DocumentTestMixin, BaseAPITestCase):
     """
     API-level tenant filtering checks using X-Organization-Id.
     """
 
     auto_create_test_document_type = True
-    auto_upload_test_document = True
+    auto_upload_test_document = False
     auto_create_test_role = True
 
     def setUp(self):
         super().setUp()
         self.client = APIClient()
-        self.client.force_authenticate(user=self._test_case_user)
+        self.client.force_login(self._test_case_user)
 
         self.organization_a = Organization.objects.create(
             name='API Tenant A',
@@ -141,17 +157,32 @@ class DocumentAIAnalysisTenantApiTestCase(
             role='member'
         )
 
-        self.document_a = self._test_document
-        self.document_a.organization = self.organization_a
-        self.document_a.save(update_fields=['organization'])
+        with patch(
+            'mayan.apps.dam.signals.should_trigger_analysis',
+            return_value=(False, 'disabled for tenant isolation tests')
+        ):
+            token = set_current_organization(self.organization_a)
+            try:
+                self._upload_test_document(_user=self._test_case_user)
+                self.document_a = self._test_document
+            finally:
+                clear_current_organization(token)
         self.grant_access(
             obj=self.document_a, permission=permission_document_view
         )
 
-        self._upload_test_document(label='api-tenant-b-document')
-        self.document_b = self._test_document
-        self.document_b.organization = self.organization_b
-        self.document_b.save(update_fields=['organization'])
+        with patch(
+            'mayan.apps.dam.signals.should_trigger_analysis',
+            return_value=(False, 'disabled for tenant isolation tests')
+        ):
+            token = set_current_organization(self.organization_b)
+            try:
+                self._upload_test_document(
+                    label='api-tenant-b-document', _user=self._test_case_user
+                )
+                self.document_b = self._test_document
+            finally:
+                clear_current_organization(token)
         self.grant_access(
             obj=self.document_b, permission=permission_document_view
         )
@@ -169,9 +200,10 @@ class DocumentAIAnalysisTenantApiTestCase(
             ai_tags=['b']
         )
 
+    @patch('mayan.apps.organizations.middleware.DEPLOYMENT_MODE', 'SAAS')
     def test_ai_analysis_list_filtered_by_header_organization(self):
         response = self.client.get(
-            '/api/dam/ai-analysis/',
+            '/api/v4/ai-analysis/',
             HTTP_X_ORGANIZATION_ID=str(self.organization_a.pk)
         )
 
@@ -185,13 +217,14 @@ class DocumentAIAnalysisTenantApiTestCase(
             str(results[0]['organization']), str(self.organization_a.pk)
         )
 
+    @patch('mayan.apps.organizations.middleware.DEPLOYMENT_MODE', 'SAAS')
     def test_ai_analysis_detail_cross_tenant_returns_404(self):
         """With X-Organization-Id for org A, GET analysis of org B by id returns 404."""
         analysis_b = DocumentAIAnalysis.objects_unfiltered.get(
             document=self.document_b
         )
         response = self.client.get(
-            f'/api/dam/ai-analysis/{analysis_b.pk}/',
+            f'/api/v4/ai-analysis/{analysis_b.pk}/',
             HTTP_X_ORGANIZATION_ID=str(self.organization_a.pk),
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
@@ -203,7 +236,7 @@ class DocumentAIAnalysisTenantTaskTestCase(DocumentTestMixin, TestCase):
     """
 
     auto_create_test_document_type = True
-    auto_upload_test_document = True
+    auto_upload_test_document = False
 
     def setUp(self):
         super().setUp()
@@ -212,9 +245,16 @@ class DocumentAIAnalysisTenantTaskTestCase(DocumentTestMixin, TestCase):
             slug='task-tenant',
             email='task-tenant@example.com'
         )
-        self.document = self._test_document
-        self.document.organization = self.organization
-        self.document.save(update_fields=['organization'])
+        with patch(
+            'mayan.apps.dam.signals.should_trigger_analysis',
+            return_value=(False, 'disabled for tenant isolation tests')
+        ):
+            token = set_current_organization(self.organization)
+            try:
+                self._upload_test_document()
+                self.document = self._test_document
+            finally:
+                clear_current_organization(token)
 
     @patch('mayan.apps.dam.tasks.reindex_document_assets')
     @patch('mayan.apps.dam.tasks.update_document_metadata_from_ai')

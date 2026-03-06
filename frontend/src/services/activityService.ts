@@ -91,13 +91,6 @@ function mapHeadlessToActivityItem(item: HeadlessActivityItem): ActivityItem {
   }
 }
 
-export async function getDashboardActivity(
-  limit = 20
-): Promise<DashboardActivityItem[]> {
-  const url = `/api/v4/headless/dashboard/activity/?limit=${limit}`
-  return apiService.get<DashboardActivityItem[]>(url)
-}
-
 /**
  * Get dashboard activity normalized for display
  * Automatically determines user role and applies appropriate filters

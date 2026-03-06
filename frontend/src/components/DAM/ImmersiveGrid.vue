@@ -3,7 +3,7 @@
     <div
       ref="scrollRef"
       class="immersive-grid-scroll"
-      role="grid"
+      role="list"
       :aria-label="`Галерея активов (${density} density, виртуальная прокрутка)`"
       @scroll="onScroll"
       @mousedown="onGridMouseDown"
@@ -46,6 +46,7 @@
               v-if="getAssetAtIndex(row.index * columns + (colIdx - 1))"
               :data-global-index="row.index * columns + (colIdx - 1)"
               class="immersive-grid-cell"
+              role="listitem"
               @mousedown="onCellMouseDown($event, row.index * columns + (colIdx - 1))"
             >
               <AssetCard
@@ -70,6 +71,7 @@
             <div
               v-else-if="row.index * columns + (colIdx - 1) < assets.length || (hasMore && isLoadingMore)"
               class="immersive-grid-cell"
+              role="listitem"
             >
               <AssetCardSkeleton :density="density" />
             </div>
@@ -81,6 +83,7 @@
         v-if="hasMore"
         ref="sentinelRef"
         class="w-full h-12 flex items-center justify-center flex-shrink-0"
+        aria-live="polite"
       >
         <div
           v-if="isLoadingMore"

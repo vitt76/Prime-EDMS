@@ -197,11 +197,12 @@ type ActivityTarget = {
 type ActivityLogEntry = {
   id: number
   datetime: string
-  actor: ActivityActor
+  actor: ActivityActor | null
   verb_code: string
   verb: string
   target?: ActivityTarget | null
   description: string
+  metadata?: Record<string, unknown>
 }
 
 type ActivityFeedResponse = {
@@ -212,11 +213,12 @@ type ActivityFeedResponse = {
   results: Array<{
     id: number
     timestamp: string
-    actor: ActivityActor
-    verb: string
-    verb_code: string
-    target?: ActivityTarget | null
-    description: string
+    user_id: number | null
+    username: string | null
+    event_type: string
+    document_id: number | null
+    channel: string
+    metadata?: Record<string, unknown>
   }>
 }
 
@@ -227,15 +229,11 @@ async function loadLogs(page = 1): Promise<void> {
   loadError.value = ''
   try {
     const data = await apiService.get<ActivityFeedResponse>(
-      '/api/v4/headless/admin/logs/',
+      '/api/v4/headless/audit-logs/',
       {
         params: {
           page,
-          page_size: pageSize.value,
-          // Default (toggle OFF): show only meaningful events and hide system noise.
-          // Toggle ON: show everything (including system/technical events).
-          important: showSystemEvents.value ? 0 : 1,
-          system: showSystemEvents.value ? 1 : 0
+          page_size: pageSize.value
         }
       } as any,
       false
@@ -247,11 +245,25 @@ async function loadLogs(page = 1): Promise<void> {
     logs.value = (data.results || []).map((r) => ({
       id: r.id,
       datetime: r.timestamp,
-      actor: r.actor,
-      verb: r.verb,
-      verb_code: r.verb_code,
-      target: r.target || null,
-      description: r.description
+      actor: r.username
+        ? {
+            id: r.user_id,
+            username: r.username,
+            full_name: r.username
+          }
+        : null,
+      verb: formatEventType(r.event_type),
+      verb_code: r.event_type,
+      target: r.document_id
+        ? {
+            id: r.document_id,
+            type: 'document',
+            label: `Документ #${r.document_id}`,
+            url: null
+          }
+        : null,
+      description: buildLogDescription(r),
+      metadata: r.metadata || {}
     }))
   } catch (err) {
     console.warn('[AdminLogs] Failed to load activity logs', err)
@@ -262,7 +274,7 @@ async function loadLogs(page = 1): Promise<void> {
     if (status === 401 || status === 403) {
       loadError.value = 'Недостаточно прав для просмотра системных логов.'
     } else if (status === 404) {
-      loadError.value = 'Endpoint системных логов недоступен (404). Проверьте, что бэкенд перезапущен и URL зарегистрирован.'
+      loadError.value = 'Endpoint аудита недоступен (404). Проверьте, что бэкенд перезапущен и URL зарегистрирован.'
     } else {
       loadError.value = 'Ошибка загрузки логов.'
     }
@@ -311,6 +323,39 @@ function formatDateTime(iso: string): string {
 
 function showLogDetail(log: ActivityLogEntry): void {
   selectedLog.value = log
+}
+
+function formatEventType(eventType: string | null | undefined): string {
+  const normalized = String(eventType || '').trim()
+  if (!normalized) {
+    return 'Событие'
+  }
+
+  const mapping: Record<string, string> = {
+    upload: 'Загрузка',
+    view: 'Просмотр',
+    download: 'Скачивание',
+    share: 'Публикация',
+    collection_share: 'Публикация коллекции',
+    deliver: 'Доставка',
+    email_click: 'Переход по ссылке'
+  }
+
+  return mapping[normalized] || normalized.replaceAll('_', ' ')
+}
+
+function buildLogDescription(entry: ActivityFeedResponse['results'][number]): string {
+  const parts = [formatEventType(entry.event_type)]
+
+  if (entry.document_id) {
+    parts.push(`документ #${entry.document_id}`)
+  }
+
+  if (entry.channel) {
+    parts.push(`канал: ${entry.channel}`)
+  }
+
+  return parts.join(' • ')
 }
 
 watch(pageSize, () => loadLogs(1))

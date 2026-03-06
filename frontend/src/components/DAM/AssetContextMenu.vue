@@ -2,6 +2,7 @@
   <Teleport to="body">
     <div
       v-if="open && asset"
+      ref="menuRef"
       class="fixed z-[1000] min-w-[180px] py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg"
       :style="{ left: `${x}px`, top: `${y}px` }"
       role="menu"
@@ -11,6 +12,7 @@
         type="button"
         class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
         role="menuitem"
+        data-menu-item
         @click="onOpen"
       >
         <span>Открыть</span>
@@ -19,6 +21,7 @@
         type="button"
         class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
         role="menuitem"
+        data-menu-item
         @click="onDownload"
       >
         <span>Скачать</span>
@@ -27,6 +30,7 @@
         type="button"
         class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
         role="menuitem"
+        data-menu-item
         @click="onShare"
       >
         <span>Поделиться</span>
@@ -35,6 +39,7 @@
         type="button"
         class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
         role="menuitem"
+        data-menu-item
         @click="onEditMetadata"
       >
         <span>Редактировать метаданные</span>
@@ -43,6 +48,7 @@
         type="button"
         class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
         role="menuitem"
+        data-menu-item
         @click="onAiTag"
       >
         <span>Тегировать с AI</span>
@@ -52,6 +58,7 @@
         class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
         role="menuitem"
         :aria-label="isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'"
+        data-menu-item
         @click="onFavorite"
       >
         <span>{{ isFavorite ? 'Убрать из избранного' : 'Добавить в избранное' }}</span>
@@ -61,6 +68,7 @@
         type="button"
         class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
         role="menuitem"
+        data-menu-item
         @click="onDelete"
       >
         <span>Удалить</span>
@@ -76,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { Asset } from '@/types/api'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 
@@ -89,6 +97,8 @@ interface Props {
 
 const props = defineProps<Props>()
 const favoritesStore = useFavoritesStore()
+const menuRef = ref<HTMLElement | null>(null)
+let previousActiveElement: HTMLElement | null = null
 
 const isFavorite = computed(() => props.asset ? favoritesStore.isFavorite(props.asset.id) : false)
 
@@ -144,9 +154,55 @@ function onClose() {
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
+    previousActiveElement?.focus()
     onClose()
+    return
+  }
+
+  if (!props.open) return
+
+  const items = Array.from(
+    menuRef.value?.querySelectorAll<HTMLElement>('[data-menu-item]') ?? []
+  )
+  if (!items.length) return
+
+  const currentIndex = items.findIndex((item) => item === document.activeElement)
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % items.length : 0
+    items[nextIndex]?.focus()
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    const nextIndex = currentIndex >= 0 ? (currentIndex - 1 + items.length) % items.length : items.length - 1
+    items[nextIndex]?.focus()
+  }
+
+  if (event.key === 'Home') {
+    event.preventDefault()
+    items[0]?.focus()
+  }
+
+  if (event.key === 'End') {
+    event.preventDefault()
+    items[items.length - 1]?.focus()
   }
 }
+
+watch(() => props.open, (open) => {
+  if (open) {
+    previousActiveElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    void nextTick(() => {
+      menuRef.value?.querySelector<HTMLElement>('[data-menu-item]')?.focus()
+    })
+  } else if (previousActiveElement && document.contains(previousActiveElement)) {
+    previousActiveElement.focus()
+  }
+})
 
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)

@@ -40,7 +40,7 @@ export interface SavedSearchRunResponse {
  * Requires X-Organization-Id (set by apiService).
  */
 export async function listSavedSearches(): Promise<SavedSearch[]> {
-  const { data } = await apiService.get<SavedSearch[]>(SAVED_SEARCHES_API)
+  const data = await apiService.get<SavedSearch[]>(SAVED_SEARCHES_API)
   return Array.isArray(data) ? data : []
 }
 
@@ -50,12 +50,11 @@ export async function listSavedSearches(): Promise<SavedSearch[]> {
 export async function createSavedSearch(
   input: SavedSearchCreateInput
 ): Promise<SavedSearch> {
-  const { data } = await apiService.post<SavedSearch>(SAVED_SEARCHES_API, {
+  return apiService.post<SavedSearch>(SAVED_SEARCHES_API, {
     name: input.name.trim(),
     query: input.query ?? '',
     filters: input.filters ?? {}
   })
-  return data
 }
 
 /**
@@ -65,11 +64,10 @@ export async function updateSavedSearch(
   id: number,
   patch: { name?: string }
 ): Promise<SavedSearch> {
-  const { data } = await apiService.patch<SavedSearch>(
+  return apiService.patch<SavedSearch>(
     `${SAVED_SEARCHES_API}${id}/`,
     patch
   )
-  return data
 }
 
 /**
@@ -88,7 +86,7 @@ export async function runSavedSearch(
   pageSize: number = 50
 ): Promise<SavedSearchRunResponse> {
   const size = Math.min(Math.max(1, pageSize), 100)
-  const { data } = await apiService.get<{
+  const data = await apiService.get<{
     results: BackendOptimizedDocument[]
     count: number
   }>(`${SAVED_SEARCHES_API}${id}/run/`, {

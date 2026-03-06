@@ -44,6 +44,16 @@ export interface AIInsight {
   message: string
 }
 
+export interface HomeSectionErrors {
+  documents: string | null
+  ai: string | null
+  inbox: string | null
+  storage: string | null
+  recentAssets: string | null
+  activity: string | null
+  insights: string | null
+}
+
 export const useHomeStore = defineStore('home', () => {
   const documentsStats = ref<HomeDocumentsStats | null>(null)
   const aiStats = ref<HomeAiStats | null>(null)
@@ -55,6 +65,15 @@ export const useHomeStore = defineStore('home', () => {
   
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const sectionErrors = ref<HomeSectionErrors>({
+    documents: null,
+    ai: null,
+    inbox: null,
+    storage: null,
+    recentAssets: null,
+    activity: null,
+    insights: null
+  })
 
   const authStore = useAuthStore()
 
@@ -76,58 +95,72 @@ export const useHomeStore = defineStore('home', () => {
       apiService.get<AIInsight[]>('/api/v4/headless/user/daily-insights/')
     ])
 
-    const sectionErrors: string[] = []
+    const aggregatedErrors: string[] = []
 
     if (results[0].status === 'fulfilled') {
       documentsStats.value = results[0].value
+      sectionErrors.value.documents = null
     } else {
       documentsStats.value = null
-      sectionErrors.push(`Документы: ${formatApiError(results[0].reason)}`)
+      sectionErrors.value.documents = formatApiError(results[0].reason)
+      aggregatedErrors.push(`Документы: ${sectionErrors.value.documents}`)
     }
 
     if (results[1].status === 'fulfilled') {
       aiStats.value = results[1].value
+      sectionErrors.value.ai = null
     } else {
       aiStats.value = null
-      sectionErrors.push(`AI: ${formatApiError(results[1].reason)}`)
+      sectionErrors.value.ai = formatApiError(results[1].reason)
+      aggregatedErrors.push(`AI: ${sectionErrors.value.ai}`)
     }
 
     if (results[2].status === 'fulfilled') {
       inboxStats.value = results[2].value
+      sectionErrors.value.inbox = null
     } else {
       inboxStats.value = null
-      sectionErrors.push(`Inbox: ${formatApiError(results[2].reason)}`)
+      sectionErrors.value.inbox = formatApiError(results[2].reason)
+      aggregatedErrors.push(`Inbox: ${sectionErrors.value.inbox}`)
     }
 
     if (results[3].status === 'fulfilled') {
       storageStats.value = results[3].value
+      sectionErrors.value.storage = null
     } else {
       storageStats.value = null
-      sectionErrors.push(`Хранилище: ${formatApiError(results[3].reason)}`)
+      sectionErrors.value.storage = formatApiError(results[3].reason)
+      aggregatedErrors.push(`Хранилище: ${sectionErrors.value.storage}`)
     }
 
     if (results[4].status === 'fulfilled') {
       recentAssets.value = (results[4].value.results || []).map((doc) => adaptBackendAsset(doc))
+      sectionErrors.value.recentAssets = null
     } else {
       recentAssets.value = []
-      sectionErrors.push(`Недавние активы: ${formatApiError(results[4].reason)}`)
+      sectionErrors.value.recentAssets = formatApiError(results[4].reason)
+      aggregatedErrors.push(`Недавние активы: ${sectionErrors.value.recentAssets}`)
     }
 
     if (results[5].status === 'fulfilled') {
       activityFeed.value = results[5].value
+      sectionErrors.value.activity = null
     } else {
       activityFeed.value = []
-      sectionErrors.push(`Активность: ${formatApiError(results[5].reason)}`)
+      sectionErrors.value.activity = formatApiError(results[5].reason)
+      aggregatedErrors.push(`Активность: ${sectionErrors.value.activity}`)
     }
 
     if (results[6].status === 'fulfilled') {
       insights.value = results[6].value
+      sectionErrors.value.insights = null
     } else {
       insights.value = []
-      sectionErrors.push(`Инсайты: ${formatApiError(results[6].reason)}`)
+      sectionErrors.value.insights = formatApiError(results[6].reason)
+      aggregatedErrors.push(`Инсайты: ${sectionErrors.value.insights}`)
     }
 
-    error.value = sectionErrors.length ? sectionErrors.join(' | ') : null
+    error.value = aggregatedErrors.length ? aggregatedErrors.join(' | ') : null
     isLoading.value = false
   }
 
@@ -141,6 +174,7 @@ export const useHomeStore = defineStore('home', () => {
     insights,
     isLoading,
     error,
+    sectionErrors,
     fetchAll
   }
 })

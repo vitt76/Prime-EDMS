@@ -168,10 +168,9 @@
       </div>
 
       <!-- Assets Grid (regular for small lists, threshold 80) -->
-      <div
+      <section
         v-if="!isVirtual"
         class="p-6"
-        role="grid"
         aria-label="Галерея активов"
       >
         <div class="group">
@@ -227,7 +226,7 @@
             @load-more="assetStore.loadMore"
           />
         </div>
-      </div>
+      </section>
 
       <!-- Immersive Grid (virtualized for 80+ items) -->
       <div
@@ -468,19 +467,22 @@
     >
       <aside
         v-if="isFiltersOpen"
+        ref="filtersPanelRef"
         class="fixed top-16 right-0 bottom-0 w-[360px] max-w-[90vw]
                bg-white border-l border-gray-200 shadow-2xl z-[950]
                overflow-y-auto"
         role="dialog"
-        aria-label="Фильтры"
+        aria-modal="true"
+        aria-labelledby="gallery-filters-title"
       >
         <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <h3 class="text-sm font-semibold text-gray-900">Фильтры</h3>
+          <h3 id="gallery-filters-title" class="text-sm font-semibold text-gray-900">Фильтры</h3>
           <button
             type="button"
             class="text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg p-2 transition-colors"
             @click="closeFilters"
             aria-label="Закрыть фильтры"
+            data-autofocus
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -500,7 +502,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, ref, computed, reactive, defineAsyncComponent } from 'vue'
+import { onMounted, onUnmounted, watch, ref, computed, reactive, defineAsyncComponent, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiService } from '@/services/apiService'
 import { aiAnalysisService } from '@/services/aiAnalysisService'
@@ -508,7 +510,6 @@ import { useAssetStore } from '@/stores/assetStore'
 import { useDistributionStore } from '@/stores/distributionStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useDamSearchFilters } from '@/composables/useDamSearchFilters'
-import AssetCard from './AssetCard.vue'
 import AssetCardSkeleton from './AssetCardSkeleton.vue'
 import AssetGrid from './AssetGrid.vue'
 import ImmersiveGrid from './ImmersiveGrid.vue'
@@ -532,6 +533,7 @@ import RecentlyViewedBlock from './RecentlyViewedBlock.vue'
 import FiltersPanel from './FiltersPanel.vue'
 import HotkeysCheatSheetModal from './HotkeysCheatSheetModal.vue'
 import { useGalleryHotkeys } from '@/composables/useGalleryHotkeys'
+import { useFocusTrap } from '@/composables/useFocusTrap'
 import { createSavedSearch, updateSavedSearch, deleteSavedSearch } from '@/services/savedSearchesService'
 import { buildSavedSearchFilters } from '@/utils/savedSearchFilters'
 import type { SavedSearch } from '@/services/savedSearchesService'
@@ -559,6 +561,12 @@ const isVirtual = computed(() => assetStore.assets.length >= 80)
 
 // Filters drawer
 const isFiltersOpen = ref(false)
+const filtersPanelRef = ref<HTMLElement | null>(null)
+const isFiltersTrapActive = ref(false)
+const { activate: activateFiltersTrap, deactivate: deactivateFiltersTrap } = useFocusTrap(
+  filtersPanelRef,
+  isFiltersTrapActive
+)
 
 // Context menu (right-click on asset)
 const contextMenuOpen = ref(false)
@@ -715,14 +723,6 @@ onUnmounted(() => {})
 // and SSoT composable resets currentPage on filter/search changes. A watcher here
 // causes duplicate requests.
 
-function isAssetSelected(asset: Asset): boolean {
-  return assetStore.selectedAssets.has(asset.id)
-}
-
-function isAssetShared(assetId: number): boolean {
-  return distributionStore.sharedAssetIds.has(assetId)
-}
-
 const isAllSelected = computed(() => {
   return (
     assetStore.assets.length > 0 &&
@@ -745,10 +745,6 @@ function handleSelectAllToggle() {
   }
 }
 
-function handleAssetSelect(asset: Asset) {
-  assetStore.selectAsset(asset, true) // Multi-select enabled
-}
-
 function handleDensityChange(value: 'compact' | 'comfortable') {
   damSearch.setView({ density: value })
 }
@@ -769,6 +765,28 @@ function openFilters() {
 function closeFilters() {
   isFiltersOpen.value = false
 }
+
+watch(isFiltersOpen, (isOpen, _previous, onCleanup) => {
+  isFiltersTrapActive.value = isOpen
+
+  if (isOpen) {
+    void nextTick(() => activateFiltersTrap())
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeFilters()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleEscape)
+      deactivateFiltersTrap()
+    })
+  } else {
+    deactivateFiltersTrap()
+  }
+})
 
 function handleFiltersReset() {
   damSearch.resetFilters()
@@ -956,10 +974,6 @@ function handleBulkTag() {
   showBulkTagModal.value = true
 }
 
-function handleBulkMove() {
-  showBulkMoveModal.value = true
-}
-
 function handleBulkDelete() {
   showBulkDeleteModal.value = true
 }
@@ -974,11 +988,6 @@ function handleBulkShare() {
     distributionStore.fetchSharedLinks()
   }
   showBulkShareModal.value = true
-}
-
-function handleBulkCampaign() {
-  // Переходим на вкладку кампаний, SharingPage возьмет выбранные активы из assetStore
-  router.push({ path: '/sharing', query: { tab: 'campaigns', from: 'assets' } })
 }
 
 function handleShareSuccess() {
