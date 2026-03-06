@@ -130,15 +130,19 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/dam/gallery',
-    name: 'dam-gallery',
-    component: () => import('@/pages/DAMGalleryPage.vue'),
-    meta: { requiresAuth: true, title: 'Галерея активов' }
+    redirect: (to) => ({
+      name: 'dam',
+      query: to.query,
+      hash: to.hash
+    })
   },
   {
     path: '/dam/gallery-old',
-    name: 'dam-gallery-old',
-    component: () => import('@/pages/DAMPage.vue'),
-    meta: { requiresAuth: true }
+    redirect: (to) => ({
+      name: 'dam',
+      query: to.query,
+      hash: to.hash
+    })
   },
   {
     path: '/dam/search',
@@ -182,6 +186,26 @@ const routes: RouteRecordRaw[] = [
     name: 'dam-shared',
     component: () => import('@/pages/collections/SharedWithMePage.vue'),
     meta: { requiresAuth: true, title: 'Доступные мне' }
+  },
+  {
+    path: '/dam/collections',
+    name: 'collections',
+    component: () => import('@/pages/CollectionsPage.vue'),
+    meta: {
+      requiresAuth: true,
+      breadcrumb: 'Collections',
+      title: 'Collections'
+    }
+  },
+  {
+    path: '/dam/collections/:id',
+    name: 'collection-detail',
+    component: () => import('@/pages/CollectionsPage.vue'),
+    meta: {
+      requiresAuth: true,
+      breadcrumb: 'Collection Detail',
+      title: 'Collection Detail'
+    }
   },
   {
     path: '/settings',
@@ -333,23 +357,11 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/collections',
-    name: 'collections',
-    component: () => import('@/pages/CollectionsPage.vue'),
-    meta: {
-      requiresAuth: true,
-      breadcrumb: 'Collections',
-      title: 'Collections'
-    }
+    redirect: '/dam/collections'
   },
   {
     path: '/collections/:id',
-    name: 'collection-detail',
-    component: () => import('@/pages/CollectionsPage.vue'),
-    meta: {
-      requiresAuth: true,
-      breadcrumb: 'Collection Detail',
-      title: 'Collection Detail'
-    }
+    redirect: (to) => `/dam/collections/${to.params.id}`
   },
   {
     path: '/shared/:uuid',

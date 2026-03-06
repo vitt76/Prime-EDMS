@@ -18,7 +18,7 @@
         <span class="text-neutral-500"> за 7 дней</span>
       </div>
       <router-link 
-        :to="{ name: 'dam-gallery' }"
+        :to="{ name: 'dam' }"
         class="inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700"
       >
         <span>&rarr; Обзор</span>
@@ -87,7 +87,7 @@ const documentsGrowthClass = computed(() => {
 })
 
 function openAIBulk() {
-  router.push({ name: 'dam-gallery', query: { status: 'untagged' } })
+  router.push({ name: 'dam', query: { status: 'untagged' } })
 }
 
 function scrollToInbox() {

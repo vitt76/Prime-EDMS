@@ -184,6 +184,21 @@ class CheckAIQuotaTestCase(TestCase):
         """No exception when organization is None."""
         check_ai_quota(None)  # Should not raise
 
+    def test_monthly_count_queries_created_field_for_current_organization(self):
+        """Monthly AI usage query uses tenant FK and created timestamp."""
+        with patch('django.core.cache.cache.get', return_value=None), patch(
+            'django.core.cache.cache.set'
+        ), patch('mayan.apps.dam.models.DocumentAIAnalysis.objects.filter') as mock_filter:
+            mock_filter.return_value.count.return_value = 3
+
+            result = self.org.get_ai_analyses_this_month()
+
+        self.assertEqual(result, 3)
+        _, call_kwargs = mock_filter.call_args
+        self.assertEqual(call_kwargs['organization'], self.org)
+        self.assertIn('created__gte', call_kwargs)
+        self.assertNotIn('created_at__gte', call_kwargs)
+
 
 class DocumentFilePreSaveSignalTestCase(TestCase):
     """Tests for on_document_file_pre_save signal handler."""

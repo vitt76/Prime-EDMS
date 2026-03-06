@@ -21,6 +21,7 @@ from .services import (
     YandexDiskClient, YandexDiskClientError, YandexDiskImporter
 )
 from .ai_providers import AIProviderRegistry
+from .ai_providers.base import AIProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +359,37 @@ def analyze_document_with_ai(self, document_id: int, **kwargs):
         try:
             analysis_results = perform_ai_analysis(document_file)
             logger.info(f"✅ perform_ai_analysis completed for document {document_id}, provider={analysis_results.get('provider', 'unknown')}")
+        except AIProviderError as analysis_error:
+            logger.warning(
+                '⚠️ AI providers exhausted for document %s, saving degraded fallback metadata: %s',
+                document_id, analysis_error
+            )
+
+            fallback_results = get_fallback_analysis(
+                document_file.mimetype or 'application/octet-stream'
+            )
+
+            ai_analysis.refresh_from_db()
+            ai_analysis.ai_description = fallback_results.get('description', '')
+            ai_analysis.ai_tags = fallback_results.get('tags', [])
+            ai_analysis.dominant_colors = fallback_results.get('colors', [])
+            ai_analysis.alt_text = fallback_results.get('alt_text', '')
+            ai_analysis.categories = fallback_results.get('categories', [])
+            ai_analysis.language = fallback_results.get('language', '')
+            ai_analysis.people = fallback_results.get('people', [])
+            ai_analysis.locations = fallback_results.get('locations', [])
+            ai_analysis.copyright_notice = fallback_results.get('copyright')
+            ai_analysis.usage_rights = fallback_results.get('usage_rights')
+            ai_analysis.rights_expiry = fallback_results.get('rights_expiry')
+            ai_analysis.analysis_status = 'failed'
+            ai_analysis.analysis_completed = timezone.now()
+            ai_analysis.ai_provider = ''
+            ai_analysis.is_fallback = True
+            ai_analysis.progress = 100
+            ai_analysis.current_step = 'AI unavailable, saved fallback metadata'
+            ai_analysis.error_message = str(analysis_error)[:1000]
+            ai_analysis.save()
+            return
         except Exception as analysis_error:
             logger.error(f"❌ perform_ai_analysis failed for document {document_id}: {analysis_error}", exc_info=True)
             # Update status to failed immediately
@@ -395,6 +427,7 @@ def analyze_document_with_ai(self, document_id: int, **kwargs):
         ai_analysis.analysis_status = 'completed'
         ai_analysis.analysis_completed = timezone.now()
         ai_analysis.ai_provider = analysis_results.get('provider', 'unknown')
+        ai_analysis.is_fallback = bool(analysis_results.get('is_fallback', False))
         ai_analysis.progress = 100
         ai_analysis.current_step = 'Analysis complete'
         ai_analysis.error_message = None
@@ -622,7 +655,7 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
     # Get file data - use direct file access (since we fixed volume mapping)
     if not document_file:
         logger.error("document_file is None, cannot perform AI analysis")
-        return get_fallback_analysis('application/octet-stream')
+        raise AIProviderError('Document file is missing for AI analysis')
     
     # Get mime_type early to avoid errors
     mime_type = document_file.mimetype if document_file and hasattr(document_file, 'mimetype') else 'application/octet-stream'
@@ -633,7 +666,7 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
         image_data = _read_document_file_bytes(document_file=document_file)
         if not image_data:
             logger.error("❌ Unable to read document file data from storage or S3.")
-            return get_fallback_analysis(document_file.mimetype or 'application/octet-stream')
+            raise AIProviderError('Unable to read document file data from storage')
         logger.info(f"✅ Successfully read file data, size: {len(image_data)} bytes")
         storage_key = document_file.file.name
         logger.info(f"📍 Storage key: {storage_key}")
@@ -652,7 +685,7 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"❌ Could not read file data: {e}")
-        raise Exception(f"Failed to read document file: {e}")
+        raise AIProviderError(f'Failed to read document file: {e}')
 
     # Validate basic properties of the file
     logger.info(f"First 100 bytes (hex): {image_data[:100].hex()}")
@@ -692,7 +725,7 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
             logger.info("✅ Successfully rendered first page to JPEG for analysis (size %.2f MB).", file_size_mb)
         else:
             logger.error("❌ Could not render document to image, skipping AI analysis.")
-            return get_fallback_analysis(document_file.mimetype or 'application/octet-stream')
+            raise AIProviderError('Could not render document to an image for AI analysis')
     else:
         if image_data.startswith(b'\xff\xd8\xff'):
             logger.info("✅ File appears to be valid JPEG (starts with JPEG SOI marker)")
@@ -720,6 +753,11 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
     if 'gigachat' in providers_to_try and file_size_mb > 4:
         logger.warning(f"⚠️ File is too large ({file_size_mb:.2f} MB) for GigaChat API (limit: 4MB)")
         providers_to_try = [provider for provider in providers_to_try if provider != 'gigachat']
+
+    if not providers_to_try:
+        raise AIProviderError('No AI providers are configured for analysis')
+
+    provider_errors = []
 
     for provider_name in providers_to_try:
         try:
@@ -760,6 +798,7 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
             logger.error(f"❌ AI analysis with {provider_name} failed: {e}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
+            provider_errors.append(f'{provider_name}: {e}')
 
             # Add more detailed error info
             if hasattr(e, 'response'):
@@ -769,8 +808,12 @@ def perform_ai_analysis(document_file: DocumentFile) -> Dict[str, Any]:
             continue
 
     # Fallback if all providers fail
-    logger.error("All AI providers failed, using fallback analysis")
-    return get_fallback_analysis(mime_type, image_data)
+    logger.error("All AI providers failed: %s", '; '.join(provider_errors) or 'unknown error')
+    raise AIProviderError(
+        'All configured AI providers failed: {}'.format(
+            '; '.join(provider_errors) or 'unknown error'
+        )
+    )
 
 
 def get_provider_config(provider_name: str) -> Dict[str, Any]:
@@ -1032,7 +1075,8 @@ def get_fallback_analysis(mime_type: str, image_data: bytes = None) -> Dict[str,
         'usage_rights': '',
         'colors': [],
         'alt_text': alt_text,
-        'provider': 'fallback'
+        'provider': 'fallback',
+        'is_fallback': True
     }
 
 

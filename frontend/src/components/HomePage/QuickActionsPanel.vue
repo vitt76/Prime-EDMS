@@ -62,19 +62,18 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 
 function goToDuplicates() {
-  router.push({ name: 'dam-gallery', query: { duplicates: 'true' } })
+  router.push({ name: 'dam', query: { duplicates: 'true' } })
 }
 
 function goToSavedSearches() {
-  router.push({ name: 'dam-gallery', hash: '#search' })
+  router.push({ name: 'dam', hash: '#search' })
 }
 
 function goToGalleryForAI() {
-  router.push({ name: 'dam-gallery', query: { status: 'untagged' } })
+  router.push({ name: 'dam', query: { status: 'untagged' } })
 }
 
 function goToFavorites() {
-  // Pass favorites_only=true or redirect to favorites page depending on implementation
-  router.push({ name: 'dam-gallery', query: { favorites_only: 'true' } })
+  router.push({ name: 'dam', query: { favorites_only: 'true' } })
 }
 </script>

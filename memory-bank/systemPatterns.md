@@ -129,6 +129,26 @@ class AIProviderRegistry:
 - Qwen Local
 - KieAI
 
+### 4.1. AI Graceful Degradation Pattern
+
+**Назначение:** не маскировать отказ AI-провайдеров под успешный AI-анализ.
+
+**Паттерн:**
+- orchestration-слой (`dam/tasks.py`) должен различать:
+  - реальный успешный провайдерский результат,
+  - degraded fallback metadata,
+  - полноценный hard failure.
+- если все провайдеры исчерпаны, fallback сохраняется как:
+  - `analysis_status='failed'`
+  - `is_fallback=True`
+  - технические метаданные в `DocumentAIAnalysis`
+- UI и сериализаторы должны видеть `is_fallback` явно, а не выводить degraded результат как полноценный `completed`.
+
+**Почему это важно:**
+- честная продуктовая семантика статусов;
+- правильная аналитика качества AI;
+- отсутствие ложного ощущения, что провайдеры реально отработали.
+
 ### 5. Storage Backend Pattern
 
 Абстракция хранилища через Django storage backends:
@@ -272,9 +292,10 @@ class TenantResolverMiddleware:
 - ContextVar для потокобезопасности в async контексте
 
 **Безопасность:**
-- 100% защита от cross-tenant access
+- Базовая tenant-изоляция реализована для новых tenant-aware моделей и новых API
 - Индексы на organization_id для производительности
 - Audit logging всех операций с Organization
+- Важно: legacy-слой `headless_api/views/activity_views.py` и части `headless_api/views/analytics_views.py` не следует считать эквивалентно tenant-safe без дополнительной ревизии
 
 **Масштабируемость:**
 - Готовность к шардированию (future)
@@ -408,6 +429,8 @@ def _has_concrete_field(model, field_name):
    - Компонентная архитектура
    - Pinia stores для state management
    - TypeScript для типизации
+   - **Новый основной контур:** `/dam` использует `GalleryView` + `ImmersiveGrid` и является фактическим ядром DAM UI.
+   - **Legacy-контур:** `/dam/gallery` и часть старых collection pages все еще присутствуют в кодовой базе и используются некоторыми переходами с HomePage.
    - **Sprint 5:** Для больших коллекций (80+) используется ImmersiveGrid с @tanstack/vue-virtual (виртуализация по строкам); поиск и фильтры синхронизируются с URL (useDamSearchFilters); контекстное меню и мультивыбор (Shift+Click, drag-select по индексам) в гриде.
    - Vite для сборки
 
@@ -505,6 +528,21 @@ mayan/apps/dam/tests/
 - Unit тесты для моделей и сервисов
 - Integration тесты для API
 - Celery task тесты с моками
+
+### 13. Frontend Shared Test Harness Pattern
+
+**Назначение:** стабилизировать unit/integration тесты SPA через единый bootstrap.
+
+**Паттерн:**
+- общий setup живет в `frontend/tests/setup/vitest.setup.ts`;
+- в `beforeEach()` поднимается fresh `Pinia`;
+- централизованно мокируются `vue-router`, `Teleport` targets, `Canvas`, `IntersectionObserver`, `ResizeObserver`, `MutationObserver`, `requestAnimationFrame`, `DOMRect`, `scrollTo`, `URL.createObjectURL`;
+- тесты должны опираться на shared setup, а не дублировать локальные ad-hoc моки в каждом spec.
+
+**Почему это важно:**
+- уменьшает contract drift между тестами;
+- убирает массовые падения из-за jsdom/browser API gaps;
+- делает recovery тестового контура повторяемым.
 
 ## Миграции и версионирование
 

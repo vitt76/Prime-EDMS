@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test'
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './tests/e2e',
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -35,10 +35,10 @@ export default defineConfig({
 
     /* Timeout for each action */
     actionTimeout: 10000,
-
-    /* Timeout for each test */
-    testTimeout: 60000,
   },
+
+  /* Timeout for each test */
+  timeout: 60000,
 
   /* Configure projects for major browsers */
   projects: [
@@ -85,10 +85,6 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },
-
-  /* Global setup and teardown */
-  globalSetup: require.resolve('./e2e/support/global-setup'),
-  globalTeardown: require.resolve('./e2e/support/global-teardown'),
 
   /* Test output directory */
   outputDir: 'test-results/',

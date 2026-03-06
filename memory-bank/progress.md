@@ -1,33 +1,34 @@
-# Прогресс проекта Prime-EDMS (по состоянию на Март 2026)
+# Прогресс проекта Prime-EDMS (актуализация по коду и фактическому прогону, март 2026)
 
-## 🟩 ЗАВЕРШЕНО (В проде / History)
-- [x] **Базовый функционал:** Core DAM, Analytics Module, Distribution, Marketing CMS, Nuxt 3 Public Frontend.
-- [x] **Multi-Tenancy (Фаза 1-4):** Изоляция данных, Shared Database/Shared Schema, TenantResolverMiddleware, кэширование, quota enforcement, патчинг Document managers.
-- [x] **High-Performance UI (Sprint 5):** ImmersiveGrid, виртуальный скролл, lazy loading.
-- [x] **Security & Compliance:** Audit Logs, Watermarking, Cookie Consent (152-ФЗ).
-- [x] **Analytics Transformation:** Графики (Chart.js), GeoMap, Retention Cohort, Churn, выгрузка отчетов.
+## 🟩 Реально работает
+- [x] **Базовая multi-tenant инфраструктура:** `Organization`, `TenantResolverMiddleware`, tenant-aware модели, `X-Organization-Id`, новые tenant-scoped endpoints и тесты на изоляцию.
+- [x] **Новый DAM-контур на `/dam`:** `GalleryView`, `ImmersiveGrid`, виртуальный скролл, blob-превью, lazy loading, горячие клавиши, работа через `/api/v4/documents/optimized/`.
+- [x] **Home/activity tenant-safe слой для основного UI:** HomePage и activity feed переведены на реальные backend ответы без ключевых synthetic заглушек в основном контуре.
+- [x] **Routing cleanup:** основной маршрут закреплен за `/dam`, legacy `/dam/gallery` переведен в cleanup/redirect режим, коллекции собраны вокруг `/dam/collections`.
+- [x] **Collections и Shared With Me:** страницы переведены с placeholder/mock-логики на реальные cabinets/collections API.
+- [x] **Recently Viewed:** backend endpoint + frontend блок/страница на базе реальных `AssetEvent`.
+- [x] **Favorites:** headless API, фильтр `favorites_only`, UI-иконки и отдельная страница избранного.
+- [x] **Trash:** отдельная страница и базовая связка с backend endpoint'ами корзины.
+- [x] **Шаринг подборок и public shares:** `CabinetUserShare`, CabinetShareModal, public share API, tenant-scoped backend для ссылок.
+- [x] **AI pipeline:** auto-trigger через signal, Celery task, вызовы AI-провайдеров, сохранение результата в `DocumentAIAnalysis`, исправленный quota-check и честная degraded fallback-семантика.
+- [x] **Базовый QA recovery фронтенда:** `Playwright` конфиг снова валиден, e2e suite определяется корректно, общий `Vitest` setup расширен, целевые smoke tests проходят.
 
-## 🟦 ТЕКУЩИЙ ЦИКЛ: ДОРАБОТКИ 2026 (UI/UX & Productivity)
+## 🟨 Работает частично / есть synthetic или legacy-слой
+- [~] **HomePage:** основной контур уже использует реальные tenant-safe ответы, но часть связанных интеграций и UX-сценариев все еще требует финальной сверки контрактов.
+- [~] **Saved Searches:** backend tenant-aware реализован, но HomePage/service-интеграция требует дополнительной унификации после cleanup.
+- [~] **Analytics dashboard:** новый tenant-aware `/api/v4/headless/analytics/dashboard/` существует и используется, но рядом остается legacy analytics слой с историческим техдолгом.
+- [~] **Distribution state на фронтенде:** часть shared-индикаторов и dev-состояния опирается на `mocks/publications.ts`.
+- [~] **Frontend QA:** инфраструктура восстановления выполнена, но полный прогон всего набора и последующее сокращение остаточных прикладных падений еще требуют отдельного спринта.
+- [~] **Backend QA:** логика по AI stabilization покрыта изменениями и частичными тестами, но полный контейнерный suite блокируется состоянием test environment.
 
-### Sprint 1: Discovery & UX (ЗАВЕРШЕН)
-- [x] Saved Searches (API + UI: Dropdown, модалки создания/переименования).
-- [x] Recently Viewed (API + UI блок над сеткой, страница /dam/recent).
-- [x] Orientation Filter (URL sync).
-- [x] Tenant-isolation для новых API (X-Organization-Id).
+## 🟥 Не готово / требует стабилизации перед MVP
+- [ ] **Полная унификация legacy analytics/activity слоя:** старые endpoints вне нового основного пути еще требуют финальной зачистки или вывода из эксплуатации.
+- [ ] **Полная синхронизация HomePage contracts:** storage/inbox/saved-searches/analytics нужно довести до полностью согласованного продуктового контракта без остаточного drift.
+- [ ] **Полный backend test environment:** контейнерный прогон tenant/DAM test suite сейчас упирается в отсутствующую зависимость `django_test_migrations`.
+- [ ] **Отдельный accessibility/hardening pass:** после восстановления тестовой инфраструктуры остается отдельный слой продуктовой и a11y-полировки.
 
-### Sprint 2: Productivity & UX (ЗАВЕРШЕН)
-- [x] Избранное (Favorites): Headless API (toggle, list), фильтр favoritesOnly, UI иконки на карточках.
-- [x] Горячие клавиши (Hotkeys): `useGalleryHotkeys` (F, Space, Delete, Esc, Ctrl+A), модалка Cheat Sheet.
-
-### Sprint 3: Collaboration & Tech Debt (В ПРОЦЕССЕ)
-- [x] Шаринг подборок (Cabinets): Backend (CabinetUserShare, headless API org-members, share-with-users, shared-with-me), Frontend (CabinetShareModal, Sidebar разделение).
-- [x] Tech Debt: Глобальное тестовое окружение Vitest (Pinia, Router, Canvas), исправление ~330 падающих тестов (VirtualScroller, ChartComponent, FiltersPanel, BulkTagModal).
-- [x] HomePage Phase 1 & 2: Исправление роутинга (status=untagged, duplicates=true), локализация, редизайн на CSS Grid, интеграция данных для виджетов (Хранилище, Недавние активы, Активность, Сохраненные поиски).
-- [x] Багфикс: Восстановление загрузки Blob-изображений в превью и модалках после изменений кэширования в `apiService`.
-- [ ] Корзина (Trash): реализация перемещения и восстановления активов.
-
-## 🟨 БЭКЛОГ (TODO / Gaps)
-- **API & Integrations:** Change Password API, User Activity Feed API, YouTube Analytics OAuth2, Интеграция с Claude/Gemini (fallback).
-- **Analytics:** Search-to-Find Time, CDN Cost tracking, Geo IP enrichment.
-- **Tech Debt:** Стабилизация оставшихся ~12 тестов Vitest (jsdom restrictions, a11y matchers).
-- **Спринты 4-7 (Из плана 2026):** AI-тегирование, массовые операции, улучшенный поиск.
+## 🟦 Ближайшие продуктовые шаги
+- [ ] Довести до конца cleanup legacy analytics/activity endpoints и убрать старые дубли из критических сценариев.
+- [ ] Сверить и стабилизировать все оставшиеся HomePage/service contracts.
+- [ ] Починить backend test environment в контейнере и прогнать полный tenant/DAM suite.
+- [ ] Провести отдельный stabilization pass по полному фронтендному тестовому набору и accessibility.

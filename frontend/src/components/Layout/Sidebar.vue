@@ -69,10 +69,10 @@
       <ul class="space-y-0.5">
         <li>
           <router-link
-            :to="'/collections'"
+            :to="'/dam/collections'"
             :class="[
               'flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm',
-              isActive('/collections')
+              isActive('/dam/collections')
                 ? 'bg-primary-50 dark:bg-primary-50 text-primary-600 dark:text-primary-600'
                 : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'
             ]"
@@ -286,7 +286,7 @@ function handleFolderSelect(folderId: string) {
   // (debug ingest removed)
 
   router.push({
-    name: 'dam-gallery',
+    name: 'dam',
     query: { folder: folderId }
   })
 }

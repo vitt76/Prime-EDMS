@@ -120,6 +120,12 @@ class DocumentAIAnalysis(TenantAwareMixin, ExtraDataModelMixin, models.Model):
         verbose_name=_('AI Provider')
     )
 
+    is_fallback = models.BooleanField(
+        default=False,
+        help_text=_('Indicates the analysis contains degraded fallback data'),
+        verbose_name=_('Is Fallback')
+    )
+
     analysis_status = models.CharField(
         max_length=20,
         choices=[

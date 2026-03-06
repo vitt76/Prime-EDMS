@@ -32,25 +32,37 @@
     <div v-else-if="homeStore.storageStats">
       <div class="flex justify-between text-sm mb-2 font-medium">
         <span class="text-neutral-900">{{ formatBytes(homeStore.storageStats.used_bytes) }}</span>
-        <span class="text-neutral-500">из {{ formatBytes(homeStore.storageStats.limit_bytes) }}</span>
+        <span class="text-neutral-500">
+          <template v-if="homeStore.storageStats.is_unlimited">без лимита</template>
+          <template v-else>из {{ formatBytes(homeStore.storageStats.limit_bytes) }}</template>
+        </span>
       </div>
       
       <!-- Progress Bar -->
       <div class="w-full bg-neutral-100 rounded-full h-2 mb-3 overflow-hidden flex">
         <div 
           class="bg-primary-500 h-2 rounded-full transition-all duration-500" 
-          :class="{ 'bg-error': homeStore.storageStats.percentage >= 90, 'bg-warning': homeStore.storageStats.percentage >= 75 && homeStore.storageStats.percentage < 90 }"
-          :style="{ width: `${Math.min(homeStore.storageStats.percentage, 100)}%` }"
+          :class="{ 'bg-error': (homeStore.storageStats.percentage ?? 0) >= 90, 'bg-warning': (homeStore.storageStats.percentage ?? 0) >= 75 && (homeStore.storageStats.percentage ?? 0) < 90 }"
+          :style="{ width: `${Math.min(homeStore.storageStats.percentage ?? 0, 100)}%` }"
         ></div>
       </div>
 
       <p class="text-xs text-neutral-500">
-        Использовано {{ homeStore.storageStats.percentage }}% от вашей квоты
+        <template v-if="homeStore.storageStats.is_unlimited">
+          Организация использует хранилище без жесткой квоты
+        </template>
+        <template v-else>
+          Использовано {{ homeStore.storageStats.percentage ?? 0 }}% от вашей квоты
+        </template>
       </p>
 
-      <div v-if="homeStore.storageStats.percentage >= 90" class="mt-3 p-2 bg-error/10 text-error text-xs rounded border border-error">
+      <div v-if="(homeStore.storageStats.percentage ?? 0) >= 90" class="mt-3 p-2 bg-error/10 text-error text-xs rounded border border-error">
         Внимание: Квота хранилища почти исчерпана. Обратитесь к администратору или удалите старые файлы.
       </div>
+    </div>
+
+    <div v-else class="text-sm text-neutral-500">
+      Метрика хранилища сейчас недоступна.
     </div>
   </div>
 </template>
@@ -67,7 +79,8 @@ const isAdmin = computed(() => {
   return authStore.user?.is_superuser || authStore.user?.is_staff
 })
 
-function formatBytes(bytes: number, decimals = 1) {
+function formatBytes(bytes: number | null, decimals = 1) {
+  if (bytes === null) return 'Без лимита'
   if (!+bytes) return '0 Байт'
   const k = 1024
   const dm = decimals < 0 ? 0 : decimals

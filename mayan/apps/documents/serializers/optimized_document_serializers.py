@@ -645,6 +645,7 @@ class OptimizedDocumentSerializer(
                     'id': analysis.pk,
                     'status': analysis.analysis_status,
                     'provider': analysis.ai_provider,
+                    'is_fallback': analysis.is_fallback,
                     'description': analysis.ai_description,
                     'tags': analysis.ai_tags,
                     'categories': analysis.categories,

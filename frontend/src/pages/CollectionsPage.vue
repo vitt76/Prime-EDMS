@@ -457,7 +457,7 @@ const isSpecialCollection = computed(() => {
 
 const breadcrumbs = computed(() => {
   const items: Array<{ label: string; to: string | null }> = [
-    { label: 'Collections', to: '/collections' }
+    { label: 'Collections', to: '/dam/collections' }
   ]
 
   if (currentCollectionId.value && typeof currentCollectionId.value === 'number') {
@@ -465,7 +465,7 @@ const breadcrumbs = computed(() => {
     breadcrumbPath.forEach((crumb) => {
       items.push({
         label: crumb.name,
-        to: `/collections/${crumb.id}`
+        to: `/dam/collections/${crumb.id}`
       })
     })
   } else if (currentCollectionId.value) {
@@ -492,10 +492,20 @@ const fetchCollections = async (): Promise<void> => {
       return
     }
 
+    const routeCollectionId = route.params.id
+      ? parseInt(Array.isArray(route.params.id) ? route.params.id[0] : route.params.id, 10)
+      : null
+
+    if (routeCollectionId && !isNaN(routeCollectionId)) {
+      currentCollectionId.value = routeCollectionId
+      await collectionsStore.fetchCollection(routeCollectionId)
+      return
+    }
+
     if (!currentCollectionId.value) {
       const firstRoot = collectionsStore.rootCollections[0]
       if (firstRoot) {
-        await selectCollection(firstRoot)
+        await handleSelectCollection(firstRoot)
       }
     }
   } catch (error) {
@@ -516,62 +526,31 @@ const handleSelectCollection = async (collection: Collection): Promise<void> => 
   if (requestId !== selectionRequestId.value) {
     return
   }
+  router.push({ name: 'collection-detail', params: { id: collection.id } })
 }
 
 const selectSpecialCollection = async (
   special: Collection & { type: SpecialCollectionType }
 ): Promise<void> => {
-  try {
-    currentCollectionId.value = special.id
-    
-    // Load assets for special collections
-    let assets: any[] = []
-    switch (special.type) {
-      case 'favorites':
-        assets = collectionsStore.favorites.flatMap(c => {
-          // Get assets from favorite collections
-          return c.asset_count > 0 ? [] : [] // Placeholder - would fetch from API
-        })
-        break
-      case 'recent':
-        assets = collectionsStore.recentCollections.flatMap(c => {
-          return c.asset_count > 0 ? [] : [] // Placeholder - would fetch from API
-        })
-        break
-      case 'shared_with_me':
-        assets = collectionsStore.sharedWithMe.flatMap(c => {
-          return c.asset_count > 0 ? [] : [] // Placeholder - would fetch from API
-        })
-        break
-      case 'public_collections':
-        assets = collectionsStore.publicCollections.flatMap(c => {
-          return c.asset_count > 0 ? [] : [] // Placeholder - would fetch from API
-        })
-        break
-    }
-    
-    // Set a virtual collection for special collections
-    collectionsStore.setCurrentCollection({
-      id: special.id,
-      name: special.name,
-      description: special.description || '',
-      parent_id: null,
-      is_favorite: special.type === 'favorites',
-      is_shared: special.type === 'shared_with_me' || special.type === 'public_collections',
-      visibility: special.visibility,
-      asset_count: special.asset_count,
-      created_by: authStore.user?.id || 0,
-      created_at: '',
-      updated_at: '',
-      cover_image_id: null
-    } as Collection)
-  } catch (error) {
-    uiStore.addNotification({
-      type: 'error',
-      title: 'Error',
-      message: 'Failed to load special collection'
-    })
+  const specialRouteMap: Record<SpecialCollectionType, string | null> = {
+    favorites: '/dam/favorites',
+    recent: '/dam/recent',
+    my_uploads: '/dam/my-uploads',
+    shared_with_me: '/dam/shared',
+    public_collections: null
   }
+
+  const targetPath = specialRouteMap[special.type]
+  if (targetPath) {
+    await router.push(targetPath)
+    return
+  }
+
+  uiStore.addNotification({
+    type: 'info',
+    title: 'Скоро доступно',
+    message: 'Этот раздел коллекций пока недоступен как отдельная страница.'
+  })
 }
 
 const selectCollection = (collection: Collection): void => {
@@ -721,18 +700,7 @@ const handleAssetClick = (assetId: number): void => {
 
 // Lifecycle
 onMounted(async () => {
-  // Check if route has collection ID
-  if (route.params.id) {
-    const collectionId = typeof route.params.id === 'string' 
-      ? parseInt(route.params.id) 
-      : parseInt(route.params.id[0])
-    if (!isNaN(collectionId)) {
-      await collectionsStore.fetchCollection(collectionId)
-      currentCollectionId.value = collectionId
-    }
-  } else {
-    await fetchCollections()
-  }
+  await fetchCollections()
 })
 </script>
 

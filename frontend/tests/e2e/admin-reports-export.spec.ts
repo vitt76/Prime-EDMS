@@ -66,58 +66,6 @@ test.describe('Admin reports export flow', () => {
         percentage: 20
       }
     ]
-    const usageMetrics = {
-      totalAssets: 120,
-      assetsByType: {
-        images: 60,
-        videos: 20,
-        documents: 30,
-        audio: 5,
-        other: 5
-      },
-      storageUsed: 5 * 1024 * 1024 * 1024,
-      storageLimit: 10 * 1024 * 1024 * 1024,
-      storagePercentage: 50
-    }
-
-    const downloadMetrics = [
-      {
-        date: new Date().toISOString(),
-        downloads: 120,
-        uniqueUsers: 42
-      },
-      {
-        date: new Date(Date.now() - 86400000).toISOString(),
-        downloads: 95,
-        uniqueUsers: 31
-      }
-    ]
-
-    const activityMetrics = [
-      {
-        username: 'alice',
-        email: 'alice@example.com',
-        action: 'upload',
-        asset_id: 1,
-        asset_name: 'hero.png',
-        timestamp: new Date().toISOString()
-      }
-    ]
-
-    const storageBreakdown = [
-      {
-        category: 'images',
-        size: 2 * 1024 * 1024 * 1024,
-        count: 60,
-        percentage: 40
-      },
-      {
-        category: 'videos',
-        size: 1 * 1024 * 1024 * 1024,
-        count: 20,
-        percentage: 20
-      }
-    ]
 
     const exportCalls: string[] = []
 

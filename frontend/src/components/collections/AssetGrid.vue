@@ -84,10 +84,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { collectionsService } from '@/services/collectionsService'
 import type { Asset } from '@/types/api'
-import type { CollectionWithAssets } from '@/types/collections'
 
 interface Props {
   collectionId: number | string
@@ -118,8 +117,11 @@ const loadAssets = async (): Promise<void> => {
 
   isLoading.value = true
   try {
-    const collection = await collectionsService.getCollection(props.collectionId)
-    assets.value = (collection as CollectionWithAssets).assets || []
+    const response = await collectionsService.getCollectionAssets({
+      collection_id: String(props.collectionId),
+      limit: 50
+    })
+    assets.value = response.results
   } catch (error) {
     console.error('Failed to load collection assets:', error)
     assets.value = []
@@ -135,6 +137,13 @@ const handleAssetClick = (assetId: number): void => {
 onMounted(() => {
   loadAssets()
 })
+
+watch(
+  () => props.collectionId,
+  () => {
+    loadAssets()
+  }
+)
 </script>
 
 <style scoped lang="css">

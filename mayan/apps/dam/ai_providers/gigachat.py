@@ -229,7 +229,7 @@ class GigaChatProvider(BaseAIProvider):
 
         except Exception as e:
             logger.error(f"GigaChat image analysis failed: {e}")
-            return self._fallback_image_analysis(mime_type, image_data)
+            raise AIProviderError(f'GigaChat image analysis failed: {e}')
         finally:
             if upload:
                 try:

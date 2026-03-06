@@ -281,7 +281,7 @@ class DocumentPropertiesView(SingleObjectDetailView):
 
             # If we have data but status is not 'completed', treat it as completed for display
             display_status = ai_analysis.analysis_status
-            if has_data and display_status != 'completed':
+            if has_data and display_status not in ('completed', 'failed') and not ai_analysis.is_fallback:
                 logger.info(f"Found data but status is '{display_status}', treating as 'completed' for display")
                 display_status = 'completed'
 

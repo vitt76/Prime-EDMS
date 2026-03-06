@@ -27,6 +27,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _get_request_organization(request):
+    return getattr(request, 'organization', None)
+
+
 class HeadlessActivityFeedView(APIView):
     """
     REST API endpoint for personalized activity feeds.
@@ -137,6 +141,13 @@ class HeadlessActivityFeedView(APIView):
         Handle GET requests for activity feed.
         """
         try:
+            organization = _get_request_organization(request)
+            if not organization:
+                return Response(
+                    {'error': _('Organization required'), 'error_code': 'ORG_REQUIRED'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             user = request.user
 
             # Parse query parameters
@@ -145,7 +156,9 @@ class HeadlessActivityFeedView(APIView):
             page_size = min(int(request.query_params.get('page_size', 20)), 100)
 
             # Get filtered actions
-            actions = self._get_filtered_actions(user, filter_type)
+            actions = self._get_filtered_actions(
+                organization=organization, user=user, filter_type=filter_type
+            )
 
             # Paginate results
             paginator = Paginator(actions, page_size)
@@ -155,7 +168,9 @@ class HeadlessActivityFeedView(APIView):
                 page_obj = paginator.page(paginator.num_pages or 1)
 
             # Batch prefetch Document objects to avoid N+1 queries
-            prefetched_documents = self._prefetch_documents_for_actions(page_obj.object_list)
+            prefetched_documents = self._prefetch_documents_for_actions(
+                actions=page_obj.object_list, organization=organization
+            )
 
             # Serialize results
             results = [
@@ -183,7 +198,31 @@ class HeadlessActivityFeedView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    def _get_filtered_actions(self, user, filter_type):
+    def _get_allowed_document_ids(self, organization, user):
+        base_queryset = Document.valid.filter(organization=organization)
+        restricted_queryset = AccessControlList.objects.restrict_queryset(
+            permission=permission_document_view,
+            queryset=base_queryset,
+            user=user
+        )
+
+        return list(restricted_queryset.values_list('pk', flat=True))
+
+    def _get_organization_scoped_queryset(self, organization, allowed_document_ids):
+        document_ct = self._get_document_content_type()
+        queryset = Action.objects.select_related(
+            'actor_content_type', 'target_content_type', 'action_object_content_type'
+        ).order_by('-timestamp')
+
+        if not allowed_document_ids:
+            return queryset.none()
+
+        return queryset.filter(
+            Q(target_content_type=document_ct, target_object_id__in=allowed_document_ids) |
+            Q(action_object_content_type=document_ct, action_object_object_id__in=allowed_document_ids)
+        )
+
+    def _get_filtered_actions(self, organization, user, filter_type):
         """
         Get actions filtered by type.
         """
@@ -196,9 +235,12 @@ class HeadlessActivityFeedView(APIView):
         # Action uses generic relations for actor/target/action_object; those cannot
         # be used with select_related(). We can however select_related the
         # ContentType FKs to reduce queries.
-        queryset = Action.objects.select_related(
-            'actor_content_type', 'target_content_type', 'action_object_content_type'
-        ).order_by('-timestamp')
+        allowed_document_ids = self._get_allowed_document_ids(
+            organization=organization, user=user
+        )
+        queryset = self._get_organization_scoped_queryset(
+            organization=organization, allowed_document_ids=allowed_document_ids
+        )
 
         # Default behavior: hide noisy internal events unless explicitly asked.
         # Query param "important" defaults to true.
@@ -246,26 +288,12 @@ class HeadlessActivityFeedView(APIView):
             queryset = queryset.filter(actor_object_id=user.pk)
 
         elif filter_type == 'my_documents':
-            # Actions related to documents accessible to the user
-            document_ct = self._get_document_content_type()
-            # ACL-filter documents for the requesting user.
-            # Staff/superusers with direct permission will get full queryset.
-            allowed_documents = AccessControlList.objects.restrict_queryset(
-                permission=permission_document_view,
-                queryset=Document.valid.all(),
-                user=user
-            ).values_list('pk', flat=True)
-
-            # Document-related actions can reference the document either as target
-            # (documents.document_create) or as action_object (version/file processing).
-            queryset = queryset.filter(
-                Q(target_content_type=document_ct, target_object_id__in=allowed_documents)
-                | Q(action_object_content_type=document_ct, action_object_object_id__in=allowed_documents)
-            )
+            # The base queryset is already limited to accessible documents
+            pass
 
         elif filter_type == 'all':
-            # All actions (admin view)
-            pass  # No additional filtering
+            # Admin view stays scoped to current organization.
+            pass
 
         else:
             # Default to my_actions
@@ -274,7 +302,7 @@ class HeadlessActivityFeedView(APIView):
         # Limit to recent actions for performance
         return queryset[:500]  # Last 500 actions
 
-    def _prefetch_documents_for_actions(self, actions):
+    def _prefetch_documents_for_actions(self, actions, organization):
         """
         Batch prefetch Document objects referenced in actions to avoid N+1 queries.
         
@@ -292,7 +320,9 @@ class HeadlessActivityFeedView(APIView):
         prefetched_documents = {}
         if document_ids:
             # Use only() to minimize data transfer and prefetch related objects
-            documents = Document.objects.filter(pk__in=document_ids).only(
+            documents = Document.valid.filter(
+                organization=organization, pk__in=document_ids
+            ).only(
                 'id', 'label', 'uuid', 'datetime_created'
             ).prefetch_related('files', 'versions__version_pages')
             prefetched_documents = {doc.pk: doc for doc in documents}
@@ -479,7 +509,7 @@ class HeadlessActivityFeedView(APIView):
         return _('%(actor)s %(verb)s') % {'actor': actor_name, 'verb': verb_ru}
 
 
-class DashboardActivityView(APIView):
+class DashboardActivityView(HeadlessActivityFeedView):
     """
     Lightweight activity feed for dashboard widget.
 
@@ -529,17 +559,28 @@ class DashboardActivityView(APIView):
 
     def get(self, request):
         try:
-            limit = min(int(request.query_params.get('limit', 20)), 50)
+            organization = _get_request_organization(request)
+            if not organization:
+                return Response(
+                    {'error': _('Organization required'), 'error_code': 'ORG_REQUIRED'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            queryset = Action.objects.select_related(
-                'actor_content_type', 'target_content_type', 'action_object_content_type'
-            ).order_by('-timestamp')[:limit]
+            limit = min(int(request.query_params.get('limit', 20)), 50)
+            allowed_document_ids = self._get_allowed_document_ids(
+                organization=organization, user=request.user
+            )
+            queryset = self._get_organization_scoped_queryset(
+                organization=organization, allowed_document_ids=allowed_document_ids
+            )[:limit]
 
             # Convert queryset to list for prefetching
             actions_list = list(queryset)
             
             # Batch prefetch Document objects to avoid N+1 queries
-            prefetched_documents = self._prefetch_documents_for_actions(actions_list)
+            prefetched_documents = self._prefetch_documents_for_actions(
+                actions=actions_list, organization=organization
+            )
 
             serializer = ActivityFeedSerializer(
                 actions_list, 

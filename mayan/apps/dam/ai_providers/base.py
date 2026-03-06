@@ -51,6 +51,7 @@ class BaseAIProvider(metaclass=abc.ABCMeta):
             api_key: API key for the provider
             **kwargs: Additional configuration options
         """
+        self.api_key = api_key
         self._settings_cache = {}
 
     def get_setting(self, setting_name: str, default=None):

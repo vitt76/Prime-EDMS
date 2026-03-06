@@ -47,8 +47,12 @@ const router = useRouter()
 function handleAction(insight: AIInsight) {
   // Map actions based on insight type
   if (insight.type === 'auto_tag_missing') {
-    // Route to gallery where they can bulk select and run AI
-    router.push({ name: 'dam-gallery' })
+    router.push({ name: 'dam', query: { status: 'untagged' } })
+    return
+  }
+
+  if (insight.type === 'ai_failed') {
+    router.push({ name: 'dam', query: { status: 'failed' } })
   }
 }
 </script>

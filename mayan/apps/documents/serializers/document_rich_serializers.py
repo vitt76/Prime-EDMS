@@ -285,6 +285,7 @@ class DocumentRichSerializer(serializers.Serializer):
                 'id': analysis.pk,
                 'status': analysis.analysis_status,
                 'provider': analysis.ai_provider,
+                'is_fallback': analysis.is_fallback,
                 'description': analysis.ai_description,
                 'tags': analysis.get_ai_tags_list() if hasattr(analysis, 'get_ai_tags_list') else (analysis.ai_tags or []),
                 'categories': analysis.categories or [],

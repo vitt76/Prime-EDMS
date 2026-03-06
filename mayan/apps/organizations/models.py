@@ -452,8 +452,8 @@ class Organization(ExtraDataModelMixin, models.Model):
             day=1, hour=0, minute=0, second=0, microsecond=0
         )
         result = DocumentAIAnalysis.objects.filter(
-            document__organization=self,
-            created_at__gte=current_month_start
+            organization=self,
+            created__gte=current_month_start
         ).count()
         cache.set(cache_key, result, timeout=self.CACHE_TTL)
         return result

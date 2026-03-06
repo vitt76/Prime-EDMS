@@ -7,6 +7,7 @@
 
 import { apiService } from './apiService'
 import { withRetry } from '@/utils/retry'
+import type { Asset } from '@/types/api'
 import type { Collection } from '@/types/collections'
 
 const CABINET_BASE = '/api/v4/cabinets'
@@ -25,6 +26,23 @@ interface CabinetDTO {
   updated_at?: string | null
 }
 
+interface CabinetDocumentDTO {
+  id: number
+  label: string
+  description?: string
+  datetime_created?: string
+  file_latest?: {
+    id?: number
+    filename?: string
+    size?: number
+    mimetype?: string
+    download_url?: string
+    pages_first?: {
+      image_url?: string
+    } | null
+  } | null
+}
+
 function cabinetToCollection(c: CabinetDTO): Collection {
   return {
     id: c.id,
@@ -39,6 +57,25 @@ function cabinetToCollection(c: CabinetDTO): Collection {
 
 function flattenTree(nodes: CabinetDTO[]): CabinetDTO[] {
   return nodes.flatMap((n) => [n, ...flattenTree(n.children ?? [])])
+}
+
+function cabinetDocumentToAsset(document: CabinetDocumentDTO): Asset {
+  const latestFile = document.file_latest
+
+  return {
+    id: document.id,
+    label: document.label,
+    description: document.description ?? '',
+    filename: latestFile?.filename ?? document.label,
+    size: latestFile?.size ?? 0,
+    mime_type: latestFile?.mimetype ?? 'application/octet-stream',
+    date_added: document.datetime_created ?? '',
+    thumbnail_url: latestFile?.pages_first?.image_url ?? undefined,
+    preview_url: latestFile?.download_url ?? undefined,
+    download_url: latestFile?.download_url ?? undefined,
+    file_latest_id: latestFile?.id ?? undefined,
+    metadata: {}
+  }
 }
 
 export interface CreateCollectionRequest {
@@ -185,19 +222,20 @@ class CollectionsService {
   }
 
   async getCollectionAssets(query: CollectionAssetsQuery): Promise<{
-    results: unknown[]
+    results: Asset[]
     count: number
   }> {
     const cid = parseInt(query.collection_id, 10)
     const operation = () =>
-      apiService.get<{ results: unknown[]; count?: number }>(
+      apiService.get<{ results: CabinetDocumentDTO[]; count?: number }>(
         `${CABINET_BASE}/${cid}/documents/`,
         { params: { page_size: query.limit ?? 50, page: query.offset ? Math.floor(query.offset / (query.limit ?? 50)) + 1 : 1 } }
       )
     const result = await withRetry(operation)
     if (!result.success) throw result.error
     const data = result.data!
-    const results = Array.isArray(data) ? data : (data.results ?? [])
+    const rawResults = Array.isArray(data) ? data : (data.results ?? [])
+    const results = rawResults.map(cabinetDocumentToAsset)
     const count = (data as { count?: number }).count ?? results.length
     return { results, count }
   }

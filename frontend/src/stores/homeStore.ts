@@ -25,13 +25,15 @@ export interface HomeInboxStats {
   comments_new: number
   approvals_pending: number
   collections_shared: number
-  mentions: number
+  mentions: number | null
+  mentions_supported: boolean
 }
 
 export interface HomeStorageStats {
   used_bytes: number
-  limit_bytes: number
-  percentage: number
+  limit_bytes: number | null
+  percentage: number | null
+  is_unlimited: boolean
 }
 
 export interface AIInsight {
@@ -62,30 +64,71 @@ export const useHomeStore = defineStore('home', () => {
     isLoading.value = true
     error.value = null
 
-    try {
-      const [docRes, aiRes, inboxStatsRes, storageRes, recentRes, activityRes, insightsRes] = await Promise.all([
-        apiService.get<HomeDocumentsStats>('/api/v4/headless/documents/stats/').catch(() => ({ total: 0, new_7days: 0, new_30days: 0 })),
-        apiService.get<HomeAiStats>('/api/v4/headless/documents/ai-stats/').catch(() => ({ analyzed: 0, queued: 0, pending: 0, failed: 0 })),
-        apiService.get<HomeInboxStats>('/api/v4/headless/user/inbox-stats/').catch(() => ({ unread_total: 0, comments_new: 0, approvals_pending: 0, collections_shared: 0, mentions: 0 })),
-        apiService.get<HomeStorageStats>('/api/v4/headless/organization/storage-stats/').catch(() => ({ used_bytes: 0, limit_bytes: 0, percentage: 0 })),
-        apiService.get<{results: BackendOptimizedDocument[]}>('/api/v4/documents/optimized/', { params: { ordering: '-datetime_created', page_size: 8 } }).catch(() => ({ results: [] })),
-        getDashboardActivityNormalized(10).catch(() => []),
-        apiService.get<AIInsight[]>('/api/v4/headless/user/daily-insights/').catch(() => ([]))
-      ])
+    const results = await Promise.allSettled([
+      apiService.get<HomeDocumentsStats>('/api/v4/headless/documents/stats/'),
+      apiService.get<HomeAiStats>('/api/v4/headless/documents/ai-stats/'),
+      apiService.get<HomeInboxStats>('/api/v4/headless/user/inbox-stats/'),
+      apiService.get<HomeStorageStats>('/api/v4/headless/organization/storage-stats/'),
+      apiService.get<{ results: BackendOptimizedDocument[] }>('/api/v4/documents/optimized/', {
+        params: { ordering: '-datetime_created', page_size: 8 }
+      }),
+      getDashboardActivityNormalized(10),
+      apiService.get<AIInsight[]>('/api/v4/headless/user/daily-insights/')
+    ])
 
-      documentsStats.value = docRes
-      aiStats.value = aiRes
-      inboxStats.value = inboxStatsRes
-      storageStats.value = storageRes
-      recentAssets.value = (recentRes.results || []).map((doc) => adaptBackendAsset(doc))
-      activityFeed.value = activityRes
-      insights.value = insightsRes
-    } catch (err) {
-      console.error('[HomeStore] Error fetching home data', err)
-      error.value = formatApiError(err)
-    } finally {
-      isLoading.value = false
+    const sectionErrors: string[] = []
+
+    if (results[0].status === 'fulfilled') {
+      documentsStats.value = results[0].value
+    } else {
+      documentsStats.value = null
+      sectionErrors.push(`Документы: ${formatApiError(results[0].reason)}`)
     }
+
+    if (results[1].status === 'fulfilled') {
+      aiStats.value = results[1].value
+    } else {
+      aiStats.value = null
+      sectionErrors.push(`AI: ${formatApiError(results[1].reason)}`)
+    }
+
+    if (results[2].status === 'fulfilled') {
+      inboxStats.value = results[2].value
+    } else {
+      inboxStats.value = null
+      sectionErrors.push(`Inbox: ${formatApiError(results[2].reason)}`)
+    }
+
+    if (results[3].status === 'fulfilled') {
+      storageStats.value = results[3].value
+    } else {
+      storageStats.value = null
+      sectionErrors.push(`Хранилище: ${formatApiError(results[3].reason)}`)
+    }
+
+    if (results[4].status === 'fulfilled') {
+      recentAssets.value = (results[4].value.results || []).map((doc) => adaptBackendAsset(doc))
+    } else {
+      recentAssets.value = []
+      sectionErrors.push(`Недавние активы: ${formatApiError(results[4].reason)}`)
+    }
+
+    if (results[5].status === 'fulfilled') {
+      activityFeed.value = results[5].value
+    } else {
+      activityFeed.value = []
+      sectionErrors.push(`Активность: ${formatApiError(results[5].reason)}`)
+    }
+
+    if (results[6].status === 'fulfilled') {
+      insights.value = results[6].value
+    } else {
+      insights.value = []
+      sectionErrors.push(`Инсайты: ${formatApiError(results[6].reason)}`)
+    }
+
+    error.value = sectionErrors.length ? sectionErrors.join(' | ') : null
+    isLoading.value = false
   }
 
   return {

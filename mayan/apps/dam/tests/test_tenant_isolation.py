@@ -15,7 +15,9 @@ from mayan.apps.organizations.models import Organization, UserOrganizationRole
 from mayan.apps.rest_api.tests.base import BaseAPITestCase
 
 from ..models import DocumentAIAnalysis
+from ..ai_providers.base import AIProviderError
 from ..tasks import analyze_document_with_ai, bulk_analyze_documents
+
 
 class DocumentAIAnalysisTenantIsolationTestCase(DocumentTestMixin, TestCase):
     """
@@ -256,3 +258,27 @@ class DocumentAIAnalysisTenantTaskTestCase(DocumentTestMixin, TestCase):
             call_kwargs.get('organization_id'),
             str(self.organization.pk)
         )
+
+    @patch('mayan.apps.dam.tasks.reindex_document_assets')
+    @patch('mayan.apps.dam.tasks.update_document_metadata_from_ai')
+    @patch('mayan.apps.dam.tasks.perform_ai_analysis')
+    def test_analyze_task_marks_failed_fallback_when_providers_exhausted(
+        self, mock_perform_ai_analysis, mock_update_metadata, mock_reindex
+    ):
+        mock_perform_ai_analysis.side_effect = AIProviderError(
+            'All configured AI providers failed'
+        )
+
+        analyze_document_with_ai(
+            document_id=self.document.pk,
+            organization_id=str(self.organization.pk)
+        )
+
+        analysis = DocumentAIAnalysis.objects_unfiltered.get(document=self.document)
+        self.assertEqual(analysis.analysis_status, 'failed')
+        self.assertTrue(analysis.is_fallback)
+        self.assertEqual(analysis.ai_provider, '')
+        self.assertIn('Техническая информация', analysis.ai_description)
+        self.assertIn('All configured AI providers failed', analysis.error_message)
+        mock_update_metadata.assert_not_called()
+        mock_reindex.assert_not_called()

@@ -105,126 +105,30 @@ export async function getDashboardActivity(
 export async function getDashboardActivityNormalized(
   limit = 10
 ): Promise<ActivityItem[]> {
-  try {
-    // Import authStore dynamically to avoid circular dependencies
-    const { useAuthStore } = await import('@/stores/authStore')
-    const authStore = useAuthStore()
-    
-    // Determine user role from authStore
-    const user = authStore.user
-    const isAdmin = user && (
-      user.is_staff === true || 
+  const { useAuthStore } = await import('@/stores/authStore')
+  const authStore = useAuthStore()
+
+  const user = authStore.user
+  const isAdmin = Boolean(
+    user && (
+      user.is_staff === true ||
       user.is_superuser === true ||
       (user as any).can_access_admin_panel === true
     )
-    
-    // Select filter based on user role
-    // 'all' - для админов (все события)
-    // 'my_documents' - для пользователей (только доступные документы)
-    const filter = isAdmin ? 'all' : 'my_documents'
-    
-    // Build URL with filters
-    const url = `/api/v4/headless/activity/feed/?filter=${filter}&important=1&system=0&page_size=${limit}`
-    
-    if (import.meta.env.DEV) {
-      console.log(`[ActivityService] Fetching activity feed: filter=${filter}, limit=${limit}, isAdmin=${isAdmin}`)
-    }
-    
-    // Fetch data from HeadlessActivityFeedView
-    let response: HeadlessActivityFeedResponse
-    try {
-      response = await apiService.get<HeadlessActivityFeedResponse>(
-        url,
-        undefined,
-        false // Don't cache activity feed
-      )
-      
-      // DEBUG: Log raw response
-      console.log('[ActivityService] Raw response received:', {
-        response,
-        type: typeof response,
-        isArray: Array.isArray(response),
-        hasResults: 'results' in response,
-        resultsType: typeof response?.results,
-        resultsIsArray: Array.isArray(response?.results),
-        responseKeys: response ? Object.keys(response) : [],
-        fullResponse: JSON.stringify(response, null, 2)
-      })
-    } catch (fetchErr: any) {
-      console.error('[ActivityService] Error during apiService.get():', {
-        error: fetchErr,
-        message: fetchErr?.message,
-        response: fetchErr?.response,
-        status: fetchErr?.response?.status,
-        statusText: fetchErr?.response?.statusText,
-        data: fetchErr?.response?.data,
-        url: url
-      })
-      throw fetchErr
-    }
-    
-    // Validate response structure
-    if (!response) {
-      console.warn('[ActivityService] Response is null/undefined:', response)
-      throw new Error('Response is null or undefined')
-    }
-    
-    if (!Array.isArray(response.results)) {
-      console.warn('[ActivityService] Invalid response format - results is not an array:', {
-        response,
-        results: response.results,
-        resultsType: typeof response.results,
-        isArray: Array.isArray(response.results)
-      })
-      throw new Error('Invalid response format from activity feed API: results is not an array')
-    }
-    
-    // Map HeadlessActivityItem[] to ActivityItem[]
-    const mappedItems = response.results.map(mapHeadlessToActivityItem)
-    
-    if (import.meta.env.DEV) {
-      console.log(`[ActivityService] Successfully mapped ${mappedItems.length} activity items`)
-    }
-    
-    return mappedItems
-    
-  } catch (err: any) {
-    console.error('[ActivityService] Failed to fetch activity feed:', {
-      error: err,
-      message: err?.message,
-      stack: err?.stack,
-      response: err?.response,
-      status: err?.response?.status,
-      statusText: err?.response?.statusText,
-      data: err?.response?.data,
-      code: err?.code,
-      name: err?.name,
-      url: url
-    })
-    
-    // Fallback: try old endpoint if new one fails
-    console.log('[ActivityService] Attempting fallback to old endpoint...')
-    try {
-      const items = await getDashboardActivity(limit)
-      console.log('[ActivityService] Fallback succeeded, mapped items:', items.length)
-      return items.map((item) => ({
-        id: item.id,
-        user: item.user,
-        user_id: item.user_id,
-        timestamp: item.timestamp,
-        action_text: item.action_text,
-        object_name: item.object_name,
-        icon: item.icon || 'upload'
-      }))
-    } catch (fallbackErr: any) {
-      console.error('[ActivityService] Fallback also failed:', {
-        error: fallbackErr,
-        message: fallbackErr?.message,
-        response: fallbackErr?.response,
-        status: fallbackErr?.response?.status
-      })
-      return []
-    }
+  )
+
+  const filter = isAdmin ? 'all' : 'my_documents'
+  const url = `/api/v4/headless/activity/feed/?filter=${filter}&important=1&system=0&page_size=${limit}`
+  const response = await apiService.get<HeadlessActivityFeedResponse>(
+    url,
+    undefined,
+    false
+  )
+
+  if (!response || !Array.isArray(response.results)) {
+    throw new Error('Invalid response format from activity feed API')
   }
+
+  return response.results.map(mapHeadlessToActivityItem)
 }
 

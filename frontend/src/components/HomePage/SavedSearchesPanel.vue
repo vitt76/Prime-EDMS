@@ -93,10 +93,10 @@ function load() {
 function onRun(item: SavedSearch) {
   // Use existing composable to apply filters and fetch
   searchFilters.applySavedSearch(item.query, item.filters)
-  router.push({ name: 'dam-gallery' })
+  router.push({ name: 'dam' })
 }
 
 function goToGallery() {
-  router.push({ name: 'dam-gallery' })
+  router.push({ name: 'dam' })
 }
 </script>

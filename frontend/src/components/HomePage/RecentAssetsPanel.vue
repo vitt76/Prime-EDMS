@@ -5,7 +5,7 @@
         <span class="text-xl">📷</span> Недавние активы
       </h2>
       <router-link
-        :to="{ name: 'dam-gallery' }"
+        :to="{ name: 'dam' }"
         class="text-sm font-medium text-primary-600 hover:text-primary-700"
       >
         Показать все
@@ -57,6 +57,6 @@ const displayAssets = computed(() => {
 })
 
 function goToGallery() {
-  router.push({ name: 'dam-gallery' })
+  router.push({ name: 'dam' })
 }
 </script>

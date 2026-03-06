@@ -3,6 +3,8 @@ import 'vitest-axe/extend-expect'
 import * as axe from 'axe-core'
 import { vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { defineComponent, h } from 'vue'
+import { config, RouterLinkStub } from '@vue/test-utils'
 
 // Make axe available globally for tests that use it
 if (typeof window !== 'undefined') {
@@ -11,27 +13,70 @@ if (typeof window !== 'undefined') {
 
 // Global Pinia for components that use stores (e.g. BulkTagModal, GalleryView)
 beforeEach(() => {
+  vi.clearAllMocks()
   setActivePinia(createPinia())
+  document.body.innerHTML = '<div id="header-actions"></div><div id="header-search-actions"></div>'
 })
+
+config.global.stubs = {
+  teleport: true,
+  'router-link': RouterLinkStub,
+  RouterLink: RouterLinkStub,
+  RouterView: true
+}
 
 // Mock vue-router so useRouter() / useRoute() work in components
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal() as object
   return {
     ...actual,
+    RouterLink: defineComponent({
+      name: 'RouterLink',
+      props: {
+        to: {
+          type: [String, Object],
+          required: false,
+          default: '/'
+        }
+      },
+      setup(props, { slots, attrs }) {
+        return () => h('a', { ...attrs, href: typeof props.to === 'string' ? props.to : '#' }, slots.default?.())
+      }
+    }),
+    RouterView: defineComponent({
+      name: 'RouterView',
+      setup(_, { slots }) {
+        return () => slots.default?.()
+      }
+    }),
     useRouter: () => ({
       push: vi.fn(),
       replace: vi.fn(),
       go: vi.fn(),
       back: vi.fn(),
       forward: vi.fn(),
-      currentRoute: { value: { path: '/', params: {}, query: {} } }
+      currentRoute: {
+        value: {
+          name: 'root',
+          path: '/',
+          fullPath: '/',
+          params: {},
+          query: {},
+          hash: '',
+          meta: {},
+          matched: []
+        }
+      }
     }),
     useRoute: () => ({
+      name: 'root',
       path: '/',
       params: {},
       query: {},
-      fullPath: '/'
+      fullPath: '/',
+      hash: '',
+      meta: {},
+      matched: []
     })
   }
 })
@@ -70,6 +115,7 @@ if (typeof HTMLCanvasElement !== 'undefined') {
     isPointInStroke: vi.fn()
   }
   HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(mockContext)
+  HTMLCanvasElement.prototype.toDataURL = vi.fn(() => 'data:image/png;base64,mock')
 }
 
 // Mock window.matchMedia
@@ -109,6 +155,14 @@ class ResizeObserverMock {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverMock)
 
+class MutationObserverMock {
+  observe = vi.fn()
+  disconnect = vi.fn()
+  takeRecords = vi.fn(() => [])
+  constructor(public _callback?: MutationCallback) {}
+}
+vi.stubGlobal('MutationObserver', MutationObserverMock)
+
 // DragEvent (jsdom does not provide it)
 if (typeof globalThis.DragEvent === 'undefined') {
   ;(globalThis as any).DragEvent = class DragEvent extends Event {
@@ -123,6 +177,7 @@ if (typeof globalThis.DragEvent === 'undefined') {
 // scrollTo / scrollIntoView (Element.prototype.scrollTo for virtual scroller, etc.)
 if (typeof window !== 'undefined') {
   window.scrollTo = vi.fn()
+  window.open = vi.fn()
   Element.prototype.scrollIntoView = vi.fn()
   const scrollToImpl = function (this: Element, options?: ScrollToOptions) {
     const el = this as HTMLElement
@@ -139,6 +194,58 @@ if (typeof window !== 'undefined') {
 if (typeof globalThis.URL !== 'undefined') {
   globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
   globalThis.URL.revokeObjectURL = vi.fn()
+}
+
+if (typeof globalThis.requestAnimationFrame === 'undefined') {
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    return window.setTimeout(() => callback(performance.now()), 0)
+  })
+}
+
+if (typeof globalThis.cancelAnimationFrame === 'undefined') {
+  vi.stubGlobal('cancelAnimationFrame', (handle: number) => {
+    window.clearTimeout(handle)
+  })
+}
+
+if (typeof globalThis.DOMRect === 'undefined') {
+  vi.stubGlobal(
+    'DOMRect',
+    class DOMRectMock {
+      x = 0
+      y = 0
+      width = 0
+      height = 0
+      top = 0
+      right = 0
+      bottom = 0
+      left = 0
+
+      constructor(x = 0, y = 0, width = 0, height = 0) {
+        this.x = x
+        this.y = y
+        this.width = width
+        this.height = height
+        this.top = y
+        this.left = x
+        this.right = x + width
+        this.bottom = y + height
+      }
+
+      toJSON() {
+        return {
+          x: this.x,
+          y: this.y,
+          width: this.width,
+          height: this.height,
+          top: this.top,
+          right: this.right,
+          bottom: this.bottom,
+          left: this.left
+        }
+      }
+    }
+  )
 }
 
 
