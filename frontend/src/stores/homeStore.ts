@@ -64,22 +64,22 @@ export const useHomeStore = defineStore('home', () => {
 
     try {
       const [docRes, aiRes, inboxStatsRes, storageRes, recentRes, activityRes, insightsRes] = await Promise.all([
-        apiService.get<HomeDocumentsStats>('/api/v4/headless/documents/stats/').catch(() => ({ data: { total: 0, new_7days: 0, new_30days: 0 } })),
-        apiService.get<HomeAiStats>('/api/v4/headless/documents/ai-stats/').catch(() => ({ data: { analyzed: 0, queued: 0, pending: 0, failed: 0 } })),
-        apiService.get<HomeInboxStats>('/api/v4/headless/user/inbox-stats/').catch(() => ({ data: { unread_total: 0, comments_new: 0, approvals_pending: 0, collections_shared: 0, mentions: 0 } })),
-        apiService.get<HomeStorageStats>('/api/v4/headless/organization/storage-stats/').catch(() => ({ data: { used_bytes: 0, limit_bytes: 0, percentage: 0 } })),
-        apiService.get<{results: BackendOptimizedDocument[]}>('/api/v4/documents/optimized/', { params: { ordering: '-datetime_created', page_size: 8 } }).catch(() => ({ data: { results: [] } })),
+        apiService.get<HomeDocumentsStats>('/api/v4/headless/documents/stats/').catch(() => ({ total: 0, new_7days: 0, new_30days: 0 })),
+        apiService.get<HomeAiStats>('/api/v4/headless/documents/ai-stats/').catch(() => ({ analyzed: 0, queued: 0, pending: 0, failed: 0 })),
+        apiService.get<HomeInboxStats>('/api/v4/headless/user/inbox-stats/').catch(() => ({ unread_total: 0, comments_new: 0, approvals_pending: 0, collections_shared: 0, mentions: 0 })),
+        apiService.get<HomeStorageStats>('/api/v4/headless/organization/storage-stats/').catch(() => ({ used_bytes: 0, limit_bytes: 0, percentage: 0 })),
+        apiService.get<{results: BackendOptimizedDocument[]}>('/api/v4/documents/optimized/', { params: { ordering: '-datetime_created', page_size: 8 } }).catch(() => ({ results: [] })),
         getDashboardActivityNormalized(10).catch(() => []),
-        apiService.get<AIInsight[]>('/api/v4/headless/user/daily-insights/').catch(() => ({ data: [] }))
+        apiService.get<AIInsight[]>('/api/v4/headless/user/daily-insights/').catch(() => ([]))
       ])
 
-      documentsStats.value = docRes.data
-      aiStats.value = aiRes.data
-      inboxStats.value = inboxStatsRes.data
-      storageStats.value = storageRes.data
-      recentAssets.value = (recentRes.data.results || []).map((doc) => adaptBackendAsset(doc))
+      documentsStats.value = docRes
+      aiStats.value = aiRes
+      inboxStats.value = inboxStatsRes
+      storageStats.value = storageRes
+      recentAssets.value = (recentRes.results || []).map((doc) => adaptBackendAsset(doc))
       activityFeed.value = activityRes
-      insights.value = insightsRes.data
+      insights.value = insightsRes
     } catch (err) {
       console.error('[HomeStore] Error fetching home data', err)
       error.value = formatApiError(err)

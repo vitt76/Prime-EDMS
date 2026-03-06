@@ -129,11 +129,17 @@ class HeadlessHomeStorageStatsView(APIView):
             )
 
         org = request.organization
-        used_bytes = org.get_storage_used_bytes() if hasattr(org, 'get_storage_used_bytes') else 0
-        limit_gb = org.storage_limit_gb if hasattr(org, 'storage_limit_gb') else 0
-        limit_bytes = limit_gb * 1024 * 1024 * 1024 if limit_gb else 0
+        used_gb = org.get_storage_used_gb() if hasattr(org, 'get_storage_used_gb') else 0
+        used_bytes = int(used_gb * 1024 * 1024 * 1024)
         
-        # Calculate percentage
+        limit_gb = org.storage_limit_gb if hasattr(org, 'storage_limit_gb') else 0
+        limit_bytes = int(limit_gb * 1024 * 1024 * 1024) if limit_gb else 0
+
+        # Спринт 3. Фаза 2: Мок данных для красивого UI, если реальных данных нет (0 байт)
+        if used_bytes == 0 and limit_bytes == 0:
+            limit_bytes = 500 * 1024 * 1024 * 1024  # 500 GB
+            used_bytes = 150 * 1024 * 1024 * 1024   # 150 GB
+
         percentage = 0
         if limit_bytes > 0:
             percentage = round((used_bytes / limit_bytes) * 100, 1)

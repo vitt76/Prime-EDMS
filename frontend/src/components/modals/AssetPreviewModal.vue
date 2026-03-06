@@ -50,7 +50,7 @@
           >
             <img
               v-if="isImage"
-              :src="mediaUrl"
+              :src="displayMediaUrl"
               :alt="currentAsset?.label || currentAsset?.filename || 'Asset preview'"
               class="asset-preview-modal__image"
               draggable="false"
@@ -59,7 +59,7 @@
             <video
               v-else-if="isVideo"
               ref="videoRef"
-              :src="mediaUrl"
+              :src="displayMediaUrl"
               class="asset-preview-modal__video"
               controls
               playsinline
@@ -67,7 +67,7 @@
             />
             <iframe
               v-else-if="isPdf"
-              :src="mediaUrl"
+              :src="displayMediaUrl"
               class="asset-preview-modal__pdf"
               frameborder="0"
               title="Document preview"
@@ -172,6 +172,7 @@ import { useRouter } from 'vue-router'
 import Modal from '@/components/Common/Modal.vue'
 import Button from '@/components/Common/Button.vue'
 import { useUIStore } from '@/stores/uiStore'
+import { apiService } from '@/services/apiService'
 import type { Asset } from '@/types/api'
 
 const router = useRouter()
@@ -241,6 +242,52 @@ const isVideo = computed(() => currentAsset.value?.mime_type.startsWith('video/'
 const isPdf = computed(
   () => currentAsset.value?.mime_type?.includes('pdf') ?? false
 )
+
+const resolvedMediaUrl = ref<string | null>(null)
+let blobObjectUrl: string | null = null
+
+function revokeBlobUrl() {
+  if (blobObjectUrl) {
+    URL.revokeObjectURL(blobObjectUrl)
+    blobObjectUrl = null
+  }
+}
+
+watch(mediaUrl, async (url) => {
+  resolvedMediaUrl.value = null
+  revokeBlobUrl()
+  
+  if (!url) return
+
+  const isProtectedApiUrl = url.includes('/api/v4/')
+  
+  if (isProtectedApiUrl) {
+    try {
+      const response = await apiService.get(url, {
+        responseType: 'blob',
+        headers: { Accept: '*/*' } as any
+      })
+      const blob = response instanceof Blob ? response : (response as any).data
+      if (blob && blob.size > 0) {
+        blobObjectUrl = URL.createObjectURL(blob)
+        resolvedMediaUrl.value = blobObjectUrl
+        return
+      }
+    } catch (e) {
+      console.warn('Failed to load protected media url', e)
+    }
+  }
+  
+  // Fallback
+  if (url.startsWith('/')) {
+    const base = import.meta.env.VITE_API_URL || window.location.origin
+    resolvedMediaUrl.value = `${base}${url}`
+  } else {
+    resolvedMediaUrl.value = url
+  }
+}, { immediate: true })
+
+const displayMediaUrl = computed(() => resolvedMediaUrl.value || mediaUrl.value)
 
 const metadataEntries = computed(() => {
   const asset = currentAsset.value

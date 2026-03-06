@@ -37,16 +37,16 @@ export async function getRecentlyViewed(
   const limit = Math.min(Math.max(1, params.limit ?? 20), 50)
   const days = Math.min(Math.max(1, params.days ?? 30), 365)
 
-  const { data } = await apiService.get<{
+  const response = await apiService.get<{
     results: BackendOptimizedDocument[]
     count: number
   }>(RECENTLY_VIEWED_API, {
     params: { limit, days }
   })
 
-  const results = (data.results || []).map((doc) => adaptBackendAsset(doc))
+  const results = (response.results || []).map((doc) => adaptBackendAsset(doc))
   return {
     results,
-    count: data.count ?? results.length
+    count: response.count ?? results.length
   }
 }

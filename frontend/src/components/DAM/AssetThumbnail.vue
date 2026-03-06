@@ -1,8 +1,8 @@
 <template>
   <div class="asset-thumbnail w-full h-full">
     <img
-      v-if="src && !imageError && loaded"
-      :src="src"
+      v-if="resolvedSrc && !imageError && loaded"
+      :src="resolvedSrc"
       :srcset="srcset || undefined"
       :sizes="sizes || undefined"
       :alt="alt"
@@ -13,8 +13,8 @@
       @load="handleLoad"
     />
     <img
-      v-else-if="src && !imageError && !loaded"
-      :src="src"
+      v-else-if="resolvedSrc && !imageError && !loaded"
+      :src="resolvedSrc"
       :alt="alt"
       loading="lazy"
       :class="objectFitClass"
@@ -55,7 +55,8 @@
  * Uses native loading="lazy", optional srcset/sizes, and solid/gradient placeholder.
  */
 
-import { ref, watch } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
+import { apiService } from '@/services/apiService'
 
 interface Props {
   src: string | null | undefined
@@ -73,18 +74,57 @@ const props = withDefaults(defineProps<Props>(), {
 
 const loaded = ref(false)
 const imageError = ref(false)
+const resolvedSrc = ref<string | null>(null)
+let blobObjectUrl: string | null = null
+
+function revokeBlobUrl() {
+  if (blobObjectUrl) {
+    URL.revokeObjectURL(blobObjectUrl)
+    blobObjectUrl = null
+  }
+}
 
 watch(
   () => props.src,
-  (newSrc) => {
+  async (newSrc) => {
     loaded.value = false
     imageError.value = false
+    revokeBlobUrl()
+    resolvedSrc.value = null
+
     if (!newSrc) {
       imageError.value = true
+      return
     }
+
+    if (newSrc.includes('/api/v4/')) {
+      try {
+        const response: any = await apiService.get(newSrc, {
+          responseType: 'blob',
+          headers: { Accept: '*/*' } as any
+        })
+        const blob = response instanceof Blob ? response : (response?.data as Blob)
+        if (blob && blob.size > 0) {
+          blobObjectUrl = URL.createObjectURL(blob)
+          resolvedSrc.value = blobObjectUrl
+          return
+        }
+      } catch (e) {
+        console.warn('AssetThumbnail: failed to fetch blob', e)
+        imageError.value = true
+        return
+      }
+    }
+
+    // fallback for non-protected or absolute URLs
+    resolvedSrc.value = newSrc
   },
   { immediate: true }
 )
+
+onBeforeUnmount(() => {
+  revokeBlobUrl()
+})
 
 function handleLoad() {
   loaded.value = true

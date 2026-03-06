@@ -1,7 +1,7 @@
 <template>
-  <div class="kpi-bar flex gap-4 overflow-x-auto pb-2 snap-x">
+  <div class="kpi-bar grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-8 mb-2">
     <!-- Card 1: Assets -->
-    <div class="kpi-card flex-none w-72 bg-white dark:bg-white rounded-lg shadow-sm border border-neutral-100 p-5 snap-start">
+    <div class="kpi-card bg-white dark:bg-white rounded-lg shadow-sm border border-neutral-100 p-5 flex flex-col justify-between hover:shadow-md transition-shadow">
       <div class="flex justify-between items-start mb-2">
         <h3 class="text-sm font-medium text-neutral-500">Всего документов</h3>
       </div>
@@ -26,7 +26,7 @@
     </div>
 
     <!-- Card 2: AI Analyses -->
-    <div class="kpi-card flex-none w-72 bg-white dark:bg-white rounded-lg shadow-sm border border-neutral-100 p-5 snap-start">
+    <div class="kpi-card bg-white dark:bg-white rounded-lg shadow-sm border border-neutral-100 p-5 flex flex-col justify-between hover:shadow-md transition-shadow">
       <div class="flex justify-between items-start mb-2">
         <h3 class="text-sm font-medium text-neutral-500">Завершённых анализов</h3>
       </div>
@@ -48,7 +48,7 @@
     </div>
 
     <!-- Card 3: Action Required -->
-    <div class="kpi-card flex-none w-72 bg-white dark:bg-white rounded-lg shadow-sm border border-neutral-100 p-5 snap-start">
+    <div class="kpi-card bg-white dark:bg-white rounded-lg shadow-sm border border-neutral-100 p-5 flex flex-col justify-between hover:shadow-md transition-shadow">
       <div class="flex justify-between items-start mb-2">
         <h3 class="text-sm font-medium text-neutral-500">Требуется действие</h3>
       </div>
@@ -97,14 +97,3 @@ function scrollToInbox() {
   }
 }
 </script>
-
-<style scoped>
-/* Optional styling to hide scrollbar while keeping functionality */
-.kpi-bar::-webkit-scrollbar {
-  display: none;
-}
-.kpi-bar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

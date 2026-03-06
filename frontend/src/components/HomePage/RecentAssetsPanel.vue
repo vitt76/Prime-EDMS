@@ -26,25 +26,37 @@
     </div>
 
     <!-- Grid -->
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-      <AssetCard
+    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 z-0 relative">
+      <div 
         v-for="asset in displayAssets"
         :key="asset.id"
-        :asset="asset"
-        :density="'compact'"
-      />
+        @click="goToGallery"
+        class="cursor-pointer"
+      >
+        <AssetCard
+          :asset="asset"
+          :density="'compact'"
+          class="pointer-events-none"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useHomeStore } from '@/stores/homeStore'
 import AssetCard from '@/components/DAM/AssetCard.vue'
 
 const homeStore = useHomeStore()
+const router = useRouter()
 
 const displayAssets = computed(() => {
   return homeStore.recentAssets.slice(0, 8)
 })
+
+function goToGallery() {
+  router.push({ name: 'dam-gallery' })
+}
 </script>

@@ -16,8 +16,8 @@
       <!-- Loading / Error States -->
       <div v-if="homeStore.isLoading && !hasData" class="space-y-8">
         <!-- Skeleton for KPI Bar -->
-        <div class="flex gap-4 overflow-x-hidden">
-          <div v-for="i in 3" :key="i" class="min-w-[280px] bg-white rounded-lg shadow-sm p-5 animate-pulse">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-8">
+          <div v-for="i in 3" :key="i" class="bg-white rounded-lg shadow-sm p-5 animate-pulse">
             <div class="h-4 bg-neutral-200 rounded w-1/2 mb-4"></div>
             <div class="h-8 bg-neutral-200 rounded w-3/4 mb-2"></div>
             <div class="h-4 bg-neutral-200 rounded w-1/4"></div>
@@ -37,20 +37,20 @@
         <KPIBar class="mb-8" />
 
         <!-- 2-column Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
           <!-- Left Column (60%) -->
-          <div class="lg:col-span-8 flex flex-col gap-8">
+          <div class="lg:col-span-8 flex flex-col gap-6 lg:gap-8">
             <MyInbox />
             <RecentAssetsPanel />
             <ActivityFeedPanel />
           </div>
 
           <!-- Right Column (40%) -->
-          <div class="lg:col-span-4 flex flex-col gap-8">
-            <QuickActionsPanel />
-            <AIInsightsCard />
-            <SavedSearchesPanel />
-            <StoragePanel />
+          <div class="lg:col-span-4 flex flex-col md:grid md:grid-cols-2 lg:flex lg:flex-col gap-6 lg:gap-8 items-start">
+            <QuickActionsPanel class="w-full" />
+            <AIInsightsCard class="w-full" />
+            <SavedSearchesPanel class="w-full" />
+            <StoragePanel class="w-full" />
           </div>
         </div>
       </template>

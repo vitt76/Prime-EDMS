@@ -64,7 +64,7 @@
     <div
       ref="thumbnailRef"
       class="relative w-full bg-neutral-50 overflow-hidden"
-      :class="thumbnailAspectClass"
+      :class="[thumbnailAspectClass, { 'z-0': true }]"
     >
       <!-- Favorite (top-right, appears on hover; always visible when favorited) -->
       <Transition
@@ -128,7 +128,7 @@
       >
         <div
           v-if="isHovered && !isLoading && !isSelected"
-          class="absolute bottom-3 right-3 z-30 flex items-center gap-2 pointer-events-auto"
+          class="absolute bottom-3 right-3 z-[60] flex items-center gap-2 pointer-events-auto"
           data-quick-actions
           @click.stop
         >
@@ -508,7 +508,7 @@ async function loadProtectedThumbnail(): Promise<void> {
           responseType: 'blob',
           headers: { Accept: '*/*' } as any
         })
-        const blob = response?.data as Blob
+        const blob = response instanceof Blob ? response : (response?.data as Blob)
         if (blob && blob.size > 0) {
           const objectUrl = URL.createObjectURL(blob)
           blobObjectUrl.value = objectUrl
@@ -626,7 +626,8 @@ async function handleDownload() {
       responseType: 'blob',
       headers: { Accept: '*/*' } as any
     })
-    const blobUrl = URL.createObjectURL(response.data as Blob)
+    const blob = response instanceof Blob ? response : (response.data as Blob)
+    const blobUrl = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = blobUrl
     link.download = filename

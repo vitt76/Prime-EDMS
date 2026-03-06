@@ -102,7 +102,7 @@ class HeadlessActivityFeedView(APIView):
         'documents.document_view': _('открыл документ'),
         'documents.document_delete': _('удалил документ'),
         'documents.document_trashed': _('переместил документ в корзину'),
-        'documents.document_properties_edited': _('изменил документ'),
+        'documents.document_properties_edit': _('изменил документ'),
     }
 
     AUTH_VERB_RU = {
