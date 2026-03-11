@@ -799,7 +799,7 @@ class AccessLog(models.Model):
         return f"{self.share_link} → {self.event} @ {self.timestamp}"
 
 
-class DistributionCampaign(models.Model):
+class DistributionCampaign(TenantAwareMixin, models.Model):
     """
     Маркетинговая кампания, объединяющая несколько публикаций и каналов
     распространения.
@@ -849,10 +849,16 @@ class DistributionCampaign(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(TenantAwareMixin.Meta):
         ordering = ['-created']
         verbose_name = _('Distribution Campaign')
         verbose_name_plural = _('Distribution Campaigns')
+        indexes = [
+            models.Index(
+                fields=['organization'],
+                name='distribution_dcamp_org_idx'
+            ),
+        ]
 
     def __str__(self):
         return self.title

@@ -212,6 +212,7 @@ export const useAnalyticsStore = defineStore('analytics', () => {
   // Unified dashboard (Analytics Transformation)
   const unifiedDashboard = ref<UnifiedDashboardResponse | null>(null)
   const dashboardGeography = ref<Array<{ country_code: string; event_count: number }>>([])
+  const dashboardGeographyError = ref<string | null>(null)
 
   // Report generation (Phase 3)
   const reportTaskId = ref<number | null>(null)
@@ -414,10 +415,12 @@ export const useAnalyticsStore = defineStore('analytics', () => {
 
   async function fetchDashboardGeography(params?: { days?: number }): Promise<void> {
     try {
+      dashboardGeographyError.value = null
       const data = await analyticsService.getDashboardGeography(params)
       dashboardGeography.value = data?.results ?? []
-    } catch {
+    } catch (e: any) {
       dashboardGeography.value = []
+      dashboardGeographyError.value = e?.message || 'Не удалось загрузить географию аналитики'
     }
   }
 
@@ -670,6 +673,7 @@ export const useAnalyticsStore = defineStore('analytics', () => {
     featureAdoption,
     unifiedDashboard,
     dashboardGeography,
+    dashboardGeographyError,
     reportTaskId,
     reportTaskStatus,
     approvalSummary,

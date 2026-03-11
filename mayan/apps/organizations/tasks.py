@@ -43,6 +43,8 @@ class TenantAwareTask(Task):
     def __call__(self, *args, **kwargs):
         organization_id = kwargs.pop('organization_id', None)
         token = None
+        previous_organization_id = getattr(self, 'organization_id', None)
+        self.organization_id = organization_id
 
         if organization_id:
             try:
@@ -70,3 +72,4 @@ class TenantAwareTask(Task):
                     'TenantAwareTask: cleared organization context '
                     'for task %s', self.name
                 )
+            self.organization_id = previous_organization_id

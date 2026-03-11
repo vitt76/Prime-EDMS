@@ -3,9 +3,12 @@
  */
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+
+const normalizeWsBaseUrl = (value: string): string => value.replace(/\/+$/, '')
+
 const computeWsUrl = (): string => {
   const explicit = import.meta.env.VITE_WS_URL
-  if (explicit) return explicit
+  if (explicit) return normalizeWsBaseUrl(explicit)
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 
@@ -20,10 +23,53 @@ const computeWsUrl = (): string => {
     }
   }
 
-  return `${protocol}//${host}/ws`
+  return normalizeWsBaseUrl(`${protocol}//${host}/ws`)
 }
 
 export const WS_URL = computeWsUrl()
+
+const appendWebSocketQuery = (
+  path: string,
+  params: Record<string, string | null | undefined>
+): string => {
+  const query = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      query.set(key, value)
+    }
+  })
+
+  const serialized = query.toString()
+  return serialized ? `${path}?${serialized}` : path
+}
+
+export const buildNotificationsWebSocketUrl = (
+  token: string,
+  organizationId?: string | null
+): string => {
+  return appendWebSocketQuery(
+    `${WS_URL}/notifications/`,
+    {
+      token,
+      organization_id: organizationId
+    }
+  )
+}
+
+export const ANALYTICS_WS_URL = `${WS_URL}/analytics/`
+
+export const buildAnalyticsWebSocketUrl = (
+  token?: string | null,
+  organizationId?: string | null
+): string => {
+  return appendWebSocketQuery(
+    ANALYTICS_WS_URL,
+    {
+      token,
+      organization_id: organizationId
+    }
+  )
+}
 
 export const APP_TITLE = import.meta.env.VITE_APP_TITLE || 'DAM System'
 export const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0'

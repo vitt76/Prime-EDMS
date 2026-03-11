@@ -1,21 +1,22 @@
 import logging
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Value
+from django.db.models.functions import Coalesce
 
 from mayan.apps.rest_api import generics
 
-from ..models import DistributionCampaign, CampaignPublication
-
-logger = logging.getLogger(name=__name__)
 from ..permissions import (
     permission_publication_api_view, permission_publication_api_create,
     permission_publication_api_edit, permission_publication_api_delete
 )
+from ..models import CampaignPublication, DistributionCampaign
 from ..serializers import (
     CampaignPublicationSerializer, CampaignPublicationCreateSerializer,
     DistributionCampaignDetailSerializer, DistributionCampaignSerializer
 )
 from ..throttles import DistributionThrottle
+
+logger = logging.getLogger(name=__name__)
 
 
 class APIDistributionCampaignListView(generics.ListCreateAPIView):
@@ -29,14 +30,20 @@ class APIDistributionCampaignListView(generics.ListCreateAPIView):
     queryset = DistributionCampaign.objects.all()
     serializer_class = DistributionCampaignSerializer
 
+    def _get_request_organization(self):
+        return getattr(self.request, 'organization', None)
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = self._get_request_organization()
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
         queryset = queryset.filter(owner=user)
+        if organization is not None:
+            queryset = queryset.filter(organization=organization).distinct()
 
         # Annotate basic aggregates for list view.
         queryset = queryset.annotate(
@@ -49,12 +56,12 @@ class APIDistributionCampaignListView(generics.ListCreateAPIView):
                 'campaign_publications__publication__items__renditions__share_links',
                 distinct=True
             ),
-            total_views=Sum(
+            total_views=Coalesce(Sum(
+                'campaign_publications__publication__items__renditions__share_links__views_count'
+            ), Value(0)),
+            total_downloads=Coalesce(Sum(
                 'campaign_publications__publication__items__renditions__share_links__downloads_count'
-            ),
-            total_downloads=Sum(
-                'campaign_publications__publication__items__renditions__share_links__downloads_count'
-            ),
+            ), Value(0)),
         )
 
         state = self.request.query_params.get('state')
@@ -91,14 +98,21 @@ class APIDistributionCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = DistributionCampaignDetailSerializer
     lookup_url_kwarg = 'campaign_id'
 
+    def _get_request_organization(self):
+        return getattr(self.request, 'organization', None)
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = self._get_request_organization()
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
-        return queryset.filter(owner=user)
+        queryset = queryset.filter(owner=user)
+        if organization is not None:
+            queryset = queryset.filter(organization=organization).distinct()
+        return queryset
 
     def get_instance_extra_data(self):
         return {
@@ -117,10 +131,15 @@ class APIDistributionCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
         # Явно синхронизируем метаданные публикации (signal должен это сделать,
         # но на случай если он не сработает, делаем явно)
         if instance.owner:
+            organization = self._get_request_organization()
             campaign_pubs = CampaignPublication.objects.filter(
                 campaign=instance,
                 publication__owner=instance.owner
             ).select_related('publication')
+            if organization is not None:
+                campaign_pubs = campaign_pubs.filter(
+                    publication__organization=organization
+                )
             
             if campaign_pubs.count() == 1:
                 publication = campaign_pubs.first().publication
@@ -146,15 +165,19 @@ class APICampaignPublicationListView(generics.ListCreateAPIView):
     def get_queryset(self):
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = getattr(self.request, 'organization', None)
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
         campaign_id = self.kwargs.get('campaign_id')
-        return queryset.filter(
+        queryset = queryset.filter(
             campaign__id=campaign_id,
             campaign__owner=user
         ).select_related('campaign', 'publication')
+        if organization is not None:
+            queryset = queryset.filter(publication__organization=organization)
+        return queryset
 
     def get_serializer_class(self):
         if self.request.method.lower() == 'post':
@@ -164,9 +187,18 @@ class APICampaignPublicationListView(generics.ListCreateAPIView):
     def get_serializer_context(self):
         context = super().get_serializer_context()
         campaign_id = self.kwargs.get('campaign_id')
-        campaign = DistributionCampaign.objects.filter(
-            id=campaign_id, owner=self.request.user
-        ).first()
+        organization = getattr(self.request, 'organization', None)
+        campaign = self.get_queryset().filter(campaign__id=campaign_id).first()
+        if campaign:
+            campaign = campaign.campaign
+        else:
+            campaign_filters = {
+                'id': campaign_id,
+                'owner': self.request.user,
+            }
+            if organization is not None:
+                campaign_filters['organization'] = organization
+            campaign = DistributionCampaign.objects.filter(**campaign_filters).first()
         context['campaign'] = campaign
         return context
 
@@ -189,15 +221,19 @@ class APICampaignPublicationDetailView(generics.RetrieveDestroyAPIView):
     def get_queryset(self):
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = getattr(self.request, 'organization', None)
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
         campaign_id = self.kwargs.get('campaign_id')
-        return queryset.filter(
+        queryset = queryset.filter(
             campaign__id=campaign_id,
             campaign__owner=user
         )
+        if organization is not None:
+            queryset = queryset.filter(publication__organization=organization)
+        return queryset
 
     def get_instance_extra_data(self):
         return {

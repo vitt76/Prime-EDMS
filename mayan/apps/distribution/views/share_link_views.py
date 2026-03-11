@@ -4,7 +4,6 @@ Views for creating share links with simplified workflow.
 import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.utils import timezone
 from django.views.generic import TemplateView
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -12,9 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from mayan.apps.documents.models import DocumentFile
-from mayan.apps.rest_api import generics
 
-from ..models import Publication, PublicationItem, GeneratedRendition, ShareLink, RenditionPreset
+from ..models import GeneratedRendition, Publication, PublicationItem, ShareLink
 from ..serializers.publication_serializers import ShareLinkSerializer
 from .preset_views import _preset_queryset_for_request
 
@@ -62,10 +60,12 @@ def create_share_link_simple(request):
         )
     
     try:
+        organization = getattr(request, 'organization', None)
+
         # Get document files
-        document_files = DocumentFile.objects.filter(
-            pk__in=document_file_ids
-        )
+        document_files = DocumentFile.objects.filter(pk__in=document_file_ids)
+        if organization is not None:
+            document_files = document_files.filter(document__organization=organization)
         
         if document_files.count() != len(document_file_ids):
             return Response(
@@ -94,7 +94,13 @@ def create_share_link_simple(request):
         publication = None
         if publication_id:
             try:
-                publication = Publication.objects.get(pk=publication_id, owner=request.user)
+                publication_filters = {
+                    'pk': publication_id,
+                    'owner': request.user,
+                }
+                if organization is not None:
+                    publication_filters['organization'] = organization
+                publication = Publication.objects.get(**publication_filters)
                 logger.info(f'Using provided publication {publication.id} for share link creation')
             except Publication.DoesNotExist:
                 return Response(
@@ -108,6 +114,10 @@ def create_share_link_simple(request):
                 document_file__in=document_files,
                 publication__owner=request.user
             ).select_related('publication', 'document_file')
+            if organization is not None:
+                existing_items = existing_items.filter(
+                    publication__organization=organization
+                )
             
             # Group items by publication
             items_by_publication = {}
@@ -134,7 +144,7 @@ def create_share_link_simple(request):
                         owner=request.user,
                         title=title,
                         access_policy='public',
-                        organization=getattr(request, 'organization', None),
+                        organization=organization,
                     )
                     logger.info(f'Created new publication {publication.id} for share link creation')
                 elif existing_items.exists():
@@ -186,12 +196,11 @@ def create_share_link_simple(request):
                     # Continue with other items
             
             # Create share link for this rendition (organization from context or pre_save)
-            org = getattr(request, 'organization', None)
             share_link = ShareLink.objects.create(
                 rendition=rendition,
                 expires_at=expires_at,
                 max_downloads=max_downloads,
-                **({'organization': org} if org is not None else {})
+                **({'organization': organization} if organization is not None else {})
             )
             share_links.append(share_link)
 
@@ -222,12 +231,12 @@ def create_share_link_simple(request):
             try:
                 from mayan.apps.analytics.literals import FEATURE_SHARE_LINK_CREATE
                 from mayan.apps.analytics.services import track_feature_usage
-                if org:
+                if organization:
                     track_feature_usage(
                         user=request.user if request.user.is_authenticated else None,
                         feature_name=FEATURE_SHARE_LINK_CREATE,
                         was_successful=True,
-                        organization=org,
+                        organization=organization,
                         metadata={'share_link_id': str(share_link.pk)},
                     )
             except Exception:

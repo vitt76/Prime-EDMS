@@ -101,6 +101,9 @@ class PublicationSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user and request.user.is_authenticated:
             validated_data['owner'] = request.user
+            organization = getattr(request, 'organization', None)
+            if organization is not None and not validated_data.get('organization'):
+                validated_data['organization'] = organization
 
         return super().create(validated_data)
 
@@ -232,9 +235,18 @@ class ShareLinkSerializer(serializers.ModelSerializer):
         """Check if link is password protected."""
         return bool(obj.password_hash)
 
+    def _strip_internal_fields(self, validated_data):
+        validated_data.pop('_instance_extra_data', None)
+        return validated_data
+
     def create(self, validated_data):
         """Handle password setting during creation."""
+        validated_data = self._strip_internal_fields(validated_data)
         password = validated_data.pop('password', None)
+        request = self.context.get('request')
+        organization = getattr(request, 'organization', None) if request else None
+        if organization and not validated_data.get('organization'):
+            validated_data['organization'] = organization
         instance = super().create(validated_data)
         if password:
             instance.set_password(password)
@@ -243,6 +255,7 @@ class ShareLinkSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         """Handle password setting during update."""
+        validated_data = self._strip_internal_fields(validated_data)
         password = validated_data.pop('password', None)
         instance = super().update(instance, validated_data)
         if password is not None:  # Allow clearing password with empty string

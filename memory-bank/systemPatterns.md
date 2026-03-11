@@ -576,6 +576,22 @@ mayan/apps/dam/tests/
 - иначе возникают ложные runtime ошибки подключения при полностью рабочем backend;
 - несогласованность между Gunicorn и Daphne портами особенно болезненна для notification center и analytics realtime flows.
 
+### 16. Middleware-Dependent Tenant Test Pattern
+
+**Назначение:** не ломать tenant-aware integration tests ложным использованием `force_authenticate()`.
+
+**Паттерн:**
+
+- если тест проверяет поведение, зависящее от `TenantResolverMiddleware`, нельзя полагаться на `APIClient.force_authenticate()`, потому что middleware выполняется раньше DRF authentication;
+- для таких тестов нужно использовать реальный `Authorization: Token ...` header через shared harness (`SaaSTenantTestHarnessMixin.api_client_for()`), чтобы middleware видел пользователя так же, как production runtime;
+- websocket/consumer tests должны переопределять `CHANNEL_LAYERS` на `channels.layers.InMemoryChannelLayer`, иначе тесты зависят от внешнего Redis channel layer и становятся хрупкими.
+
+**Почему это важно:**
+
+- tenant resolution по `X-Organization-Id` и default organization должна проверяться в условиях, максимально близких к реальному runtime;
+- это устраняет ложные падения, когда `request.user` доступен DRF view, но не доступен middleware;
+- это стабилизирует analytics/distribution regression suite без специальных test-only bypasses в production коде.
+
 ## Миграции и версионирование
 
 ### Database Migrations

@@ -1,18 +1,16 @@
 import logging
 
-from django.db.models import Count, Sum
 from django.utils.translation import ugettext_lazy as _
 
+from mayan.apps.documents.models import Document
 from mayan.apps.rest_api import serializers
-from mayan.apps.documents.models import Document, DocumentFile, DocumentVersion
-
-logger = logging.getLogger(name=__name__)
 
 from ..models import (
-    CampaignPublication, DistributionCampaign, Publication, PublicationItem,
-    ShareLink
+    CampaignPublication, DistributionCampaign, Publication, PublicationItem
 )
 from .publication_serializers import PublicationSerializer
+
+logger = logging.getLogger(name=__name__)
 
 
 class CampaignPublicationSerializer(serializers.ModelSerializer):
@@ -59,8 +57,17 @@ class CampaignPublicationCreateSerializer(serializers.ModelSerializer):
         if not request or not request.user or not request.user.is_authenticated:
             raise serializers.ValidationError(_('Authentication required.'))
 
+        organization = getattr(request, 'organization', None)
+
         try:
-            publication = Publication.objects.get(id=value, owner=request.user)
+            publication_filters = {
+                'id': value,
+                'owner': request.user
+            }
+            if organization is not None:
+                publication_filters['organization'] = organization
+
+            publication = Publication.objects.get(**publication_filters)
         except Publication.DoesNotExist:
             raise serializers.ValidationError(_('Publication not found or access denied.'))
         return publication.id
@@ -146,10 +153,26 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
         validated_data.pop('_instance_extra_data', None)
         return validated_data
 
+    def _get_request_organization(self):
+        request = self.context.get('request')
+        return getattr(request, 'organization', None) if request else None
+
+    def _bind_campaign_organization_metadata(self, validated_data):
+        organization = self._get_request_organization()
+        if organization is None:
+            return validated_data
+
+        validated_data.setdefault('organization', organization)
+        metadata = dict(validated_data.get('metadata') or {})
+        metadata.setdefault('organization_id', str(organization.pk))
+        validated_data['metadata'] = metadata
+        return validated_data
+
     def create(self, validated_data):
         publication_ids = validated_data.pop('publication_ids', [])
         document_ids = validated_data.pop('document_ids', [])
         validated_data = self._strip_internal_fields(validated_data)
+        validated_data = self._bind_campaign_organization_metadata(validated_data)
 
         request = self.context.get('request')
         owner = None
@@ -185,6 +208,7 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
         publication_ids = validated_data.pop('publication_ids', None)
         document_ids = validated_data.pop('document_ids', None)
         validated_data = self._strip_internal_fields(validated_data)
+        validated_data = self._bind_campaign_organization_metadata(validated_data)
         # Owner is controlled by backend
         validated_data.pop('owner', None)
 
@@ -194,7 +218,7 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
         logger.info(f'[CampaignSerializer.update] Before update: title={old_title!r}, description={old_description!r}, validated_data={validated_data}')
 
         instance = super().update(instance, validated_data)
-        
+
         # Обновляем из БД, чтобы получить актуальные значения
         instance.refresh_from_db()
         logger.info(f'[CampaignSerializer.update] After update: title={instance.title!r}, description={instance.description!r}')
@@ -237,11 +261,19 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
         """
         # Обновляем кампанию из БД, чтобы получить актуальные значения
         campaign.refresh_from_db()
-        
+
+        organization = self._get_request_organization()
+        if organization is None:
+            organization = getattr(campaign, 'organization', None)
+
         campaign_pubs = CampaignPublication.objects.filter(
             campaign=campaign,
             publication__owner=owner
         ).select_related('publication')
+        if organization is not None:
+            campaign_pubs = campaign_pubs.filter(
+                publication__organization=organization
+            )
 
         pub_count = campaign_pubs.count()
         logger.info(f'Found {pub_count} publications for campaign {campaign.id} (owner={owner.username})')
@@ -262,8 +294,20 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
             logger.info(f'Campaign {campaign.id} has no publications, skipping metadata sync')
 
     def _sync_publications_for_campaign(self, campaign, owner, publication_ids):
+        organization = self._get_request_organization()
+        if organization is None:
+            organization = getattr(campaign, 'organization', None)
+
+        publication_queryset = Publication.objects.filter(
+            id__in=publication_ids, owner=owner
+        )
+        if organization is not None:
+            publication_queryset = publication_queryset.filter(
+                organization=organization
+            )
+
         allowed_publications = set(
-            Publication.objects.filter(id__in=publication_ids, owner=owner).values_list('id', flat=True)
+            publication_queryset.values_list('id', flat=True)
         )
         # Удаляем связи, которых больше нет
         CampaignPublication.objects.filter(
@@ -286,11 +330,21 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
         Create or update a single Publication for this campaign and ensure its
         items correspond to the given document IDs (latest files).
         """
+        organization = self._get_request_organization()
+        if organization is None:
+            organization = getattr(campaign, 'organization', None)
+
         # Ищем существующую публикацию кампании этого владельца
         campaign_pub = CampaignPublication.objects.filter(
             campaign=campaign,
             publication__owner=owner
         ).select_related('publication').first()
+        if organization is not None:
+            campaign_pub = CampaignPublication.objects.filter(
+                campaign=campaign,
+                publication__owner=owner,
+                publication__organization=organization
+            ).select_related('publication').first()
 
         if campaign_pub:
             publication = campaign_pub.publication
@@ -298,7 +352,8 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
             publication = Publication.objects.create(
                 owner=owner,
                 title=campaign.title or _('Campaign publication'),
-                description=campaign.description or ''
+                description=campaign.description or '',
+                organization=organization,
             )
             CampaignPublication.objects.create(
                 campaign=campaign,
@@ -307,6 +362,8 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
 
         # Получаем последние файлы документов
         documents = Document.objects.filter(id__in=document_ids)
+        if organization is not None:
+            documents = documents.filter(organization=organization)
         file_ids = []
         for doc in documents:
             doc_file = doc.files.order_by('-timestamp').first()
@@ -334,12 +391,12 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
         publication.title = campaign.title or _('Campaign publication')
         publication.description = campaign.description or ''
         publication.save(update_fields=['title', 'description'])
-        
+
         # Автоматически генерируем рендишены для всех файлов в публикации
         # если были добавлены новые элементы или если у публикации нет пресетов
         if new_items_created or not publication.presets.exists():
             from ..models import RenditionPreset, Recipient
-            
+
             # Если у публикации нет пресетов, создаем дефолтный пресет для изображений
             if not publication.presets.exists():
                 # Ищем дефолтный пресет для изображений или создаем его
@@ -347,17 +404,22 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
                     resource_type='image',
                     name__icontains='default'
                 ).first()
-                
+
                 if not default_preset:
                     # Создаем или получаем дефолтного получателя для системных пресетов
-                    default_recipient, _ = Recipient.objects.get_or_create(
+                    default_recipient, recipient_created = Recipient.objects.get_or_create(
                         email='system@mayan-edms.local',
                         defaults={
                             'name': 'System Default',
                             'organization': 'Mayan EDMS'
                         }
                     )
-                    
+                    if recipient_created:
+                        logger.info(
+                            'Created default recipient %s for campaign rendition generation',
+                            default_recipient.pk
+                        )
+
                     # Создаем дефолтный пресет для изображений
                     default_preset = RenditionPreset.objects.create(
                         resource_type='image',
@@ -371,11 +433,11 @@ class DistributionCampaignSerializer(serializers.ModelSerializer):
                         recipient=default_recipient
                     )
                     logger.info(f'[Campaign] Created default preset: {default_preset.name}')
-                
+
                 # Добавляем пресет к публикации
                 publication.presets.add(default_preset)
                 logger.info(f'[Campaign] Added default preset to publication {publication.id}')
-            
+
             # Генерируем рендишены для всех элементов публикации
             # generate_all_renditions() использует get_or_create, так что безопасно вызывать для всех
             # Это гарантирует, что рендишены будут созданы для всех файлов, включая новые
@@ -496,5 +558,4 @@ class DistributionCampaignDetailSerializer(DistributionCampaignSerializer):
             })
 
         return results
-
 

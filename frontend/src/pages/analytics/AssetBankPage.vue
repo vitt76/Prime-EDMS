@@ -56,6 +56,12 @@
       </div>
 
       <div class="mt-6">
+        <div
+          v-if="analyticsStore.dashboardGeographyError"
+          class="mb-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {{ analyticsStore.dashboardGeographyError }}
+        </div>
         <GeoMap
           :rows="analyticsStore.dashboardGeography"
           :days="30"
@@ -90,6 +96,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
+import { buildAnalyticsWebSocketUrl } from '@/utils/constants'
 
 import AssetDistributionChart from '@/components/Analytics/AssetDistributionChart.vue'
 import AssetDetailModal from '@/components/Analytics/AssetDetailModal.vue'
@@ -110,6 +117,22 @@ const selectedAsset = ref<MostDownloadedAssetRow | null>(null)
 const assetDetailModalOpen = ref(false)
 const showReportModal = ref(false)
 let ws: WebSocket | null = null
+
+function getToken(): string | null {
+  try {
+    return localStorage.getItem('auth_token')
+  } catch {
+    return null
+  }
+}
+
+function getOrganizationId(): string | null {
+  try {
+    return localStorage.getItem('current_organization_id')
+  } catch {
+    return null
+  }
+}
 
 async function refreshAll(): Promise<void> {
   await Promise.all([
@@ -151,12 +174,16 @@ onMounted(async () => {
 
   // Real-time updates (best-effort). Requires backend Channels route: /ws/analytics/
   try {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    ws = new WebSocket(`${protocol}://${window.location.host}/ws/analytics/`)
+    ws = new WebSocket(
+      buildAnalyticsWebSocketUrl(getToken(), getOrganizationId())
+    )
     ws.onmessage = async (event) => {
       try {
         const payload = JSON.parse(event.data || '{}')
-        if (payload?.type === 'refresh' && !analyticsStore.isLoading) {
+        if (
+          ['analytics_refresh', 'refresh'].includes(payload?.type) &&
+          !analyticsStore.isLoading
+        ) {
           await refreshAll()
         }
       } catch {

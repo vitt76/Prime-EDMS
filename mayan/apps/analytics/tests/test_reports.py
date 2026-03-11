@@ -1,38 +1,37 @@
 """Tests for async analytics report generation."""
 
 import os
-import tempfile
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
-from django.utils import timezone
+from django.test import TestCase
 from rest_framework import status
-from rest_framework.test import APIClient
 
 from mayan.apps.documents.models import Document, DocumentType
-from mayan.apps.organizations.models import Organization
+from mayan.apps.organizations.tests.mixins import SaaSTenantTestHarnessMixin
 
 from mayan.apps.analytics.models import AssetEvent, AnalyticsReportTask
-from mayan.apps.analytics.tasks import generate_analytics_report
+from mayan.apps.analytics.tasks import (
+    generate_analytics_report, track_asset_event_async
+)
 
-User = get_user_model()
 
-
-class AnalyticsReportGenerationTestCase(TestCase):
+class AnalyticsReportGenerationTestCase(
+    SaaSTenantTestHarnessMixin, TestCase
+):
     """Report task is created and task runs to completion."""
+
+    use_temporary_media_root = True
 
     def setUp(self):
         super().setUp()
-        self.media_root = tempfile.mkdtemp()
-        self.org = Organization.objects.create(
+        self.org = self.create_organization(
             name='Report Org',
             slug='report-org',
-            email='report@test.com',
-            is_active=True,
-            status='active',
         )
-        self.user = User.objects.create_superuser(
-            username='reportuser', password='pass', email='r@test.com'
+        self.user = self.create_user_in_organization(
+            username='reportuser',
+            organization=self.org,
+            is_default=True,
+            is_superuser=True,
         )
         doc_type = DocumentType.objects.create(label='Test')
         self.document = Document.objects.create(
@@ -48,46 +47,60 @@ class AnalyticsReportGenerationTestCase(TestCase):
 
     def test_generate_analytics_report_task_sync(self):
         """Running the task synchronously completes and sets file_path."""
-        with tempfile.TemporaryDirectory() as tmp:
-            with override_settings(MEDIA_ROOT=tmp):
-                task = AnalyticsReportTask.objects.create(
-                    organization=self.org,
-                    user=self.user,
-                    report_type=AnalyticsReportTask.REPORT_TYPE_ASSET_USAGE,
-                    parameters={'date_range': {}},
-                    status=AnalyticsReportTask.STATUS_PENDING,
-                )
-                generate_analytics_report(
-                    task.pk,
-                    organization_id=str(self.org.pk),
-                )
-                task.refresh_from_db()
-                self.assertEqual(task.status, AnalyticsReportTask.STATUS_COMPLETED)
-                self.assertIsNotNone(task.file_path)
-                self.assertIsNotNone(task.completed_at)
-                self.assertTrue(
-                    os.path.isfile(task.file_path),
-                    'Report file should exist: %s' % task.file_path
-                )
+        task = AnalyticsReportTask.objects.create(
+            organization=self.org,
+            user=self.user,
+            report_type=AnalyticsReportTask.REPORT_TYPE_ASSET_USAGE,
+            parameters={'date_range': {}},
+            status=AnalyticsReportTask.STATUS_PENDING,
+        )
+        generate_analytics_report(
+            task.pk,
+            organization_id=str(self.org.pk),
+        )
+        task.refresh_from_db()
+        self.assertEqual(task.status, AnalyticsReportTask.STATUS_COMPLETED)
+        self.assertIsNotNone(task.file_path)
+        self.assertIsNotNone(task.completed_at)
+        self.assertTrue(
+            os.path.isfile(task.file_path),
+            'Report file should exist: %s' % task.file_path
+        )
+
+    def test_track_asset_event_async_apply_accepts_organization_id_kwarg(self):
+        """TenantAwareTask should accept organization_id in kwargs without signature errors."""
+        before_count = AssetEvent.objects.count()
+
+        result = track_asset_event_async.apply(kwargs={
+            'organization_id': str(self.org.pk),
+            'user_id': self.user.pk,
+            'document_id': self.document.pk,
+            'event_type': AssetEvent.EVENT_TYPE_VIEW,
+            'metadata': {'source': 'test'},
+        })
+
+        self.assertTrue(result.successful())
+        self.assertEqual(AssetEvent.objects.count(), before_count + 1)
 
 
-class AnalyticsReportAPITestCase(TestCase):
+class AnalyticsReportAPITestCase(
+    SaaSTenantTestHarnessMixin, TestCase
+):
     """POST generate returns 202 and creates a report task."""
 
     def setUp(self):
         super().setUp()
-        self.client = APIClient()
-        self.user = User.objects.create_superuser(
-            username='apiuser', password='pass', email='a@test.com'
-        )
-        self.client.force_authenticate(user=self.user)
-        self.org = Organization.objects.create(
+        self.org = self.create_organization(
             name='API Report Org',
             slug='api-report-org',
-            email='api-report@test.com',
-            is_active=True,
-            status='active',
         )
+        self.user = self.create_user_in_organization(
+            username='apiuser',
+            organization=self.org,
+            is_default=True,
+            is_superuser=True,
+        )
+        self.client = self.api_client_for(self.user)
 
     def test_post_generate_returns_202_and_creates_task(self):
         """POST with X-Organization-Id creates task and returns task_id."""

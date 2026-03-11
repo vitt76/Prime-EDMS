@@ -49,11 +49,14 @@ from mayan.apps.headless_api.views.users_views import HeadlessUsersDetailView, H
 from mayan.apps.headless_api.views.analytics_views import (
     AssetBankViewSet, CampaignPerformanceViewSet, SearchAnalyticsViewSet,
     ApprovalAnalyticsViewSet, ROIDashboardViewSet, UserActivityViewSet,
-    DistributionAnalyticsViewSet, ContentIntelligenceViewSet
+    DashboardGeographyViewSet, DistributionAnalyticsViewSet,
+    ContentIntelligenceViewSet
 )
-from mayan.apps.analytics.api_views import EmailClickWebhookView
-from mayan.apps.analytics.api_views import AnalyticsEventsExportView
-from mayan.apps.analytics.api_views import AnalyticsHealthCheckView
+from mayan.apps.analytics.api_views import (
+    AnalyticsDashboardViewSet, AnalyticsEventsExportView,
+    AnalyticsHealthCheckView, AnalyticsReportGenerateViewSet,
+    EmailClickWebhookView
+)
 from mayan.apps.headless_api.views.image_editor_views import (
     HeadlessImageEditorCommitView,
     HeadlessImageEditorPreviewView,
@@ -155,6 +158,31 @@ api_version_urls = [
         regex=r'^headless/dashboard/stats/$',
         view=HeadlessDashboardStatsView.as_view(),
         name='headless-dashboard-stats'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/$',
+        view=AnalyticsDashboardViewSet.as_view({'get': 'list'}),
+        name='headless-analytics-dashboard'
+    ),
+    url(
+        regex=r'^headless/analytics/reports/generate/$',
+        view=AnalyticsReportGenerateViewSet.as_view({'post': 'create'}),
+        name='headless-analytics-reports-generate'
+    ),
+    url(
+        regex=r'^headless/analytics/reports/(?P<pk>\d+)/$',
+        view=AnalyticsReportGenerateViewSet.as_view({'get': 'retrieve'}),
+        name='headless-analytics-reports-detail'
+    ),
+    url(
+        regex=r'^headless/analytics/reports/(?P<pk>\d+)/download/$',
+        view=AnalyticsReportGenerateViewSet.as_view({'get': 'download'}),
+        name='headless-analytics-reports-download'
+    ),
+    url(
+        regex=r'^headless/analytics/dashboard/geography/$',
+        view=DashboardGeographyViewSet.as_view({'get': 'list'}),
+        name='headless-analytics-dashboard-geography'
     ),
     # Analytics (Asset Bank, Phase 1)
     url(

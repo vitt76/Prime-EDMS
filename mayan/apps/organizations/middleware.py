@@ -17,6 +17,7 @@ import logging
 import os
 import uuid as uuid_module
 
+from django.conf import settings
 from django.http import JsonResponse
 from django.utils.translation import ugettext_lazy as _
 
@@ -24,10 +25,10 @@ from .managers import set_current_organization, clear_current_organization
 
 logger = logging.getLogger(name=__name__)
 
-# Deployment mode from environment
+# Deployment mode defaults from environment.
 DEPLOYMENT_MODE = os.environ.get('DEPLOYMENT_MODE', 'STANDALONE').upper()
 
-# Base domain for subdomain resolution in SaaS mode
+# Base domain defaults from environment.
 SAAS_BASE_DOMAIN = os.environ.get('SAAS_BASE_DOMAIN', 'dam-brand.com')
 
 # Paths that should bypass tenant resolution (health checks, static, etc.)
@@ -135,7 +136,7 @@ class TenantResolverMiddleware:
             Organization instance or None.
         """
         # Standalone mode: always return default organization
-        if DEPLOYMENT_MODE == 'STANDALONE':
+        if self._get_deployment_mode() == 'STANDALONE':
             return self._get_default_organization()
 
         # SaaS mode: try multiple resolution strategies
@@ -169,12 +170,13 @@ class TenantResolverMiddleware:
             return organization
 
         # 4. Try from authenticated user's default organization
-        if hasattr(request, 'user') and request.user.is_authenticated:
-            organization = self._resolve_by_user(request.user)
+        request_user = self._get_request_user(request=request)
+        if request_user and request_user.is_authenticated:
+            organization = self._resolve_by_user(request_user)
             if organization is not None:
                 logger.debug(
                     'Resolved organization by user: %s -> %s',
-                    request.user.username, organization.slug
+                    request_user.username, organization.slug
                 )
                 return organization
 
@@ -212,8 +214,10 @@ class TenantResolverMiddleware:
             )
             return None
 
+        user = self._get_request_user(request=request)
+
         # User must be authenticated to use header-based switching
-        if not hasattr(request, 'user') or not request.user.is_authenticated:
+        if not user or not user.is_authenticated:
             logger.debug(
                 'X-Organization-Id header present but user not authenticated'
             )
@@ -234,12 +238,12 @@ class TenantResolverMiddleware:
                 return None
 
             # Superadmin can access any organization
-            if request.user.is_staff or request.user.is_superuser:
+            if user.is_staff or user.is_superuser:
                 return organization
 
             # Regular users must be members
             is_member = UserOrganizationRole.objects.filter(
-                user=request.user,
+                user=user,
                 organization=organization
             ).exists()
 
@@ -247,7 +251,7 @@ class TenantResolverMiddleware:
                 logger.warning(
                     'User %s tried to access organization %s via header '
                     'but is not a member',
-                    request.user.pk, org_id
+                    user.pk, org_id
                 )
                 return None
 
@@ -259,6 +263,39 @@ class TenantResolverMiddleware:
                 'header: %s', exc
             )
             return None
+
+    def _get_request_user(self, request):
+        """
+        Resolve the authenticated user early enough for tenant middleware.
+
+        Django session auth populates ``request.user`` before this middleware.
+        DRF token auth does not, so we best-effort resolve ``Authorization:
+        Token <key>`` here to keep tenant switching working for the SPA.
+        """
+        user = getattr(request, 'user', None)
+        if user and user.is_authenticated:
+            return user
+
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if not auth_header:
+            return user
+
+        parts = auth_header.split()
+        if len(parts) != 2 or parts[0].lower() != 'token':
+            return user
+
+        try:
+            from rest_framework.authtoken.models import Token
+        except Exception:
+            return user
+
+        try:
+            token = Token.objects.select_related('user').get(key=parts[1])
+        except Token.DoesNotExist:
+            return user
+
+        request.user = token.user
+        return token.user
 
     def _resolve_by_custom_domain(self, host):
         """Resolve organization by custom domain from DomainSettings."""
@@ -286,7 +323,7 @@ class TenantResolverMiddleware:
 
         Example: org-slug.dam-brand.com -> Organization(slug='org-slug')
         """
-        base_domain = SAAS_BASE_DOMAIN
+        base_domain = self._get_saas_base_domain()
 
         if not host.endswith(base_domain):
             return None
@@ -310,6 +347,18 @@ class TenantResolverMiddleware:
                 'Unexpected error resolving subdomain %s: %s', host, exc
             )
             return None
+
+    def _get_deployment_mode(self):
+        """Resolve deployment mode dynamically to keep tests/settings consistent."""
+        return str(
+            getattr(settings, 'DEPLOYMENT_MODE', DEPLOYMENT_MODE)
+        ).upper()
+
+    def _get_saas_base_domain(self):
+        """Resolve SaaS base domain dynamically to support override_settings()."""
+        return str(
+            getattr(settings, 'SAAS_BASE_DOMAIN', SAAS_BASE_DOMAIN)
+        )
 
     def _resolve_by_user(self, user):
         """

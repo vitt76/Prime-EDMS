@@ -17,6 +17,7 @@ from ..models import (
     GeneratedRendition,
     Publication,
     PublicationItem,
+    Recipient,
     RenditionPreset,
     ShareLink,
 )
@@ -89,10 +90,15 @@ class ShareLinkIsValidTestCase(TestCase):
         )
         _add_file_to_document(self.document)
         self.document.refresh_from_db()
+        self.recipient, _ = Recipient.objects.get_or_create(
+            email='share-link-tests@test.com',
+            defaults={'name': 'Share Link Tests Recipient'}
+        )
         self.preset = RenditionPreset.objects.create(
             name='Test Preset',
             resource_type='image',
             format='png',
+            recipient=self.recipient,
         )
         self.publication = Publication.objects.create(
             owner=self.user,
@@ -199,10 +205,15 @@ class ShareLinkCheckPasswordTestCase(TestCase):
         )
         _add_file_to_document(self.document)
         self.document.refresh_from_db()
+        self.recipient, _ = Recipient.objects.get_or_create(
+            email='share-link-tests@test.com',
+            defaults={'name': 'Share Link Tests Recipient'}
+        )
         self.preset = RenditionPreset.objects.create(
             name='Test Preset',
             resource_type='image',
             format='png',
+            recipient=self.recipient,
         )
         self.publication = Publication.objects.create(
             owner=self.user,
@@ -282,10 +293,15 @@ class ShareLinkPortalExpiredTestCase(TestCase):
         )
         _add_file_to_document(self.document)
         self.document.refresh_from_db()
+        self.recipient, _ = Recipient.objects.get_or_create(
+            email='share-link-tests@test.com',
+            defaults={'name': 'Share Link Tests Recipient'}
+        )
         self.preset = RenditionPreset.objects.create(
             name='Test Preset',
             resource_type='image',
             format='png',
+            recipient=self.recipient,
         )
         self.publication = Publication.objects.create(
             owner=self.user,

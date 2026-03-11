@@ -2,16 +2,18 @@
 
 ## Текущий фокус
 
-Проект завершил все 4 фазы MVP Stabilization roadmap на уровне кода: legacy cleanup, contract sync, backend tenant-suite stabilization и базовый accessibility/product hardening реализованы. Текущий фокус сместился с roadmap delivery на post-MVP runtime stabilization: устранение live-консольных ошибок, доочистка legacy integration seams и фиксация operational gaps между Vite SPA и Docker backend.
+Проект завершил Runtime Follow-up Stabilization pass как на уровне исходного кода, так и на уровне targeted backend verification. Текущий фокус сместился с исправления runtime gaps на финальный operational smoke и последующее закрытие follow-up: migration для distribution campaigns уже применена, regression suite против актуального workspace-кода уже прогнан через контейнерный runtime, остается только окончательно подтвердить live HTTP smoke на поднятом стеке.
 
 ## Подтвержденное текущее состояние
 
-- **MVP Stabilization:** все 4 фазы плана реализованы; targeted Vitest и Playwright smoke suites проходят.
-- **HomePage KPI router gap:** live backend теперь экспортирует `/api/v4/headless/documents/stats/`, `/documents/ai-stats/`, `/user/inbox-stats/`, `/organization/storage-stats/` и `/user/daily-insights/` через `mayan/apps/rest_api/urls.py`; прежний live `404` на этих маршрутах устранен.
-- **A11y / product hardening:** галерея переведена на более корректную `list/listitem` семантику, улучшены focus trap и keyboard сценарии для `Modal`, `MetadataPanel`, filters drawer и action menus; добавлены `vitest-axe` и `@axe-core/playwright` smoke checks.
-- **Routing:** основной маршрут DAM закреплен за `/dam`, legacy `/dam/gallery` живет как redirect/compat path.
-- **Backend tenant verification:** контейнерный tenant/DAM regression suite был стабилизирован и ранее проходил green run.
-- **Frontend QA:** shared test bootstrap и Playwright smoke infrastructure работают стабильно для targeted suites.
+- **Backend test harness normalization:** `TenantResolverMiddleware` теперь читает `DEPLOYMENT_MODE` и `SAAS_BASE_DOMAIN` динамически из `settings`, а не только из module-level env snapshot; для новых tenant/DAM integration tests введен общий `SaaSTenantTestHarnessMixin`.
+- **Token-aware tenant resolution:** `TenantResolverMiddleware` теперь умеет резолвить пользователя из `Authorization: Token ...` еще до DRF auth phase, поэтому `X-Organization-Id` и default-org fallback корректно работают и для SPA/token запросов, и для containerized API tests.
+- **Distribution tenant contract:** `DistributionCampaign` переведен на first-class tenant model через `TenantAwareMixin`; миграция `0018_distributioncampaign_organization` уже применена в контейнерном runtime.
+- **Realtime/WebSocket contract:** analytics stream больше не открывается “анонимно”; frontend строит analytics websocket URL через единый helper с `token` и `organization_id`, backend consumer валидирует membership так же, как notifications consumer.
+- **Verification hardening:** geography flow теперь проверяется на live route contract, targeted backend tests проходят через `mayan-edms.py`, а frontend stores/pages показывают явную ошибку для geography вместо тихого пустого списка.
+- **Backend QA:** targeted Django suite для `home_stats`, `analytics reports`, `analytics consumers` и `distribution tenant isolation` проходит green run в Docker runtime через `/opt/mayan-edms/bin/mayan-edms.py`.
+- **Frontend QA:** targeted Vitest suite для `useWebSocket`, `AssetBankPage` и distribution store проходит green run на текущем workspace.
+- **Operational stack:** `app` (`:8080`) и `app_websocket` (`:8001`) подняты и healthy; admin token и default organization для live smoke уже получены из контейнерного runtime.
 
 ## Текущая архитектура (Шпаргалка)
 
@@ -19,18 +21,16 @@
 - **Headless API exposure:** наличие view в `mayan/apps/headless_api/views/` недостаточно само по себе; критические SPA endpoints должны быть одновременно смонтированы в live `mayan/apps/rest_api/urls.py`.
 - **Frontend QA/A11y:** accessibility теперь закреплена не только компонентными тестами, но и Playwright axe smoke для основного gallery flow.
 - **Operational split:** SPA использует `:5173`, Django API — `:8080`, а WebSocket ASGI контур живет отдельно на `:8001`; ошибки чаще возникают на seams между этими тремя точками входа, а не внутри самого UI.
+- **Distribution campaigns:** для campaigns больше не считается нормой tenant scoping через `metadata` и join-ы; canonical contract теперь должен идти через явный `organization` FK с metadata как backward-compatible fallback.
 
 ## Ближайшие задачи (Next Actions)
 
-1. Починить live analytics geography route exposure, чтобы `/api/v4/headless/analytics/dashboard/geography/` не давал `404`.
-2. Привести frontend WebSocket configuration в соответствие с фактическим ASGI endpoint на `:8001`, а не вычислять его из API host.
-3. Убрать frontend runtime warning в `SharingPage.vue` (`IconEye`) и довести distribution screens до clean render без component-resolution ошибок.
-4. Разобрать backend `500` на `/api/v4/distribution/share_links/` и `/api/v4/distribution/campaigns/`, а также связанные task/event ошибки (`track_asset_event_async(... organization_id ...)`) как отдельный runtime stabilization pass.
+1. Завершить live smoke для tenant-scoped endpoint'ов (`headless geography`, `distribution campaigns`, `share_links`) на уже поднятом `:8080` стеке.
+2. При необходимости подтвердить websocket smoke для `:8001` уже вне unit/integration уровня.
+3. После live smoke обновить итоговый operational статус и закрыть Runtime Follow-up Stabilization pass.
 
 ## Известные проблемы / Риски (Known Issues)
 
-- `/api/v4/headless/analytics/dashboard/geography/` в live backend все еще не отдается, хотя view существует в коде.
-- WebSocket notifications/analytics configuration во frontend не до конца синхронизирована с выделенным Daphne/ASGI портом `8001`.
-- `SharingPage.vue` содержит runtime проблему с неимпортированным `IconEye`.
-- Distribution контур все еще нестабилен в live Docker runtime: `share_links` и `campaigns` могут отдавать `500`, а в backend логах всплывают ошибки Celery/event pipeline с отсутствующим `organization_id`.
-- Полный backend suite по-прежнему ограничен состоянием общего test environment, а не только бизнес-логикой.
+- Код runtime follow-up pass подтвержден targeted regression suite, но live smoke по HTTP endpoint'ам еще не зафиксирован отдельным успешным прогоном из shell/browser из-за проблем со spawn отдельных curl-команд в локальной Windows shell-сессии.
+- Полный backend test environment в широком смысле все еще хрупок: параллельные Django test runs конфликтуют за `test_mayan`, поэтому verification надежно работает при последовательном прогоне с очисткой тестовой БД.
+- IDE по-прежнему показывает import-resolution warnings для Django/Channels в локальном окружении Windows, но это не проявилось как синтаксическая ошибка на измененных Python файлах.

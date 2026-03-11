@@ -1045,6 +1045,7 @@ import { useAssetStore } from '@/stores/assetStore'
 import ShareModal from '@/components/DAM/ShareModal.vue'
 import { apiService } from '@/services/apiService'
 import { resolveAssetImageUrl } from '@/utils/imageUtils'
+import IconEye from '@/components/Common/icons/IconEye.vue'
 import TrendSparkline from '@/components/Common/TrendSparkline.vue'
 import DistributionToolbar from '@/components/Distribution/DistributionToolbar.vue'
 

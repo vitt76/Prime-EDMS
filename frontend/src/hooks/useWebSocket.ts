@@ -1,4 +1,4 @@
-import { WS_URL } from '@/utils/constants'
+import { buildNotificationsWebSocketUrl } from '@/utils/constants'
 import { useNotificationStore } from '@/stores/notificationStore'
 
 export function useWebSocket() {
@@ -14,12 +14,19 @@ export function useWebSocket() {
     }
   }
 
+  const getOrganizationId = (): string | null => {
+    try {
+      return localStorage.getItem('current_organization_id')
+    } catch {
+      return null
+    }
+  }
+
   const connect = () => {
     const token = getToken()
     if (!token) return
 
-    // WS_URL already includes "/ws"
-    const url = `${WS_URL}/notifications/?token=${encodeURIComponent(token)}`
+    const url = buildNotificationsWebSocketUrl(token, getOrganizationId())
 
     websocket = new WebSocket(url)
 

@@ -3,7 +3,7 @@
  * This is a placeholder implementation that can be extended with actual WebSocket connection
  */
 
-import { WS_URL } from '@/utils/constants'
+import { buildNotificationsWebSocketUrl } from '@/utils/constants'
 
 type WebSocketEventType =
   | 'comment_added'
@@ -34,7 +34,14 @@ class WebSocketService {
     this.isConnecting = true
 
     try {
-      const wsUrl = WS_URL
+      const token = localStorage.getItem('auth_token')
+      const organizationId = localStorage.getItem('current_organization_id')
+      if (!token) {
+        this.isConnecting = false
+        return
+      }
+
+      const wsUrl = buildNotificationsWebSocketUrl(token, organizationId)
       this.ws = new WebSocket(wsUrl)
 
       this.ws.onopen = () => {

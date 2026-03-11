@@ -38,10 +38,10 @@ logger = logging.getLogger(name=__name__)
 )
 def track_asset_event_async(
     self,
-    organization_id: str,
-    user_id: Optional[int],
-    document_id: Optional[int],
-    event_type: str,
+    organization_id: Optional[str] = None,
+    user_id: Optional[int] = None,
+    document_id: Optional[int] = None,
+    event_type: str = '',
     ip_address: str = '',
     user_agent: str = '',
     referrer: str = '',
@@ -57,7 +57,10 @@ def track_asset_event_async(
     """
     import uuid as uuid_module
     try:
-        org_id = kwargs.get('organization_id') or organization_id
+        org_id = (
+            kwargs.get('organization_id') or organization_id or
+            getattr(self, 'organization_id', None)
+        )
         if not org_id:
             logger.warning('track_asset_event_async: missing organization_id')
             return
@@ -164,7 +167,7 @@ def generate_analytics_report(self, report_task_id: int, **kwargs) -> None:
     import json
     import os
 
-    organization_id = kwargs.get('organization_id')
+    organization_id = kwargs.get('organization_id') or getattr(self, 'organization_id', None)
     if not organization_id:
         logger.warning('generate_analytics_report: missing organization_id')
         return

@@ -25,15 +25,22 @@ class APIPublicationListView(generics.ListCreateAPIView):
     queryset = Publication.objects.all()
     serializer_class = PublicationSerializer
 
+    def _get_request_organization(self):
+        return getattr(self.request, 'organization', None)
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = self._get_request_organization()
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
         # Filter to show only publications owned by current user
-        return queryset.filter(owner=user)
+        queryset = queryset.filter(owner=user)
+        if organization is not None:
+            queryset = queryset.filter(organization=organization)
+        return queryset
 
     def get_instance_extra_data(self):
         return {
@@ -57,15 +64,22 @@ class APIPublicationDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Publication.objects.all()
     serializer_class = PublicationSerializer
 
+    def _get_request_organization(self):
+        return getattr(self.request, 'organization', None)
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = self._get_request_organization()
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
         # Filter to show only publications owned by current user
-        return queryset.filter(owner=user)
+        queryset = queryset.filter(owner=user)
+        if organization is not None:
+            queryset = queryset.filter(organization=organization)
+        return queryset
 
     def get_instance_extra_data(self):
         return {
@@ -83,15 +97,22 @@ class APIPublicationItemListView(generics.ListCreateAPIView):
     queryset = PublicationItem.objects.all()
     serializer_class = PublicationItemSerializer
 
+    def _get_request_organization(self):
+        return getattr(self.request, 'organization', None)
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = self._get_request_organization()
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
         # Filter to show only items that belong to publications owned by current user
-        return queryset.filter(publication__owner=user)
+        queryset = queryset.filter(publication__owner=user)
+        if organization is not None:
+            queryset = queryset.filter(publication__organization=organization)
+        return queryset
 
 
 class APIPublicationItemDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -110,15 +131,22 @@ class APIPublicationItemDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = PublicationItem.objects.all()
     serializer_class = PublicationItemSerializer
 
+    def _get_request_organization(self):
+        return getattr(self.request, 'organization', None)
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = self._get_request_organization()
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
         # Filter to show only items that belong to publications owned by current user
-        return queryset.filter(publication__owner=user)
+        queryset = queryset.filter(publication__owner=user)
+        if organization is not None:
+            queryset = queryset.filter(publication__organization=organization)
+        return queryset
 
 
 class APIShareLinkListView(generics.ListCreateAPIView):
@@ -132,12 +160,16 @@ class APIShareLinkListView(generics.ListCreateAPIView):
     queryset = ShareLink.objects.all()
     serializer_class = ShareLinkSerializer
 
+    def _get_request_organization(self):
+        return getattr(self.request, 'organization', None)
+
     def get_queryset(self):
         import logging
         logger = logging.getLogger(__name__)
         
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = self._get_request_organization()
 
         if not user or not user.is_authenticated:
             return queryset.none()
@@ -160,6 +192,9 @@ class APIShareLinkListView(generics.ListCreateAPIView):
                 'rendition__publication_item__document_file'
             ).order_by('-created')
             
+            if organization is not None:
+                queryset = queryset.filter(organization=organization)
+
             return queryset
         except Exception as e:
             logger.exception('Error in APIShareLinkListView.get_queryset: %s', e)
@@ -204,16 +239,20 @@ class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = ShareLink.objects.all()
     serializer_class = ShareLinkSerializer
 
+    def _get_request_organization(self):
+        return getattr(self.request, 'organization', None)
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = getattr(self.request, 'user', None)
+        organization = self._get_request_organization()
 
         if not user or not user.is_authenticated:
             return queryset.none()
 
         # Filter to show only share links for publications owned by current user
         # Filter out any share links with missing relationships
-        return queryset.filter(
+        queryset = queryset.filter(
             rendition__isnull=False,
             rendition__publication_item__isnull=False,
             rendition__publication_item__publication__isnull=False,
@@ -226,6 +265,9 @@ class APIShareLinkDetailView(generics.RetrieveUpdateDestroyAPIView):
             'rendition__publication_item__publication__owner',
             'rendition__publication_item__document_file'
         )
+        if organization is not None:
+            queryset = queryset.filter(organization=organization)
+        return queryset
 
 
 class APIGeneratedRenditionListView(generics.ListAPIView):
