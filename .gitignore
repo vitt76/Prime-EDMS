@@ -178,3 +178,4 @@ diagnose-and-start.ps1
 check_search_logs.*
 restart_server.ps1
 restart-container.ps1
+.gitnexus
