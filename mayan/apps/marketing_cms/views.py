@@ -1,9 +1,12 @@
 from urllib.parse import urlencode
 
 from django.conf import settings
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import update_last_login
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,10 +16,12 @@ from .models import FAQ, Lead, Page, Plan, Post, EmailVerificationToken
 from .serializers import (
     FAQSerializer,
     LeadSerializer,
+    LoginSerializer,
     PageSerializer,
     PlanSerializer,
     PostDetailSerializer,
     PostListSerializer,
+    PublicAnalyticsEventSerializer,
     RegisterSerializer
 )
 
@@ -174,6 +179,57 @@ class PublicRegisterView(APIView):
         )
 
 
+class PublicLoginView(APIView):
+    permission_classes = (AllowAny,)
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+        user = authenticate(request=request, username=email, password=password)
+        if user is None:
+            return Response(
+                {'message': 'Неверный email или пароль.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if not user.is_active:
+            return Response(
+                {
+                    'message': 'Аккаунт не активирован. Подтвердите email перед входом.',
+                    'error': 'account_inactive'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        token, _ = Token.objects.get_or_create(user=user)
+        try:
+            update_last_login(sender=None, user=user)
+        except Exception:
+            pass
+
+        redirect_url = (
+            getattr(settings, 'FRONTEND_URL', None) or
+            getattr(settings, 'SPA_URL', '') or
+            'http://localhost:5173'
+        )
+
+        return Response(
+            {
+                'token': token.key,
+                'user': {
+                    'id': str(user.pk),
+                    'email': user.email,
+                    'username': user.get_username(),
+                },
+                'redirect_url': redirect_url,
+            },
+            status=status.HTTP_200_OK
+        )
+
+
 class PublicVerifyEmailView(APIView):
     permission_classes = (AllowAny,)
 
@@ -206,16 +262,12 @@ class PublicVerifyEmailView(APIView):
         user.is_active = True
         user.save(update_fields=['is_active'])
         frontend_base = (
-            getattr(settings, 'FRONTEND_URL', None)
-            or getattr(settings, 'SPA_URL', '')
-            or ''
-        )
-        frontend_base = (frontend_base or '').strip()
-        redirect_url = (
-            f'{frontend_base.rstrip("/")}/login?verified=true'
-            if frontend_base
-            else 'http://localhost:5173/login?verified=true'
-        )
+            getattr(settings, 'FRONTEND_URL', None) or
+            getattr(settings, 'SPA_URL', '') or
+            ''
+        ).strip()
+        redirect_base = frontend_base.rstrip('/') if frontend_base else 'http://localhost:5173'
+        redirect_url = f'{redirect_base}/login?verified=true'
         return Response(
             {
                 'success': True,
@@ -224,3 +276,41 @@ class PublicVerifyEmailView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+class PublicAnalyticsEventView(APIView):
+    permission_classes = (AllowAny,)
+
+    def post(self, request):
+        serializer = PublicAnalyticsEventSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        payload = serializer.validated_data.copy()
+        payload.setdefault('timestamp', timezone.now())
+        payload['timestamp'] = payload['timestamp'].isoformat()
+        payload['path'] = request.path
+        payload['ip_address'] = (request.META.get('REMOTE_ADDR') or '')[:45]
+        payload['user_agent'] = (request.META.get('HTTP_USER_AGENT') or '')[:500]
+
+        try:
+            from mayan.apps.analytics.event_stream import publish_event
+            from mayan.apps.analytics.operational import increment_counter, record_marker
+
+            publish_event(
+                payload={
+                    'kind': 'public_event',
+                    **payload,
+                }
+            )
+            increment_counter('public_events_total')
+            record_marker(
+                'public_ingest',
+                payload={
+                    'event': payload.get('event', ''),
+                    'path': payload.get('path', ''),
+                }
+            )
+        except Exception:
+            pass
+
+        return Response({'status': 'accepted'}, status=status.HTTP_202_ACCEPTED)

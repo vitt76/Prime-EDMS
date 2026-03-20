@@ -103,6 +103,44 @@ test.describe('Contact Page', () => {
   })
 })
 
+test.describe('Public Auth Flow', () => {
+  test('should submit login form against canonical public auth endpoint', async ({ page }) => {
+    await page.route('**/api/v4/public/auth/login/', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          token: 'demo-token',
+          redirect_url: 'http://localhost:5173'
+        })
+      })
+    })
+
+    await page.goto('/auth/login')
+    await page.locator('input[name="email"]').fill('demo@example.com')
+    await page.locator('input[name="password"]').fill('Password123!')
+    await page.locator('button[type="submit"]').click()
+
+    await expect(page.locator('text=Вход выполнен')).toBeVisible()
+  })
+
+  test('should resolve verify-email page via canonical endpoint', async ({ page }) => {
+    await page.route('**/api/v4/public/auth/verify-email/', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          message: 'Email verified successfully',
+          redirect_url: '/auth/login'
+        })
+      })
+    })
+
+    await page.goto('/auth/verify-email/test-token')
+    await expect(page.locator('text=Email verified successfully')).toBeVisible()
+  })
+})
+
 test.describe('Mobile Navigation', () => {
   test.use({ viewport: { width: 375, height: 667 } })
 

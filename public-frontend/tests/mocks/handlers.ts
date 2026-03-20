@@ -180,7 +180,7 @@ export const handlers = [
   }),
 
   // Registration
-  http.post('/api/v4/public/register/', async ({ request }) => {
+  http.post('/api/v4/public/auth/register/', async ({ request }) => {
     const body = await request.json() as any
     
     if (body.email === 'existing@example.com') {
@@ -196,9 +196,39 @@ export const handlers = [
     }, { status: 201 })
   }),
 
+  // Login
+  http.post('/api/v4/public/auth/login/', async ({ request }) => {
+    const body = await request.json() as any
+
+    if (body.email === 'inactive@example.com') {
+      return HttpResponse.json(
+        { message: 'Аккаунт не активирован. Подтвердите email перед входом.', error: 'account_inactive' },
+        { status: 403 }
+      )
+    }
+
+    if (body.email !== 'demo@example.com' || body.password !== 'Password123!') {
+      return HttpResponse.json(
+        { message: 'Неверный email или пароль.' },
+        { status: 401 }
+      )
+    }
+
+    return HttpResponse.json({
+      token: 'demo-token',
+      user: {
+        id: '1',
+        email: body.email,
+        username: body.email
+      },
+      redirect_url: 'http://localhost:5173'
+    })
+  }),
+
   // Email verification
-  http.get('/api/v4/public/verify-email/:token/', ({ params }) => {
-    if (params.token === 'invalid-token') {
+  http.post('/api/v4/public/auth/verify-email/', async ({ request }) => {
+    const body = await request.json() as any
+    if (body.token === 'invalid-token') {
       return HttpResponse.json(
         { message: 'Invalid or expired token' },
         { status: 400 }
@@ -208,6 +238,11 @@ export const handlers = [
       message: 'Email verified successfully',
       redirect_url: '/auth/login'
     })
+  }),
+
+  // Public analytics events
+  http.post('/api/v4/public/analytics/events/', () => {
+    return HttpResponse.json({ status: 'accepted' }, { status: 202 })
   }),
 
   // Newsletter subscription

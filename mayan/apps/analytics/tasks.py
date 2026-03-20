@@ -20,6 +20,7 @@ from .models import (
     OrganizationBandwidthDaily, SearchDailyMetrics, SearchQuery, SearchSession,
     UserDailyMetrics, CampaignEngagementEvent, DistributionEvent
 )
+from .operational import record_marker
 from .realtime import notify_analytics_refresh
 from .services import link_download_to_latest_search_session
 from .utils import get_geo_from_ip
@@ -57,9 +58,8 @@ def track_asset_event_async(
     """
     import uuid as uuid_module
     try:
-        org_id = (
-            kwargs.get('organization_id') or organization_id or
-            getattr(self, 'organization_id', None)
+        org_id = kwargs.get('organization_id') or organization_id or getattr(
+            self, 'organization_id', None
         )
         if not org_id:
             logger.warning('track_asset_event_async: missing organization_id')
@@ -149,7 +149,23 @@ def track_asset_event_async(
                     download_event=event,
                     max_window_minutes=30,
                 )
+        record_marker(
+            'task_success',
+            payload={
+                'task': 'track_asset_event_async',
+                'event_type': event_type,
+                'organization_id': str(organization.pk),
+            }
+        )
     except Exception as exc:
+        record_marker(
+            'task_failure',
+            status='error',
+            payload={
+                'task': 'track_asset_event_async',
+                'error': str(exc),
+            }
+        )
         logger.exception('track_asset_event_async failed: %s', exc)
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
@@ -191,7 +207,6 @@ def generate_analytics_report(self, report_task_id: int, **kwargs) -> None:
         date_from = date_range.get('date_from') or date_range.get('from')
         date_to = date_range.get('date_to') or date_range.get('to')
         from django.utils.dateparse import parse_date
-        from django.db.models import Sum
 
         qs = AssetEvent.objects_unfiltered.filter(organization_id=report_task.organization_id)
         if date_from:
@@ -279,7 +294,24 @@ def generate_analytics_report(self, report_task_id: int, **kwargs) -> None:
         report_task.file_path = file_path
         report_task.completed_at = timezone.now()
         report_task.save(update_fields=['status', 'file_path', 'completed_at'])
+        record_marker(
+            'task_success',
+            payload={
+                'task': 'generate_analytics_report',
+                'report_task_id': report_task_id,
+                'organization_id': str(report_task.organization_id),
+            }
+        )
     except Exception as exc:
+        record_marker(
+            'task_failure',
+            status='error',
+            payload={
+                'task': 'generate_analytics_report',
+                'report_task_id': report_task_id,
+                'error': str(exc),
+            }
+        )
         logger.exception('generate_analytics_report failed: %s', exc)
         report_task.status = AnalyticsReportTask.STATUS_FAILED
         report_task.completed_at = timezone.now()

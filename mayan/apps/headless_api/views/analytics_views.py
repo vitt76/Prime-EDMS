@@ -11,6 +11,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ParseError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -34,6 +35,18 @@ from mayan.apps.analytics.permissions import (
 )
 from mayan.apps.permissions import Permission
 from mayan.apps.analytics.realtime import notify_analytics_refresh
+
+
+class TenantScopedAnalyticsViewSet(viewsets.ViewSet):
+    """Require explicit organization context for published headless analytics."""
+
+    permission_classes = (IsAuthenticated,)
+    organization_required_message = 'Organization context required (e.g. X-Organization-Id).'
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if not getattr(request, 'organization', None):
+            raise ParseError(detail=self.organization_required_message)
 
 
 @extend_schema_view(
@@ -91,21 +104,14 @@ from mayan.apps.analytics.realtime import notify_analytics_refresh
         tags=['analytics'],
     ),
 )
-class DashboardGeographyViewSet(viewsets.ViewSet):
+class DashboardGeographyViewSet(TenantScopedAnalyticsViewSet):
     """GET /api/v4/headless/analytics/dashboard/geography/ — event counts by country (AssetEvent.metadata.country)."""
-
-    permission_classes = (IsAuthenticated,)
 
     def list(self, request):
         Permission.check_user_permissions(
             permissions=(permission_analytics_view_asset_bank,), user=request.user
         )
         organization = getattr(request, 'organization', None)
-        if not organization:
-            return Response(
-                {'detail': 'Organization context required (e.g. X-Organization-Id).'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
         days = int(request.query_params.get('days') or 30)
         date_from = timezone.now() - timedelta(days=days)
         try:
@@ -128,10 +134,8 @@ class DashboardGeographyViewSet(viewsets.ViewSet):
         return Response(data={'results': results}, status=status.HTTP_200_OK)
 
 
-class AssetBankViewSet(viewsets.ViewSet):
+class AssetBankViewSet(TenantScopedAnalyticsViewSet):
     """Headless API: Asset Bank dashboard (Phase 1 / Level 1)."""
-
-    permission_classes = (IsAuthenticated,)
 
     @method_decorator(cache_page(600))
     @action(detail=False, methods=('get',))
@@ -848,7 +852,7 @@ class AssetBankViewSet(viewsets.ViewSet):
         tags=['analytics'],
     ),
 )
-class CampaignPerformanceViewSet(viewsets.ViewSet):
+class CampaignPerformanceViewSet(TenantScopedAnalyticsViewSet):
     """Headless API: Campaign Performance dashboard (Phase 2 / Level 2)."""
 
     permission_classes = (IsAuthenticated,)
@@ -1418,7 +1422,7 @@ class CampaignPerformanceViewSet(viewsets.ViewSet):
         tags=['analytics'],
     ),
 )
-class SearchAnalyticsViewSet(viewsets.ViewSet):
+class SearchAnalyticsViewSet(TenantScopedAnalyticsViewSet):
     """Headless API: Search Analytics (Phase 2 / Level 4)."""
 
     permission_classes = (IsAuthenticated,)
@@ -1561,7 +1565,7 @@ class SearchAnalyticsViewSet(viewsets.ViewSet):
         tags=['analytics'],
     ),
 )
-class UserActivityViewSet(viewsets.ViewSet):
+class UserActivityViewSet(TenantScopedAnalyticsViewSet):
     """Headless API: User activity / adoption (Phase 2 / Level 3)."""
 
     permission_classes = (IsAuthenticated,)
@@ -1813,7 +1817,7 @@ class UserActivityViewSet(viewsets.ViewSet):
         tags=['analytics'],
     ),
 )
-class ApprovalAnalyticsViewSet(viewsets.ViewSet):
+class ApprovalAnalyticsViewSet(TenantScopedAnalyticsViewSet):
     """Headless API: Approval workflow analytics (Phase 2 / Level 3)."""
 
     permission_classes = (IsAuthenticated,)
@@ -1888,7 +1892,7 @@ class ApprovalAnalyticsViewSet(viewsets.ViewSet):
         tags=['analytics'],
     ),
 )
-class DistributionAnalyticsViewSet(viewsets.ViewSet):
+class DistributionAnalyticsViewSet(TenantScopedAnalyticsViewSet):
     """Headless API: Distribution analytics (Release 3 foundation)."""
 
     permission_classes = (IsAuthenticated,)
@@ -2153,7 +2157,7 @@ class DistributionAnalyticsViewSet(viewsets.ViewSet):
         tags=['analytics'],
     ),
 )
-class ContentIntelligenceViewSet(viewsets.ViewSet):
+class ContentIntelligenceViewSet(TenantScopedAnalyticsViewSet):
     """Headless API: Content Intelligence MVP (Release 3 foundation)."""
 
     permission_classes = (IsAuthenticated,)
@@ -2347,7 +2351,7 @@ class ContentIntelligenceViewSet(viewsets.ViewSet):
         tags=['analytics'],
     ),
 )
-class ROIDashboardViewSet(viewsets.ViewSet):
+class ROIDashboardViewSet(TenantScopedAnalyticsViewSet):
     """Headless API: ROI dashboard (Phase 2 MVP)."""
 
     permission_classes = (IsAuthenticated,)

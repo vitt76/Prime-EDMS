@@ -25,6 +25,7 @@ from django.utils import timezone
 from django_redis import get_redis_connection
 
 from mayan.apps.analytics.cache import invalidate_asset_analytics_cache
+from mayan.apps.analytics.operational import increment_counter, record_marker
 from mayan.apps.analytics.models import AssetEvent, PortalSession, UserSession
 from mayan.apps.analytics.realtime import notify_analytics_refresh
 from mayan.apps.documents.models import Document
@@ -140,6 +141,7 @@ class Command(BaseCommand):
             user_logouts: List[Dict[str, Any]] = []
             download_document_ids: List[int] = []
             portal_updates: List[Dict[str, Any]] = []
+            public_events = 0
 
             # Parse.
             for entry_id, fields in entries:
@@ -270,6 +272,8 @@ class Command(BaseCommand):
                             'metadata': metadata or {},
                         }
                     )
+                elif kind == 'public_event':
+                    public_events += 1
 
             # Resolve organization_id from documents (bulk_create does not run pre_save).
             doc_ids = list({e.document_id for e in asset_events})
@@ -355,6 +359,11 @@ class Command(BaseCommand):
                                 session.user_agent = ev.get('user_agent')
                             session.save(update_fields=('last_seen_at', 'views', 'downloads', 'user_agent'))
             except Exception as exc:
+                record_marker(
+                    'consumer',
+                    status='error',
+                    payload={'error': str(exc)}
+                )
                 logger.error('Failed to persist analytics events batch: %s', exc)
                 if once:
                     return
@@ -404,11 +413,26 @@ class Command(BaseCommand):
             except Exception:
                 pass
 
+            record_marker(
+                'consumer',
+                payload={
+                    'asset_events': len(asset_events),
+                    'user_logins': len(user_logins),
+                    'portal_events': len(portal_updates),
+                    'public_events': public_events,
+                }
+            )
+            increment_counter('consumer_batches_total')
+            if public_events:
+                increment_counter('public_events_total', delta=public_events)
+
             # Prometheus metrics (best-effort).
             try:
+                analytics_redis_stream_lag.set(client.xlen(stream))
                 analytics_events_processed_total.labels(kind='asset_event').inc(len(asset_events))
                 analytics_events_processed_total.labels(kind='user_session').inc(len(user_logins))
                 analytics_events_processed_total.labels(kind='portal_event').inc(len(portal_updates))
+                analytics_events_processed_total.labels(kind='public_event').inc(public_events)
             except Exception:
                 pass
 
@@ -420,5 +444,3 @@ class Command(BaseCommand):
 
             if once:
                 return
-
-

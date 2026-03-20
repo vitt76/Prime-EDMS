@@ -8,6 +8,18 @@ from django.utils.functional import cached_property
 from .settings import setting_organization_installation_url
 
 logger = logging.getLogger(name=__name__)
+_runtime_patch_status = {}
+
+
+def _record_patch_status(name, *, applied, details=''):
+    _runtime_patch_status[name] = {
+        'applied': bool(applied),
+        'details': details or '',
+    }
+
+
+def get_runtime_patch_status():
+    return dict(_runtime_patch_status)
 
 
 def patch_organization_fields():
@@ -36,6 +48,13 @@ def patch_organization_fields():
         )
         field.contribute_to_class(Document, 'organization')
         logger.info('Patched Document with organization FK')
+        _record_patch_status('documents.Document.organization', applied=True)
+    else:
+        _record_patch_status(
+            'documents.Document.organization',
+            applied=False,
+            details='Field already registered.'
+        )
 
     try:
         from mayan.apps.tags.models import Tag
@@ -51,8 +70,20 @@ def patch_organization_fields():
             )
             field.contribute_to_class(Tag, 'organization')
             logger.info('Patched Tag with organization FK')
+            _record_patch_status('tags.Tag.organization', applied=True)
+        else:
+            _record_patch_status(
+                'tags.Tag.organization',
+                applied=False,
+                details='Field already registered.'
+            )
     except ImportError:
         logger.warning('Could not import Tag model for patching')
+        _record_patch_status(
+            'tags.Tag.organization',
+            applied=False,
+            details='Import failed.'
+        )
 
     try:
         from mayan.apps.cabinets.models import Cabinet
@@ -68,8 +99,20 @@ def patch_organization_fields():
             )
             field.contribute_to_class(Cabinet, 'organization')
             logger.info('Patched Cabinet with organization FK')
+            _record_patch_status('cabinets.Cabinet.organization', applied=True)
+        else:
+            _record_patch_status(
+                'cabinets.Cabinet.organization',
+                applied=False,
+                details='Field already registered.'
+            )
     except ImportError:
         logger.warning('Could not import Cabinet model for patching')
+        _record_patch_status(
+            'cabinets.Cabinet.organization',
+            applied=False,
+            details='Import failed.'
+        )
 
 
 def _has_concrete_field(model, field_name):
@@ -82,6 +125,14 @@ def _has_concrete_field(model, field_name):
 
 
 def patch_HttpRequest():
+    if hasattr(HttpRequest, '_original_current_scheme_host'):
+        _record_patch_status(
+            'django.http.HttpRequest._current_scheme_host',
+            applied=False,
+            details='Already patched.'
+        )
+        return
+
     class MockClass:
         @cached_property
         def _patched_current_scheme_host(self):
@@ -94,6 +145,10 @@ def patch_HttpRequest():
 
     HttpRequest._current_scheme_host = MockClass._patched_current_scheme_host
     HttpRequest._original_current_scheme_host = _original_current_scheme_host
+    _record_patch_status(
+        'django.http.HttpRequest._current_scheme_host',
+        applied=True
+    )
 
 
 def patch_document_managers():
@@ -146,3 +201,4 @@ def patch_document_managers():
     logger.info(
         'Document managers patched with tenant-aware versions'
     )
+    _record_patch_status('documents.Document.managers', applied=True)

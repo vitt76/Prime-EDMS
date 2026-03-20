@@ -128,3 +128,12 @@ class AnalyticsDashboardIsolationTestCase(TestCase):
         self.assertEqual(data['total_documents'], 0)
         self.assertEqual(len(data['top_documents']), 0)
         self.assertEqual(data['active_users_30d'], 0)
+
+    def test_health_endpoint_returns_operational_snapshot(self):
+        response = self.client.get('/api/v4/analytics/health/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertIn('status', response.data)
+        self.assertIn('snapshot', response.data)
+        self.assertIn('reports', response.data['snapshot'])
+        self.assertIn('stream', response.data['snapshot'])

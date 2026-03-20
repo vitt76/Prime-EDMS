@@ -592,6 +592,57 @@ mayan/apps/dam/tests/
 - это устраняет ложные падения, когда `request.user` доступен DRF view, но не доступен middleware;
 - это стабилизирует analytics/distribution regression suite без специальных test-only bypasses в production коде.
 
+### 17. Public Auth Contract Alignment Pattern
+
+**Назначение:** удерживать единый и явный контракт между публичным Nuxt frontend и Django backend для login/register/verify flows.
+
+**Паттерн:**
+
+- canonical backend routes живут в `marketing_cms` и публикуются через `rest_api/urls.py` как `public/auth/login`, `public/auth/register`, `public/auth/verify-email`;
+- `public-frontend`, MSW mocks и Playwright smoke обязаны использовать именно эти canonical routes, а не исторические aliases;
+- backend login endpoint обязан возвращать не только токен/пользователя, но и явный `redirect_url`, чтобы фронтенд не зашивал environment-specific redirect logic локально;
+- публичная аналитика (`public/analytics/events`) считается частью того же public contract и должна меняться синхронно с frontend mocks/tests.
+
+**Почему это важно:**
+
+- устраняет contract drift между public UI и backend;
+- уменьшает риск "UI выглядит рабочим, но бьется в несуществующий endpoint";
+- делает smoke-тесты на auth flow репрезентативными для production контракта.
+
+### 18. Operational Health Snapshot Pattern
+
+**Назначение:** превращать асинхронные analytics pipelines из "черного ящика" в наблюдаемый operational контур.
+
+**Паттерн:**
+
+- `analytics/health` должен отдавать не только `status: ok`, но и структурированный `snapshot` по stream length, consumer status, task success/failure markers, counters и свежести отчетов;
+- Celery tasks и Redis-stream consumer обязаны записывать best-effort markers/counters через единый operational helper слой;
+- health endpoint считается operational API для smoke/monitoring и должен деградировать явно (`degraded`/`error`), а не скрывать проблемы пустым `200 OK`;
+- при добавлении новых async flow к ним сразу добавляется operational marker contract, а не "потом по логам разберемся".
+
+**Почему это важно:**
+
+- позволяет быстро локализовать падения consumer/tasks/report generation;
+- отделяет "данные пустые" от "pipeline сломан";
+- создает базу для live smoke и последующего мониторинга без тяжелой observability платформы.
+
+### 19. Runtime Patch Observability Pattern
+
+**Назначение:** сделать monkey-patching / `contribute_to_class` слой явным, проверяемым и безопасным для сопровождения.
+
+**Паттерн:**
+
+- любой runtime patch в `organizations/patches.py` должен быть идемпотентным и сохранять свой status (`applied/details`) в отдельном runtime registry;
+- `AppConfig.ready()` после применения patch sequence обязан логировать агрегированный patch status;
+- на критические runtime patches нужны прямые tests, проверяющие не только side effect, но и доступность patch-status contract;
+- динамический patching допустим для совместимости с core Mayan, но больше не должен быть "невидимой магией".
+
+**Почему это важно:**
+
+- снижает риск silent runtime regression после обновлений Mayan/core моделей;
+- упрощает расследование проблем tenant binding и patched managers;
+- формирует мост между временным monkey-patching и будущим cleanup/refactor plan.
+
 ## Миграции и версионирование
 
 ### Database Migrations

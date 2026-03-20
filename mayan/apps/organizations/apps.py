@@ -5,7 +5,8 @@ from django.utils.translation import ugettext_lazy as _
 from mayan.apps.common.apps import MayanAppConfig
 
 from .patches import (
-    patch_HttpRequest, patch_document_managers, patch_organization_fields
+    get_runtime_patch_status, patch_HttpRequest, patch_document_managers,
+    patch_organization_fields
 )
 
 logger = logging.getLogger(name=__name__)
@@ -23,6 +24,10 @@ class OrganizationsApp(MayanAppConfig):
         patch_HttpRequest()
         patch_organization_fields()
         patch_document_managers()
+        logger.info(
+            'Organization runtime patch status: %s',
+            get_runtime_patch_status()
+        )
 
         # Ensure Document.organization is always set before DB insert.
         self._connect_document_tenant_binding_signal()

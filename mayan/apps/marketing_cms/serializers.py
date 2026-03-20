@@ -224,3 +224,20 @@ class RegisterSerializer(serializers.Serializer):
         )
         token = EmailVerificationToken.create_for_user(user=user)
         return user, token
+
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    remember = serializers.BooleanField(required=False, default=False)
+
+
+class PublicAnalyticsEventSerializer(serializers.Serializer):
+    event = serializers.CharField(max_length=100)
+    category = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    label = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    page = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    url = serializers.URLField(required=False, allow_blank=True)
+    referrer = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    timestamp = serializers.DateTimeField(required=False)
+    metadata = serializers.JSONField(required=False)

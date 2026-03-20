@@ -118,10 +118,10 @@ const onSubmit = async () => {
   
   try {
     const config = useRuntimeConfig()
-    const appUrl = config.public.appUrl || 'http://localhost:5173'
+    const defaultAppUrl = config.public.appUrl || 'http://localhost:5173'
     
     // Attempt login via API (POST, credentials in body, not URL)
-    await $fetch('/api/v4/public/auth/login/', {
+    const loginResponse = await $fetch<{ redirect_url?: string }>('/api/v4/public/auth/login/', {
       method: 'POST',
       body: {
         email: form.email,
@@ -135,7 +135,7 @@ const onSubmit = async () => {
     
     // Redirect to main app after successful login
     setTimeout(() => {
-      window.location.href = appUrl
+      window.location.href = loginResponse?.redirect_url || defaultAppUrl
     }, 1000)
   } catch (error: any) {
     status.value = 'error'
@@ -147,7 +147,7 @@ const onSubmit = async () => {
     } else {
       // Fallback: redirect to Django login page
       const config = useRuntimeConfig()
-      const apiBase = config.public.apiBase || 'http://localhost:8080'
+      const apiBase = (config.apiBase as string) || 'http://localhost:8080'
       window.location.href = `${apiBase}/authentication/login/`
     }
   } finally {

@@ -1,8 +1,10 @@
 from django.conf.urls import url
 
 from .views import (
+    PublicAnalyticsEventView,
     PublicFAQListView,
     PublicLeadCreateView,
+    PublicLoginView,
     PublicPageDetailView,
     PublicPlanListView,
     PublicPostDetailView,
@@ -50,9 +52,19 @@ api_urls = [
         name='public-auth-register'
     ),
     url(
+        regex=r'^public/auth/login/$',
+        view=PublicLoginView.as_view(),
+        name='public-auth-login'
+    ),
+    url(
         regex=r'^public/auth/verify-email/$',
         view=PublicVerifyEmailView.as_view(),
         name='public-auth-verify-email'
+    ),
+    url(
+        regex=r'^public/analytics/events/$',
+        view=PublicAnalyticsEventView.as_view(),
+        name='public-analytics-events'
     )
 ]
 

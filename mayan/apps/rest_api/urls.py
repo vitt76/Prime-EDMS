@@ -7,6 +7,7 @@ from .api_views import (
     APIRoot, APIVersionRoot, BatchRequestAPIView, BrowseableObtainAuthToken,
     ProjectInformationAPIView
 )
+from mayan.apps.marketing_cms.urls import api_urls as marketing_cms_api_urls
 from mayan.apps.permissions.urls import api_urls as permissions_api_urls
 from mayan.apps.headless_api.views.config_views import HeadlessDocumentTypeConfigView
 from mayan.apps.headless_api.views.activity_views import HeadlessActivityFeedView
@@ -549,6 +550,7 @@ api_version_urls = [
 
 # Expose permissions (roles) API for SPA role/permission matrix.
 api_version_urls.extend(permissions_api_urls)
+api_version_urls.extend(marketing_cms_api_urls)
 
 api_urls = [
     url(regex=r'^v{}/'.format(API_VERSION), view=include(api_version_urls)),

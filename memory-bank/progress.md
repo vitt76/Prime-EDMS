@@ -18,21 +18,28 @@
 - [x] **Realtime contract alignment на frontend:** notifications и analytics websocket URL теперь строятся через единый helper contract с `token`/`organization_id`; targeted Vitest для `useWebSocket` и `AssetBankPage` проходит.
 - [x] **Distribution campaign tenant migration:** `0018_distributioncampaign_organization` применена в контейнерном runtime; локальная проверка подтверждает актуальную схему без непримененных migration gaps для campaigns.
 - [x] **Targeted backend regression runner:** verification выполняется через контейнерный `/opt/mayan-edms/bin/mayan-edms.py`, а не через локальный `manage.py`; green run подтвержден для `headless_api`, `analytics reports`, `analytics consumers` и `distribution tenant isolation`.
+- [x] **Operational hardening для analytics:** `analytics/health` отдает `operational snapshot`; добавлены operational markers/counters для consumer/tasks, чтобы stream/report/task проблемы были видимы вне UI.
+- [x] **Public auth/public telemetry contract alignment:** backend публикует canonical routes `public/auth/login`, `public/auth/register`, `public/auth/verify-email`, `public/analytics/events`; `public-frontend`, MSW и Playwright smoke выровнены под этот контракт.
+- [x] **Runtime patch observability:** runtime patching в `organizations` теперь имеет явный status/visibility слой и test coverage, а не остается полностью неявным monkey-patching behavior.
+- [x] **Runtime HTTP smoke harness:** добавлен `runtime_contract_smoke` management command для live tenant-scoped HTTP smoke без зависимости от `curl.exe`.
 
 ## 🟨 Работает частично / есть synthetic или legacy-слой
 
-- [~] **Live runtime smoke:** контейнерный стек поднят, admin token и organization уже получены, но отдельный live HTTP smoke по `geography` / `campaigns` / `share_links` еще не зафиксирован из-за локального shell-spawn issue на Windows.
+- [~] **Live runtime smoke:** smoke harness уже реализован, но финальный live прогон по `geography` / `campaigns` / `share_links` / `analytics/health` не зафиксирован из-за недоступного Docker/runtime в конце прохода.
 - [~] **Saved Searches / Home contracts:** backend tenant-aware реализован, но связанные интеграции все еще требуют финальной унификации после cleanup.
 - [~] **Frontend QA:** инфраструктура восстановления выполнена, но полный прогон всего набора и последующее сокращение остаточных прикладных падений еще требуют отдельного спринта.
-- [~] **Backend QA в полном объеме:** targeted Django suite уже проходит, но параллельные test runs конфликтуют за `test_mayan`, а полный широкий suite все еще требует отдельной стабилизации test DB lifecycle.
+- [~] **Backend QA в полном объеме:** targeted Django suite уже проходит, но повторный подтверждающий прогон в текущем состоянии среды уперся в недоступный Docker daemon; кроме этого, параллельные runs конфликтуют за `test_mayan`.
+- [~] **Legacy contract cleanup:** часть published seams уже переведена на canonical contract и tenant guards, но финальная matrix-ревизия `canonical/deprecated/remove-after-migration` еще не завершена.
 
 ## 🟥 Не готово / требует стабилизации перед MVP+
 
-- [ ] **Полная зачистка legacy analytics/activity слоя:** старые endpoints вне нового основного пути еще требуют финальной ревизии.
-- [ ] **Полный backend test environment:** tenant/DAM suite по-прежнему упирается в test runner / container-source drift и `django_test_migrations`-подобные env gaps.
+- [ ] **Полное подтверждение runtime seams на живом стеке:** до завершения hardening нужен успешный live smoke для tenant-scoped HTTP/WS контуров на доступном runtime.
+- [ ] **Полная зачистка legacy analytics/activity слоя:** старые endpoints вне нового основного пути еще требуют финальной ревизии и формального статуса в cleanup matrix.
+- [ ] **Полный backend test environment:** tenant/DAM suite по-прежнему упирается в test runner / container-source drift и environment gaps вокруг Docker/test DB lifecycle.
 
 ## 🟦 Ближайшие продуктовые шаги
 
-- [ ] Завершить live smoke по sharing/campaign/geography endpoint'ам на уже поднятом `:8080` / `:8001` стеке.
-- [ ] Довести до конца cleanup legacy analytics/activity endpoints и убрать старые дубли из критических сценариев.
+- [ ] Восстановить доступный Docker/runtime и завершить live smoke по `geography`, `campaigns`, `share_links`, `analytics/health` и при необходимости WebSocket seams.
+- [ ] Довести до конца cleanup matrix для legacy analytics/activity/public contracts и убрать старые дубли из критических сценариев.
+- [ ] Повторно подтвердить targeted backend regression suite в доступной containerized среде.
 - [ ] Провести отдельный stabilization pass по полному фронтендному тестовому набору и operational monitoring.

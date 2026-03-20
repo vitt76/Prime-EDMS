@@ -20,6 +20,7 @@ from .dashboard_cache import (
 )
 from .literals import FEATURE_ADOPTION_NAMES
 from .models import AssetEvent, AnalyticsReportTask, FeatureUsage, SearchSession
+from .operational import get_operational_snapshot
 from .permissions import permission_analytics_view_asset_bank
 from .serializers import DashboardMetricsSerializer
 from .tasks import generate_analytics_report
@@ -264,4 +265,26 @@ class AnalyticsHealthCheckView(APIView):
     permission_classes = (AllowAny,)
 
     def get(self, request):
-        return Response({'status': 'ok'}, status=status.HTTP_200_OK)
+        snapshot = get_operational_snapshot()
+
+        has_recent_failure = bool(snapshot['tasks'].get('last_failure'))
+        stale_reports = int(snapshot['reports'].get('stale_pending') or 0)
+        stream_length = snapshot['stream'].get('length')
+
+        status_label = 'ok'
+        http_status = status.HTTP_200_OK
+
+        if has_recent_failure or stale_reports > 0:
+            status_label = 'degraded'
+            http_status = status.HTTP_200_OK
+
+        if stream_length is None:
+            status_label = 'unknown'
+
+        return Response(
+            {
+                'status': status_label,
+                'snapshot': snapshot,
+            },
+            status=http_status
+        )

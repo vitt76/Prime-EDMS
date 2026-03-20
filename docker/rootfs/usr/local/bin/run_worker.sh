@@ -2,6 +2,8 @@
 
 export MAYAN_WORKER_NAME=${MAYAN_WORKER_NAME:-$1}
 export MAYAN_WORKER_NICE_LEVEL=${MAYAN_WORKER_NICE_LEVEL:-0}
+export MAYAN_CELERY_LOGLEVEL=${MAYAN_CELERY_LOGLEVEL:-ERROR}
+export MAYAN_CELERY_ENABLE_EVENTS=${MAYAN_CELERY_ENABLE_EVENTS:-0}
 
 if [ ! "${MAYAN_QUEUE_LIST}" ]; then
     if [ ! "$MAYAN_WORKER_NAME" ]; then
@@ -17,4 +19,10 @@ fi
 if [ "$#" -gt 0 ]; then
     shift
 fi
-su mayan --command "nice -n ${MAYAN_WORKER_NICE_LEVEL} ${MAYAN_PYTHON_BIN_DIR}celery -A mayan worker --loglevel=ERROR -Ofair --queues=${MAYAN_QUEUE_LIST} --without-gossip --without-heartbeat ${@}"
+
+EVENTS_FLAG=""
+if [ "${MAYAN_CELERY_ENABLE_EVENTS}" = "1" ]; then
+    EVENTS_FLAG="-E"
+fi
+
+su mayan --command "nice -n ${MAYAN_WORKER_NICE_LEVEL} ${MAYAN_PYTHON_BIN_DIR}celery -A mayan worker --loglevel=${MAYAN_CELERY_LOGLEVEL} -Ofair --queues=${MAYAN_QUEUE_LIST} --without-gossip --without-heartbeat ${EVENTS_FLAG} ${@}"
