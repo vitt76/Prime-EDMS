@@ -1,6 +1,6 @@
 # Карта архитектуры Prime-EDMS
 
-Документ подготовлен на основе актуального индекса `GitNexus` для репозитория `Prime-EDMS` и дополнительной верификации ключевых узлов по исходному коду. Цель документа — зафиксировать не только состав подсистем, но и их связность: как основной DAM SPA, публичный фронтенд, Django/Mayan backend, асинхронные задачи, аналитика и distribution работают как единая платформа.
+Документ подготовлен на основе актуального индекса `GitNexus` для репозитория `Prime-EDMS` на коммите `add2616` и дополнительной верификации ключевых узлов по исходному коду. В свежем состоянии карты особенно важны четыре усиленных контракта: canonical public API routes, `redirect_url`-handoff между public frontend и основным приложением, `analytics/health` как operational snapshot и явная наблюдаемость runtime patching в `organizations`. Цель документа — зафиксировать не только состав подсистем, но и их связность: как основной DAM SPA, публичный фронтенд, Django/Mayan backend, асинхронные задачи, аналитика и distribution работают как единая платформа.
 
 ## 1. Краткое описание системы
 
@@ -125,7 +125,17 @@ Tenant isolation — это не локальная деталь одного м
 
 Следствие: domain apps работают не как глобальные модули над всей БД, а как доменные сервисы внутри конкретной организации.
 
-### 4.3 Что это даёт архитектурно
+### 4.3 Runtime patching как часть tenant-контракта
+
+Multi-tenancy в Prime-EDMS опирается не только на статические модели, но и на runtime patching:
+
+- `patch_HttpRequest()` переопределяет `_current_scheme_host`, чтобы tenant-aware URL generation опирался на organization-level installation URL;
+- `patch_organization_fields()` динамически добавляет `organization` в core-модели вроде `Document`, `Tag`, `Cabinet`;
+- `patch_document_managers()` заменяет `Document.objects`, `Document.trash`, `Document.valid` на tenant-aware hybrid managers.
+
+Свежее изменение делает этот слой менее "магическим": `organizations/patches.py` теперь ведёт `get_runtime_patch_status()`, а `OrganizationsApp.ready()` логирует агрегированный статус после применения patch sequence. Архитектурно это означает, что runtime patching становится не просто скрытым bootstrap-механизмом, а наблюдаемым operational contract.
+
+### 4.4 Что это даёт архитектурно
 
 - единая shared-schema база с логической изоляцией по `organization`;
 - переиспользуемый security-паттерн для API, ORM и Celery;
@@ -191,7 +201,39 @@ flowchart TD
 - public/product analytics events;
 - отчёты в JSON.
 
-### 6.3 Аналитика как связующий слой
+### 6.3 Analytics как operational observability layer
+
+После последних изменений `analytics` отвечает не только за продуктовые метрики, но и за live operational picture:
+
+- `get_operational_snapshot()` собирает состояние Redis stream, consumer marker, public ingest marker, task success/failure markers, counters и свежесть отчетов;
+- `/api/v4/analytics/health/` возвращает не просто `status: ok`, а структурированный `snapshot`, который может показать `degraded` или `unknown`;
+- `track_asset_event_async`, consumer Redis stream и public ingest endpoint записывают operational markers/counters в cache, чтобы асинхронные проблемы были видны без прямого захода в worker logs.
+
+Это важный архитектурный сдвиг: analytics становится не только downstream-потребителем событий, но и live control plane для диагностики собственного ingestion/reporting контура.
+
+### 6.4 Event stream и связность ingestion-контура
+
+События теперь проходят через явный ingestion pipeline:
+
+```mermaid
+flowchart LR
+    Public[public-frontend] --> PublicAPI[/api/v4/public/analytics/events/]
+    SPA[frontend / backend flows] --> Tasks[track_asset_event_async]
+
+    PublicAPI --> Stream[(Redis Stream)]
+    Tasks --> PG[(AssetEvent / task markers)]
+    Stream --> Consumer[consume_analytics_events]
+    Consumer --> PG
+    Consumer --> Realtime[notify_analytics_refresh]
+    PG --> Health[/api/v4/analytics/health/]
+```
+
+У этого контура два свойства:
+
+- public telemetry и внутренние product events сходятся в один analytics domain, а не живут как отдельные disconnected системы;
+- operational snapshot проверяет не только финальные таблицы, но и промежуточные stream/task seams.
+
+### 6.5 Аналитика как связующий слой
 
 `analytics` связывает почти все остальные подсистемы:
 
@@ -301,7 +343,15 @@ Nuxt-контур реализует:
 - `/api/v4/public/auth/verify-email`
 - `/api/v4/public/analytics/events/`
 
+Ключевое уточнение по текущему состоянию: canonical public routes теперь централизованы в `marketing_cms`, публикуются через `rest_api/urls.py` и используются синхронно в backend, `public-frontend`, MSW mocks и Playwright smoke.
+
 В `useApi()` серверная SSR-часть ходит напрямую в backend, а клиентская работает через Nitro proxy, что даёт единый API-контракт без лишнего CORS-шума.
+
+Отдельный архитектурный контракт для auth-handoff:
+
+- `PublicLoginView` возвращает `redirect_url`, а не заставляет Nuxt жёстко знать destination;
+- `PublicVerifyEmailView` тоже возвращает `redirect_url`, замыкая verify flow в backend contract;
+- `LoginForm.vue` теперь редиректит в `loginResponse.redirect_url || NUXT_PUBLIC_APP_URL`, то есть handoff управляется и runtime-config, и backend response.
 
 ### 9.3 Как он связан с основным приложением
 
@@ -353,11 +403,11 @@ sequenceDiagram
     Public->>API: GET /api/v4/public/pages|posts|plans|faq
     API-->>Public: Контент страницы
 
-    User->>Public: Логин / регистрация
-    Public->>API: POST /api/v4/public/auth/login|register
-    API-->>Public: Успешный ответ
+    User->>Public: Логин / регистрация / verify email
+    Public->>API: POST /api/v4/public/auth/login|register|verify-email
+    API-->>Public: token / redirect_url / verification state
 
-    Public->>App: Redirect на NUXT_PUBLIC_APP_URL
+    Public->>App: Redirect на redirect_url или NUXT_PUBLIC_APP_URL
     App->>API: Авторизованные tenant-aware запросы
 ```
 
@@ -376,6 +426,16 @@ sequenceDiagram
 - public frontend зависит от HTTP/public API и затем ведёт пользователя в DAM SPA.
 
 Именно поэтому frontend-контуры нельзя рассматривать как плоские UI-слои: они входят в разные runtime seams одной платформы.
+
+После последних изменений у этой topology появился отдельный live verification harness: management command `runtime_contract_smoke` проверяет из runtime-контейнера ключевые HTTP seams:
+
+- `analytics_health`;
+- `geography_ok`;
+- `geography_requires_org`;
+- `distribution_campaigns_ok`;
+- `distribution_share_links_ok`.
+
+Это важно архитектурно, потому что проверяется уже не только код view, но и реальная опубликованность route, tenant requirements и доступность runtime-стыков.
 
 ## 12. Главные зависимости между подсистемами
 
@@ -447,7 +507,7 @@ Tenant-aware архитектура — одно из главных преим�
 - Такие ошибки плохо читаются снаружи и часто маскируются под "BFF не отвечает" или "данные не загружаются".
 - Это особенно опасно для headless endpoints, где frontend и backend эволюционируют быстро и независимо.
 
-Слабое место архитектуры: контракт маршрутов сейчас частично зависит не только от кода view, но и от дополнительной дисциплины публикации маршрутов и live smoke-проверок.
+Свежие изменения частично снижают этот риск: public auth/public analytics routes централизованы в `marketing_cms` и публикуются через единый `rest_api` router, а `runtime_contract_smoke` формализует часть live route verification. Но сам класс риска никуда не исчезает: контракт маршрутов всё ещё зависит не только от view-кода, но и от дисциплины публикации маршрутов и регулярных smoke-проверок.
 
 ### 14.3 Split runtime topology создаёт интеграционную хрупкость
 
@@ -476,7 +536,7 @@ AI-анализ, рендишены, watermarking, часть analytics и ув�
 - Состояние системы становится распределённым между Django, Redis, RabbitMQ, Celery workers и хранилищем файлов.
 - Часть ошибок проявляется позже как неконсистентность данных: нет AI-результата, не сгенерирован rendition, не дошло уведомление, не записалось событие.
 
-Слабое место архитектуры здесь — высокая observability-нагрузка: без хорошего task monitoring и operational smoke значительная часть проблем остаётся "полускрытой".
+Сейчас эта зона стала лучше наблюдаемой: `analytics/health` отдает snapshot, а задачи и consumer пишут operational markers/counters. Но слабое место архитектуры остаётся прежним: даже при улучшенной наблюдаемости без хорошего task monitoring и регулярных operational smoke значительная часть проблем всё ещё остаётся "полускрытой".
 
 ### 14.5 Analytics завязана на корректность событий, а не только на код дашбордов
 
@@ -511,6 +571,8 @@ AI-анализ, рендишены, watermarking, часть analytics и ув�
 - auth flow может деградировать на стыке public site → backend → app;
 - SEO/SSR-контур может стать "частично живым": контент рендерится, но формы, login или analytics работают нестабильно;
 - public frontend проще недооценить при ревью, потому что он выглядит как отдельный сайт, хотя фактически является частью product funnel.
+
+Риск здесь тоже частично смягчён: canonical routes выровнены, `redirect_url` стал явной частью backend contract, а Playwright smoke и mocks зафиксировали ожидаемые ответы. Но эта зона всё ещё опирается на конфиг, HTTP shape и runtime-согласованность, а не на единый shared typed contract.
 
 ### 14.7 Тестовый контур пока слабее архитектурной сложности
 
