@@ -71,3 +71,16 @@ class PublicAuthAndAnalyticsAPITestCase(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.data)
         self.assertEqual(response.data['status'], 'accepted')
+
+    def test_public_newsletter_subscription_creates_newsletter_lead(self):
+        response = self.client.post(
+            '/api/v4/public/newsletter/',
+            {
+                'email': 'subscriber@example.com',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data['status'], 'subscribed')
+        self.assertEqual(response.data['email'], 'subscriber@example.com')

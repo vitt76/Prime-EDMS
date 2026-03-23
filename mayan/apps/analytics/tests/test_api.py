@@ -1,5 +1,7 @@
 """Tests for analytics API (tenant-scoped dashboard)."""
 
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
@@ -137,3 +139,23 @@ class AnalyticsDashboardIsolationTestCase(TestCase):
         self.assertIn('snapshot', response.data)
         self.assertIn('reports', response.data['snapshot'])
         self.assertIn('stream', response.data['snapshot'])
+        self.assertIn('broker', response.data['snapshot'])
+        self.assertIn('indexing', response.data['snapshot'])
+        self.assertIn('window_seconds', response.data['snapshot']['counters'])
+        self.assertIn('track_asset_event_async', response.data['snapshot']['tasks'])
+
+    @mock.patch('mayan.apps.analytics.api_views.get_operational_snapshot')
+    def test_health_endpoint_degrades_when_broker_is_unreachable(self, mock_snapshot):
+        mock_snapshot.return_value = {
+            'stream': {'length': 0},
+            'tasks': {'last_failure': None},
+            'reports': {'stale_pending': 0},
+            'broker': {'reachable': False, 'worker_count': 0},
+            'indexing': {},
+            'counters': {'window_seconds': 86400},
+        }
+
+        response = self.client.get('/api/v4/analytics/health/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['status'], 'degraded')

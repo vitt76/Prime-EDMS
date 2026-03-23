@@ -5,6 +5,7 @@ from .views import (
     PublicFAQListView,
     PublicLeadCreateView,
     PublicLoginView,
+    PublicNewsletterSubscribeView,
     PublicPageDetailView,
     PublicPlanListView,
     PublicPostDetailView,
@@ -45,6 +46,11 @@ api_urls = [
         regex=r'^public/leads/$',
         view=PublicLeadCreateView.as_view(),
         name='public-leads-create'
+    ),
+    url(
+        regex=r'^public/newsletter/$',
+        view=PublicNewsletterSubscribeView.as_view(),
+        name='public-newsletter-subscribe'
     ),
     url(
         regex=r'^public/auth/register/$',

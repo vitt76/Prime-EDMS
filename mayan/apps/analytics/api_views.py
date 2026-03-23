@@ -270,13 +270,18 @@ class AnalyticsHealthCheckView(APIView):
         has_recent_failure = bool(snapshot['tasks'].get('last_failure'))
         stale_reports = int(snapshot['reports'].get('stale_pending') or 0)
         stream_length = snapshot['stream'].get('length')
+        broker_reachable = snapshot.get('broker', {}).get('reachable')
+        worker_count = snapshot.get('broker', {}).get('worker_count')
 
         status_label = 'ok'
         http_status = status.HTTP_200_OK
 
-        if has_recent_failure or stale_reports > 0:
+        if has_recent_failure or stale_reports > 0 or broker_reachable is False:
             status_label = 'degraded'
             http_status = status.HTTP_200_OK
+
+        if broker_reachable and worker_count == 0:
+            status_label = 'degraded'
 
         if stream_length is None:
             status_label = 'unknown'

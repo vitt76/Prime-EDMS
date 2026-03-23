@@ -206,16 +206,6 @@ class DistributionService {
   }
 
   /**
-   * Check password for a share link
-   */
-  async checkShareLinkPassword(token: string, password: string): Promise<{ valid: boolean }> {
-    return apiService.post<{ valid: boolean }>(
-      `/api/v4/distribution/public/${token}/check-password/`,
-      { password }
-    )
-  }
-
-  /**
    * Delete (revoke) a share link
    */
   async deleteShareLink(id: number): Promise<void> {
@@ -282,40 +272,6 @@ class DistributionService {
       `/api/v4/distribution/publications/${publicationId}/analytics/`,
       undefined,
       true // Cache analytics for 5 minutes
-    )
-  }
-
-  /**
-   * Get public publication using token (portal access)
-   */
-  async getPublicationByToken(token: string): Promise<Publication> {
-    return apiService.get<Publication>(
-      `/api/v4/distribution/publications/portal/${token}/`,
-      undefined,
-      false
-    )
-  }
-
-  /**
-   * Track a view for the public publication
-   */
-  async trackPublicView(token: string): Promise<void> {
-    await apiService.post<void>(
-      `/api/v4/distribution/publications/portal/${token}/events/`,
-      { event: 'view' }
-    )
-  }
-
-  /**
-   * Track a download for a public asset
-   */
-  async trackPublicDownload(token: string, assetId?: number): Promise<void> {
-    await apiService.post<void>(
-      `/api/v4/distribution/publications/portal/${token}/events/`,
-      {
-        event: 'download',
-        asset_id: assetId
-      }
     )
   }
 

@@ -20,7 +20,7 @@ from .models import (
     OrganizationBandwidthDaily, SearchDailyMetrics, SearchQuery, SearchSession,
     UserDailyMetrics, CampaignEngagementEvent, DistributionEvent
 )
-from .operational import record_marker
+from .operational import record_task_result
 from .realtime import notify_analytics_refresh
 from .services import link_download_to_latest_search_session
 from .utils import get_geo_from_ip
@@ -149,20 +149,18 @@ def track_asset_event_async(
                     download_event=event,
                     max_window_minutes=30,
                 )
-        record_marker(
-            'task_success',
+        record_task_result(
+            'track_asset_event_async',
             payload={
-                'task': 'track_asset_event_async',
                 'event_type': event_type,
                 'organization_id': str(organization.pk),
             }
         )
     except Exception as exc:
-        record_marker(
-            'task_failure',
+        record_task_result(
+            'track_asset_event_async',
             status='error',
             payload={
-                'task': 'track_asset_event_async',
                 'error': str(exc),
             }
         )
@@ -294,20 +292,18 @@ def generate_analytics_report(self, report_task_id: int, **kwargs) -> None:
         report_task.file_path = file_path
         report_task.completed_at = timezone.now()
         report_task.save(update_fields=['status', 'file_path', 'completed_at'])
-        record_marker(
-            'task_success',
+        record_task_result(
+            'generate_analytics_report',
             payload={
-                'task': 'generate_analytics_report',
                 'report_task_id': report_task_id,
                 'organization_id': str(report_task.organization_id),
             }
         )
     except Exception as exc:
-        record_marker(
-            'task_failure',
+        record_task_result(
+            'generate_analytics_report',
             status='error',
             payload={
-                'task': 'generate_analytics_report',
                 'report_task_id': report_task_id,
                 'error': str(exc),
             }

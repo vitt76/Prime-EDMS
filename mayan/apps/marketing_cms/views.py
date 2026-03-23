@@ -17,6 +17,7 @@ from .serializers import (
     FAQSerializer,
     LeadSerializer,
     LoginSerializer,
+    NewsletterSubscriptionSerializer,
     PageSerializer,
     PlanSerializer,
     PostDetailSerializer,
@@ -147,6 +148,35 @@ class PublicLeadCreateView(CreateAPIView):
                 'status': 'new',
                 'created_at': response.data.get('created_at'),
                 'message': 'Спасибо! Мы получили ваше сообщение и свяжемся в течение 24 часов.'
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+
+class PublicNewsletterSubscribeView(APIView):
+    permission_classes = (AllowAny,)
+
+    def post(self, request):
+        serializer = NewsletterSubscriptionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        lead = Lead.objects.create(
+            name=email,
+            email=email,
+            source='newsletter',
+            metadata={
+                'lang': get_lang(request),
+                'path': request.path,
+            }
+        )
+
+        return Response(
+            {
+                'id': lead.pk,
+                'status': 'subscribed',
+                'email': email,
+                'message': 'Спасибо! Вы подписаны на обновления.'
             },
             status=status.HTTP_201_CREATED
         )

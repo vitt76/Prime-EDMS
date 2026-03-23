@@ -18,12 +18,15 @@
 Prime-EDMS/
 ├── mayan/                    # Основной код приложения
 │   ├── apps/                 # Django приложения (модули)
-│   │   ├── dam/              # DAM расширение (кастомное)
-│   │   ├── documents/        # Управление документами (core)
-│   │   ├── analytics/        # Аналитика (кастомное)
-│   │   ├── headless_api/     # REST API для фронтенда (кастомное)
-│   │   ├── image_editor/      # Редактор изображений (кастомное)
-│   │   └── ...               # Другие core и кастомные apps
+│   │   ├── organizations/    # Multi-tenancy, планы, роли (кастомное)
+│   │   ├── dam/              # DAM, AI-анализ (кастомное)
+│   │   ├── documents/        # Управление документами (core, часто патчится)
+│   │   ├── analytics/        # События, отчёты, health snapshot (кастомное)
+│   │   ├── distribution/     # Публикации, share links, кампании (кастомное)
+│   │   ├── headless_api/     # BFF для DAM SPA (кастомное, без своих моделей)
+│   │   ├── marketing_cms/    # Публичный API страниц, лидов, auth routes
+│   │   ├── image_editor/     # Редактор изображений (кастомное)
+│   │   └── ...               # Прочие core Mayan apps
 │   ├── settings/             # Конфигурация Django
 │   ├── urls/                 # URL маршрутизация
 │   └── asgi.py/wsgi.py       # ASGI/WSGI точки входа
@@ -570,6 +573,7 @@ mayan/apps/dam/tests/
   - REST API: `http://localhost:8080`
   - WebSocket ASGI: `ws://localhost:8001`
 - все hooks/services (`useWebSocket`, `websocketService`, analytics realtime clients) должны следовать одной общей константе и одной operational contract.
+- live verification должен проверять не только unit/integration слой, но и реальный WebSocket upgrade/deny behavior; для этого `runtime_contract_smoke` использует raw handshake на `notifications` и `analytics` seams.
 
 **Почему это важно:**
 
@@ -598,10 +602,11 @@ mayan/apps/dam/tests/
 
 **Паттерн:**
 
-- canonical backend routes живут в `marketing_cms` и публикуются через `rest_api/urls.py` как `public/auth/login`, `public/auth/register`, `public/auth/verify-email`;
+- canonical backend routes живут в `marketing_cms` и публикуются через `rest_api/urls.py` как `public/auth/login`, `public/auth/register`, `public/auth/verify-email`, `public/newsletter`;
 - `public-frontend`, MSW mocks и Playwright smoke обязаны использовать именно эти canonical routes, а не исторические aliases;
 - backend login endpoint обязан возвращать не только токен/пользователя, но и явный `redirect_url`, чтобы фронтенд не зашивал environment-specific redirect logic локально;
-- публичная аналитика (`public/analytics/events`) считается частью того же public contract и должна меняться синхронно с frontend mocks/tests.
+- публичная аналитика (`public/analytics/events`) считается частью того же public contract и должна меняться синхронно с frontend mocks/tests;
+- если frontend-сценарий опирается на route family, которая не публикуется backend-ом в live router, такой сценарий не нужно "поддерживать на будущее": dead-path должен удаляться, а не сохраняться как скрытый legacy contract.
 
 **Почему это важно:**
 
@@ -615,9 +620,10 @@ mayan/apps/dam/tests/
 
 **Паттерн:**
 
-- `analytics/health` должен отдавать не только `status: ok`, но и структурированный `snapshot` по stream length, consumer status, task success/failure markers, counters и свежести отчетов;
-- Celery tasks и Redis-stream consumer обязаны записывать best-effort markers/counters через единый operational helper слой;
+- `analytics/health` должен отдавать не только `status: ok`, но и структурированный `snapshot` по stream length, consumer status, task-specific success/failure markers, broker reachability, worker count, indexing counters и свежести отчетов;
+- Celery tasks и Redis-stream consumer обязаны записывать best-effort markers/counters через единый operational helper слой (`record_task_result` и согласованные имена счётчиков);
 - health endpoint считается operational API для smoke/monitoring и должен деградировать явно (`degraded`/`error`), а не скрывать проблемы пустым `200 OK`;
+- counters с cache TTL нельзя называть как фиксированное временное окно (`24h`), если они отражают только "recent window"; snapshot должен явно показывать окно в секундах или использовать нейтральное имя `recent`;
 - при добавлении новых async flow к ним сразу добавляется operational marker contract, а не "потом по логам разберемся".
 
 **Почему это важно:**

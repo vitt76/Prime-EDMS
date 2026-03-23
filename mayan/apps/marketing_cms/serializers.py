@@ -179,6 +179,10 @@ class LeadSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at')
 
 
+class NewsletterSubscriptionSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(min_length=8, write_only=True)

@@ -219,14 +219,13 @@ public-frontend/
 
 **API интеграция:**
 - Проксирование API запросов через Vite dev server (`/api` → `http://localhost:8080`)
-- Endpoints:
-  - `/api/v4/public/pages/:slug/` - Получение страниц
-  - `/api/v4/public/posts/` - Список постов блога
-  - `/api/v4/public/plans/` - Тарифные планы
-  - `/api/v4/public/faq/` - FAQ элементы
-  - `/api/v4/public/leads/` - Отправка форм обратной связи
-  - `/api/v4/public/register/` - Регистрация пользователей
-  - `/api/v4/public/verify-email/:token/` - Подтверждение email
+- Endpoints (canonical public perimeter, см. `marketing_cms` + `rest_api` router):
+  - `/api/v4/public/pages/:slug/` — страницы CMS
+  - `/api/v4/public/posts/` — блог
+  - `/api/v4/public/plans/`, `/api/v4/public/faq/`, `/api/v4/public/leads/` — маркетинг/лиды
+  - `/api/v4/public/auth/login`, `/api/v4/public/auth/register`, `/api/v4/public/auth/verify-email` — аутентификация и верификация (не legacy плоские `public/register`)
+  - `/api/v4/public/analytics/events` — публичная телеметрия
+  - `/api/v4/public/newsletter/` — подписка на рассылку (создание `Lead`, `source='newsletter'`)
 
 **Оптимизации производительности:**
 - Image optimization через Nuxt Image (WebP/AVIF форматы)
@@ -262,6 +261,8 @@ public-frontend/
 - **Docker**: (контейнеризация приложения)
 - **Docker Compose**: (оркестрация сервисов)
 - **Django-команды в контейнере:** выполняются через `/opt/mayan-edms/bin/mayan-edms.py` (в образе Mayan EDMS нет `python manage.py` в PATH). Пример: `docker compose exec app /opt/mayan-edms/bin/mayan-edms.py showmigrations dam`, `migrate dam`, `shell -c "..."`.
+- **Live contract smoke (analytics app):** `mayan-edms.py runtime_contract_smoke` — проверка ключевых tenant-scoped HTTP seams и raw WebSocket upgrade для `/ws/notifications/` и `/ws/analytics/`; по умолчанию `--base-url http://localhost:8080`, для WS — `--ws-base-url` или авто (порт `8001` при split-topology `8080`/`8000`). Unit-покрытие: `mayan/apps/analytics/tests/test_runtime_contract_smoke.py`.
+- **Operational health:** GET `/api/v4/analytics/health/` отдаёт snapshot (stream/consumer, task markers через `record_task_result`, broker, workers, indexing counters); при недоступном брокере/нуле workers допустим статус `degraded` в рамках health-логики.
 
 #### Мониторинг и логирование
 - **Sentry SDK**: 1.5.8 (отслеживание ошибок)

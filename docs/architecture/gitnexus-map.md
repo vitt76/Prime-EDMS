@@ -343,7 +343,7 @@ Nuxt-контур реализует:
 - `/api/v4/public/auth/verify-email`
 - `/api/v4/public/analytics/events/`
 
-Ключевое уточнение по текущему состоянию: canonical public routes теперь централизованы в `marketing_cms`, публикуются через `rest_api/urls.py` и используются синхронно в backend, `public-frontend`, MSW mocks и Playwright smoke.
+Ключевое уточнение по текущему состоянию: canonical public routes теперь централизованы в `marketing_cms`, публикуются через `rest_api/urls.py` и используются синхронно в backend, `public-frontend`, MSW mocks и Playwright smoke. В этот же canonical perimeter теперь явно входит и `public/newsletter`, а мертвый SPA-контур, который раньше ссылался на несуществующие `distribution/publications/portal/*` JSON endpoints, удален как legacy drift, а не сохранен как параллельный контракт.
 
 В `useApi()` серверная SSR-часть ходит напрямую в backend, а клиентская работает через Nitro proxy, что даёт единый API-контракт без лишнего CORS-шума.
 
@@ -427,13 +427,17 @@ sequenceDiagram
 
 Именно поэтому frontend-контуры нельзя рассматривать как плоские UI-слои: они входят в разные runtime seams одной платформы.
 
-После последних изменений у этой topology появился отдельный live verification harness: management command `runtime_contract_smoke` проверяет из runtime-контейнера ключевые HTTP seams:
+После последних изменений у этой topology появился отдельный live verification harness: management command `runtime_contract_smoke` проверяет ключевые HTTP seams:
 
 - `analytics_health`;
 - `geography_ok`;
 - `geography_requires_org`;
 - `distribution_campaigns_ok`;
-- `distribution_share_links_ok`.
+- `distribution_campaigns_requires_org`;
+- `distribution_share_links_ok`;
+- `distribution_share_links_requires_org`.
+
+Дополнительно этот же harness теперь делает raw WebSocket handshake checks для `ws://.../notifications/` и `ws://.../analytics/`, подтверждая не только split port topology, но и то, что tenant-aware `organization_id` действительно требуется на runtime seam, а не только в unit/integration tests.
 
 Это важно архитектурно, потому что проверяется уже не только код view, но и реальная опубликованность route, tenant requirements и доступность runtime-стыков.
 
@@ -507,7 +511,7 @@ Tenant-aware архитектура — одно из главных преим�
 - Такие ошибки плохо читаются снаружи и часто маскируются под "BFF не отвечает" или "данные не загружаются".
 - Это особенно опасно для headless endpoints, где frontend и backend эволюционируют быстро и независимо.
 
-Свежие изменения частично снижают этот риск: public auth/public analytics routes централизованы в `marketing_cms` и публикуются через единый `rest_api` router, а `runtime_contract_smoke` формализует часть live route verification. Но сам класс риска никуда не исчезает: контракт маршрутов всё ещё зависит не только от view-кода, но и от дисциплины публикации маршрутов и регулярных smoke-проверок.
+Свежие изменения частично снижают этот риск: public auth/public analytics/newsletter routes централизованы в `marketing_cms` и публикуются через единый `rest_api` router, dead SPA contract для `distribution/publications/portal/*` удален, а `runtime_contract_smoke` формализует live verification не только для HTTP, но и для WebSocket handshake. Но сам класс риска никуда не исчезает: контракт маршрутов всё ещё зависит не только от view-кода, но и от дисциплины публикации маршрутов и регулярных smoke-проверок.
 
 ### 14.3 Split runtime topology создаёт интеграционную хрупкость
 
@@ -536,7 +540,7 @@ AI-анализ, рендишены, watermarking, часть analytics и ув�
 - Состояние системы становится распределённым между Django, Redis, RabbitMQ, Celery workers и хранилищем файлов.
 - Часть ошибок проявляется позже как неконсистентность данных: нет AI-результата, не сгенерирован rendition, не дошло уведомление, не записалось событие.
 
-Сейчас эта зона стала лучше наблюдаемой: `analytics/health` отдает snapshot, а задачи и consumer пишут operational markers/counters. Но слабое место архитектуры остаётся прежним: даже при улучшенной наблюдаемости без хорошего task monitoring и регулярных operational smoke значительная часть проблем всё ещё остаётся "полускрытой".
+Сейчас эта зона стала лучше наблюдаемой: `analytics/health` отдает snapshot не только по stream/report состоянию, но и по broker reachability, worker count, task-specific markers и indexing metrics. Но слабое место архитектуры остаётся прежним: даже при улучшенной наблюдаемости без хорошего task monitoring и регулярных operational smoke значительная часть проблем всё ещё остаётся "полускрытой".
 
 ### 14.5 Analytics завязана на корректность событий, а не только на код дашбордов
 
@@ -620,18 +624,18 @@ AI-анализ, рендишены, watermarking, часть analytics и ув�
 
 ## 15. Приоритетные зоны усиления
 
-Если переводить архитектурные риски в практический порядок усиления, я бы выделил следующие направления.
+Если переводить архитектурные риски в практический порядок усиления, после последнего hardening-прохода приоритеты выглядят так.
 
 ### 15.1 Наивысший приоритет
 
-- Закрыть оставшиеся live smoke gaps для tenant-scoped HTTP и WebSocket-сценариев.
-- Довести до конца ревизию legacy tenant-unsafe или transition endpoints.
-- Зафиксировать обязательную проверку route exposure для всех новых headless/public endpoints.
+- Формально подтвердить обновлённый `runtime_contract_smoke` на живом Docker/runtime стеке: сейчас код уже покрывает tenant-scoped HTTP negative checks и WebSocket handshake, но environment-dependent live прогон ещё не зафиксирован.
+- Довести до конца ревизию оставшихся legacy tenant-unsafe или transition endpoints за пределами уже убранного SPA portal drift.
+- Зафиксировать обязательную проверку route exposure для всех новых headless/public endpoints как часть acceptance criteria.
 
 ### 15.2 Средний приоритет
 
-- Усилить operational monitoring по Celery/Redis/RabbitMQ и критическим async pipeline.
-- Сделать проверку public frontend auth handoff и public API drift отдельным обязательным smoke-контуром.
+- Расширять operational monitoring уже поверх нового snapshot-а с broker/worker visibility и task-specific markers, а не возвращаться к общим `task_success/task_failure`.
+- Сделать проверку public frontend auth handoff и public API drift отдельным обязательным smoke-контуром на доступной среде.
 - Укрепить end-to-end telemetry validation для analytics, а не только UI-слой отчётов.
 
 ### 15.3 Стратегический приоритет
